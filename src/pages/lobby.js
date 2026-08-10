@@ -1,5 +1,5 @@
 // src/pages/lobby.js — Глобальное Лобби (Dashboard)
-import { supabase, signOut } from '../api/supabase.js';
+import { supabase, signOut, invokeFunction } from '../api/supabase.js';
 import {
   getSessions, createSession, getWorlds, createWorld,
   importWorld, exportWorld, downloadJSON,
@@ -743,16 +743,14 @@ export function renderLobby(container, user) {
       btn.disabled = true;
       btn.textContent = '⏳ ...';
       try {
-        const { data, error } = await supabase.functions.invoke('generate-character', {
-          body: {
+        const { data, error } = await invokeFunction('generate-character', {
             user_id: user.id,
             name: document.getElementById('editCharName')?.value || '',
             race: document.getElementById('editCharRace')?.value || '',
             class: document.getElementById('editCharClass')?.value || '',
             appearance: document.getElementById('editCharAppearance')?.value || '',
             bio,
-          },
-        });
+          });
         if (error) throw error;
         if (data.stats) {
           STATS.forEach((s) => {
@@ -851,16 +849,14 @@ export function renderLobby(container, user) {
       btn.disabled = true;
       btn.textContent = '⏳ ...';
       try {
-        const { data, error } = await supabase.functions.invoke('generate-character', {
-          body: {
+        const { data, error } = await invokeFunction('generate-character', {
             user_id: user.id,
             name: document.getElementById('charName')?.value || '',
             race: document.getElementById('charRace')?.value || '',
             class: document.getElementById('charClass')?.value || '',
             appearance: document.getElementById('charAppearance')?.value || '',
             bio,
-          },
-        });
+          });
         if (error) throw error;
         if (data.stats) {
           STATS.forEach((s) => { const el = document.getElementById(`stat_${s}`); if (el && data.stats[s] !== undefined) el.value = data.stats[s]; });
@@ -980,8 +976,8 @@ export function renderLobby(container, user) {
       // If description provided — convert via AI
       if (description) {
         try {
-          const { data, error } = await supabase.functions.invoke('convert-world-text', {
-            body: { user_id: user.id, world_name: name, description },
+          const { data, error } = await invokeFunction('convert-world-text', {
+            user_id: user.id, world_name: name, description,
           });
           if (error) throw error;
           settings = data.settings || {};

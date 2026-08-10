@@ -4,6 +4,28 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Безопасный вызов Edge Functions через прямой fetch (обходит баг Supabase-клиента)
+export async function invokeFunction(functionName, body) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers = { 'Content-Type': 'application/json' };
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const err = new Error(data.error || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
 // Auth helpers
 export async function signUp(email, password) {
   const { data, error } = await supabase.auth.signUp({ email, password });

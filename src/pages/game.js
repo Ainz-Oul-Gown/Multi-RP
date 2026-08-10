@@ -1,5 +1,5 @@
 // src/pages/game.js — Игровой экран (Чат + Инвентарь + Профиль)
-import { supabase, subscribeToSessionMessages, subscribeToSessionPlayers } from '../api/supabase.js';
+import { supabase, subscribeToSessionMessages, subscribeToSessionPlayers, invokeFunction } from '../api/supabase.js';
 import {
   getSession, getSessionPlayers, getPlayer, getPlayerInventory,
   getSessionMessages, submitAction, updatePlayer, addInventoryItem,
@@ -739,25 +739,20 @@ export async function renderGame(container, sessionId, user) {
       loading.style.display = 'block';
 
       try {
-        const response = await supabase.functions.invoke('generate-character', {
-          body: {
+        const response = await invokeFunction('generate-character', {
             user_id: user.id,
             name: document.getElementById('charName')?.value || '',
             race: document.getElementById('charRace')?.value || '',
             class: document.getElementById('charClass')?.value || '',
             appearance: document.getElementById('charAppearance')?.value || '',
             bio,
-          },
-        });
+          });
 
-        if (response.error) throw response.error;
-
-        const { stats } = response.data;
-        if (stats) {
+        if (response?.stats) {
           STATS.forEach((stat) => {
             const input = document.getElementById(`stat_${stat}`);
-            if (input && stats[stat] !== undefined) {
-              input.value = stats[stat];
+            if (input && response.stats[stat] !== undefined) {
+              input.value = response.stats[stat];
             }
           });
           updateStatsSum();

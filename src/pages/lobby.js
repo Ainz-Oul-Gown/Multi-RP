@@ -162,6 +162,28 @@ export function renderLobby(container, user) {
         </div>
       </div>
 
+      <!-- Модальное окно: Редактирование мира -->
+      <div class="modal-overlay" id="editWorldModal">
+        <div class="modal" style="max-width: 500px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">✏️ Редактирование мира</h2>
+          <form id="editWorldForm">
+            <input type="hidden" id="editWorldId" />
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Название</label>
+              <input class="input" id="editWorldName" required />
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Настройки (JSON)</label>
+              <textarea class="input" id="editWorldSettings" rows="6"></textarea>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-secondary" id="closeEditWorldModal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- Скрытый input для импорта -->
       <input type="file" id="importFileInput" accept=".json" style="display: none;" />
       <input type="file" id="importCharFileInput" accept=".json" style="display: none;" />
@@ -211,6 +233,53 @@ export function renderLobby(container, user) {
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
               <button type="button" class="btn btn-secondary" id="closeCharModal">Отмена</button>
               <button type="submit" class="btn btn-primary">Создать</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Модальное окно: Редактирование персонажа -->
+      <div class="modal-overlay" id="editCharModal">
+        <div class="modal" style="max-width: 500px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">✏️ Редактирование персонажа</h2>
+          <form id="editCharForm">
+            <input type="hidden" id="editCharId" />
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Имя героя</label>
+              <input class="input" id="editCharName" required />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div class="form-group">
+                <label class="form-label">Раса</label>
+                <input class="input" id="editCharRace" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Класс</label>
+                <input class="input" id="editCharClass" required />
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Внешность</label>
+              <textarea class="input" id="editCharAppearance" rows="2"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Биография</label>
+              <textarea class="input" id="editCharBio" rows="3"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Характеристики</label>
+              <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr); gap: 0.5rem;">
+                ${STATS.map((stat) => `
+                  <div class="form-group">
+                    <label class="form-hint">${stat}</label>
+                    <input class="input" type="number" id="edit_stat_${stat}" min="1" max="30" style="text-align: center;" />
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-secondary" id="closeEditCharModal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Сохранить</button>
             </div>
           </form>
         </div>
@@ -360,7 +429,8 @@ export function renderLobby(container, user) {
             </div>
             <pre class="world-settings-preview">${JSON.stringify(w.settings || {}, null, 2).slice(0, 200)}</pre>
             <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-              <button class="btn btn-secondary btn-sm" data-action="export" data-id="${w.id}">📤 Экспорт</button>
+              <button class="btn btn-secondary btn-sm" data-action="edit-world" data-id="${w.id}">✏️</button>
+              <button class="btn btn-secondary btn-sm" data-action="export" data-id="${w.id}">📤</button>
               <button class="btn btn-ghost btn-sm" data-action="delete-world" data-id="${w.id}">🗑️</button>
             </div>
           </div>
@@ -416,7 +486,8 @@ export function renderLobby(container, user) {
             <p class="form-hint" style="text-align: center; margin-top: 0.5rem;">HP: ${c.hp}/${c.max_hp} | 💰 ${c.money} | Сумма: ${total}</p>
             ${c.bio ? `<p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${c.bio}</p>` : ''}
             <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
-              <button class="btn btn-secondary btn-sm" data-action="export-char" data-id="${c.id}">📤</button>
+              <button class="btn btn-secondary btn-sm" data-action="edit-char" data-id="${c.id}">✏️</button>
+              <button class="btn btn-ghost btn-sm" data-action="export-char" data-id="${c.id}">📤</button>
               <button class="btn btn-ghost btn-sm" data-action="delete-char" data-id="${c.id}">🗑️</button>
             </div>
           </div>
@@ -589,6 +660,95 @@ export function renderLobby(container, user) {
           toast.error('Ошибка: ' + err.message);
         }
       });
+    });
+
+    // Edit character card
+    container.querySelectorAll('[data-action="edit-char"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const card = characterCards.find((c) => c.id === btn.dataset.id);
+        if (!card) return;
+        document.getElementById('editCharId').value = card.id;
+        document.getElementById('editCharName').value = card.name || '';
+        document.getElementById('editCharRace').value = card.race || '';
+        document.getElementById('editCharClass').value = card.class || '';
+        document.getElementById('editCharAppearance').value = card.appearance || '';
+        document.getElementById('editCharBio').value = card.bio || '';
+        const stats = card.stats || {};
+        STATS.forEach((s) => {
+          const el = document.getElementById(`edit_stat_${s}`);
+          if (el) el.value = stats[s] || 10;
+        });
+        document.getElementById('editCharModal').classList.add('open');
+      });
+    });
+
+    document.getElementById('closeEditCharModal')?.addEventListener('click', () => {
+      document.getElementById('editCharModal').classList.remove('open');
+    });
+
+    document.getElementById('editCharForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('editCharId').value;
+      const stats = {};
+      STATS.forEach((s) => { stats[s] = parseInt(document.getElementById(`edit_stat_${s}`)?.value) || 10; });
+
+      try {
+        const { updateCharacterCard } = await import('../api/game.js');
+        await updateCharacterCard(id, {
+          name: document.getElementById('editCharName').value,
+          race: document.getElementById('editCharRace').value,
+          class: document.getElementById('editCharClass').value,
+          appearance: document.getElementById('editCharAppearance').value,
+          bio: document.getElementById('editCharBio').value,
+          stats,
+          hp: stats.CON * 2 + 10,
+          max_hp: stats.CON * 2 + 10,
+        });
+        toast.success('Персонаж обновлён!');
+        document.getElementById('editCharModal').classList.remove('open');
+        loadData();
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Edit world
+    container.querySelectorAll('[data-action="edit-world"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const world = worlds.find((w) => w.id === btn.dataset.id);
+        if (!world) return;
+        document.getElementById('editWorldId').value = world.id;
+        document.getElementById('editWorldName').value = world.name || '';
+        document.getElementById('editWorldSettings').value = JSON.stringify(world.settings || {}, null, 2);
+        document.getElementById('editWorldModal').classList.add('open');
+      });
+    });
+
+    document.getElementById('closeEditWorldModal')?.addEventListener('click', () => {
+      document.getElementById('editWorldModal').classList.remove('open');
+    });
+
+    document.getElementById('editWorldForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('editWorldId').value;
+      let settings = {};
+      try {
+        const raw = document.getElementById('editWorldSettings').value;
+        if (raw) settings = JSON.parse(raw);
+      } catch { toast.error('Некорректный JSON'); return; }
+
+      try {
+        const { updateWorld } = await import('../api/game.js');
+        await updateWorld(id, {
+          name: document.getElementById('editWorldName').value,
+          settings,
+        });
+        toast.success('Мир обновлён!');
+        document.getElementById('editWorldModal').classList.remove('open');
+        loadData();
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      }
     });
 
     // Create character card form
@@ -903,6 +1063,7 @@ export function renderLobby(container, user) {
       } catch (err) {
         toast.error('Ошибка импорта: ' + err.message);
       }
+      e.target.value = '';
     });
 
     // Delete world

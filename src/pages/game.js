@@ -490,10 +490,12 @@ export async function renderGame(container, sessionId, user) {
       if (result.error) {
         toast.error(result.error);
       }
-
-      // Ответ Мастера придёт через Realtime subscription
     } catch (err) {
-      toast.error('Ошибка обработки: ' + err.message);
+      if (err.message === 'MISSING_API_KEY') {
+        toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» в лобби и введите ключ.');
+      } else {
+        toast.error('Ошибка обработки: ' + err.message);
+      }
     } finally {
       isSubmitting = false;
       updateInputState();
@@ -762,7 +764,11 @@ export async function renderGame(container, sessionId, user) {
           toast.success('Статы сгенерированы!');
         }
       } catch (err) {
-        toast.error('Ошибка генерации: ' + (err.message || err));
+        if (err.message === 'MISSING_API_KEY' || err?.data?.code === 'MISSING_API_KEY') {
+          toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» в лобби и введите ключ.');
+        } else {
+          toast.error('Ошибка генерации: ' + (err.message || err));
+        }
       } finally {
         btn.disabled = false;
         btn.textContent = '✨ Сгенерировать нейросетью';

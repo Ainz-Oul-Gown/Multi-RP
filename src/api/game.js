@@ -282,11 +282,18 @@ export async function getCurrentTurn(sessionId) {
 }
 
 export async function submitAction(sessionId, playerId, actionText) {
-  // Вызываем Edge Function для обработки действия
   const { data, error } = await supabase.functions.invoke('process-turn', {
     body: { session_id: sessionId, player_id: playerId, action_text: actionText },
   });
-  if (error) throw error;
+  if (error) {
+    // Supabase оборачивает ошибку — извлекаем сообщение
+    const msg = error.message || error.context?.message || 'Неизвестная ошибка';
+    // Проверяем на 402 (отсутствие API ключа)
+    if (error.context?.status === 402 || data?.code === 'MISSING_API_KEY') {
+      throw new Error('MISSING_API_KEY');
+    }
+    throw new Error(msg);
+  }
   return data;
 }
 

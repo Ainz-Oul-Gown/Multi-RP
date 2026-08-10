@@ -1,6 +1,3 @@
-// Скрипт для деплоя Edge Functions (запускать локально с токеном в env)
-// SUPABASE_ACCESS_TOKEN=sbp_xxx node scripts/deploy-functions.mjs
-
 import { readFileSync } from 'fs';
 
 const token = process.env.SUPABASE_ACCESS_TOKEN;
@@ -37,5 +34,6 @@ async function deployFunction(slug, filePath) {
 
 const ok1 = await deployFunction('process-turn', 'supabase/functions/process-turn/index.ts');
 const ok2 = await deployFunction('generate-character', 'supabase/functions/generate-character/index.ts');
-if (!ok1 || !ok2) process.exit(1);
+const ok3 = await deployFunction('convert-world-text', 'supabase/functions/convert-world-text/index.ts');
+if (!ok1 || !ok2 || !ok3) process.exit(1);
 console.log('\n✅ All Edge Functions deployed!');

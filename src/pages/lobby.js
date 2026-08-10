@@ -93,21 +93,37 @@ export function renderLobby(container, user) {
 
       <!-- Модальное окно: Новый мир -->
       <div class="modal-overlay" id="newWorldModal">
-        <div class="modal">
-          <h2 class="card-title" style="margin-bottom: 1rem;">Новый мир</h2>
+        <div class="modal" style="max-width: 600px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">🌍 Новый мир</h2>
+          <p class="form-hint" style="margin-bottom: 1rem;">Опишите мир текстом — нейросеть автоматически создаст настройки (расы, классы, локации и т.д.)</p>
           <form id="newWorldForm">
             <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label">Название мира</label>
+              <label class="form-label">Название мира *</label>
               <input class="input" id="worldName" placeholder="World of Eteria" required />
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label">Настройки (JSON)</label>
-              <textarea class="input" id="worldSettings" rows="6" placeholder='{"races": ["Человек", "Эльф"], "classes": ["Воин", "Маг"]}'></textarea>
-              <span class="form-hint">Доступные расы, классы, глобальные лимиты</span>
+              <label class="form-label">Описание мира</label>
+              <textarea class="input" id="worldDescription" rows="5"
+                placeholder="Мрачное фэнтези-средневековье. Доступные расы: люди, эльфы, гномы, орки. Классы: воин, маг, плут, жрец. Мир разделён на 3 крупных королевства, между которыми идёт война. Магия редка и опасна..."
+              ></textarea>
+              <span class="form-hint">Опишите расы, классы, атмосферу, локации, фракции, правила — что угодно</span>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Файлы лора (необязательно)</label>
+              <div class="file-drop-zone" id="fileDropZone">
+                <div class="file-drop-icon">📁</div>
+                <p>Перетащите файлы .txt, .md или .json<br/>или <a href="#" id="browseFilesLink">выберите файлы</a></p>
+              </div>
+              <div class="file-list" id="fileList"></div>
+              <input type="file" id="worldFileInput" multiple accept=".txt,.md,.json" style="display: none;" />
+            </div>
+            <div id="aiSettingsPreview" style="display: none; margin-bottom: 1rem;">
+              <label class="form-label">AI создал настройки:</label>
+              <pre class="world-settings-preview" id="aiSettingsOutput"></pre>
             </div>
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
               <button type="button" class="btn btn-secondary" id="closeWorldModal">Отмена</button>
-              <button type="submit" class="btn btn-primary">Создать мир</button>
+              <button type="submit" class="btn btn-primary" id="createWorldBtn">✨ Создать мир</button>
             </div>
           </form>
         </div>
@@ -120,6 +136,14 @@ export function renderLobby(container, user) {
       <div class="modal-overlay" id="accountSettingsModal">
         <div class="modal">
           <h2 class="card-title" style="margin-bottom: 1rem;">⚙️ Настройки аккаунта</h2>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label">ID аккаунта</label>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <code class="invite-code" style="flex: 1; font-size: var(--fs-xs);">${user.id}</code>
+              <button class="btn btn-secondary btn-sm" id="copyUserIdBtn">📋</button>
+            </div>
+          </div>
 
           <div class="form-group" style="margin-bottom: 1.5rem;">
             <label class="form-label">Email</label>
@@ -243,6 +267,12 @@ export function renderLobby(container, user) {
       document.getElementById('accountSettingsModal').classList.remove('open');
     });
 
+    // Copy User ID
+    document.getElementById('copyUserIdBtn')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(user.id);
+      toast.success('ID скопирован!');
+    });
+
     // Save account settings
     document.getElementById('saveAccountSettingsBtn')?.addEventListener('click', async () => {
       const key = document.getElementById('openrouterKeyInput').value.trim();
@@ -311,28 +341,128 @@ export function renderLobby(container, user) {
       }
     });
 
-    // Create world form
+    // Create world form — text to JSON via AI
+    let pendingFiles = [];
+
     document.getElementById('newWorldForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const name = document.getElementById('worldName').value;
+      const name = document.getElementById('worldName').value.trim();
+      const description = document.getElementById('worldDescription').value.trim();
+      const createBtn = document.getElementById('createWorldBtn');
+
+      if (!name) { toast.error('Укажите название мира'); return; }
+
+      createBtn.disabled = true;
+      createBtn.textContent = '⏳ Нейросеть анализирует мир...';
+
       let settings = {};
-      try {
-        const raw = document.getElementById('worldSettings').value;
-        if (raw) settings = JSON.parse(raw);
-      } catch {
-        toast.error('Некорректный JSON в настройках');
-        return;
+
+      // If description provided — convert via AI
+      if (description) {
+        try {
+          const { data, error } = await supabase.functions.invoke('convert-world-text', {
+            body: { user_id: user.id, world_name: name, description },
+          });
+          if (error) throw error;
+          settings = data.settings || {};
+          // Show preview
+          document.getElementById('aiSettingsPreview').style.display = 'block';
+          document.getElementById('aiSettingsOutput').textContent = JSON.stringify(settings, null, 2);
+        } catch (err) {
+          toast.error('Ошибка AI: ' + (err.message || err));
+          createBtn.disabled = false;
+          createBtn.textContent = '✨ Создать мир';
+          return;
+        }
       }
 
       try {
-        await createWorld({ owner_id: user.id, name, settings });
-        toast.success('Мир создан!');
+        const world = await createWorld({ owner_id: user.id, name, settings });
+
+        // Upload lore files if any
+        if (pendingFiles.length) {
+          const loreFiles = [];
+          for (const file of pendingFiles) {
+            const content = await file.text();
+            loreFiles.push({
+              world_id: world.id,
+              folder: 'imported',
+              title: file.name.replace(/\.[^.]+$/, ''),
+              content,
+              tags: [],
+            });
+          }
+          const { error: loreErr } = await supabase.from('lore_files').insert(loreFiles);
+          if (loreErr) console.error('Lore upload error:', loreErr);
+        }
+
+        toast.success(`Мир «${name}» создан! ${pendingFiles.length ? `+ ${pendingFiles.length} файл(ов) лора` : ''}`);
         document.getElementById('newWorldModal').classList.remove('open');
+        pendingFiles = [];
         loadData();
       } catch (err) {
         toast.error('Ошибка: ' + err.message);
+      } finally {
+        createBtn.disabled = false;
+        createBtn.textContent = '✨ Создать мир';
       }
     });
+
+    // File drop zone
+    const fileDropZone = document.getElementById('fileDropZone');
+    const fileInput = document.getElementById('worldFileInput');
+
+    fileDropZone?.addEventListener('click', () => fileInput.click());
+    document.getElementById('browseFilesLink')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      fileInput.click();
+    });
+
+    fileDropZone?.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      fileDropZone.classList.add('dragover');
+    });
+    fileDropZone?.addEventListener('dragleave', () => {
+      fileDropZone.classList.remove('dragover');
+    });
+    fileDropZone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fileDropZone.classList.remove('dragover');
+      addFiles(e.dataTransfer.files);
+    });
+
+    fileInput?.addEventListener('change', (e) => {
+      addFiles(e.target.files);
+      fileInput.value = '';
+    });
+
+    function addFiles(fileListObj) {
+      for (const file of fileListObj) {
+        if (['.txt', '.md', '.json'].some(ext => file.name.endsWith(ext))) {
+          pendingFiles.push(file);
+        } else {
+          toast.warning(`Файл «${file.name}» пропущен (поддерживаются .txt, .md, .json)`);
+        }
+      }
+      renderFileList();
+    }
+
+    function renderFileList() {
+      const el = document.getElementById('fileList');
+      if (!el) return;
+      el.innerHTML = pendingFiles.map((f, i) => `
+        <div class="file-item">
+          <span>📄 ${f.name} <span class="text-muted">(${(f.size / 1024).toFixed(1)} KB)</span></span>
+          <button type="button" class="btn btn-ghost btn-sm" data-file-idx="${i}">✕</button>
+        </div>
+      `).join('');
+      el.querySelectorAll('[data-file-idx]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          pendingFiles.splice(parseInt(btn.dataset.fileIdx), 1);
+          renderFileList();
+        });
+      });
+    }
 
     // Session card actions
     container.querySelectorAll('[data-action="join"]').forEach((btn) => {

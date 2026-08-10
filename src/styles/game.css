@@ -647,6 +647,51 @@
   margin-top: 2px;
 }
 
+/* ===================== File Drop Zone ===================== */
+.file-drop-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.file-drop-zone:hover,
+.file-drop-zone.dragover {
+  border-color: var(--accent-primary);
+  background: rgba(233, 69, 96, 0.05);
+  color: var(--text-secondary);
+}
+
+.file-drop-icon {
+  font-size: 2rem;
+  margin-bottom: var(--space-sm);
+}
+
+.file-drop-zone p {
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+}
+
 /* ===================== Responsive ===================== */
 @media (max-width: 768px) {
   /* --- Lobby Header Mobile --- */

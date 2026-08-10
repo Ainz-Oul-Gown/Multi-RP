@@ -101,8 +101,6 @@ serve(async (req) => {
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://multirp-ai.app",
-        "X-Title": "MultiRP AI Character Generator",
       },
       body: JSON.stringify({
         model: AI_MODEL,

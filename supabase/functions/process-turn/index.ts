@@ -144,8 +144,6 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://multirp-ai.app",
-          "X-Title": "MultiRP AI Game Engine",
         },
         body: JSON.stringify({
           model: AI_MODEL,

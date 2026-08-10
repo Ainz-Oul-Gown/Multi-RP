@@ -42,14 +42,14 @@ function parseAIJson(text: string): any {
 }
 
 serve(async (req) => {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
-      },
-    });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
@@ -58,7 +58,7 @@ serve(async (req) => {
     if (!user_id || !bio) {
       return new Response(JSON.stringify({ error: "user_id и bio обязательны" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -82,7 +82,7 @@ serve(async (req) => {
         code: "MISSING_API_KEY",
       }), {
         status: 402,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -120,7 +120,7 @@ serve(async (req) => {
       console.error("AI API error:", errText);
       return new Response(JSON.stringify({ error: "Ошибка AI API" }), {
         status: 502,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -131,7 +131,7 @@ serve(async (req) => {
     if (!stats) {
       return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
         status: 422,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -164,14 +164,14 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ stats: result }), {
       status: 200,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (err) {
     console.error("generate-character error:", err);
     return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
       status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

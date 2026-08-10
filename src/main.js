@@ -1,5 +1,5 @@
 // src/main.js — Точка входа приложения
-import { onAuthStateChange, getCurrentUser } from './api/supabase.js';
+import { onAuthStateChange } from './api/supabase.js';
 import { renderAuth } from './pages/auth.js';
 import { renderLobby } from './pages/lobby.js';
 import { renderSessionSettings } from './pages/session-settings.js';
@@ -17,7 +17,11 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
-// Auth state listener
+// Show loading state while Supabase resolves auth
+app.innerHTML = '<div class="page page-centered"><p style="color: var(--text-muted);">Загрузка...</p></div>';
+
+// Auth state listener — handles both initial check AND OAuth callback
+// Supabase client automatically processes tokens from URL hash
 onAuthStateChange((user) => {
   currentUser = user;
   if (cleanupFn) {
@@ -48,11 +52,4 @@ onAuthStateChange((user) => {
     });
 
   router.resolve();
-});
-
-// Initial check
-getCurrentUser().then((user) => {
-  if (!user) {
-    renderAuth(app);
-  }
 });

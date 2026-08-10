@@ -9,6 +9,7 @@ import {
 } from '../api/game.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
+import { STATS } from '../config.js';
 
 export function renderLobby(container, user) {
   let activeTab = 'sessions';

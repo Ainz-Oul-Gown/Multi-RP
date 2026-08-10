@@ -103,12 +103,29 @@ export async function deleteLoreFile(id) {
 // ===================== SESSIONS =====================
 
 export async function getSessions() {
-  const { data, error } = await supabase
+  const { data: sessions, error: sessErr } = await supabase
     .from('sessions')
-    .select('*, worlds(name), players(id, name, user_id, hp, max_hp, is_active)')
+    .select('*')
     .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data;
+  if (sessErr) throw sessErr;
+
+  // Загружаем мира и игроков отдельно (RLS запрещает join)
+  const worldIds = [...new Set(sessions.map((s) => s.world_id))];
+  const { data: worlds } = await supabase.from('worlds').select('id, name').in('id', worldIds.length ? worldIds : ['00000000-0000-0000-0000-000000000000']);
+  const worldMap = {};
+  (worlds || []).forEach((w) => { worldMap[w.id] = w; });
+
+  const result = await Promise.all(
+    sessions.map(async (s) => {
+      const { data: players } = await supabase
+        .from('players')
+        .select('id, name, user_id, hp, max_hp, is_active')
+        .eq('session_id', s.id);
+      return { ...s, worlds: worldMap[s.world_id] || null, players: players || [] };
+    })
+  );
+
+  return result;
 }
 
 export async function getSession(id) {

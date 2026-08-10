@@ -649,10 +649,58 @@
 
 /* ===================== Responsive ===================== */
 @media (max-width: 768px) {
+  /* --- Lobby Header Mobile --- */
   .lobby-header {
+    flex-wrap: wrap;
     padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
   }
 
+  .lobby-header-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: var(--space-sm);
+  }
+
+  .lobby-title {
+    font-size: var(--fs-base);
+    white-space: nowrap;
+  }
+
+  .lobby-header-left .badge {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-xs);
+  }
+
+  .lobby-header-right {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    gap: 2px;
+  }
+
+  .lobby-header-right .btn {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--fs-xs);
+  }
+
+  .lobby-header-right .btn span {
+    display: none;
+  }
+
+  /* --- Tabs Mobile --- */
+  .lobby-tabs {
+    padding: 0 var(--space-md);
+  }
+
+  .lobby-tab {
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--fs-xs);
+  }
+
+  /* --- Content Mobile --- */
   .lobby-content {
     padding: var(--space-md);
   }
@@ -661,18 +709,98 @@
     grid-template-columns: 1fr;
   }
 
+  /* --- Side Panel Mobile --- */
   .side-panel {
     width: 100%;
   }
 
+  /* --- Stats Grid Mobile --- */
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  /* --- Game Header Mobile --- */
   .game-header-name {
     max-width: 60px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* --- Auth Mobile --- */
+  .auth-container {
+    padding: 0 var(--space-md);
+  }
+
+  .btn-google {
+    font-size: var(--fs-sm);
+  }
+}
+
+@media (max-width: 480px) {
+  .lobby-header-left .badge {
+    display: none;
+  }
+
+  .lobby-header-right .btn {
+    padding: var(--space-xs) 6px;
+  }
+
+  .lobby-title {
+    font-size: var(--fs-sm);
+  }
+
+  .lobby-tab {
+    padding: var(--space-sm) var(--space-sm);
+    font-size: var(--fs-xs);
+  }
+
+  /* Game header compact */
+  .game-header {
+    padding: var(--space-xs) var(--space-sm);
+    min-height: 48px;
+  }
+
+  .game-header-center {
+    gap: 4px;
+  }
+
+  .game-header-hp {
+    min-width: auto;
+    font-size: 0.65rem;
+  }
+
+  .game-header-actions .btn-icon {
+    width: 32px;
+    height: 32px;
+    font-size: var(--fs-sm);
+  }
+
+  /* Chat messages tighter */
+  .chat-messages {
+    gap: var(--space-sm);
+  }
+
+  .message-text {
+    font-size: var(--fs-sm);
+  }
+
+  /* Input compact */
+  .game-input {
+    font-size: var(--fs-sm);
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  /* Character creation */
+  .stats-grid {
+    gap: var(--space-xs);
+  }
+
+  .stat-item {
+    padding: var(--space-xs);
+  }
+
+  .stat-value {
+    font-size: var(--fs-lg);
   }
 }

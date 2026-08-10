@@ -1,8 +1,9 @@
 const CACHE_NAME = 'multirp-v2.0';
+const BASE = '/Multi-RP';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/manifest.json',
 ];
 
 self.addEventListener('install', (event) => {

@@ -2,21 +2,17 @@
   "name": "MultiRP AI — Текстовая RPG",
   "short_name": "MultiRP",
   "description": "Гибридный ИИ-Движок для текстовых ролевых игр",
-  "start_url": "/",
+  "start_url": "/Multi-RP/",
+  "scope": "/Multi-RP/",
   "display": "standalone",
   "background_color": "#1a1a2e",
   "theme_color": "#1a1a2e",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/Multi-RP/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ]
 }

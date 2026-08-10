@@ -267,7 +267,10 @@ export function renderLobby(container, user) {
               <textarea class="input" id="editCharBio" rows="3"></textarea>
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label">Характеристики</label>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                <label class="form-label" style="margin: 0;">Характеристики</label>
+                <button type="button" class="btn btn-secondary btn-sm" id="editGenerateStatsBtn">✨ AI</button>
+              </div>
               <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr); gap: 0.5rem;">
                 ${STATS.map((stat) => `
                   <div class="form-group">
@@ -275,6 +278,9 @@ export function renderLobby(container, user) {
                     <input class="input" type="number" id="edit_stat_${stat}" min="1" max="30" style="text-align: center;" />
                   </div>
                 `).join('')}
+              </div>
+              <div style="text-align: center; margin-top: 0.5rem;">
+                <span class="form-hint" id="editStatsSum"></span>
               </div>
             </div>
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
@@ -709,6 +715,62 @@ export function renderLobby(container, user) {
         loadData();
       } catch (err) {
         toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Edit modal: stats sum updater
+    function updateEditStatsSum() {
+      let sum = 0;
+      STATS.forEach((s) => { sum += parseInt(document.getElementById(`edit_stat_${s}`)?.value) || 0; });
+      const el = document.getElementById('editStatsSum');
+      if (el) {
+        el.textContent = `Сумма: ${sum} / 72`;
+        el.style.color = sum === 72 ? 'var(--accent-success)' : sum > 72 ? 'var(--accent-danger)' : 'var(--text-muted)';
+      }
+    }
+
+    STATS.forEach((s) => {
+      document.getElementById(`edit_stat_${s}`)?.addEventListener('input', updateEditStatsSum);
+    });
+    updateEditStatsSum();
+
+    // Edit modal: AI generate stats
+    document.getElementById('editGenerateStatsBtn')?.addEventListener('click', async () => {
+      const bio = document.getElementById('editCharBio')?.value?.trim();
+      if (!bio) { toast.warning('Заполните биографию для генерации статов'); return; }
+
+      const btn = document.getElementById('editGenerateStatsBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ ...';
+      try {
+        const { data, error } = await supabase.functions.invoke('generate-character', {
+          body: {
+            user_id: user.id,
+            name: document.getElementById('editCharName')?.value || '',
+            race: document.getElementById('editCharRace')?.value || '',
+            class: document.getElementById('editCharClass')?.value || '',
+            appearance: document.getElementById('editCharAppearance')?.value || '',
+            bio,
+          },
+        });
+        if (error) throw error;
+        if (data.stats) {
+          STATS.forEach((s) => {
+            const el = document.getElementById(`edit_stat_${s}`);
+            if (el && data.stats[s] !== undefined) el.value = data.stats[s];
+          });
+          updateEditStatsSum();
+          toast.success('Статы сгенерированы!');
+        }
+      } catch (err) {
+        if (err?.data?.code === 'MISSING_API_KEY') {
+          toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» в лобби и введите ключ.');
+        } else {
+          toast.error('Ошибка AI: ' + (err.message || err));
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ AI';
       }
     });
 

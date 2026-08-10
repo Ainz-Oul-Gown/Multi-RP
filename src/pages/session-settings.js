@@ -128,10 +128,15 @@ export async function renderSessionSettings(container, sessionId, user) {
           <!-- Приглашение -->
           <section class="card">
             <h2 class="card-title">🔗 Приглашение</h2>
-            <p class="form-hint" style="margin-top: 0.5rem;">Поделитесь этим ID с друзьями:</p>
+            <p class="form-hint" style="margin-top: 0.5rem;">Отправьте эту ссылку друзьям — они присоединятся одной кнопкой</p>
             <div class="invite-code-container" style="margin-top: 1rem;">
-              <code class="invite-code">${sessionId}</code>
-              <button class="btn btn-secondary btn-sm" id="copyIdBtn">📋 Копировать</button>
+              <code class="invite-code" style="flex: 1; font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis;">${window.location.origin}/Multi-RP/#/session/${sessionId}</code>
+              <button class="btn btn-secondary btn-sm" id="copyInviteBtn">📋 Копировать</button>
+            </div>
+            <p class="form-hint" style="margin-top: 0.75rem;">ID сессии (для ручного ввода):</p>
+            <div class="invite-code-container" style="margin-top: 0.5rem;">
+              <code class="invite-code" style="flex: 1; font-size: var(--fs-xs);">${sessionId}</code>
+              <button class="btn btn-ghost btn-sm" id="copyIdBtn">📋</button>
             </div>
             <button class="btn btn-primary btn-sm" id="addBotBtn" style="margin-top: 1rem;">🤖 Добавить NPC-бота</button>
           </section>
@@ -190,6 +195,13 @@ export async function renderSessionSettings(container, sessionId, user) {
     document.getElementById('copyIdBtn')?.addEventListener('click', () => {
       navigator.clipboard.writeText(sessionId);
       toast.success('ID скопирован!');
+    });
+
+    // Copy invite link
+    document.getElementById('copyInviteBtn')?.addEventListener('click', () => {
+      const url = `${window.location.origin}/Multi-RP/#/session/${sessionId}`;
+      navigator.clipboard.writeText(url);
+      toast.success('Инвайт-ссылка скопирована!');
     });
 
     // Add bot

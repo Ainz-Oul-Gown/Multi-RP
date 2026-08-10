@@ -647,6 +647,37 @@
   margin-top: 2px;
 }
 
+/* ===================== Session Player Chips ===================== */
+.session-players-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.session-player-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.player-chip-self {
+  background: rgba(233, 69, 96, 0.15);
+  color: var(--accent-primary);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+}
+
 /* ===================== File Drop Zone ===================== */
 .plot-details {
   border: 1px solid var(--border-color);

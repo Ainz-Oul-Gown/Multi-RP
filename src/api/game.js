@@ -105,7 +105,7 @@ export async function deleteLoreFile(id) {
 export async function getSessions() {
   const { data, error } = await supabase
     .from('sessions')
-    .select('*, worlds(name)')
+    .select('*, worlds(name), players(id, name, user_id, hp, max_hp, is_active)')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data;

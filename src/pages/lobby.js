@@ -157,6 +157,24 @@ export function renderLobby(container, user) {
       <!-- Скрытый input для импорта -->
       <input type="file" id="importFileInput" accept=".json" style="display: none;" />
 
+      <!-- Модальное окно: Присоединиться к сессии -->
+      <div class="modal-overlay" id="joinSessionModal">
+        <div class="modal" style="max-width: 450px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">🔗 Присоединиться к сессии</h2>
+          <p class="form-hint" style="margin-bottom: 1rem;">Вставьте ID или ссылку на сессию от друга</p>
+          <form id="joinSessionForm">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">ID или ссылка на сессию</label>
+              <input class="input" id="joinSessionInput" placeholder="abc123-def456... или https://...#/session/abc123" required />
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-secondary" id="closeJoinModal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Присоединиться</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- Модальное окно: Настройки аккаунта -->
       <div class="modal-overlay" id="accountSettingsModal">
         <div class="modal">
@@ -212,14 +230,24 @@ export function renderLobby(container, user) {
           <div class="empty-icon">🎮</div>
           <h3>Нет активных сессий</h3>
           <p>Создайте новую сессию или подключитесь к существующей</p>
-          <button class="btn btn-primary btn-lg" id="newSessionBtn">+ Новая сессия</button>
+          <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-lg" id="newSessionBtn">+ Новая сессия</button>
+            <button class="btn btn-secondary btn-lg" id="joinSessionBtn">🔗 Присоединиться</button>
+          </div>
         </div>
       `;
     }
 
     return `
+      <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn btn-primary btn-sm" id="newSessionBtn">+ Новая сессия</button>
+        <button class="btn btn-secondary btn-sm" id="joinSessionBtn">🔗 Присоединиться</button>
+      </div>
       <div class="card-grid">
-        ${sessions.map((s) => `
+        ${sessions.map((s) => {
+          const players = s.players || [];
+          const hasChar = players.some((p) => p.user_id === user.id);
+          return `
           <div class="card session-card" data-id="${s.id}">
             <div class="card-header">
               <span class="badge badge-${s.difficulty === 'easy' ? 'success' : s.difficulty === 'hard' ? 'primary' : 'info'}">
@@ -228,14 +256,29 @@ export function renderLobby(container, user) {
               ${s.is_pvp_enabled ? '<span class="badge badge-gold">PvP</span>' : ''}
             </div>
             <h3 class="card-title">${s.worlds?.name || 'Неизвестный мир'}</h3>
-            <p class="text-muted" style="margin-top: 0.5rem;">${s.current_plot_stage ? `Акт: ${s.current_plot_stage}` : 'Песочница'}</p>
+            <p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.25rem;">${s.current_plot_stage ? '📖 Сюжет' : '🎭 Песочница'}</p>
+            ${players.length ? `
+              <div class="session-players-preview" style="margin-top: 0.75rem;">
+                <span class="form-hint">👥 ${players.length} игрок(ов):</span>
+                <div class="session-player-chips">
+                  ${players.map((p) => `
+                    <span class="player-chip ${p.user_id === user.id ? 'player-chip-self' : ''}">
+                      ${p.hp > 0 ? '💚' : '💀'} ${p.name || 'Безымянный'}
+                    </span>
+                  `).join('')}
+                </div>
+              </div>
+            ` : '<p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.5rem;">Пока нет игроков</p>'}
             <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-              <button class="btn btn-primary btn-sm" data-action="join" data-id="${s.id}">Войти</button>
+              <button class="btn btn-primary btn-sm" data-action="join" data-id="${s.id}">
+                ${hasChar ? '🎮 Войти' : '⚔️ Создать героя'}
+              </button>
               <button class="btn btn-secondary btn-sm" data-action="settings" data-id="${s.id}">⚙️</button>
+              <button class="btn btn-ghost btn-sm" data-action="invite" data-id="${s.id}" title="Копировать инвайт-ссылку">🔗</button>
             </div>
           </div>
-        `).join('')}
-        <div class="card session-card new-session-card" id="newSessionBtn">
+        `}).join('')}
+        <div class="card session-card new-session-card" id="newSessionBtn2">
           <div class="empty-state" style="padding: 2rem;">
             <div class="empty-icon">+</div>
             <p>Новая сессия</p>
@@ -319,9 +362,35 @@ export function renderLobby(container, user) {
       }
     });
 
-    // New session button
-    document.getElementById('newSessionBtn')?.addEventListener('click', () => {
+    // New session button (both empty state and grid card)
+    const openNewSession = () => document.getElementById('newSessionModal').classList.add('open');
+    document.getElementById('newSessionBtn')?.addEventListener('click', openNewSession);
+    document.getElementById('newSessionBtn2')?.addEventListener('click', openNewSession);
+
+    // Join session button
+    document.getElementById('joinSessionBtn')?.addEventListener('click', () => {
+      document.getElementById('joinSessionModal').classList.add('open');
+    });
+    document.getElementById('newSessionBtn2')?.addEventListener('click', () => {
       document.getElementById('newSessionModal').classList.add('open');
+    });
+
+    // Join session form
+    document.getElementById('joinSessionForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('joinSessionInput').value.trim();
+      if (!input) return;
+
+      // Extract session ID from URL or plain text
+      let sessionId = input;
+      const urlMatch = input.match(/session\/([a-f0-9-]+)/i);
+      if (urlMatch) sessionId = urlMatch[1];
+
+      document.getElementById('joinSessionModal').classList.remove('open');
+      router.navigate(`/session/${sessionId}`);
+    });
+    document.getElementById('closeJoinModal')?.addEventListener('click', () => {
+      document.getElementById('joinSessionModal').classList.remove('open');
     });
 
     // New world button
@@ -545,6 +614,13 @@ export function renderLobby(container, user) {
     });
     container.querySelectorAll('[data-action="settings"]').forEach((btn) => {
       btn.addEventListener('click', () => router.navigate(`/session/${btn.dataset.id}/settings`));
+    });
+    container.querySelectorAll('[data-action="invite"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const url = `${window.location.origin}/Multi-RP/#/session/${btn.dataset.id}`;
+        navigator.clipboard.writeText(url);
+        toast.success('Инвайт-ссылка скопирована!');
+      });
     });
 
     // Export world

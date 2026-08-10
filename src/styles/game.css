@@ -648,6 +648,35 @@
 }
 
 /* ===================== File Drop Zone ===================== */
+.plot-details {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.plot-summary {
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  transition: background var(--transition-fast);
+}
+
+.plot-summary:hover {
+  background: var(--bg-hover);
+}
+
+.plot-summary::marker {
+  color: var(--text-muted);
+}
+
+.plot-body {
+  padding: 0 var(--space-md) var(--space-md);
+}
+
 .file-drop-zone {
   border: 2px dashed var(--border-color);
   border-radius: var(--radius-lg);

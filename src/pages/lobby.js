@@ -3,7 +3,7 @@ import { supabase, signOut } from '../api/supabase.js';
 import {
   getSessions, createSession, getWorlds, createWorld,
   importWorld, exportWorld, downloadJSON,
-  getUserSettings, upsertUserSettings
+  getUserSettings, upsertUserSettings, updateSession
 } from '../api/game.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
@@ -60,7 +60,7 @@ export function renderLobby(container, user) {
 
       <!-- Модальное окно: Новая сессия -->
       <div class="modal-overlay" id="newSessionModal">
-        <div class="modal">
+        <div class="modal" style="max-width: 550px;">
           <h2 class="card-title" style="margin-bottom: 1rem;">Новая сессия</h2>
           <form id="newSessionForm">
             <div class="form-group" style="margin-bottom: 1rem;">
@@ -83,6 +83,31 @@ export function renderLobby(container, user) {
               <div class="toggle" id="pvpToggle"></div>
               <span class="form-hint" id="pvpLabel">Выкл</span>
             </div>
+
+            <!-- Сюжет (необязательно) -->
+            <details class="plot-details" style="margin-bottom: 1rem;">
+              <summary class="plot-summary">
+                📖 Сюжетная линия <span class="form-hint">(необязательно)</span>
+              </summary>
+              <div class="plot-body">
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                  <label class="form-label">Описание сюжета</label>
+                  <textarea class="input" id="sessionPlotText" rows="4"
+                    placeholder="Опишите сюжетную линию: завязку, ключевых NPC, цели игроков, тайны и конфликты..."
+                  ></textarea>
+                  <span class="form-hint">Текст станет основой для нарратива ИИ-Мастера</span>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label">Или загрузите .txt файл</label>
+                  <div class="file-drop-zone" id="plotFileDropZone" style="padding: 0.75rem;">
+                    <p style="font-size: var(--fs-xs);">Перетащите файл или <a href="#" id="plotBrowseLink">выберите</a></p>
+                  </div>
+                  <div id="plotFileName" class="form-hint" style="margin-top: 0.25rem;"></div>
+                  <input type="file" id="plotFileInput" accept=".txt,.md" style="display: none;" />
+                </div>
+              </div>
+            </details>
+
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
               <button type="button" class="btn btn-secondary" id="closeModal">Отмена</button>
               <button type="submit" class="btn btn-primary">Создать</button>
@@ -322,10 +347,44 @@ export function renderLobby(container, user) {
     });
 
     // Create session form
+    let plotFile = null;
+
+    // Plot file drop zone
+    const plotFileDropZone = document.getElementById('plotFileDropZone');
+    const plotFileInput = document.getElementById('plotFileInput');
+
+    plotFileDropZone?.addEventListener('click', () => plotFileInput.click());
+    document.getElementById('plotBrowseLink')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      plotFileInput.click();
+    });
+    plotFileDropZone?.addEventListener('dragover', (e) => { e.preventDefault(); plotFileDropZone.classList.add('dragover'); });
+    plotFileDropZone?.addEventListener('dragleave', () => plotFileDropZone.classList.remove('dragover'));
+    plotFileDropZone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      plotFileDropZone.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) {
+        plotFile = e.dataTransfer.files[0];
+        document.getElementById('plotFileName').textContent = `📄 ${plotFile.name}`;
+      }
+    });
+    plotFileInput?.addEventListener('change', (e) => {
+      if (e.target.files[0]) {
+        plotFile = e.target.files[0];
+        document.getElementById('plotFileName').textContent = `📄 ${plotFile.name}`;
+      }
+    });
+
     document.getElementById('newSessionForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const worldId = document.getElementById('sessionWorld').value;
       const difficulty = document.getElementById('sessionDifficulty').value;
+      let plotText = document.getElementById('sessionPlotText')?.value?.trim() || '';
+
+      // If file uploaded, read its content
+      if (!plotText && plotFile) {
+        try { plotText = await plotFile.text(); } catch {}
+      }
 
       try {
         const session = await createSession({
@@ -333,7 +392,23 @@ export function renderLobby(container, user) {
           difficulty,
           is_pvp_enabled: pvpEnabled,
         });
+
+        // Save plot to lore_files if provided
+        if (plotText && plotText.length > 10) {
+          const stageName = 'custom_plot';
+          await supabase.from('lore_files').insert({
+            world_id: worldId,
+            folder: 'plot',
+            title: stageName,
+            content: plotText,
+            tags: ['сюжет', 'custom'],
+          });
+          // Set session to use this plot
+          await updateSession(session.id, { current_plot_stage: stageName });
+        }
+
         toast.success('Сессия создана!');
+        plotFile = null;
         document.getElementById('newSessionModal').classList.remove('open');
         router.navigate(`/session/${session.id}`);
       } catch (err) {

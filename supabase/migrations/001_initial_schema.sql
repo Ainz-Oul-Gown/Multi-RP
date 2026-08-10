@@ -1,14 +1,31 @@
 -- ============================================
--- MultiRP AI — Initial Schema Migration
--- Version: 2.0
+-- MultiRP AI — Initial Schema Migration v2
+-- All tables first, then policies/indexes/triggers
 -- ============================================
+
+-- Clean slate
+DROP TABLE IF EXISTS turn_queue CASCADE;
+DROP TABLE IF EXISTS messages CASCADE;
+DROP TABLE IF EXISTS inventory CASCADE;
+DROP TABLE IF EXISTS players CASCADE;
+DROP TABLE IF EXISTS sessions CASCADE;
+DROP TABLE IF EXISTS lore_files CASCADE;
+DROP TABLE IF EXISTS worlds CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at CASCADE;
+DROP FUNCTION IF EXISTS roll_d20 CASCADE;
+DROP FUNCTION IF EXISTS roll_d20_advantage CASCADE;
+DROP FUNCTION IF EXISTS roll_d20_disadvantage CASCADE;
+DROP FUNCTION IF EXISTS update_player_hp CASCADE;
+DROP FUNCTION IF EXISTS add_item_to_inventory CASCADE;
+DROP FUNCTION IF EXISTS remove_item_from_inventory CASCADE;
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================
--- 1. WORLDS (Миры / Сеттинги)
+-- TABLES (order matters for FK references)
 -- ============================================
+
 CREATE TABLE worlds (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -18,23 +35,6 @@ CREATE TABLE worlds (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Индекс по владельцу
-CREATE INDEX idx_worlds_owner ON worlds(owner_id);
-
--- RLS: только владелец может редактировать
-ALTER TABLE worlds ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Worlds: owner read/write"
-  ON worlds FOR ALL
-  USING (auth.uid() = owner_id);
-
-CREATE POLICY "Worlds: anyone can read for session creation"
-  ON worlds FOR SELECT
-  USING (true);
-
--- ============================================
--- 2. LORE_FILES (База знаний мира)
--- ============================================
 CREATE TABLE lore_files (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
@@ -46,26 +46,6 @@ CREATE TABLE lore_files (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_lore_files_world ON lore_files(world_id);
-CREATE INDEX idx_lore_files_folder ON lore_files(world_id, folder);
-CREATE INDEX idx_lore_files_tags ON lore_files USING GIN(tags);
-
-ALTER TABLE lore_files ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Lore: read for all authenticated"
-  ON lore_files FOR SELECT
-  TO authenticated
-  USING (true);
-
-CREATE POLICY "Lore: owner write"
-  ON lore_files FOR ALL
-  USING (
-    world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid())
-  );
-
--- ============================================
--- 3. SESSIONS (Игровые комнаты)
--- ============================================
 CREATE TABLE sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE RESTRICT,
@@ -76,35 +56,6 @@ CREATE TABLE sessions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_sessions_world ON sessions(world_id);
-
-ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
-
--- Любой аутентифицированный может видеть сессии
-CREATE POLICY "Sessions: read for authenticated"
-  ON sessions FOR SELECT
-  TO authenticated
-  USING (true);
-
--- Любой аутентифицированный может создавать сессии
-CREATE POLICY "Sessions: create for authenticated"
-  ON sessions FOR INSERT
-  TO authenticated
-  WITH CHECK (true);
-
--- Only session participants can update
-CREATE POLICY "Sessions: update for participants"
-  ON sessions FOR UPDATE
-  TO authenticated
-  USING (
-    id IN (
-      SELECT session_id FROM players WHERE user_id = auth.uid()
-    )
-  );
-
--- ============================================
--- 4. PLAYERS (Карточки Персонажей)
--- ============================================
 CREATE TABLE players (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -125,41 +76,6 @@ CREATE TABLE players (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_players_session ON players(session_id);
-CREATE INDEX idx_players_user ON players(user_id);
-
-ALTER TABLE players ENABLE ROW LEVEL SECURITY;
-
--- Players can read all players in their sessions
-CREATE POLICY "Players: read in same session"
-  ON players FOR SELECT
-  TO authenticated
-  USING (
-    session_id IN (
-      SELECT session_id FROM players WHERE user_id = auth.uid()
-    )
-  );
-
--- Players can create (join session)
-CREATE POLICY "Players: join session"
-  ON players FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
-
--- Players can update their own character
-CREATE POLICY "Players: update own"
-  ON players FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = user_id);
-
--- Players can update via system (Edge Functions use service_role)
-CREATE POLICY "Players: system update"
-  ON players FOR UPDATE
-  USING (true);
-
--- ============================================
--- 5. INVENTORY (Вещи и экипировка)
--- ============================================
 CREATE TABLE inventory (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -170,36 +86,6 @@ CREATE TABLE inventory (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_inventory_player ON inventory(player_id);
-
-ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Inventory: read for owner"
-  ON inventory FOR SELECT
-  TO authenticated
-  USING (
-    player_id IN (
-      SELECT id FROM players WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Inventory: manage for owner"
-  ON inventory FOR ALL
-  TO authenticated
-  USING (
-    player_id IN (
-      SELECT id FROM players WHERE user_id = auth.uid()
-    )
-  );
-
--- System policy for Edge Functions
-CREATE POLICY "Inventory: system manage"
-  ON inventory FOR ALL
-  USING (true);
-
--- ============================================
--- 6. MESSAGES (Игровой чат)
--- ============================================
 CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -211,38 +97,6 @@ CREATE TABLE messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_messages_session ON messages(session_id, created_at DESC);
-
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Messages: read for session players"
-  ON messages FOR SELECT
-  TO authenticated
-  USING (
-    session_id IN (
-      SELECT session_id FROM players WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Messages: players send"
-  ON messages FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    sender_type = 'player' AND
-    sender_id = auth.uid() AND
-    session_id IN (
-      SELECT session_id FROM players WHERE user_id = auth.uid()
-    )
-  );
-
--- System can insert (narrator messages)
-CREATE POLICY "Messages: system insert"
-  ON messages FOR INSERT
-  WITH CHECK (sender_type IN ('master', 'system'));
-
--- ============================================
--- 7. TURN_QUEUE (Очередь ходов)
--- ============================================
 CREATE TABLE turn_queue (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -255,271 +109,160 @@ CREATE TABLE turn_queue (
   resolved_at TIMESTAMPTZ
 );
 
+-- ============================================
+-- INDEXES
+-- ============================================
+
+CREATE INDEX idx_worlds_owner ON worlds(owner_id);
+CREATE INDEX idx_lore_files_world ON lore_files(world_id);
+CREATE INDEX idx_lore_files_folder ON lore_files(world_id, folder);
+CREATE INDEX idx_lore_files_tags ON lore_files USING GIN(tags);
+CREATE INDEX idx_sessions_world ON sessions(world_id);
+CREATE INDEX idx_players_session ON players(session_id);
+CREATE INDEX idx_players_user ON players(user_id);
+CREATE INDEX idx_inventory_player ON inventory(player_id);
+CREATE INDEX idx_messages_session ON messages(session_id, created_at DESC);
 CREATE INDEX idx_turn_queue_session ON turn_queue(session_id, status);
 CREATE INDEX idx_turn_queue_player ON turn_queue(player_id);
 
+-- ============================================
+-- RLS POLICIES (all tables now exist)
+-- ============================================
+
+ALTER TABLE worlds ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Worlds: owner read/write" ON worlds FOR ALL USING (auth.uid() = owner_id);
+CREATE POLICY "Worlds: anyone can read" ON worlds FOR SELECT USING (true);
+
+ALTER TABLE lore_files ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lore: read for all authenticated" ON lore_files FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Lore: owner write" ON lore_files FOR ALL USING (world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid()));
+
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Sessions: read for authenticated" ON sessions FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Sessions: create for authenticated" ON sessions FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Sessions: update for participants" ON sessions FOR UPDATE TO authenticated USING (id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+
+ALTER TABLE players ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Players: read in same session" ON players FOR SELECT TO authenticated USING (session_id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Players: join session" ON players FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+CREATE POLICY "Players: update own" ON players FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Players: system update" ON players FOR UPDATE USING (true);
+
+ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Inventory: read for owner" ON inventory FOR SELECT TO authenticated USING (player_id IN (SELECT id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Inventory: manage for owner" ON inventory FOR ALL TO authenticated USING (player_id IN (SELECT id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Inventory: system manage" ON inventory FOR ALL USING (true);
+
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Messages: read for session players" ON messages FOR SELECT TO authenticated USING (session_id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Messages: players send" ON messages FOR INSERT TO authenticated WITH CHECK (sender_type = 'player' AND sender_id = auth.uid() AND session_id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Messages: system insert" ON messages FOR INSERT WITH CHECK (sender_type IN ('master', 'system'));
+
 ALTER TABLE turn_queue ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Turn: read for session players"
-  ON turn_queue FOR SELECT
-  TO authenticated
-  USING (
-    session_id IN (
-      SELECT session_id FROM players WHERE user_id = auth.uid()
-    )
-  );
-
--- System manages turn queue
-CREATE POLICY "Turn: system manage"
-  ON turn_queue FOR ALL
-  USING (true);
+CREATE POLICY "Turn: read for session players" ON turn_queue FOR SELECT TO authenticated USING (session_id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Turn: system manage" ON turn_queue FOR ALL USING (true);
 
 -- ============================================
--- 8. RPC: Бросок кубика (Детерминированный)
+-- RPC FUNCTIONS
 -- ============================================
 
--- Функция для броска d20 с учётом модификатора
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$;
+
+CREATE TRIGGER trigger_worlds_updated_at BEFORE UPDATE ON worlds FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trigger_sessions_updated_at BEFORE UPDATE ON sessions FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trigger_players_updated_at BEFORE UPDATE ON players FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trigger_lore_files_updated_at BEFORE UPDATE ON lore_files FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
 CREATE OR REPLACE FUNCTION roll_d20(stat_value INT, difficulty_mod INT DEFAULT 0)
-RETURNS TABLE (
-  roll INT,
-  total INT,
-  success BOOLEAN
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  d20_roll INT;
-  stat_mod INT;
-  total_val INT;
+RETURNS TABLE (roll INT, total INT, success BOOLEAN)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE d20_roll INT; stat_mod INT; total_val INT;
 BEGIN
-  -- Бросаем d20
   d20_roll := floor(random() * 20 + 1)::INT;
-
-  -- Модификатор стата: (значение - 10) / 2, округлённое вниз
   stat_mod := floor((stat_value - 10) / 2.0)::INT;
-
-  -- Итого
   total_val := d20_roll + stat_mod + difficulty_mod;
-
-  RETURN QUERY SELECT
-    d20_roll AS roll,
-    total_val AS total,
-    (total_val >= 10) AS success; -- Базовая сложность = 10 (настраивается через Edge Function)
+  RETURN QUERY SELECT d20_roll AS roll, total_val AS total, (total_val >= 10) AS success;
 END;
 $$;
 
--- Функция для броска с Преимуществом (Легко)
 CREATE OR REPLACE FUNCTION roll_d20_advantage(stat_value INT)
-RETURNS TABLE (
-  rolls INT[],
-  best_roll INT,
-  total INT,
-  success BOOLEAN
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  r1 INT;
-  r2 INT;
-  best INT;
-  stat_mod INT;
-  total_val INT;
+RETURNS TABLE (rolls INT[], best_roll INT, total INT, success BOOLEAN)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE r1 INT; r2 INT; best INT; stat_mod INT; total_val INT;
 BEGIN
   r1 := floor(random() * 20 + 1)::INT;
   r2 := floor(random() * 20 + 1)::INT;
   best := GREATEST(r1, r2);
-
   stat_mod := floor((stat_value - 10) / 2.0)::INT;
   total_val := best + stat_mod;
-
-  RETURN QUERY SELECT
-    ARRAY[r1, r2] AS rolls,
-    best AS best_roll,
-    total_val AS total,
-    (total_val >= 10) AS success;
+  RETURN QUERY SELECT ARRAY[r1, r2] AS rolls, best AS best_roll, total_val AS total, (total_val >= 10) AS success;
 END;
 $$;
 
--- Функция для броска с Помехой (Хардкор)
 CREATE OR REPLACE FUNCTION roll_d20_disadvantage(stat_value INT)
-RETURNS TABLE (
-  rolls INT[],
-  worst_roll INT,
-  total INT,
-  success BOOLEAN
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  r1 INT;
-  r2 INT;
-  worst INT;
-  stat_mod INT;
-  total_val INT;
+RETURNS TABLE (rolls INT[], worst_roll INT, total INT, success BOOLEAN)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE r1 INT; r2 INT; worst INT; stat_mod INT; total_val INT;
 BEGIN
   r1 := floor(random() * 20 + 1)::INT;
   r2 := floor(random() * 20 + 1)::INT;
   worst := LEAST(r1, r2);
-
   stat_mod := floor((stat_value - 10) / 2.0)::INT;
   total_val := worst + stat_mod;
-
-  RETURN QUERY SELECT
-    ARRAY[r1, r2] AS rolls,
-    worst AS worst_roll,
-    total_val AS total,
-    (total_val >= 10) AS success;
+  RETURN QUERY SELECT ARRAY[r1, r2] AS rolls, worst AS worst_roll, total_val AS total, (total_val >= 10) AS success;
 END;
 $$;
 
--- ============================================
--- 9. RPC: Безопасное обновление HP (транзакция)
--- ============================================
-CREATE OR REPLACE FUNCTION update_player_hp(
-  p_player_id UUID,
-  p_hp_change INT
-)
-RETURNS TABLE (
-  new_hp INT,
-  new_max_hp INT,
-  is_alive BOOLEAN
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  current_hp_val INT;
-  max_hp_val INT;
-  new_hp_val INT;
+CREATE OR REPLACE FUNCTION update_player_hp(p_player_id UUID, p_hp_change INT)
+RETURNS TABLE (new_hp INT, new_max_hp INT, is_alive BOOLEAN)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE current_hp_val INT; max_hp_val INT; new_hp_val INT;
 BEGIN
-  -- Атомарное чтение с блокировкой строки
-  SELECT hp, max_hp INTO current_hp_val, max_hp_val
-  FROM players
-  WHERE id = p_player_id
-  FOR UPDATE;
-
+  SELECT hp, max_hp INTO current_hp_val, max_hp_val FROM players WHERE id = p_player_id FOR UPDATE;
   new_hp_val := GREATEST(0, LEAST(max_hp_val, current_hp_val + p_hp_change));
-
   UPDATE players SET hp = new_hp_val WHERE id = p_player_id;
-
-  RETURN QUERY SELECT
-    new_hp_val AS new_hp,
-    max_hp_val AS new_max_hp,
-    (new_hp_val > 0) AS is_alive;
+  RETURN QUERY SELECT new_hp_val AS new_hp, max_hp_val AS new_max_hp, (new_hp_val > 0) AS is_alive;
 END;
 $$;
 
--- ============================================
--- 10. RPC: Безопасное добавление предмета (транзакция)
--- ============================================
-CREATE OR REPLACE FUNCTION add_item_to_inventory(
-  p_player_id UUID,
-  p_item_name TEXT,
-  p_quantity INT DEFAULT 1,
-  p_type TEXT DEFAULT 'misc',
-  p_attributes JSONB DEFAULT '{}'
-)
-RETURNS UUID
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  existing_item_id UUID;
-  new_id UUID;
+CREATE OR REPLACE FUNCTION add_item_to_inventory(p_player_id UUID, p_item_name TEXT, p_quantity INT DEFAULT 1, p_type TEXT DEFAULT 'misc', p_attributes JSONB DEFAULT '{}')
+RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item_id UUID; new_id UUID;
 BEGIN
-  -- Попытка найти существующий стак
-  SELECT id INTO existing_item_id
-  FROM inventory
-  WHERE player_id = p_player_id AND item_name = p_item_name AND type = p_type
-  FOR UPDATE;
-
+  SELECT id INTO existing_item_id FROM inventory WHERE player_id = p_player_id AND item_name = p_item_name AND type = p_type FOR UPDATE;
   IF existing_item_id IS NOT NULL THEN
-    -- Увеличиваем количество
-    UPDATE inventory
-    SET quantity = quantity + p_quantity
-    WHERE id = existing_item_id;
-
+    UPDATE inventory SET quantity = quantity + p_quantity WHERE id = existing_item_id;
     RETURN existing_item_id;
   ELSE
-    -- Создаём новый предмет
     new_id := uuid_generate_v4();
-    INSERT INTO inventory (id, player_id, item_name, quantity, type, attributes)
-    VALUES (new_id, p_player_id, p_item_name, p_quantity, p_type, p_attributes);
-
+    INSERT INTO inventory (id, player_id, item_name, quantity, type, attributes) VALUES (new_id, p_player_id, p_item_name, p_quantity, p_type, p_attributes);
     RETURN new_id;
   END IF;
 END;
 $$;
 
--- ============================================
--- 11. RPC: Безопасное удаление предмета
--- ============================================
-CREATE OR REPLACE FUNCTION remove_item_from_inventory(
-  p_player_id UUID,
-  p_item_name TEXT,
-  p_quantity INT DEFAULT 1
-)
-RETURNS BOOLEAN
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  existing_item RECORD;
+CREATE OR REPLACE FUNCTION remove_item_from_inventory(p_player_id UUID, p_item_name TEXT, p_quantity INT DEFAULT 1)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item RECORD;
 BEGIN
-  SELECT id, quantity INTO existing_item
-  FROM inventory
-  WHERE player_id = p_player_id AND item_name = p_item_name
-  FOR UPDATE;
-
-  IF NOT FOUND THEN
-    RETURN FALSE; -- Предмет не найден (фантомный предмет)
-  END IF;
-
+  SELECT id, quantity INTO existing_item FROM inventory WHERE player_id = p_player_id AND item_name = p_item_name FOR UPDATE;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
   IF existing_item.quantity <= p_quantity THEN
     DELETE FROM inventory WHERE id = existing_item.id;
   ELSE
     UPDATE inventory SET quantity = quantity - p_quantity WHERE id = existing_item.id;
   END IF;
-
   RETURN TRUE;
 END;
 $$;
 
 -- ============================================
--- 12. TRIGGER: Auto-update updated_at
+-- ENABLE REALTIME
 -- ============================================
-CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$;
 
-CREATE TRIGGER trigger_worlds_updated_at
-  BEFORE UPDATE ON worlds
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
-CREATE TRIGGER trigger_sessions_updated_at
-  BEFORE UPDATE ON sessions
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
-CREATE TRIGGER trigger_players_updated_at
-  BEFORE UPDATE ON players
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
-CREATE TRIGGER trigger_lore_files_updated_at
-  BEFORE UPDATE ON lore_files
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
--- ============================================
--- 13. Enable Realtime
--- ============================================
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 ALTER PUBLICATION supabase_realtime ADD TABLE players;
 ALTER PUBLICATION supabase_realtime ADD TABLE turn_queue;

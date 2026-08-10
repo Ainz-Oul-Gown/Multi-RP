@@ -3,7 +3,9 @@ import { supabase, signOut } from '../api/supabase.js';
 import {
   getSessions, createSession, getWorlds, createWorld,
   importWorld, exportWorld, downloadJSON,
-  getUserSettings, upsertUserSettings, updateSession
+  getUserSettings, upsertUserSettings, updateSession,
+  getCharacterCards, createCharacterCard, deleteCharacterCard,
+  exportPlayer
 } from '../api/game.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
@@ -13,11 +15,13 @@ export function renderLobby(container, user) {
   let sessions = [];
   let worlds = [];
   let userSettings = null;
+  let characterCards = [];
 
   async function loadData() {
     try {
-      [sessions, worlds, userSettings] = await Promise.all([
-        getSessions(), getWorlds(), getUserSettings(user.id)
+      [sessions, worlds, userSettings, characterCards] = await Promise.all([
+        getSessions(), getWorlds(), getUserSettings(user.id),
+        getCharacterCards(user.id)
       ]);
     } catch (err) {
       toast.error('Ошибка загрузки данных: ' + err.message);
@@ -38,7 +42,6 @@ export function renderLobby(container, user) {
             <span class="badge badge-primary">${user.email}</span>
           </div>
           <div class="lobby-header-right">
-            <button class="btn btn-ghost" id="importWorldBtn">📥 Импорт мира</button>
             <button class="btn btn-ghost" id="accountSettingsBtn">⚙️ Аккаунт</button>
             <button class="btn btn-ghost" id="signOutBtn">Выйти</button>
           </div>
@@ -48,13 +51,16 @@ export function renderLobby(container, user) {
           <button class="lobby-tab ${activeTab === 'sessions' ? 'active' : ''}" data-tab="sessions">
             🎮 Сессии (${sessions.length})
           </button>
+          <button class="lobby-tab ${activeTab === 'characters' ? 'active' : ''}" data-tab="characters">
+            ⚔️ Персонажи (${characterCards.length})
+          </button>
           <button class="lobby-tab ${activeTab === 'worlds' ? 'active' : ''}" data-tab="worlds">
             🌍 Миры (${worlds.length})
           </button>
         </nav>
 
         <main class="lobby-content" id="lobbyContent">
-          ${activeTab === 'sessions' ? renderSessions() : renderWorlds()}
+          ${activeTab === 'sessions' ? renderSessions() : activeTab === 'characters' ? renderCharacters() : renderWorlds()}
         </main>
       </div>
 
@@ -147,6 +153,7 @@ export function renderLobby(container, user) {
               <pre class="world-settings-preview" id="aiSettingsOutput"></pre>
             </div>
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-ghost btn-sm" id="importWorldFromModalBtn" style="margin-right: auto;">📥 Импорт мира</button>
               <button type="button" class="btn btn-secondary" id="closeWorldModal">Отмена</button>
               <button type="submit" class="btn btn-primary" id="createWorldBtn">✨ Создать мир</button>
             </div>
@@ -156,6 +163,57 @@ export function renderLobby(container, user) {
 
       <!-- Скрытый input для импорта -->
       <input type="file" id="importFileInput" accept=".json" style="display: none;" />
+      <input type="file" id="importCharFileInput" accept=".json" style="display: none;" />
+
+      <!-- Модальное окно: Новый персонаж -->
+      <div class="modal-overlay" id="newCharModal">
+        <div class="modal" style="max-width: 500px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">⚔️ Новый персонаж</h2>
+          <p class="form-hint" style="margin-bottom: 1rem;">Создайте героя — он останется у вас и сможет участвовать в любых сессиях</p>
+          <form id="newCharForm">
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Имя героя *</label>
+              <input class="input" id="charName" placeholder="Эльдрин" required />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div class="form-group">
+                <label class="form-label">Раса</label>
+                <input class="input" id="charRace" placeholder="Человек" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Класс</label>
+                <input class="input" id="charClass" placeholder="Воин" required />
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Внешность</label>
+              <textarea class="input" id="charAppearance" rows="2" placeholder="Высокий мужчина с шрамом..."></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Биография</label>
+              <textarea class="input" id="charBio" rows="3" placeholder="Родился в деревне на краю мира..."></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                <label class="form-label" style="margin: 0;">Характеристики</label>
+                <button type="button" class="btn btn-secondary btn-sm" id="generateStatsBtn">✨ AI</button>
+              </div>
+              <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr); gap: 0.5rem;" id="statsGrid">
+                ${STATS.map((stat) => `
+                  <div class="form-group">
+                    <label class="form-hint">${stat}</label>
+                    <input class="input" type="number" id="stat_${stat}" value="10" min="1" max="30" style="text-align: center;" />
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-secondary" id="closeCharModal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Создать</button>
+            </div>
+          </form>
+        </div>
+      </div>
 
       <!-- Модальное окно: Присоединиться к сессии -->
       <div class="modal-overlay" id="joinSessionModal">
@@ -290,6 +348,9 @@ export function renderLobby(container, user) {
 
   function renderWorlds() {
     return `
+      <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn btn-primary btn-sm" id="newWorldBtn2">+ Новый мир</button>
+      </div>
       <div class="card-grid">
         ${worlds.map((w) => `
           <div class="card world-card">
@@ -309,6 +370,56 @@ export function renderLobby(container, user) {
             <p>Новый мир</p>
           </div>
         </div>
+      </div>
+    `;
+  }
+
+  function renderCharacters() {
+    if (!characterCards.length) {
+      return `
+        <div class="empty-state">
+          <div class="empty-icon">⚔️</div>
+          <h3>Нет персонажей</h3>
+          <p>Создайте героя или импортируйте из файла</p>
+          <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-lg" id="newCharBtn">+ Создать персонажа</button>
+            <button class="btn btn-secondary btn-lg" id="importCharBtn">📥 Импорт .json</button>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn btn-primary btn-sm" id="newCharBtn2">+ Создать персонажа</button>
+        <button class="btn btn-secondary btn-sm" id="importCharBtn2">📥 Импорт .json</button>
+      </div>
+      <div class="card-grid">
+        ${characterCards.map((c) => {
+          const stats = c.stats || {};
+          const total = Object.values(stats).reduce((s, v) => s + (v || 0), 0);
+          return `
+          <div class="card char-card">
+            <div class="card-header">
+              <h3 class="card-title">⚔️ ${c.name}</h3>
+            </div>
+            <p class="text-muted" style="font-size: var(--fs-sm);">${c.race} / ${c.class}</p>
+            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 0.5rem;">
+              ${STATS.map((s) => `
+                <div class="stat-item" style="padding: 4px; text-align: center;">
+                  <div class="stat-label" style="font-size: 0.6rem;">${s}</div>
+                  <div class="stat-value" style="font-size: var(--fs-sm);">${stats[s] || 10}</div>
+                </div>
+              `).join('')}
+            </div>
+            <p class="form-hint" style="text-align: center; margin-top: 0.5rem;">HP: ${c.hp}/${c.max_hp} | 💰 ${c.money} | Сумма: ${total}</p>
+            ${c.bio ? `<p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${c.bio}</p>` : ''}
+            <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+              <button class="btn btn-secondary btn-sm" data-action="export-char" data-id="${c.id}">📤</button>
+              <button class="btn btn-ghost btn-sm" data-action="delete-char" data-id="${c.id}">🗑️</button>
+            </div>
+          </div>
+        `}).join('')}
       </div>
     `;
   }
@@ -393,9 +504,151 @@ export function renderLobby(container, user) {
       document.getElementById('joinSessionModal').classList.remove('open');
     });
 
-    // New world button
-    document.getElementById('newWorldBtn')?.addEventListener('click', () => {
-      document.getElementById('newWorldModal').classList.add('open');
+    // New world button (both empty state and grid card)
+    const openNewWorld = () => document.getElementById('newWorldModal').classList.add('open');
+    document.getElementById('newWorldBtn')?.addEventListener('click', openNewWorld);
+    document.getElementById('newWorldBtn2')?.addEventListener('click', openNewWorld);
+    document.getElementById('importWorldFromModalBtn')?.addEventListener('click', () => {
+      document.getElementById('importFileInput').click();
+    });
+
+    // Character card buttons
+    const openNewChar = () => document.getElementById('newCharModal').classList.add('open');
+    document.getElementById('newCharBtn')?.addEventListener('click', openNewChar);
+    document.getElementById('newCharBtn2')?.addEventListener('click', openNewChar);
+
+    document.getElementById('closeCharModal')?.addEventListener('click', () => {
+      document.getElementById('newCharModal').classList.remove('open');
+    });
+
+    // Import character buttons
+    const openImportChar = () => document.getElementById('importCharFileInput').click();
+    document.getElementById('importCharBtn')?.addEventListener('click', openImportChar);
+    document.getElementById('importCharBtn2')?.addEventListener('click', openImportChar);
+    document.getElementById('importCharFileInput')?.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const card = data.character || data;
+        await createCharacterCard({
+          owner_id: user.id,
+          name: card.name || 'Безымянный',
+          race: card.race || 'Человек',
+          class: card.class || 'Воин',
+          appearance: card.appearance || '',
+          personality: card.personality || {},
+          bio: card.bio || '',
+          power_level: card.power_level || 10,
+          stats: card.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+          hp: card.hp || 30,
+          max_hp: card.max_hp || 30,
+          money: card.money || 50,
+        });
+        toast.success(`Персонаж «${card.name || 'Безымянный'}» импортирован!`);
+        loadData();
+      } catch (err) {
+        toast.error('Ошибка импорта: ' + err.message);
+      }
+    });
+
+    // Character card actions
+    container.querySelectorAll('[data-action="export-char"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const card = characterCards.find((c) => c.id === btn.dataset.id);
+          if (!card) return;
+          const exportData = {
+            version: '2.0',
+            exported_at: new Date().toISOString(),
+            character: {
+              name: card.name, race: card.race, class: card.class,
+              appearance: card.appearance, personality: card.personality,
+              bio: card.bio, power_level: card.power_level,
+              stats: card.stats, hp: card.hp, max_hp: card.max_hp, money: card.money,
+            },
+          };
+          downloadJSON(exportData, `${card.name}_character.json`);
+          toast.success('Персонаж экспортирован!');
+        } catch (err) {
+          toast.error('Ошибка: ' + err.message);
+        }
+      });
+    });
+
+    container.querySelectorAll('[data-action="delete-char"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Удалить персонажа?')) return;
+        try {
+          await deleteCharacterCard(btn.dataset.id);
+          toast.success('Персонаж удалён');
+          loadData();
+        } catch (err) {
+          toast.error('Ошибка: ' + err.message);
+        }
+      });
+    });
+
+    // Create character card form
+    document.getElementById('newCharForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const stats = {};
+      STATS.forEach((s) => { stats[s] = parseInt(document.getElementById(`stat_${s}`)?.value) || 10; });
+
+      try {
+        await createCharacterCard({
+          owner_id: user.id,
+          name: document.getElementById('charName').value,
+          race: document.getElementById('charRace').value,
+          class: document.getElementById('charClass').value,
+          appearance: document.getElementById('charAppearance').value,
+          bio: document.getElementById('charBio').value,
+          personality: { ideals: [], bonds: [], flaws: [] },
+          power_level: 10,
+          stats,
+          hp: stats.CON * 2 + 10,
+          max_hp: stats.CON * 2 + 10,
+          money: 50,
+        });
+        toast.success('Персонаж создан!');
+        document.getElementById('newCharModal').classList.remove('open');
+        loadData();
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Generate stats via AI (in character card modal)
+    document.getElementById('generateStatsBtn')?.addEventListener('click', async () => {
+      const bio = document.getElementById('charBio')?.value?.trim();
+      if (!bio) { toast.warning('Заполните биографию для генерации статов'); return; }
+
+      const btn = document.getElementById('generateStatsBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ ...';
+      try {
+        const { data, error } = await supabase.functions.invoke('generate-character', {
+          body: {
+            user_id: user.id,
+            name: document.getElementById('charName')?.value || '',
+            race: document.getElementById('charRace')?.value || '',
+            class: document.getElementById('charClass')?.value || '',
+            appearance: document.getElementById('charAppearance')?.value || '',
+            bio,
+          },
+        });
+        if (error) throw error;
+        if (data.stats) {
+          STATS.forEach((s) => { const el = document.getElementById(`stat_${s}`); if (el && data.stats[s] !== undefined) el.value = data.stats[s]; });
+          toast.success('Статы сгенерированы!');
+        }
+      } catch (err) {
+        toast.error('Ошибка AI: ' + (err.message || err));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ AI';
+      }
     });
 
     // Close modals
@@ -637,10 +890,7 @@ export function renderLobby(container, user) {
       });
     });
 
-    // Import world
-    document.getElementById('importWorldBtn')?.addEventListener('click', () => {
-      document.getElementById('importFileInput').click();
-    });
+    // Import world (from modal)
     document.getElementById('importFileInput')?.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;

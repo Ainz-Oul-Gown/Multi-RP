@@ -3,7 +3,8 @@ import { supabase, subscribeToSessionMessages, subscribeToSessionPlayers } from 
 import {
   getSession, getSessionPlayers, getPlayer, getPlayerInventory,
   getSessionMessages, submitAction, updatePlayer, addInventoryItem,
-  removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn, createPlayer
+  removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn, createPlayer,
+  getCharacterCards
 } from '../api/game.js';
 import { STATS } from '../config.js';
 import { toast } from '../utils/toast.js';
@@ -549,44 +550,74 @@ export async function renderGame(container, sessionId, user) {
     return div.innerHTML;
   }
 
-  // Character creation screen (when player has no character)
+  // Character creation / selection screen
   function renderCharacterCreation() {
+    // Try to load existing cards
+    getCharacterCards(user.id).then((cards) => {
+      const cardsEl = document.getElementById('existingCardsList');
+      if (cardsEl && cards.length) {
+        cardsEl.innerHTML = cards.map((c) => {
+          const stats = c.stats || {};
+          return `
+            <div class="card char-select-card" data-card-id="${c.id}">
+              <div class="card-header">
+                <h3 style="font-weight: 700;">⚔️ ${c.name}</h3>
+                <span class="badge badge-info">${c.race} / ${c.class}</span>
+              </div>
+              <p class="text-muted" style="font-size: var(--fs-xs);">HP: ${c.hp}/${c.max_hp} | 💰 ${c.money}</p>
+              <p class="text-muted" style="font-size: var(--fs-xs); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${c.bio || 'Без биографии'}</p>
+              <button class="btn btn-primary btn-sm char-select-btn" data-card-id="${c.id}" style="margin-top: 0.5rem; width: 100%;">Выбрать этого героя</button>
+            </div>
+          `;
+        }).join('');
+      } else if (cardsEl) {
+        cardsEl.innerHTML = '<p class="text-muted" style="text-align: center;">У вас пока нет карточек. Создайте нового героя ниже.</p>';
+      }
+    });
+
     container.innerHTML = `
       <div class="page page-centered">
-        <div class="card" style="max-width: 500px; width: 100%;">
-          <h2 class="card-title" style="margin-bottom: 1rem;">⚔️ Создание персонажа</h2>
+        <div class="card" style="max-width: 600px; width: 100%;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">⚔️ Создание персонажа</h2>
+          <p class="form-hint" style="margin-bottom: 1rem;">Выберите существующего героя или создайте нового</p>
+
+          <!-- Существующие карточки -->
+          <div id="existingCardsList" class="char-select-grid" style="margin-bottom: 1.5rem;">
+            <p class="text-muted" style="text-align: center;">Загрузка карточек...</p>
+          </div>
+
+          <div class="auth-divider" style="margin: 1rem 0;"><span>или создайте нового</span></div>
+
+          <!-- Создание нового -->
           <form id="createCharacterForm">
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label">Имя героя</label>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Имя героя *</label>
               <input class="input" id="charName" placeholder="Эльдрин" required />
             </div>
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label">Раса</label>
-              <input class="input" id="charRace" placeholder="Человек" required />
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div class="form-group">
+                <label class="form-label">Раса</label>
+                <input class="input" id="charRace" placeholder="Человек" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Класс</label>
+                <input class="input" id="charClass" placeholder="Воин" required />
+              </div>
             </div>
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label">Класс</label>
-              <input class="input" id="charClass" placeholder="Воин" required />
-            </div>
-            <div class="form-group" style="margin-bottom: 1rem;">
+            <div class="form-group" style="margin-bottom: 0.75rem;">
               <label class="form-label">Внешность</label>
               <textarea class="input" id="charAppearance" rows="2" placeholder="Высокий мужчина с шрамом на левом глазу..."></textarea>
             </div>
-            <div class="form-group" style="margin-bottom: 1rem;">
+            <div class="form-group" style="margin-bottom: 0.75rem;">
               <label class="form-label">Биография</label>
               <textarea class="input" id="charBio" rows="3" placeholder="Родился в деревне на краю мира..."></textarea>
             </div>
-            <div class="form-group" style="margin-bottom: 1.5rem;">
+            <div class="form-group" style="margin-bottom: 1rem;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                <label class="form-label" style="margin: 0;">Характеристики (по умолчанию 10)</label>
-                <button type="button" class="btn btn-secondary btn-sm" id="generateStatsBtn">
-                  ✨ Сгенерировать нейросетью
-                </button>
+                <label class="form-label" style="margin: 0;">Характеристики</label>
+                <button type="button" class="btn btn-secondary btn-sm" id="generateStatsBtn">✨ AI</button>
               </div>
-              <div id="statsLoading" style="display: none; text-align: center; padding: 1rem; color: var(--text-muted);">
-                Нейросеть анализирует биографию...
-              </div>
-              <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 0.5rem;" id="statsGrid">
+              <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr); gap: 0.5rem;" id="statsGrid">
                 ${STATS.map((stat) => `
                   <div class="form-group">
                     <label class="form-hint">${stat}</label>
@@ -604,6 +635,41 @@ export async function renderGame(container, sessionId, user) {
       </div>
     `;
 
+    // Select existing card handler
+    container.querySelectorAll('.char-select-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const cardId = btn.dataset.cardId;
+        try {
+          const card = cards.find((c) => c.id === cardId);
+          if (!card) return;
+
+          currentPlayer = await createPlayer({
+            session_id: sessionId,
+            user_id: user.id,
+            name: card.name,
+            race: card.race,
+            class: card.class,
+            appearance: card.appearance,
+            bio: card.bio,
+            personality: card.personality || {},
+            power_level: card.power_level,
+            stats: card.stats,
+            hp: card.hp,
+            max_hp: card.max_hp,
+            money: card.money,
+          });
+
+          allPlayers.push(currentPlayer);
+          toast.success(`Герой «${card.name}» выбран!`);
+          render();
+          subscribeRealtime();
+        } catch (err) {
+          toast.error('Ошибка: ' + err.message);
+        }
+      });
+    });
+
+    // Create new character
     document.getElementById('createCharacterForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
 

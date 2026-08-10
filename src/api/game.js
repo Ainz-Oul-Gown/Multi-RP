@@ -273,6 +273,54 @@ export async function submitAction(sessionId, playerId, actionText) {
   return data;
 }
 
+// ===================== CHARACTER CARDS =====================
+
+export async function getCharacterCards(userId) {
+  const { data, error } = await supabase
+    .from('character_cards')
+    .select('*')
+    .eq('owner_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function getCharacterCard(id) {
+  const { data, error } = await supabase
+    .from('character_cards')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createCharacterCard(card) {
+  const { data, error } = await supabase
+    .from('character_cards')
+    .insert(card)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateCharacterCard(id, updates) {
+  const { data, error } = await supabase
+    .from('character_cards')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCharacterCard(id) {
+  const { error } = await supabase.from('character_cards').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ===================== USER SETTINGS =====================
 
 export async function getUserSettings(userId) {

@@ -647,6 +647,22 @@
   margin-top: 2px;
 }
 
+/* ===================== Character Select Grid ===================== */
+.char-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--space-sm);
+}
+
+.char-select-card {
+  cursor: default;
+  padding: var(--space-md);
+}
+
+.char-select-card:hover {
+  border-color: var(--accent-primary);
+}
+
 /* ===================== Session Player Chips ===================== */
 .session-players-preview {
   display: flex;

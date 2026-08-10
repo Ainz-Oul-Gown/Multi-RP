@@ -1,8 +1,2 @@
-{
-  "project_id": "YOUR_SUPABASE_PROJECT_ID",
-  "functions": {
-    "process-turn": {
-      "verify_jwt": true
-    }
-  }
-}
+[project]
+id = "xhzpxiiqrtmeduynqmsd"

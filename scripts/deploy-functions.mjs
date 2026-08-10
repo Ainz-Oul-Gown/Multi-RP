@@ -8,26 +8,34 @@ const projectId = 'xhzpxiiqrtmeduynqmsd';
 async function deployFunction(slug, filePath) {
   console.log(`\n=== Deploying: ${slug} ===`);
   const code = readFileSync(filePath, 'utf-8');
-  let res = await fetch(`https://api.supabase.com/v1/projects/${projectId}/functions`, {
+
+  // Get existing
+  const listRes = await fetch(`https://api.supabase.com/v1/projects/${projectId}/functions`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const list = await listRes.json();
+  const existing = list.find(f => f.slug === slug);
+
+  if (existing) {
+    console.log(`Deleting existing ${slug}...`);
+    await fetch(`https://api.supabase.com/v1/projects/${projectId}/functions/${existing.id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    // Wait for deletion to propagate
+    await new Promise(r => setTimeout(r, 2000));
+  }
+
+  console.log(`Creating ${slug}...`);
+  const res = await fetch(`https://api.supabase.com/v1/projects/${projectId}/functions`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ slug, name: slug, body: code, verify_jwt: true }),
   });
-  let data = await res.text();
+  const data = await res.text();
   console.log(`Create: ${res.status}`);
-  if (res.status === 409 || data.includes('already exists')) {
-    const list = await (await fetch(`https://api.supabase.com/v1/projects/${projectId}/functions`, { headers: { 'Authorization': `Bearer ${token}` } })).json();
-    const fn = list.find(f => f.slug === slug);
-    if (fn) {
-      res = await fetch(`https://api.supabase.com/v1/projects/${projectId}/functions/${fn.id}`, {
-        method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: code, verify_jwt: true }),
-      });
-      data = await res.text();
-      console.log(`Update: ${res.status}`);
-    }
-  }
-  if (!res.ok) { console.error(`FAILED: ${data.slice(0, 300)}`); return false; }
+
+  if (!res.ok) { console.error(`FAILED: ${data.slice(0, 500)}`); return false; }
   console.log(`OK: ${slug}`);
   return true;
 }

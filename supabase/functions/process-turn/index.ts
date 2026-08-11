@@ -133,6 +133,16 @@ ${params.recentMessages.length ? `Предыдущие события:\n${params
 ВАЖНО: Опиши результат действия от лица Мастера. Сделай это живым языком. Никаких цифр и игровой терминологии.`;
 }
 
+function sanitizeKey(raw: string): string {
+  return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
+}
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 // ============================================
 // AI API Call
 // ============================================
@@ -207,15 +217,8 @@ function parseAIJson(text: string): any {
 // Main Handler
 // ============================================
 serve(async (req) => {
-  // CORS
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
-      },
-    });
+    return new Response("ok", { headers: CORS });
   }
 
   try {
@@ -224,7 +227,7 @@ serve(async (req) => {
     if (!session_id || !player_id || !action_text) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
@@ -243,14 +246,14 @@ serve(async (req) => {
     if (playerErr || !player) {
       return new Response(JSON.stringify({ error: "Player not found" }), {
         status: 404,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
     // ============================================
     // STEP 0.1: Resolve user's OpenRouter API key
     // ============================================
-    let openrouterApiKey = FALLBACK_OPENROUTER_KEY;
+    let openrouterApiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
 
     if (player.user_id) {
       const { data: userSettings } = await supabase
@@ -260,7 +263,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (userSettings?.openrouter_key) {
-        openrouterApiKey = userSettings.openrouter_key;
+        openrouterApiKey = sanitizeKey(userSettings.openrouter_key);
       }
     }
 
@@ -270,10 +273,7 @@ serve(async (req) => {
         code: "MISSING_API_KEY",
       }), {
         status: 402,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
+        headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
@@ -286,7 +286,7 @@ serve(async (req) => {
     if (!session) {
       return new Response(JSON.stringify({ error: "Session not found" }), {
         status: 404,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
@@ -366,7 +366,7 @@ serve(async (req) => {
         raw: rawParserResponse,
       }), {
         status: 422,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
@@ -392,7 +392,7 @@ serve(async (req) => {
             is_phantom_item: true,
           }), {
             status: 200,
-            headers: { "Content-Type": "application/json" },
+            headers: { ...CORS, "Content-Type": "application/json" },
           });
         }
       }
@@ -573,10 +573,7 @@ serve(async (req) => {
       parsed_action: parsedAction,
     }), {
       status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-      },
+      headers: { ...CORS, "Content-Type": "application/json" },
     });
 
   } catch (err) {
@@ -585,10 +582,7 @@ serve(async (req) => {
       error: err.message || "Internal server error",
     }), {
       status: 500,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-      },
+      headers: { ...CORS, "Content-Type": "application/json" },
     });
   }
 });

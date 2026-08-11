@@ -41,15 +41,19 @@ function parseAIJson(text: string): any {
   return null;
 }
 
-serve(async (req) => {
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
+function sanitizeKey(raw: string): string {
+  return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
+}
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: CORS });
   }
 
   try {
@@ -58,35 +62,27 @@ serve(async (req) => {
     if (!user_id || !bio) {
       return new Response(JSON.stringify({ error: "user_id и bio обязательны" }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // Resolve API key
-    let apiKey = FALLBACK_OPENROUTER_KEY;
+    let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
     const { data: userSettings } = await supabase
       .from("user_settings")
       .select("openrouter_key")
       .eq("id", user_id)
       .maybeSingle();
-
-    if (userSettings?.openrouter_key) {
-      apiKey = userSettings.openrouter_key;
-    }
+    if (userSettings?.openrouter_key) apiKey = sanitizeKey(userSettings.openrouter_key);
 
     if (!apiKey) {
       return new Response(JSON.stringify({
         error: "Укажите ваш OpenRouter API Key в настройках аккаунта.",
         code: "MISSING_API_KEY",
-      }), {
-        status: 402,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
-    // Build user message from character info
     const userMessage = [
       name ? `Имя: ${name}` : "",
       race ? `Раса: ${race}` : "",
@@ -95,7 +91,6 @@ serve(async (req) => {
       `Биография: ${bio}`,
     ].filter(Boolean).join("\n");
 
-    // Call AI
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -117,8 +112,7 @@ serve(async (req) => {
       const errText = await response.text();
       console.error("AI API error:", errText);
       return new Response(JSON.stringify({ error: "Ошибка AI API" }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 502, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
@@ -128,12 +122,10 @@ serve(async (req) => {
 
     if (!stats) {
       return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 422, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
-    // Validate: sum must be 72, each stat 3-18
     const validStats = ["STR", "DEX", "CON", "INT", "WIS", "CHA"];
     const result: Record<string, number> = {};
     let sum = 0;
@@ -144,32 +136,25 @@ serve(async (req) => {
       sum += val;
     }
 
-    // Normalize to exactly 72 if needed
     if (sum !== 72) {
       const diff = 72 - sum;
-      // Adjust the stat furthest from 10
       let adjustStat = "STR";
       let maxDist = 0;
       for (const s of validStats) {
         const dist = Math.abs(result[s] - 10);
-        if (dist > maxDist) {
-          maxDist = dist;
-          adjustStat = s;
-        }
+        if (dist > maxDist) { maxDist = dist; adjustStat = s; }
       }
       result[adjustStat] = Math.min(18, Math.max(3, result[adjustStat] + diff));
     }
 
     return new Response(JSON.stringify({ stats: result }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200, headers: { ...CORS, "Content-Type": "application/json" },
     });
 
   } catch (err) {
     console.error("generate-character error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
+      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
     });
   }
 });

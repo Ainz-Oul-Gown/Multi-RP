@@ -762,9 +762,10 @@ export function renderLobby(container, user) {
         }
       } catch (err) {
         if (err?.data?.code === 'MISSING_API_KEY') {
-          toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» в лобби и введите ключ.');
+          toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» и введите ключ.');
         } else {
-          toast.error('Ошибка AI: ' + (err.message || err));
+          const detail = err?.data?.details || err?.data?.error || err.message || 'Неизвестная ошибка';
+          toast.error('Ошибка AI: ' + detail);
         }
       } finally {
         btn.disabled = false;
@@ -863,7 +864,12 @@ export function renderLobby(container, user) {
           toast.success('Статы сгенерированы!');
         }
       } catch (err) {
-        toast.error('Ошибка AI: ' + (err.message || err));
+        if (err?.data?.code === 'MISSING_API_KEY') {
+          toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» и введите ключ.');
+        } else {
+          const detail = err?.data?.details || err?.data?.error || err.message || 'Неизвестная ошибка';
+          toast.error('Ошибка AI: ' + detail);
+        }
       } finally {
         btn.disabled = false;
         btn.textContent = '✨ AI';

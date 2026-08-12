@@ -11,10 +11,12 @@ export async function invokeFunction(functionName, body) {
   if (session?.access_token) {
     headers['Authorization'] = `Bearer ${session.access_token}`;
   }
+  const payload = JSON.stringify(body ?? {});
   const res = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body: payload,
+    cache: 'no-store',
   });
   const data = await res.json();
   if (!res.ok) {

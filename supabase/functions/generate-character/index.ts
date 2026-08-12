@@ -57,7 +57,23 @@ serve(async (req) => {
   }
 
   try {
-    const { user_id, name, race, class: charClass, appearance, bio } = await req.json();
+    const raw = await req.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return new Response(JSON.stringify({ error: "Некорректный JSON в теле запроса" }), {
+        status: 400,
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    const user_id = parsed.user_id;
+    const name = parsed.name;
+    const race = parsed.race;
+    const charClass = parsed.class;
+    const appearance = parsed.appearance;
+    const bio = parsed.bio;
 
     if (!user_id || !bio) {
       return new Response(JSON.stringify({ error: "user_id и bio обязательны" }), {
@@ -96,6 +112,8 @@ serve(async (req) => {
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": SUPABASE_URL,
+        "X-Title": "MultiRP-AI",
       },
       body: JSON.stringify({
         model: AI_MODEL,
@@ -106,12 +124,24 @@ serve(async (req) => {
         temperature: 0.8,
         max_tokens: 300,
       }),
+      signal: AbortSignal.timeout(60000),
     });
 
+    let errDetails = "";
+    try {
+      const errJson = await response.json();
+      errDetails = errJson?.error?.message || errJson?.error || JSON.stringify(errJson);
+    } catch {
+      errDetails = await response.text();
+    }
+
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("AI API error:", errText);
-      return new Response(JSON.stringify({ error: "Ошибка AI API" }), {
+      console.error("AI API error:", errDetails);
+      return new Response(JSON.stringify({
+        error: "Ошибка AI API",
+        details: errDetails,
+        status: response.status,
+      }), {
         status: 502, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
@@ -153,7 +183,10 @@ serve(async (req) => {
 
   } catch (err) {
     console.error("generate-character error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
+    return new Response(JSON.stringify({
+      error: err.message || "Internal error",
+      details: err.message,
+    }), {
       status: 500, headers: { ...CORS, "Content-Type": "application/json" },
     });
   }

@@ -759,10 +759,11 @@ export async function renderGame(container, sessionId, user) {
           toast.success('Статы сгенерированы!');
         }
       } catch (err) {
-        if (err.message === 'MISSING_API_KEY' || err?.data?.code === 'MISSING_API_KEY') {
+        if (err?.data?.code === 'MISSING_API_KEY') {
           toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» в лобби и введите ключ.');
         } else {
-          toast.error('Ошибка генерации: ' + (err.message || err));
+          const detail = err?.data?.details || err?.data?.error || err.message || 'Неизвестная ошибка';
+          toast.error('Ошибка генерации: ' + detail);
         }
       } finally {
         btn.disabled = false;

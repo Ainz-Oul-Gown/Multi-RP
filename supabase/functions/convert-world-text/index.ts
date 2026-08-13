@@ -43,8 +43,12 @@ function cleanTextForAI(raw: string | null | undefined): string {
   let text = String(raw);
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
   text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
-  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)[_.-]?\w*\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
+  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[^]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
+  text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");
+  text = text.replace(/https?:\/\/[^\s]+/g, "");
+  text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
   text = text.replace(/\s+/g, " ").trim();
+  if (text.length > 4000) text = text.slice(0, 4000);
   return text;
 }
 
@@ -63,6 +67,8 @@ serve(async (req) => {
     const { user_id, world_name, description } = await req.json();
 
     const safeDescription = cleanTextForAI(description);
+
+    console.log('convert-world-text input:', { user_id, world_name, description: safeDescription });
 
     if (!user_id || !world_name || !safeDescription) {
       return new Response(JSON.stringify({ error: "user_id, world_name и description обязательны" }), {
@@ -115,7 +121,8 @@ serve(async (req) => {
     }
 
     const aiData = await aiRes.json();
-    const rawContent = aiData.choices[0].message.content;
+    const rawContent = aiData.choices[0].message.content || "";
+    console.log('convert-world-text AI raw:', rawContent);
 
     let settings = null;
     try { settings = JSON.parse(rawContent); } catch {}

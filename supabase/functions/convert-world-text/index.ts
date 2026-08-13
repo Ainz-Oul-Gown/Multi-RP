@@ -43,7 +43,9 @@ function cleanTextForAI(raw: string | null | undefined): string {
   let text = String(raw);
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
   text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
-  return text.trim();
+  text = text.replace(/\b(image|img|photo|picture|avatar|icon)[_.-]?\w*\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
+  text = text.replace(/\s+/g, " ").trim();
+  return text;
 }
 
 const CORS = {

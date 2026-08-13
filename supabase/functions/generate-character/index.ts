@@ -135,15 +135,14 @@ serve(async (req) => {
       signal: AbortSignal.timeout(60000),
     });
 
-    let errDetails = "";
-    try {
-      const errJson = await response.json();
-      errDetails = errJson?.error?.message || errJson?.error || JSON.stringify(errJson);
-    } catch {
-      errDetails = await response.text();
-    }
-
     if (!response.ok) {
+      let errDetails = "";
+      try {
+        const errJson = await response.json();
+        errDetails = errJson?.error?.message || errJson?.error || JSON.stringify(errJson);
+      } catch {
+        errDetails = await response.text();
+      }
       console.error("AI API error:", errDetails);
       return new Response(JSON.stringify({
         error: "Ошибка AI API",

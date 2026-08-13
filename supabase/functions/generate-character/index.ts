@@ -152,6 +152,8 @@ serve(async (req) => {
       signal: AbortSignal.timeout(60000),
     });
 
+    console.log('generate-character OpenRouter status:', response.status);
+
     if (!response.ok) {
       let errDetails = "";
       try {

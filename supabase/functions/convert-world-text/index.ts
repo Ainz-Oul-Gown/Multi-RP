@@ -119,6 +119,8 @@ serve(async (req) => {
       }),
     });
 
+    console.log('convert-world-text OpenRouter status:', aiRes.status);
+
     if (!aiRes.ok) {
       const errText = await aiRes.text();
       console.error("AI error:", errText);

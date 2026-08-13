@@ -180,6 +180,8 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
         }),
       });
 
+      console.log('process-turn OpenRouter status:', response.status, 'attempt:', attempt + 1);
+
       if (!response.ok) {
         const errText = await response.text();
         console.error(`AI API error (attempt ${attempt + 1}):`, errText);

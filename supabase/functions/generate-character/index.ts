@@ -49,7 +49,7 @@ function cleanTextForAI(raw: string | null | undefined): string {
   let text = String(raw);
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
   text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
-  text = text.replace(/\b(image|img|photo|picture|avatar|icon)[_.-]?\w*\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
+  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)[_.-]?\w*\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
   text = text.replace(/\s+/g, " ").trim();
   return text;
 }
@@ -83,6 +83,8 @@ serve(async (req) => {
     const charClass = cleanTextForAI(parsed.class);
     const appearance = cleanTextForAI(parsed.appearance);
     const bio = cleanTextForAI(parsed.bio);
+
+    console.log('generate-character input:', { user_id, name, race, charClass, appearance, bio });
 
     if (!user_id || !bio) {
       return new Response(JSON.stringify({ error: "user_id и bio обязательны" }), {
@@ -155,11 +157,12 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const rawContent = data.choices[0].message.content;
+    const rawContent = data.choices?.[0]?.message?.content || "";
+    console.log('generate-character AI raw:', rawContent);
     const stats = parseAIJson(rawContent);
 
     if (!stats) {
-      return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
+      return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent || null }), {
         status: 422, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }

@@ -142,7 +142,7 @@ function cleanTextForAI(raw: string | null | undefined): string {
   let text = String(raw);
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
   text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
-  text = text.replace(/\b(image|img|photo|picture|avatar|icon)[_.-]?\w*\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
+  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)[_.-]?\w*\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
   text = text.replace(/\s+/g, " ").trim();
   return text;
 }
@@ -235,6 +235,8 @@ serve(async (req) => {
     const { session_id, player_id, action_text } = await req.json();
 
     const safeActionText = cleanTextForAI(action_text);
+
+    console.log('process-turn input:', { session_id, player_id, action_text: safeActionText });
 
     if (!session_id || !player_id || !safeActionText) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {

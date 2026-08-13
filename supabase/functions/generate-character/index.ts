@@ -49,7 +49,7 @@ function cleanTextForAI(raw: string | null | undefined): string {
   let text = String(raw);
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
   text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
-  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[^]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
+  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
   text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");
   text = text.replace(/https?:\/\/[^\s]+/g, "");
   text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
@@ -81,14 +81,14 @@ serve(async (req) => {
       });
     }
 
-    const user_id = parsed.user_id;
+    const user_id = cleanTextForAI(parsed.user_id);
     const name = cleanTextForAI(parsed.name);
     const race = cleanTextForAI(parsed.race);
     const charClass = cleanTextForAI(parsed.class);
     const appearance = cleanTextForAI(parsed.appearance);
     const bio = cleanTextForAI(parsed.bio);
 
-    console.log('generate-character input:', { user_id, name, race, charClass, appearance, bio });
+    console.log('generate-character input:', JSON.stringify({ user_id, name, race, charClass, appearance, bio }));
 
     if (!user_id || !bio) {
       return new Response(JSON.stringify({ error: "user_id и bio обязательны" }), {

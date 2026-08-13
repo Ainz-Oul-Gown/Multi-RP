@@ -627,6 +627,9 @@ export async function renderGame(container, sessionId, user) {
                   </div>
                 `).join('')}
               </div>
+              <div id="statsLoading" style="display: none; text-align: center; margin-top: 0.5rem;">
+                <span class="form-hint">⏳ Генерация...</span>
+              </div>
               <div style="text-align: center; margin-top: 0.5rem;">
                 <span class="form-hint" id="statsSum">Сумма: 60 / 72</span>
               </div>
@@ -733,8 +736,10 @@ export async function renderGame(container, sessionId, user) {
       }
 
       const btn = document.getElementById('generateStatsBtn');
+      const loading = document.getElementById('statsLoading');
       btn.disabled = true;
       btn.textContent = '⏳ Генерация...';
+      loading.style.display = 'block';
 
       try {
         const response = await invokeFunction('generate-character', {
@@ -766,6 +771,7 @@ export async function renderGame(container, sessionId, user) {
       } finally {
         btn.disabled = false;
         btn.textContent = '✨ Сгенерировать нейросетью';
+        loading.style.display = 'none';
       }
     });
   }

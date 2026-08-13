@@ -137,6 +137,14 @@ function sanitizeKey(raw: string): string {
   return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
 }
 
+function cleanTextForAI(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let text = String(raw);
+  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
+  return text.trim();
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
@@ -224,7 +232,9 @@ serve(async (req) => {
   try {
     const { session_id, player_id, action_text } = await req.json();
 
-    if (!session_id || !player_id || !action_text) {
+    const safeActionText = cleanTextForAI(action_text);
+
+    if (!session_id || !player_id || !safeActionText) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
         headers: { ...CORS, "Content-Type": "application/json" },
@@ -339,7 +349,7 @@ serve(async (req) => {
     // STEP 1: AI-Парсер → JSON
     // ============================================
     const parserUserMessage = `Игрок "${player.name}" (${player.race}, ${player.class}) пишет:
-"${action_text}"
+"${safeActionText}"
 
 Инвентарь игрока: ${player.inventory?.map((i: any) => i.item_name).join(", ") || "пусто"}`;
 
@@ -545,7 +555,7 @@ serve(async (req) => {
       sender_type: "player",
       sender_id: player.user_id,
       sender_name: player.name,
-      content: action_text,
+      content: safeActionText,
     });
 
     // Master narrative message

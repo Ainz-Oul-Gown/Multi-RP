@@ -45,6 +45,14 @@ function sanitizeKey(raw: string): string {
   return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
 }
 
+function cleanTextForAI(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let text = String(raw);
+  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
+  return text.trim();
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
@@ -69,11 +77,11 @@ serve(async (req) => {
     }
 
     const user_id = parsed.user_id;
-    const name = parsed.name;
-    const race = parsed.race;
-    const charClass = parsed.class;
-    const appearance = parsed.appearance;
-    const bio = parsed.bio;
+    const name = cleanTextForAI(parsed.name);
+    const race = cleanTextForAI(parsed.race);
+    const charClass = cleanTextForAI(parsed.class);
+    const appearance = cleanTextForAI(parsed.appearance);
+    const bio = cleanTextForAI(parsed.bio);
 
     if (!user_id || !bio) {
       return new Response(JSON.stringify({ error: "user_id и bio обязательны" }), {

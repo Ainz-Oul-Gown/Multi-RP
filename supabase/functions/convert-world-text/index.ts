@@ -38,6 +38,14 @@ function sanitizeKey(raw: string): string {
   return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
 }
 
+function cleanTextForAI(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let text = String(raw);
+  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
+  return text.trim();
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
@@ -52,7 +60,9 @@ serve(async (req) => {
   try {
     const { user_id, world_name, description } = await req.json();
 
-    if (!user_id || !world_name || !description) {
+    const safeDescription = cleanTextForAI(description);
+
+    if (!user_id || !world_name || !safeDescription) {
       return new Response(JSON.stringify({ error: "user_id, world_name и description обязательны" }), {
         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
       });
@@ -75,7 +85,7 @@ serve(async (req) => {
       }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
-    const userMessage = `Мир: "${world_name}"\n\nОписание:\n${description}`;
+    const userMessage = `Мир: "${world_name}"\n\nОписание:\n${safeDescription}`;
 
     const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",

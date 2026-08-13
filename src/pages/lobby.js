@@ -18,6 +18,12 @@ export function renderLobby(container, user) {
   let userSettings = null;
   let characterCards = [];
 
+  function isTextFile(file) {
+    if (file.type && file.type.startsWith('text/')) return true;
+    const name = file.name.toLowerCase();
+    return ['.txt', '.md', '.json', '.js', '.ts', '.css', '.html', '.yaml', '.yml', '.xml', '.csv', '.log'].some(ext => name.endsWith(ext));
+  }
+
   async function loadData() {
     try {
       [sessions, worlds, userSettings, characterCards] = await Promise.all([
@@ -910,14 +916,26 @@ export function renderLobby(container, user) {
     plotFileDropZone?.addEventListener('drop', (e) => {
       e.preventDefault();
       plotFileDropZone.classList.remove('dragover');
-      if (e.dataTransfer.files[0]) {
-        plotFile = e.dataTransfer.files[0];
+      const file = e.dataTransfer.files[0];
+      if (file && !isTextFile(file)) {
+        toast.warning(`Файл «${file.name}» пропущен (поддерживаются только текстовые файлы)`);
+        return;
+      }
+      if (file) {
+        plotFile = file;
         document.getElementById('plotFileName').textContent = `📄 ${plotFile.name}`;
       }
     });
     plotFileInput?.addEventListener('change', (e) => {
-      if (e.target.files[0]) {
-        plotFile = e.target.files[0];
+      const file = e.target.files[0];
+      if (file && !isTextFile(file)) {
+        toast.warning(`Файл «${file.name}» пропущен (поддерживаются только текстовые файлы)`);
+        plotFile = null;
+        document.getElementById('plotFileName').textContent = 'Нет файла';
+        return;
+      }
+      if (file) {
+        plotFile = file;
         document.getElementById('plotFileName').textContent = `📄 ${plotFile.name}`;
       }
     });
@@ -1119,6 +1137,11 @@ export function renderLobby(container, user) {
     document.getElementById('importFileInput')?.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      if (!isTextFile(file)) {
+        toast.warning(`Файл «${file.name}» пропущен (поддерживаются только текстовые файлы)`);
+        e.target.value = '';
+        return;
+      }
       try {
         const text = await file.text();
         await importWorld(text, user.id);

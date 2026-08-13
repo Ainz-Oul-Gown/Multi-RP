@@ -90,6 +90,16 @@ serve(async (req) => {
 
     console.log('generate-character input:', JSON.stringify({ user_id, name, race, charClass, appearance, bio }));
 
+    const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
+    const checkFields = [name, race, charClass, appearance, bio];
+    for (const field of checkFields) {
+      if (field && imagePattern.test(field)) {
+        return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
+          status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     if (!user_id || !bio) {
       return new Response(JSON.stringify({ error: "user_id и bio обязательны" }), {
         status: 400,

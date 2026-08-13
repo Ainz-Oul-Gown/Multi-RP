@@ -70,6 +70,13 @@ serve(async (req) => {
 
     console.log('convert-world-text input:', { user_id, world_name, description: safeDescription });
 
+    const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
+    if (imagePattern.test(safeDescription)) {
+      return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
+        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
     if (!user_id || !world_name || !safeDescription) {
       return new Response(JSON.stringify({ error: "user_id, world_name и description обязательны" }), {
         status: 400, headers: { ...CORS, "Content-Type": "application/json" },

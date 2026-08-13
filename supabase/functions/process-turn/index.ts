@@ -242,6 +242,13 @@ serve(async (req) => {
 
     console.log('process-turn input:', { session_id, player_id, action_text: safeActionText });
 
+    const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
+    if (imagePattern.test(safeActionText)) {
+      return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
+        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
     if (!session_id || !player_id || !safeActionText) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,

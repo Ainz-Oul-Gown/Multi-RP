@@ -733,10 +733,8 @@ export async function renderGame(container, sessionId, user) {
       }
 
       const btn = document.getElementById('generateStatsBtn');
-      const loading = document.getElementById('statsLoading');
       btn.disabled = true;
       btn.textContent = '⏳ Генерация...';
-      loading.style.display = 'block';
 
       try {
         const response = await invokeFunction('generate-character', {
@@ -768,7 +766,6 @@ export async function renderGame(container, sessionId, user) {
       } finally {
         btn.disabled = false;
         btn.textContent = '✨ Сгенерировать нейросетью';
-        loading.style.display = 'none';
       }
     });
   }

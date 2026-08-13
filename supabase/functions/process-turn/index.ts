@@ -311,7 +311,7 @@ serve(async (req) => {
 
       if (loreFiles?.length) {
         loreContext = loreFiles
-          .map((f) => `### ${f.title}\n${f.content.slice(0, 500)}`)
+          .map((f) => `### ${f.title}\n${cleanTextForAI(f.content).slice(0, 500)}`)
           .join("\n\n");
       }
     }
@@ -329,7 +329,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (plotFile?.content) {
-        plotContent = plotFile.content;
+        plotContent = cleanTextForAI(plotFile.content);
       }
     }
 
@@ -343,7 +343,7 @@ serve(async (req) => {
 
     const recentMessages = (recentMsgs || [])
       .reverse()
-      .map((m) => `[${m.sender_type === "master" ? "Мастер" : "Игрок"}]: ${m.content.slice(0, 200)}`);
+      .map((m) => `[${m.sender_type === "master" ? "Мастер" : "Игрок"}]: ${cleanTextForAI(m.content).slice(0, 200)}`);
 
     // ============================================
     // STEP 1: AI-Парсер → JSON

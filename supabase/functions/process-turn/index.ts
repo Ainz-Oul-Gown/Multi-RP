@@ -350,7 +350,7 @@ serve(async (req) => {
     // ============================================
     // STEP 1: AI-Парсер → JSON
     // ============================================
-    const parserUserMessage = `Игрок "${player.name}" (${player.race}, ${player.class}) пишет:
+    const parserUserMessage = `Игрок "${cleanTextForAI(player.name)}" (${cleanTextForAI(player.race)}, ${cleanTextForAI(player.class)}) пишет:
 "${safeActionText}"
 
 Инвентарь игрока: ${player.inventory?.map((i: any) => i.item_name).join(", ") || "пусто"}`;
@@ -531,12 +531,12 @@ serve(async (req) => {
       sessionMode: session.current_plot_stage ? "plot" : "sandbox",
       plotStage: session.current_plot_stage,
       plotContent,
-      playerName: player.name,
-      playerRace: player.race,
-      playerClass: player.class,
+      playerName: cleanTextForAI(player.name),
+      playerRace: cleanTextForAI(player.race),
+      playerClass: cleanTextForAI(player.class),
       playerFlaws,
-      playerAppearance: player.appearance || "",
-      actionText,
+      playerAppearance: cleanTextForAI(player.appearance) || "",
+      actionText: safeActionText,
       rollResult: rollResultText,
       inventoryChanges: inventoryText,
       hpChanges: hpChange !== 0 ? `Изменение HP: ${hpChange}` : "",

@@ -10,6 +10,20 @@ import { STATS } from '../config.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 
+function sanitizeAIText(raw) {
+  if (!raw) return "";
+  let text = String(raw);
+  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
+  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
+  text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");
+  text = text.replace(/https?:\/\/[^\s]+/g, "");
+  text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
+  text = text.replace(/\s+/g, " ").trim();
+  if (text.length > 4000) text = text.slice(0, 4000);
+  return text;
+}
+
 export async function renderGame(container, sessionId, user) {
   let session = null;
   let currentPlayer = null;
@@ -485,7 +499,7 @@ export async function renderGame(container, sessionId, user) {
     updateInputState();
 
     try {
-      const result = await submitAction(sessionId, currentPlayer.id, text);
+      const result = await submitAction(sessionId, currentPlayer.id, sanitizeAIText(text));
 
       if (result.error) {
         toast.error(result.error);
@@ -744,11 +758,11 @@ export async function renderGame(container, sessionId, user) {
       try {
         const response = await invokeFunction('generate-character', {
             user_id: user.id,
-            name: document.getElementById('charName')?.value || '',
-            race: document.getElementById('charRace')?.value || '',
-            class: document.getElementById('charClass')?.value || '',
-            appearance: document.getElementById('charAppearance')?.value || '',
-            bio,
+            name: sanitizeAIText(document.getElementById('charName')?.value || ''),
+            race: sanitizeAIText(document.getElementById('charRace')?.value || ''),
+            class: sanitizeAIText(document.getElementById('charClass')?.value || ''),
+            appearance: sanitizeAIText(document.getElementById('charAppearance')?.value || ''),
+            bio: sanitizeAIText(bio),
           });
 
         if (response?.stats) {

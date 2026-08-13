@@ -11,6 +11,20 @@ import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 import { STATS } from '../config.js';
 
+function sanitizeAIText(raw) {
+  if (!raw) return "";
+  let text = String(raw);
+  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
+  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
+  text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");
+  text = text.replace(/https?:\/\/[^\s]+/g, "");
+  text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
+  text = text.replace(/\s+/g, " ").trim();
+  if (text.length > 4000) text = text.slice(0, 4000);
+  return text;
+}
+
 export function renderLobby(container, user) {
   let activeTab = 'sessions';
   let sessions = [];
@@ -751,11 +765,11 @@ export function renderLobby(container, user) {
       try {
         const { data, error } = await invokeFunction('generate-character', {
             user_id: user.id,
-            name: document.getElementById('editCharName')?.value || '',
-            race: document.getElementById('editCharRace')?.value || '',
-            class: document.getElementById('editCharClass')?.value || '',
-            appearance: document.getElementById('editCharAppearance')?.value || '',
-            bio,
+            name: sanitizeAIText(document.getElementById('editCharName')?.value || ''),
+            race: sanitizeAIText(document.getElementById('editCharRace')?.value || ''),
+            class: sanitizeAIText(document.getElementById('editCharClass')?.value || ''),
+            appearance: sanitizeAIText(document.getElementById('editCharAppearance')?.value || ''),
+            bio: sanitizeAIText(bio),
           });
         if (error) throw error;
         if (data.stats) {
@@ -858,11 +872,11 @@ export function renderLobby(container, user) {
       try {
         const { data, error } = await invokeFunction('generate-character', {
             user_id: user.id,
-            name: document.getElementById('charName')?.value || '',
-            race: document.getElementById('charRace')?.value || '',
-            class: document.getElementById('charClass')?.value || '',
-            appearance: document.getElementById('charAppearance')?.value || '',
-            bio,
+            name: sanitizeAIText(document.getElementById('charName')?.value || ''),
+            race: sanitizeAIText(document.getElementById('charRace')?.value || ''),
+            class: sanitizeAIText(document.getElementById('charClass')?.value || ''),
+            appearance: sanitizeAIText(document.getElementById('charAppearance')?.value || ''),
+            bio: sanitizeAIText(bio),
           });
         if (error) throw error;
         if (data.stats) {
@@ -1001,7 +1015,7 @@ export function renderLobby(container, user) {
       if (description) {
         try {
           const { data, error } = await invokeFunction('convert-world-text', {
-            user_id: user.id, world_name: name, description,
+            user_id: user.id, world_name: name, description: sanitizeAIText(description),
           });
           if (error) throw error;
           settings = data.settings || {};

@@ -7,6 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -133,24 +134,6 @@ ${params.recentMessages.length ? `Предыдущие события:\n${params
 ВАЖНО: Опиши результат действия от лица Мастера. Сделай это живым языком. Никаких цифр и игровой терминологии.`;
 }
 
-function sanitizeKey(raw: string): string {
-  return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
-}
-
-function cleanTextForAI(raw: string | null | undefined): string {
-  if (!raw) return "";
-  let text = String(raw);
-  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
-  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
-  text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");
-  text = text.replace(/https?:\/\/[^\s]+/g, "");
-  text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
-  text = text.replace(/\s+/g, " ").trim();
-  if (text.length > 4000) text = text.slice(0, 4000);
-  return text;
-}
-
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
@@ -204,30 +187,6 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
 // ============================================
 // Parse AI JSON response safely
 // ============================================
-function parseAIJson(text: string): any {
-  // Try direct parse
-  try {
-    return JSON.parse(text);
-  } catch {}
-
-  // Try extracting JSON from markdown code block
-  const jsonMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[1]);
-    } catch {}
-  }
-
-  // Try finding JSON object in text
-  const objMatch = text.match(/\{[\s\S]*\}/);
-  if (objMatch) {
-    try {
-      return JSON.parse(objMatch[0]);
-    } catch {}
-  }
-
-  return null;
-}
 
 // ============================================
 // Main Handler

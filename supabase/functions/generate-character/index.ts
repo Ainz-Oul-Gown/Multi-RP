@@ -3,6 +3,12 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  sanitizeKey,
+  cleanTextForAI,
+  parseAIJson,
+  validateAndFixStats,
+} from "../_shared/utils.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -30,19 +36,6 @@ const STATS_SYSTEM_PROMPT = `Ты — D&D-балансировщик персо�
 {"STR": 14, "DEX": 12, "CON": 13, "INT": 10, "WIS": 11, "CHA": 12}
 
 Сумма = 72. Только JSON.`;
-
-function parseAIJson(text: string): any {
-  try { return JSON.parse(text); } catch {}
-  const jsonMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (jsonMatch) { try { return JSON.parse(jsonMatch[1]); } catch {} }
-  const objMatch = text.match(/\{[\s\S]*\}/);
-  if (objMatch) { try { return JSON.parse(objMatch[0]); } catch {} }
-  return null;
-}
-
-function sanitizeKey(raw: string): string {
-  return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
-}
 
 function cleanTextForAI(raw: string | null | undefined): string {
   if (!raw) return "";
@@ -183,26 +176,7 @@ serve(async (req) => {
       });
     }
 
-    const validStats = ["STR", "DEX", "CON", "INT", "WIS", "CHA"];
-    const result: Record<string, number> = {};
-    let sum = 0;
-
-    for (const s of validStats) {
-      const val = Math.min(18, Math.max(3, Math.round(Number(stats[s]) || 10)));
-      result[s] = val;
-      sum += val;
-    }
-
-    if (sum !== 72) {
-      const diff = 72 - sum;
-      let adjustStat = "STR";
-      let maxDist = 0;
-      for (const s of validStats) {
-        const dist = Math.abs(result[s] - 10);
-        if (dist > maxDist) { maxDist = dist; adjustStat = s; }
-      }
-      result[adjustStat] = Math.min(18, Math.max(3, result[adjustStat] + diff));
-    }
+    const result = validateAndFixStats(stats);
 
     return new Response(JSON.stringify({ stats: result }), {
       status: 200, headers: { ...CORS, "Content-Type": "application/json" },

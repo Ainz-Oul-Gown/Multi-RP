@@ -440,7 +440,7 @@ export async function exportPlayer(playerId) {
       personality: player.personality,
       bio: player.bio,
       power_level: player.power_level,
-      stats: player.stats,
+      stats: player.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
       hp: player.hp,
       max_hp: player.max_hp,
       money: player.money,

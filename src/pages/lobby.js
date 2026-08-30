@@ -664,7 +664,8 @@ export function renderLobby(container, user) {
               name: card.name, race: card.race, class: card.class,
               appearance: card.appearance, personality: card.personality,
               bio: card.bio, power_level: card.power_level,
-              stats: card.stats, hp: card.hp, max_hp: card.max_hp, money: card.money,
+              stats: card.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+              hp: card.hp, max_hp: card.max_hp, money: card.money,
             },
           };
           downloadJSON(exportData, `${card.name}_character.json`);

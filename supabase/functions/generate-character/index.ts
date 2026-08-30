@@ -158,7 +158,11 @@ serve(async (req) => {
     const stats = parseAIJson(rawContent);
 
     if (!stats) {
-      return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent || null }), {
+      return new Response(JSON.stringify({
+        error: "Не удалось распарсить ответ ИИ",
+        raw: rawContent || null,
+        stats: { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+      }), {
         status: 422, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }

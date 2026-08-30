@@ -363,8 +363,10 @@ serve(async (req) => {
     const itemsToRemove: string[] = [];
 
     if (parsedAction.items_used?.length) {
+      const safeStats = player.stats || {};
+      const safeInventory = player.inventory || [];
       for (const itemName of parsedAction.items_used) {
-        const ownedItem = player.inventory?.find(
+        const ownedItem = safeInventory.find(
           (i: any) => i.item_name.toLowerCase() === itemName.toLowerCase()
         );
         if (ownedItem) {

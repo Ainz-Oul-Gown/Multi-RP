@@ -312,11 +312,13 @@ export async function renderGame(container, sessionId, user) {
   }
 
   function renderProfile(player) {
+    if (!player) return '';
+    const stats = player.stats || {};
     const statsHtml = STATS.map((stat) => `
       <div class="stat-item">
         <div class="stat-label">${stat}</div>
-        <div class="stat-value">${player.stats?.[stat] || 10}</div>
-        <div class="stat-modifier">${Math.floor(((player.stats?.[stat] || 10) - 10) / 2) >= 0 ? '+' : ''}${Math.floor(((player.stats?.[stat] || 10) - 10) / 2)}</div>
+        <div class="stat-value">${stats[stat] || 10}</div>
+        <div class="stat-modifier">${Math.floor(((stats[stat] || 10) - 10) / 2) >= 0 ? '+' : ''}${Math.floor(((stats[stat] || 10) - 10) / 2)}</div>
       </div>
     `).join('');
 
@@ -672,7 +674,7 @@ export async function renderGame(container, sessionId, user) {
             bio: card.bio,
             personality: card.personality || {},
             power_level: card.power_level,
-            stats: card.stats,
+            stats: card.stats || {},
             hp: card.hp,
             max_hp: card.max_hp,
             money: card.money,

@@ -758,16 +758,21 @@ export async function renderGame(container, sessionId, user) {
       loading.style.display = 'block';
 
       try {
-        const response = await invokeFunction('generate-character', {
+        const requestPayload = {
             user_id: user.id,
             name: sanitizeAIText(document.getElementById('charName')?.value || ''),
             race: sanitizeAIText(document.getElementById('charRace')?.value || ''),
             class: sanitizeAIText(document.getElementById('charClass')?.value || ''),
             appearance: sanitizeAIText(document.getElementById('charAppearance')?.value || ''),
             bio: sanitizeAIText(bio),
-          });
+          };
+        console.log('[generate-character] request:', requestPayload);
+
+        const response = await invokeFunction('generate-character', requestPayload);
+        console.log('[generate-character] response:', response);
 
         if (response?.stats) {
+          console.log('[generate-character] applying stats:', response.stats);
           STATS.forEach((stat) => {
             const input = document.getElementById(`stat_${stat}`);
             if (input && response.stats[stat] !== undefined) {
@@ -776,8 +781,11 @@ export async function renderGame(container, sessionId, user) {
           });
           updateStatsSum();
           toast.success('Статы сгенерированы!');
+        } else {
+          console.warn('[generate-character] response without stats:', response);
         }
       } catch (err) {
+        console.error('[generate-character] error:', err);
         if (err?.data?.code === 'MISSING_API_KEY') {
           toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» в лобби и введите ключ.');
         } else {
@@ -785,6 +793,7 @@ export async function renderGame(container, sessionId, user) {
           toast.error('Ошибка генерации: ' + detail);
         }
       } finally {
+        console.log('[generate-character] finally: reset UI');
         btn.disabled = false;
         btn.textContent = '✨ Сгенерировать нейросетью';
         loading.style.display = 'none';

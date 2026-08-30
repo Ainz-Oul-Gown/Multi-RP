@@ -779,19 +779,18 @@ export function renderLobby(container, user) {
           };
         console.log('[generate-character][edit] request:', requestPayload);
 
-        const { data, error } = await invokeFunction('generate-character', requestPayload);
-        console.log('[generate-character][edit] response:', { data, error });
-        if (error) throw error;
-        if (data.stats) {
-          console.log('[generate-character][edit] applying stats:', data.stats);
+        const response = await invokeFunction('generate-character', requestPayload);
+        console.log('[generate-character][edit] response:', response);
+        if (response?.stats) {
+          console.log('[generate-character][edit] applying stats:', response.stats);
           STATS.forEach((s) => {
             const el = document.getElementById(`edit_stat_${s}`);
-            if (el && data.stats[s] !== undefined) el.value = data.stats[s];
+            if (el && response.stats[s] !== undefined) el.value = response.stats[s];
           });
           updateEditStatsSum();
           toast.success('Статы сгенерированы!');
         } else {
-          console.warn('[generate-character][edit] response without stats:', data);
+          console.warn('[generate-character][edit] response without stats:', response);
         }
       } catch (err) {
         console.error('[generate-character][edit] error:', err);
@@ -899,15 +898,14 @@ export function renderLobby(container, user) {
           };
         console.log('[generate-character][new-card] request:', requestPayload);
 
-        const { data, error } = await invokeFunction('generate-character', requestPayload);
-        console.log('[generate-character][new-card] response:', { data, error });
-        if (error) throw error;
-        if (data.stats) {
-          console.log('[generate-character][new-card] applying stats:', data.stats);
-          STATS.forEach((s) => { const el = document.getElementById(`stat_${s}`); if (el && data.stats[s] !== undefined) el.value = data.stats[s]; });
+        const response = await invokeFunction('generate-character', requestPayload);
+        console.log('[generate-character][new-card] response:', response);
+        if (response?.stats) {
+          console.log('[generate-character][new-card] applying stats:', response.stats);
+          STATS.forEach((s) => { const el = document.getElementById(`stat_${s}`); if (el && response.stats[s] !== undefined) el.value = response.stats[s]; });
           toast.success('Статы сгенерированы!');
         } else {
-          console.warn('[generate-character][new-card] response without stats:', data);
+          console.warn('[generate-character][new-card] response without stats:', response);
         }
       } catch (err) {
         console.error('[generate-character][new-card] error:', err);
@@ -1041,11 +1039,10 @@ export function renderLobby(container, user) {
       // If description provided — convert via AI
       if (description) {
         try {
-          const { data, error } = await invokeFunction('convert-world-text', {
+          const response = await invokeFunction('convert-world-text', {
             user_id: user.id, world_name: name, description: sanitizeAIText(description),
           });
-          if (error) throw error;
-          settings = data.settings || {};
+          settings = response?.settings || {};
           // Show preview
           document.getElementById('aiSettingsPreview').style.display = 'block';
           document.getElementById('aiSettingsOutput').textContent = JSON.stringify(settings, null, 2);

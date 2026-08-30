@@ -122,7 +122,7 @@ export function parseAIJson(text: string): any {
   return null;
 }
 
-export function validateAndFixStats(raw: any): StatsRecord {
+export function validateAndFixStats(raw: any, options: { forceSum72?: boolean } = {}): StatsRecord {
   const result: StatsRecord = {
     STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10,
   };
@@ -134,25 +134,36 @@ export function validateAndFixStats(raw: any): StatsRecord {
     result[s] = val;
   }
 
+  if (options.forceSum72) {
+    let sum = 0;
+    for (const s of VALID_STATS) sum += result[s];
+    const diff = 72 - sum;
+    if (diff !== 0) {
+      let adjustStat: StatKey = "STR";
+      let maxDist = 0;
+      for (const s of VALID_STATS) {
+        const dist = Math.abs(result[s] - 10);
+        if (dist > maxDist) {
+          maxDist = dist;
+          adjustStat = s;
+        }
+      }
+      result[adjustStat] = result[adjustStat] + diff;
+    }
+  }
+
   return result;
 }
 
-export function calculateDerivedStats(stats = {}, race = 'Человек', equipment = []) {
+export function calculateDerivedStats(stats = {}, race = 'Человек', equipment = [], raceAcBonus) {
   const safeStats = validateAndFixStats(stats);
   const initiative = Math.floor(((safeStats.DEX || 10) - 10) / 2);
   const dexMod = Math.floor(((safeStats.DEX || 10) - 10) / 2);
-  const raceBonusMap: Record<string, number> = {
-    'Эльф': 0,
-    'Дварф': 1,
-    'Гном': 1,
-    'Полурослик': 1,
-    'Тифлинг': 0,
-    'Драконорожденный': 0,
-  };
+  const raceBonus = Number(raceAcBonus ?? 0);
   const equipmentBonus = Array.isArray(equipment)
     ? equipment.reduce((sum, item) => sum + (Number(item.ac_bonus) || 0), 0)
     : 0;
-  const armorClass = 10 + dexMod + Number(raceBonusMap[race] || 0) + equipmentBonus;
+  const armorClass = 10 + dexMod + raceBonus + equipmentBonus;
   const savingThrows = {};
   for (const s of VALID_STATS) {
     const mod = Math.floor(((safeStats[s] || 10) - 10) / 2);

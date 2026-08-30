@@ -6,7 +6,7 @@ import {
   removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn, createPlayer,
   getCharacterCards
 } from '../api/game.js';
-import { STATS, calculateHpFromStats, calculateDerivedStats } from '../config.js';
+import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 
@@ -228,9 +228,6 @@ export async function renderGame(container, sessionId, user) {
             <button class="btn btn-primary btn-icon" id="sendBtn" ${isSubmitting || !isMyTurn ? 'disabled' : ''}>
               ${isSubmitting ? '⏳' : '▶'}
             </button>
-            <button class="btn btn-ghost btn-icon" id="restBtn" ${isSubmitting || !isMyTurn ? 'disabled' : ''} title="Отдохнуть">
-              🛌
-            </button>
           </div>
         </footer>
 
@@ -317,24 +314,60 @@ export async function renderGame(container, sessionId, user) {
   function renderProfile(player) {
     if (!player) return '';
     const stats = player.stats || {};
-    const statsHtml = STATS.map((stat) => `
-      <div class="stat-item">
-        <div class="stat-label">${stat}</div>
-        <div class="stat-value">${stats[stat] || 10}</div>
-        <div class="stat-modifier">${Math.floor(((stats[stat] || 10) - 10) / 2) >= 0 ? '+' : ''}${Math.floor(((stats[stat] || 10) - 10) / 2)}</div>
-      </div>
-    `).join('');
+    const statsHtml = STATS.map((stat) => {
+      const baseValue = stats[stat] || 10;
+      const injuryPenalty = (player.injuries || [])
+        .filter(i => !i.cured_at && i.stat_penalties?.[stat])
+        .reduce((sum, i) => sum + (Number(i.stat_penalties[stat]) || 0), 0);
+      const displayValue = baseValue + injuryPenalty;
+      return `
+        <div class="stat-item">
+          <div class="stat-label">${stat}</div>
+          <div class="stat-value">${displayValue}</div>
+          <div class="stat-modifier">${Math.floor((displayValue - 10) / 2) >= 0 ? '+' : ''}${Math.floor((displayValue - 10) / 2)}</div>
+        </div>
+      `;
+    }).join('');
 
-    const derived = calculateDerivedStats(stats, player.race || 'Человек', player.inventory || []);
+    const derived = calculateDerivedStats(stats, player.race || 'Человек', player.inventory || [], player.race_ac_bonus);
     const initiative = derived.initiative;
     const armorClass = derived.armor_class;
     const savingThrows = derived.saving_throws;
-    const savingThrowsHtml = STATS.map((stat) => `
-      <div class="stat-item">
-        <div class="stat-label">${stat}</div>
-        <div class="stat-value">${savingThrows[stat] >= 0 ? '+' : ''}${savingThrows[stat]}</div>
+    const savingThrowsHtml = STATS.map((stat) => {
+      const baseMod = Math.floor(((stats[stat] || 10) - 10) / 2);
+      const injuryPenalty = (player.injuries || [])
+        .filter(i => !i.cured_at && i.stat_penalties?.[stat])
+        .reduce((sum, i) => sum + (Number(i.stat_penalties[stat]) || 0), 0);
+      const totalMod = baseMod + 2 + injuryPenalty;
+      return `
+        <div class="stat-item">
+          <div class="stat-label">${stat}</div>
+          <div class="stat-value">${totalMod >= 0 ? '+' : ''}${totalMod}</div>
+        </div>
+      `;
+    }).join('');
+
+    const activeInjuries = (player.injuries || []).filter(i => !i.cured_at);
+    const injuriesHtml = activeInjuries.length ? `
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
+        <h4 class="form-label" style="color: var(--accent-danger);">Травмы</h4>
+        <div style="margin-top: 0.5rem;">
+          ${activeInjuries.map(injury => `
+            <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: rgba(255,0,0,0.1); border-radius: 4px;">
+              <div style="font-weight: 600; color: var(--accent-danger);">${escapeHtml(injury.injury_type)}</div>
+              <div style="font-size: var(--fs-xs); color: var(--text-muted);">${escapeHtml(injury.description || '')}</div>
+              ${injury.stat_penalties && Object.keys(injury.stat_penalties).length > 0 ? `
+                <div style="font-size: var(--fs-xs); margin-top: 0.25rem;">
+                  Штрафы: ${Object.entries(injury.stat_penalties).map(([k, v]) => `${k} ${Number(v) >= 0 ? '+' : ''}${Number(v)}`).join(', ')}
+                </div>
+              ` : ''}
+              ${injury.duration_hours ? `<div style="font-size: var(--fs-xs);">Длительность: ${injury.duration_hours}ч</div>` : ''}
+              ${injury.is_permanent ? '<div style="font-size: var(--fs-xs); color: var(--accent-danger);">Постоянная</div>' : ''}
+            </div>
+          `).join('')}
+        </div>
       </div>
-    `).join('');
+    ` : '';
 
     return `
       <div class="profile-card">
@@ -377,6 +410,8 @@ export async function renderGame(container, sessionId, user) {
             ${savingThrowsHtml}
           </div>
         </div>
+
+        ${injuriesHtml}
 
         ${player.appearance ? `
           <div style="margin-top: 1.5rem;">
@@ -491,21 +526,6 @@ export async function renderGame(container, sessionId, user) {
 
     // Submit action
     document.getElementById('sendBtn')?.addEventListener('click', handleSend);
-    document.getElementById('restBtn')?.addEventListener('click', async () => {
-      if (!currentPlayer) return;
-      try {
-        const healed = Math.min(currentPlayer.max_hp, currentPlayer.hp + Math.max(1, Math.floor(currentPlayer.max_hp * 0.25)));
-        const updated = await updatePlayer(currentPlayer.id, {
-          hp: healed,
-          last_rested_at: new Date().toISOString(),
-        });
-        currentPlayer = { ...currentPlayer, ...updated };
-        toast.success(`Отдых удался. HP: ${healed}/${currentPlayer.max_hp}`);
-        render();
-      } catch (err) {
-        toast.error('Ошибка отдыха: ' + err.message);
-      }
-    });
     input?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -548,6 +568,35 @@ export async function renderGame(container, sessionId, user) {
 
       if (result.error) {
         toast.error(result.error);
+        return;
+      }
+
+      if (result.rest_result?.is_rest) {
+        const restInfo = result.rest_result;
+        let restMessage = `Отдых: ${restInfo.rest_quality || 'normal'} (${restInfo.rest_duration_hours || 0}ч)`;
+        if (restInfo.hp_recovery) {
+          restMessage += `. Восстановлено HP: ${restInfo.hp_recovery}`;
+        }
+        if (restInfo.injuries?.length) {
+          restMessage += `. Получены травмы: ${restInfo.injuries.map(i => i.type).join(', ')}`;
+        }
+        toast.info(restMessage);
+
+        if (restInfo.new_hp !== undefined) {
+          currentPlayer = { ...currentPlayer, hp: restInfo.new_hp };
+        }
+        if (restInfo.injuries?.length) {
+          currentPlayer = {
+            ...currentPlayer,
+            injuries: [...(currentPlayer.injuries || []), ...restInfo.injuries],
+          };
+        }
+        render();
+      }
+
+      if (result.hp_change) {
+        currentPlayer = { ...currentPlayer, hp: (currentPlayer.hp || 0) + result.hp_change };
+        render();
       }
     } catch (err) {
       if (err.message === 'MISSING_API_KEY') {
@@ -650,7 +699,8 @@ export async function renderGame(container, sessionId, user) {
           <div class="auth-divider" style="margin: 1rem 0;"><span>или создайте нового</span></div>
 
           <!-- Создание нового -->
-          <form id="createCharacterForm">
+           <form id="createCharacterForm">
+            <input type="hidden" id="charRaceAcBonus" value="0" />
             <div class="form-group" style="margin-bottom: 0.75rem;">
               <label class="form-label">Имя героя *</label>
               <input class="input" id="charName" placeholder="Эльдрин" required />
@@ -682,7 +732,7 @@ export async function renderGame(container, sessionId, user) {
                 ${STATS.map((stat) => `
                   <div class="form-group">
                     <label class="form-hint">${stat}</label>
-                    <input class="input" type="number" id="stat_${stat}" value="10" min="1" max="30" style="text-align: center;" />
+                     <input class="input" type="number" id="stat_${stat}" value="10" style="text-align: center;" />
                   </div>
                 `).join('')}
               </div>
@@ -723,7 +773,7 @@ export async function renderGame(container, sessionId, user) {
             hp: calculateHpFromStats(card.stats),
             max_hp: calculateHpFromStats(card.stats),
             money: card.money,
-            ...calculateDerivedStats(card.stats, card.race || 'Человек', []),
+            ...calculateDerivedStats(card.stats, card.race || 'Человек', [], getRaceAcBonus(card.race)),
           });
 
           console.log('[character-card] player created:', currentPlayer.id);

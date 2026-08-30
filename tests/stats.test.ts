@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateAndFixStats } from "../supabase/functions/_shared/utils.ts";
-import { calculateHpFromStats, calculateInitiative, calculateArmorClass, calculateSavingThrows, calculateDerivedStats } from "../src/config.js";
+import { calculateHpFromStats, calculateInitiative, calculateArmorClass, calculateSavingThrows, calculateDerivedStats, getRaceAcBonus, validateAndFixStats as validateAndFixStatsFrontend } from "../src/config.js";
 
 describe("validateAndFixStats", () => {
   it("returns default stats when input is empty", () => {
@@ -122,5 +122,39 @@ describe("calculateDerivedStats", () => {
   it("adds equipment bonus to AC", () => {
     const result = calculateDerivedStats({ DEX: 14 }, 'Человек', [{ ac_bonus: 3 }]);
     expect(result.armor_class).toBe(15);
+  });
+
+  it("uses custom race_ac_bonus when provided", () => {
+    const result = calculateDerivedStats({ DEX: 14 }, 'Каменный голем', [], 3);
+    expect(result.armor_class).toBe(15);
+  });
+});
+
+describe("getRaceAcBonus", () => {
+  it("returns correct bonus for standard races", () => {
+    expect(getRaceAcBonus('Дварф')).toBe(1);
+    expect(getRaceAcBonus('Гном')).toBe(1);
+    expect(getRaceAcBonus('Полурослик')).toBe(1);
+    expect(getRaceAcBonus('Эльф')).toBe(0);
+    expect(getRaceAcBonus('Человек')).toBe(0);
+  });
+
+  it("returns 0 for unknown races", () => {
+    expect(getRaceAcBonus('Каменный голем')).toBe(0);
+    expect(getRaceAcBonus('Дракон')).toBe(0);
+  });
+});
+
+describe("validateAndFixStats with forceSum72", () => {
+  it("forces sum to 72 only when option is set", () => {
+    const backendResult = validateAndFixStats({ STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 }, { forceSum72: true });
+    const sum = Object.values(backendResult).reduce((a, b) => a + b, 0);
+    expect(sum).toBe(72);
+  });
+
+  it("does not force sum when option is not set", () => {
+    const backendResult = validateAndFixStats({ STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 });
+    const sum = Object.values(backendResult).reduce((a, b) => a + b, 0);
+    expect(sum).toBe(60);
   });
 });

@@ -369,9 +369,7 @@ serve(async (req) => {
         const ownedItem = safeInventory.find(
           (i: any) => i.item_name.toLowerCase() === itemName.toLowerCase()
         );
-        if (ownedItem) {
-          itemsToRemove.push(ownedItem.item_name);
-        } else {
+        if (!ownedItem) {
           // Фантомный предмет — прерываем конвейер
           return new Response(JSON.stringify({
             success: true,
@@ -382,6 +380,38 @@ serve(async (req) => {
             status: 200,
             headers: { ...CORS, "Content-Type": "application/json" },
           });
+        }
+
+        // Оценка износа предмета после использования
+        try {
+          const durabilityResponse = await fetch(`${SUPABASE_URL}/functions/v1/assess-durability`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              user_id: player.user_id,
+              item_id: ownedItem.id,
+              item_name: ownedItem.item_name,
+              item_type: ownedItem.type,
+              item_condition: ownedItem.condition,
+              item_durability: ownedItem.durability,
+              action_description: safeActionText,
+              use_context: `Игрок использует ${ownedItem.item_name}`,
+            }),
+          });
+
+          if (durabilityResponse.ok) {
+            const durabilityResult = await durabilityResponse.json();
+            console.log('assess-durability result:', durabilityResult);
+
+            if (durabilityResult.is_destroyed || durabilityResult.is_lost) {
+              itemsToRemove.push(ownedItem.item_name);
+            }
+          }
+        } catch (durabilityErr) {
+          console.error('assess-durability call failed:', durabilityErr);
         }
       }
     }
@@ -525,6 +555,47 @@ serve(async (req) => {
     const narrative = await callAI(narratorSystemPrompt, "Сгенерируй нарратив для этого действия.", openrouterApiKey, 2);
 
     // ============================================
+    // STEP 3.5: Автоматическое определение отдыха через ИИ
+    // ============================================
+    let restResult = null;
+    const restKeywords = ['отдых', 'спать', 'сон', 'лагерь', 'camp', 'rest', 'sleep', 'лечение', 'heal', 'meditate', 'медитация'];
+    const actionTextLower = safeActionText.toLowerCase();
+    const isRestAction = restKeywords.some(keyword => actionTextLower.includes(keyword));
+
+    if (isRestAction) {
+      try {
+        const restResponse = await fetch(`${SUPABASE_URL}/functions/v1/process-rest`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: player.user_id,
+            player_id: player.id,
+            session_id,
+            action_text: safeActionText,
+            player_stats: player.stats || {},
+            player_hp: player.hp,
+            player_max_hp: player.max_hp,
+            current_injuries: player.injuries || [],
+          }),
+        });
+
+        if (restResponse.ok) {
+          restResult = await restResponse.json();
+          console.log('process-rest result:', restResult);
+
+          if (restResult.new_hp !== undefined) {
+            await supabase.from("players").update({ hp: restResult.new_hp }).eq("id", player.id);
+          }
+        }
+      } catch (restErr) {
+        console.error('process-rest call failed:', restErr);
+      }
+    }
+
+    // ============================================
     // STEP 4: Сохраняем сообщения
     // ============================================
     // Player action message
@@ -554,11 +625,12 @@ serve(async (req) => {
     // ============================================
     return new Response(JSON.stringify({
       success: true,
-      narrative,
+      narrative: restResult?.narrative ? `${narrative}\n\n${restResult.narrative}` : narrative,
       roll_result: rollResult,
-      hp_change: hpChange,
+      hp_change: hpChange + (restResult?.hp_recovery || 0),
       items_used: parsedAction.items_used || [],
       parsed_action: parsedAction,
+      rest_result: restResult,
     }), {
       status: 200,
       headers: { ...CORS, "Content-Type": "application/json" },

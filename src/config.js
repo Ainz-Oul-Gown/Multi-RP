@@ -59,36 +59,7 @@ export function calculateSavingThrows(stats = {}, proficiencyBonus = 2) {
   return result;
 }
 
-export function calculateDerivedStats(stats = {}, race = 'Человек', equipment = []) {
-  const safeStats = validateAndFixStats(stats);
-  const initiative = Math.floor(((safeStats.DEX || 10) - 10) / 2);
-  const dexMod = Math.floor(((safeStats.DEX || 10) - 10) / 2);
-  const raceBonusMap = {
-    'Эльф': 0,
-    'Дварф': 1,
-    'Гном': 1,
-    'Полурослик': 1,
-    'Тифлинг': 0,
-    'Драконорожденный': 0,
-  };
-  const equipmentBonus = Array.isArray(equipment)
-    ? equipment.reduce((sum, item) => sum + (Number(item.ac_bonus) || 0), 0)
-    : 0;
-  const armorClass = 10 + dexMod + Number(raceBonusMap[race] || 0) + equipmentBonus;
-  const savingThrows = {};
-  for (const s of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']) {
-    const mod = Math.floor(((safeStats[s] || 10) - 10) / 2);
-    savingThrows[s] = mod + 2;
-  }
-  return {
-    stats: safeStats,
-    initiative,
-    armor_class: armorClass,
-    saving_throws: savingThrows,
-  };
-}
-
-function validateAndFixStats(raw) {
+export function validateAndFixStats(raw, options = {}) {
   const result = {
     STR: 10,
     DEX: 10,
@@ -106,7 +77,59 @@ function validateAndFixStats(raw) {
     result[s] = val;
   }
 
+  if (options.forceSum72) {
+    let sum = 0;
+    for (const s of validStats) sum += result[s];
+    const diff = 72 - sum;
+    if (diff !== 0) {
+      let adjustStat = 'STR';
+      let maxDist = 0;
+      for (const s of validStats) {
+        const dist = Math.abs(result[s] - 10);
+        if (dist > maxDist) {
+          maxDist = dist;
+          adjustStat = s;
+        }
+      }
+      result[adjustStat] = result[adjustStat] + diff;
+    }
+  }
+
   return result;
+}
+
+export function calculateDerivedStats(stats = {}, race = 'Человек', equipment = [], raceAcBonus) {
+  const safeStats = validateAndFixStats(stats);
+  const initiative = Math.floor(((safeStats.DEX || 10) - 10) / 2);
+  const dexMod = Math.floor(((safeStats.DEX || 10) - 10) / 2);
+  const raceBonus = Number(raceAcBonus ?? 0);
+  const equipmentBonus = Array.isArray(equipment)
+    ? equipment.reduce((sum, item) => sum + (Number(item.ac_bonus) || 0), 0)
+    : 0;
+  const armorClass = 10 + dexMod + raceBonus + equipmentBonus;
+  const savingThrows = {};
+  for (const s of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']) {
+    const mod = Math.floor(((safeStats[s] || 10) - 10) / 2);
+    savingThrows[s] = mod + 2;
+  }
+  return {
+    stats: safeStats,
+    initiative,
+    armor_class: armorClass,
+    saving_throws: savingThrows,
+  };
+}
+
+export function getRaceAcBonus(race) {
+  const map = {
+    'Эльф': 0,
+    'Дварф': 1,
+    'Гном': 1,
+    'Полурослик': 1,
+    'Тифлинг': 0,
+    'Драконорожденный': 0,
+  };
+  return Number(map[race] ?? 0);
 }
 
 export const DIFFICULTY_PRESETS = {

@@ -9,7 +9,7 @@ import {
 } from '../api/game.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
-import { STATS, calculateHpFromStats, calculateDerivedStats } from '../config.js';
+import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
 
 function sanitizeAIText(raw) {
   if (!raw) return "";
@@ -213,7 +213,8 @@ export function renderLobby(container, user) {
         <div class="modal" style="max-width: 500px;">
           <h2 class="card-title" style="margin-bottom: 0.5rem;">⚔️ Новый персонаж</h2>
           <p class="form-hint" style="margin-bottom: 1rem;">Создайте героя — он останется у вас и сможет участвовать в любых сессиях</p>
-          <form id="newCharForm">
+           <form id="newCharForm">
+            <input type="hidden" id="charRaceAcBonus" value="0" />
             <div class="form-group" style="margin-bottom: 0.75rem;">
               <label class="form-label">Имя героя *</label>
               <input class="input" id="charName" placeholder="Эльдрин" required />
@@ -245,7 +246,7 @@ export function renderLobby(container, user) {
                 ${STATS.map((stat) => `
                   <div class="form-group">
                     <label class="form-hint">${stat}</label>
-                    <input class="input" type="number" id="stat_${stat}" value="10" min="1" max="30" style="text-align: center;" />
+                     <input class="input" type="number" id="stat_${stat}" value="10" style="text-align: center;" />
                   </div>
                 `).join('')}
               </div>
@@ -262,7 +263,8 @@ export function renderLobby(container, user) {
       <div class="modal-overlay" id="editCharModal">
         <div class="modal" style="max-width: 500px;">
           <h2 class="card-title" style="margin-bottom: 0.5rem;">✏️ Редактирование персонажа</h2>
-          <form id="editCharForm">
+           <form id="editCharForm">
+            <input type="hidden" id="editCharRaceAcBonus" value="0" />
             <input type="hidden" id="editCharId" />
             <div class="form-group" style="margin-bottom: 0.75rem;">
               <label class="form-label">Имя героя</label>
@@ -295,7 +297,7 @@ export function renderLobby(container, user) {
                 ${STATS.map((stat) => `
                   <div class="form-group">
                     <label class="form-hint">${stat}</label>
-                    <input class="input" type="number" id="edit_stat_${stat}" min="1" max="30" style="text-align: center;" />
+                     <input class="input" type="number" id="edit_stat_${stat}" style="text-align: center;" />
                   </div>
                 `).join('')}
               </div>
@@ -643,7 +645,7 @@ export function renderLobby(container, user) {
           stats: cardStats,
           hp: calculateHpFromStats(cardStats),
           max_hp: calculateHpFromStats(cardStats),
-          ...calculateDerivedStats(cardStats, card.race || 'Человек', []),
+          ...calculateDerivedStats(cardStats, card.race || 'Человек', [], card.race_ac_bonus),
           money: card.money || 50,
         });
         toast.success(`Персонаж «${card.name || 'Безымянный'}» импортирован!`);
@@ -730,7 +732,8 @@ export function renderLobby(container, user) {
         stats,
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
-        ...calculateDerivedStats(stats, document.getElementById('editCharRace').value || 'Человек', []),
+        race_ac_bonus: Number(document.getElementById('editCharRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('editCharRace').value)),
+        ...calculateDerivedStats(stats, document.getElementById('editCharRace').value || 'Человек', [], Number(document.getElementById('editCharRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('editCharRace').value))),
       };
       console.log('[edit-character-card] request:', { id, ...requestPayload });
 
@@ -866,7 +869,8 @@ export function renderLobby(container, user) {
         stats,
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
-        ...calculateDerivedStats(stats, document.getElementById('charRace').value || 'Человек', []),
+        race_ac_bonus: Number(document.getElementById('charRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('charRace').value)),
+        ...calculateDerivedStats(stats, document.getElementById('charRace').value || 'Человек', [], Number(document.getElementById('charRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('charRace').value))),
         money: 50,
       };
       console.log('[create-character-card] request:', requestPayload);
@@ -907,6 +911,10 @@ export function renderLobby(container, user) {
         if (response?.stats) {
           console.log('[generate-character][new-card] applying stats:', response.stats);
           STATS.forEach((s) => { const el = document.getElementById(`stat_${s}`); if (el && response.stats[s] !== undefined) el.value = response.stats[s]; });
+          if (response.race_ac_bonus !== undefined) {
+            const el = document.getElementById('charRaceAcBonus');
+            if (el) el.value = response.race_ac_bonus;
+          }
           toast.success('Статы сгенерированы!');
         } else {
           console.warn('[generate-character][new-card] response without stats:', response);

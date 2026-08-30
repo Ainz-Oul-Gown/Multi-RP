@@ -168,10 +168,12 @@ serve(async (req) => {
       });
     }
 
-    const result = validateAndFixStats(stats);
-    const derived = calculateDerivedStats(result, cleanTextForAI(parsed.race) || 'Человек', []);
+    const result = validateAndFixStats(stats, { forceSum72: true });
+    const race = cleanTextForAI(parsed.race) || 'Человек';
+    const raceAcBonus = calculateDerivedStats(result, race, []).armor_class - 10 - Math.floor(((result.DEX || 10) - 10) / 2);
+    const derived = calculateDerivedStats(result, race, [], raceAcBonus);
 
-    return new Response(JSON.stringify({ stats: result, ...derived }), {
+    return new Response(JSON.stringify({ stats: result, race_ac_bonus: raceAcBonus, ...derived }), {
       status: 200, headers: { ...CORS, "Content-Type": "application/json" },
     });
 

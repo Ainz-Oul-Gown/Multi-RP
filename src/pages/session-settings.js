@@ -4,7 +4,7 @@ import {
   getSession, updateSession, getSessionPlayers, createPlayer,
   getWorlds, getLoreFiles
 } from '../api/game.js';
-import { STATS, DIFFICULTY_PRESETS, calculateHpFromStats, calculateDerivedStats } from '../config.js';
+import { STATS, DIFFICULTY_PRESETS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 
@@ -221,7 +221,7 @@ export async function renderSessionSettings(container, sessionId, user) {
           stats: { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
           hp: calculateHpFromStats({ CON: 10 }),
           max_hp: calculateHpFromStats({ CON: 10 }),
-          ...calculateDerivedStats({ CON: 10 }, 'Человек', []),
+          ...calculateDerivedStats({ CON: 10 }, 'Человек', [], getRaceAcBonus('Человек')),
           money: 0,
         });
         toast.success(`Бот ${botName} добавлен!`);

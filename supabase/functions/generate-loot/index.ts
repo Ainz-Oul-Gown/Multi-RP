@@ -18,11 +18,12 @@ const CORS = {
 const SYSTEM_PROMPT = `Ты — генератор предметов и построений для текстовой RPG. Твоя задача — создать реалистичный, сбалансированный предмет/постройку/лут на основе контекста.
 
 ПРАВИЛА:
-1. Предмет должен соответствовать контексту (раса, класс, уровень, сюжет).
+1. Предмет должен соответствовать контексту (локация, сюжет, уровень, раса, класс).
 2. Не создавай "Экскалибур в подвале", если это не указано в сюжете.
 3. Учитывай характеристики игрока (STR/DEX/CON/INT/WIS/CHA) для подбора редкости и параметров.
 4. Баланс: обычные предметы → 1-2 параметра, редкие → 3-4 параметра, легендарные → только если явно указано в сюжете.
-5. Если контекст бедный — создай простой предмет подходящего уровня.
+5. Оцени состояние предмета: new, used, damaged, broken.
+6. Если контекст бедный — создай простой предмет подходящего уровня.
 
 Формат ответа — ТОЛЬКО валидный JSON без markdown:
 {
@@ -42,11 +43,18 @@ const SYSTEM_PROMPT = `Ты — генератор предметов и пос�
   "damage": "1d8",
   "heal_amount": 0,
   "value": 10,
+  "condition": "new|used|damaged|broken",
+  "durability": 100,
   "requirements": {
     "level": 1,
     "stats": {}
   },
-  "effects": ["Эффект 1", "Эффект 2"]
+  "effects": ["Эффект 1", "Эффект 2"],
+  "world_hints": {
+    "location": "Таверна",
+    "theme": " medieval",
+    "plot_relevance": "низкая"
+  }
 }
 
 ВСЁ на русском языке.`;
@@ -76,8 +84,11 @@ serve(async (req) => {
     const player_race = cleanTextForAI(parsed.player_race) || 'Человек';
     const item_type = cleanTextForAI(parsed.item_type) || 'misc';
     const rarity = cleanTextForAI(parsed.rarity) || 'common';
+    const location = cleanTextForAI(parsed.location) || 'Неизвестно';
+    const save_to_inventory = Boolean(parsed.save_to_inventory);
+    const player_id = sanitizeKey(parsed.player_id);
 
-    console.log('generate-loot input:', { user_id, item_type, rarity, player_race, context });
+    console.log('generate-loot input:', { user_id, item_type, rarity, player_race, location, save_to_inventory });
 
     if (!user_id || !context) {
       return new Response(JSON.stringify({ error: "user_id и context обязательны" }), {
@@ -103,7 +114,7 @@ serve(async (req) => {
       }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
-    const userMessage = `Контекст: ${context}\n\n${recent_messages ? `Последние события:\n${recent_messages}\n\n` : ''}${plot_stage ? `Сюжет: ${plot_stage}\n\n` : ''}Игрок (${player_race}) имеет характеристики: ${JSON.stringify(player_stats)}.\n\nСоздай ${rarity === 'legendary' ? 'легендарный' : rarity === 'rare' ? 'редкий' : rarity === 'uncommon' ? 'необычный' : 'обычный'} предмет типа ${item_type}.`;
+    const userMessage = `Контекст: ${context}\nЛокация: ${location}\n\n${recent_messages ? `Последние события:\n${recent_messages}\n\n` : ''}${plot_stage ? `Сюжет: ${plot_stage}\n\n` : ''}Игрок (${player_race}) имеет характеристики: ${JSON.stringify(player_stats)}.\n\nСоздай ${rarity === 'legendary' ? 'легендарный' : rarity === 'rare' ? 'редкий' : rarity === 'uncommon' ? 'необычный' : 'обычный'} предмет типа ${item_type}.`;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -120,7 +131,7 @@ serve(async (req) => {
           { role: "user", content: userMessage },
         ],
         temperature: 0.7,
-        max_tokens: 800,
+        max_tokens: 1000,
       }),
       signal: AbortSignal.timeout(60000),
     });
@@ -156,7 +167,59 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ item }), {
+    const normalizedItem = {
+      name: cleanTextForAI(item.name),
+      type: cleanTextForAI(item.type) || 'misc',
+      rarity: cleanTextForAI(item.rarity) || 'common',
+      description: cleanTextForAI(item.description),
+      stats: item.stats || {},
+      ac_bonus: Number(item.ac_bonus) || 0,
+      damage: cleanTextForAI(item.damage) || '',
+      heal_amount: Number(item.heal_amount) || 0,
+      value: Number(item.value) || 10,
+      condition: cleanTextForAI(item.condition) || 'new',
+      durability: Number(item.durability) || 100,
+      requirements: item.requirements || {},
+      effects: Array.isArray(item.effects) ? item.effects.map((e: any) => cleanTextForAI(String(e))) : [],
+      world_hints: item.world_hints || {},
+    };
+
+    let inventoryItem = null;
+    if (save_to_inventory && player_id) {
+      const { data: inventoryData, error: inventoryError } = await supabase
+        .from("inventory")
+        .insert({
+          player_id,
+          item_name: normalizedItem.name,
+          type: normalizedItem.type,
+          rarity: normalizedItem.rarity,
+          description: normalizedItem.description,
+          stats: normalizedItem.stats,
+          ac_bonus: normalizedItem.ac_bonus,
+          damage: normalizedItem.damage,
+          heal_amount: normalizedItem.heal_amount,
+          value: normalizedItem.value,
+          condition: normalizedItem.condition,
+          durability: normalizedItem.durability,
+          requirements: normalizedItem.requirements,
+          effects: normalizedItem.effects,
+          quantity: 1,
+        })
+        .select()
+        .single();
+
+      if (inventoryError) {
+        console.error('Failed to save item to inventory:', inventoryError);
+      } else {
+        inventoryItem = inventoryData;
+      }
+    }
+
+    return new Response(JSON.stringify({
+      item: normalizedItem,
+      inventory_item: inventoryItem,
+      location,
+    }), {
       status: 200, headers: { ...CORS, "Content-Type": "application/json" },
     });
 

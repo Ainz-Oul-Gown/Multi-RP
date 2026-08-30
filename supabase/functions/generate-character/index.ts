@@ -8,6 +8,7 @@ import {
   cleanTextForAI,
   parseAIJson,
   validateAndFixStats,
+  calculateDerivedStats,
 } from "../_shared/utils.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -168,8 +169,9 @@ serve(async (req) => {
     }
 
     const result = validateAndFixStats(stats);
+    const derived = calculateDerivedStats(result, cleanTextForAI(parsed.race) || 'Человек', []);
 
-    return new Response(JSON.stringify({ stats: result }), {
+    return new Response(JSON.stringify({ stats: result, ...derived }), {
       status: 200, headers: { ...CORS, "Content-Type": "application/json" },
     });
 

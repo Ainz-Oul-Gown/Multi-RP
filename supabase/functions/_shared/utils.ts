@@ -126,27 +126,42 @@ export function validateAndFixStats(raw: any): StatsRecord {
   const result: StatsRecord = {
     STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10,
   };
-  let sum = 0;
 
   for (const s of VALID_STATS) {
-    const val = Math.min(18, Math.max(3, Math.round(Number(raw?.[s]) || 10)));
+    const rawValue = raw?.[s];
+    const num = Number(rawValue);
+    const val = Number.isFinite(num) ? Math.round(num) : 10;
     result[s] = val;
-    sum += val;
-  }
-
-  if (sum !== 72) {
-    const diff = 72 - sum;
-    let adjustStat: StatKey = "STR";
-    let maxDist = 0;
-    for (const s of VALID_STATS) {
-      const dist = Math.abs(result[s] - 10);
-      if (dist > maxDist) {
-        maxDist = dist;
-        adjustStat = s;
-      }
-    }
-    result[adjustStat] = Math.min(18, Math.max(3, result[adjustStat] + diff));
   }
 
   return result;
+}
+
+export function calculateDerivedStats(stats = {}, race = 'Человек', equipment = []) {
+  const safeStats = validateAndFixStats(stats);
+  const initiative = Math.floor(((safeStats.DEX || 10) - 10) / 2);
+  const dexMod = Math.floor(((safeStats.DEX || 10) - 10) / 2);
+  const raceBonusMap: Record<string, number> = {
+    'Эльф': 0,
+    'Дварф': 1,
+    'Гном': 1,
+    'Полурослик': 1,
+    'Тифлинг': 0,
+    'Драконорожденный': 0,
+  };
+  const equipmentBonus = Array.isArray(equipment)
+    ? equipment.reduce((sum, item) => sum + (Number(item.ac_bonus) || 0), 0)
+    : 0;
+  const armorClass = 10 + dexMod + Number(raceBonusMap[race] || 0) + equipmentBonus;
+  const savingThrows = {};
+  for (const s of VALID_STATS) {
+    const mod = Math.floor(((safeStats[s] || 10) - 10) / 2);
+    savingThrows[s] = mod + 2;
+  }
+  return {
+    stats: safeStats,
+    initiative,
+    armor_class: armorClass,
+    saving_throws: savingThrows,
+  };
 }

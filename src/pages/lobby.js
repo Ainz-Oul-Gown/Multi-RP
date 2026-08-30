@@ -9,7 +9,7 @@ import {
 } from '../api/game.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
-import { STATS, calculateHpFromStats } from '../config.js';
+import { STATS, calculateHpFromStats, calculateDerivedStats } from '../config.js';
 
 function sanitizeAIText(raw) {
   if (!raw) return "";
@@ -643,6 +643,7 @@ export function renderLobby(container, user) {
           stats: cardStats,
           hp: calculateHpFromStats(cardStats),
           max_hp: calculateHpFromStats(cardStats),
+          ...calculateDerivedStats(cardStats, card.race || 'Человек', []),
           money: card.money || 50,
         });
         toast.success(`Персонаж «${card.name || 'Безымянный'}» импортирован!`);
@@ -729,6 +730,7 @@ export function renderLobby(container, user) {
         stats,
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
+        ...calculateDerivedStats(stats, document.getElementById('editCharRace').value || 'Человек', []),
       };
       console.log('[edit-character-card] request:', { id, ...requestPayload });
 
@@ -864,6 +866,7 @@ export function renderLobby(container, user) {
         stats,
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
+        ...calculateDerivedStats(stats, document.getElementById('charRace').value || 'Человек', []),
         money: 50,
       };
       console.log('[create-character-card] request:', requestPayload);

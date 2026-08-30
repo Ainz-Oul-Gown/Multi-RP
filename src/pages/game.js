@@ -6,7 +6,7 @@ import {
   removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn, createPlayer,
   getCharacterCards
 } from '../api/game.js';
-import { STATS, calculateHpFromStats } from '../config.js';
+import { STATS, calculateHpFromStats, calculateDerivedStats } from '../config.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 
@@ -228,6 +228,9 @@ export async function renderGame(container, sessionId, user) {
             <button class="btn btn-primary btn-icon" id="sendBtn" ${isSubmitting || !isMyTurn ? 'disabled' : ''}>
               ${isSubmitting ? '⏳' : '▶'}
             </button>
+            <button class="btn btn-ghost btn-icon" id="restBtn" ${isSubmitting || !isMyTurn ? 'disabled' : ''} title="Отдохнуть">
+              🛌
+            </button>
           </div>
         </footer>
 
@@ -322,6 +325,17 @@ export async function renderGame(container, sessionId, user) {
       </div>
     `).join('');
 
+    const derived = calculateDerivedStats(stats, player.race || 'Человек', player.inventory || []);
+    const initiative = derived.initiative;
+    const armorClass = derived.armor_class;
+    const savingThrows = derived.saving_throws;
+    const savingThrowsHtml = STATS.map((stat) => `
+      <div class="stat-item">
+        <div class="stat-label">${stat}</div>
+        <div class="stat-value">${savingThrows[stat] >= 0 ? '+' : ''}${savingThrows[stat]}</div>
+      </div>
+    `).join('');
+
     return `
       <div class="profile-card">
         <div class="profile-avatar">⚔️</div>
@@ -346,6 +360,24 @@ export async function renderGame(container, sessionId, user) {
           ${statsHtml}
         </div>
 
+        <div class="stats-grid" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
+          <div class="stat-item">
+            <div class="stat-label">Инициатива</div>
+            <div class="stat-value">${initiative >= 0 ? '+' : ''}${initiative}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">AC</div>
+            <div class="stat-value">${armorClass}</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
+          <h4 class="form-label">Спасброски</h4>
+          <div class="stats-grid" style="margin-top: 0.5rem;">
+            ${savingThrowsHtml}
+          </div>
+        </div>
+
         ${player.appearance ? `
           <div style="margin-top: 1.5rem;">
             <h4 class="form-label">Внешность</h4>
@@ -359,10 +391,6 @@ export async function renderGame(container, sessionId, user) {
             <p class="text-muted" style="font-size: var(--fs-sm);">${escapeHtml(player.bio)}</p>
           </div>
         ` : ''}
-
-        <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
-          <button class="btn btn-secondary btn-sm" id="exportPlayerBtn">📤 Экспорт персонажа</button>
-        </div>
       </div>
     `;
   }
@@ -463,6 +491,21 @@ export async function renderGame(container, sessionId, user) {
 
     // Submit action
     document.getElementById('sendBtn')?.addEventListener('click', handleSend);
+    document.getElementById('restBtn')?.addEventListener('click', async () => {
+      if (!currentPlayer) return;
+      try {
+        const healed = Math.min(currentPlayer.max_hp, currentPlayer.hp + Math.max(1, Math.floor(currentPlayer.max_hp * 0.25)));
+        const updated = await updatePlayer(currentPlayer.id, {
+          hp: healed,
+          last_rested_at: new Date().toISOString(),
+        });
+        currentPlayer = { ...currentPlayer, ...updated };
+        toast.success(`Отдых удался. HP: ${healed}/${currentPlayer.max_hp}`);
+        render();
+      } catch (err) {
+        toast.error('Ошибка отдыха: ' + err.message);
+      }
+    });
     input?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -680,6 +723,7 @@ export async function renderGame(container, sessionId, user) {
             hp: calculateHpFromStats(card.stats),
             max_hp: calculateHpFromStats(card.stats),
             money: card.money,
+            ...calculateDerivedStats(card.stats, card.race || 'Человек', []),
           });
 
           console.log('[character-card] player created:', currentPlayer.id);
@@ -717,6 +761,9 @@ export async function renderGame(container, sessionId, user) {
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
         money: 50,
+        initiative: calculateInitiative(stats),
+        armor_class: calculateArmorClass(stats, document.getElementById('charRace').value || 'Человек', []),
+        saving_throws: calculateSavingThrows(stats, 2),
       };
       console.log('[create-character] request:', requestPayload);
 

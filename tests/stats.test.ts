@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateAndFixStats } from "../supabase/functions/_shared/utils.ts";
+import { calculateHpFromStats } from "../src/config.js";
 
 describe("validateAndFixStats", () => {
   it("returns default stats when input is empty", () => {
@@ -61,5 +62,19 @@ describe("validateAndFixStats", () => {
     expect(result.STR).toBe(18);
     Object.values(result).forEach((v) => expect(v).toBeGreaterThanOrEqual(3));
     Object.values(result).forEach((v) => expect(v).toBeLessThanOrEqual(18));
+  });
+});
+
+describe("calculateHpFromStats", () => {
+  it("calculates HP from CON using D&D-like formula", () => {
+    expect(calculateHpFromStats({ CON: 10 })).toBe(30);
+    expect(calculateHpFromStats({ CON: 14 })).toBe(38);
+    expect(calculateHpFromStats({ CON: 8 })).toBe(26);
+  });
+
+  it("falls back to 10 when stats object is empty or CON is missing", () => {
+    expect(calculateHpFromStats({})).toBe(30);
+    expect(calculateHpFromStats(null)).toBe(30);
+    expect(calculateHpFromStats(undefined)).toBe(30);
   });
 });

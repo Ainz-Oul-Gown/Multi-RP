@@ -14,6 +14,11 @@ export const AI_NARRATOR_TIMEOUT = 30000;
 // Game Constants
 export const STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 
+export function calculateHpFromStats(stats = {}) {
+  const con = stats && typeof stats.CON === 'number' ? stats.CON : 10;
+  return con * 2 + 10;
+}
+
 export const DIFFICULTY_PRESETS = {
   easy: { label: 'Легко', modifier: 'advantage', description: 'Героям сопутствует удача, препятствия преодолеваются легко.' },
   normal: { label: 'Нормально', modifier: 'none', description: 'Сбалансированный мир со стандартными испытаниями.' },

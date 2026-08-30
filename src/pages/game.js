@@ -6,7 +6,7 @@ import {
   removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn, createPlayer,
   getCharacterCards
 } from '../api/game.js';
-import { STATS } from '../config.js';
+import { STATS, calculateHpFromStats } from '../config.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 
@@ -677,8 +677,8 @@ export async function renderGame(container, sessionId, user) {
             personality: card.personality || {},
             power_level: card.power_level,
             stats: card.stats || {},
-            hp: card.hp,
-            max_hp: card.max_hp,
+            hp: calculateHpFromStats(card.stats),
+            max_hp: calculateHpFromStats(card.stats),
             money: card.money,
           });
 
@@ -714,8 +714,8 @@ export async function renderGame(container, sessionId, user) {
         personality: { ideals: [], bonds: [], flaws: [] },
         power_level: 10,
         stats,
-        hp: stats.CON * 2 + 10,
-        max_hp: stats.CON * 2 + 10,
+        hp: calculateHpFromStats(stats),
+        max_hp: calculateHpFromStats(stats),
         money: 50,
       };
       console.log('[create-character] request:', requestPayload);

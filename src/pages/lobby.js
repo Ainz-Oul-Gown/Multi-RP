@@ -9,7 +9,7 @@ import {
 } from '../api/game.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
-import { STATS } from '../config.js';
+import { STATS, calculateHpFromStats } from '../config.js';
 
 function sanitizeAIText(raw) {
   if (!raw) return "";
@@ -630,6 +630,7 @@ export function renderLobby(container, user) {
         const text = await file.text();
         const data = JSON.parse(text);
         const card = data.character || data;
+        const cardStats = card.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
         await createCharacterCard({
           owner_id: user.id,
           name: card.name || 'Безымянный',
@@ -639,9 +640,9 @@ export function renderLobby(container, user) {
           personality: card.personality || {},
           bio: card.bio || '',
           power_level: card.power_level || 10,
-          stats: card.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-          hp: card.hp || 30,
-          max_hp: card.max_hp || 30,
+          stats: cardStats,
+          hp: calculateHpFromStats(cardStats),
+          max_hp: calculateHpFromStats(cardStats),
           money: card.money || 50,
         });
         toast.success(`Персонаж «${card.name || 'Безымянный'}» импортирован!`);
@@ -726,8 +727,8 @@ export function renderLobby(container, user) {
         appearance: document.getElementById('editCharAppearance').value,
         bio: document.getElementById('editCharBio').value,
         stats,
-        hp: stats.CON * 2 + 10,
-        max_hp: stats.CON * 2 + 10,
+        hp: calculateHpFromStats(stats),
+        max_hp: calculateHpFromStats(stats),
       };
       console.log('[edit-character-card] request:', { id, ...requestPayload });
 
@@ -861,8 +862,8 @@ export function renderLobby(container, user) {
         personality: { ideals: [], bonds: [], flaws: [] },
         power_level: 10,
         stats,
-        hp: stats.CON * 2 + 10,
-        max_hp: stats.CON * 2 + 10,
+        hp: calculateHpFromStats(stats),
+        max_hp: calculateHpFromStats(stats),
         money: 50,
       };
       console.log('[create-character-card] request:', requestPayload);

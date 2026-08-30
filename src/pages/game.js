@@ -664,6 +664,8 @@ export async function renderGame(container, sessionId, user) {
           const card = cards.find((c) => c.id === cardId);
           if (!card) return;
 
+          console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
+
           currentPlayer = await createPlayer({
             session_id: sessionId,
             user_id: user.id,
@@ -680,11 +682,13 @@ export async function renderGame(container, sessionId, user) {
             money: card.money,
           });
 
+          console.log('[character-card] player created:', currentPlayer.id);
           allPlayers.push(currentPlayer);
           toast.success(`Герой «${card.name}» выбран!`);
           render();
           subscribeRealtime();
         } catch (err) {
+          console.error('[character-card] select error:', err);
           toast.error('Ошибка: ' + err.message);
         }
       });
@@ -699,28 +703,33 @@ export async function renderGame(container, sessionId, user) {
         stats[stat] = parseInt(document.getElementById(`stat_${stat}`).value) || 10;
       });
 
-      try {
-        currentPlayer = await createPlayer({
-          session_id: sessionId,
-          user_id: user.id,
-          name: document.getElementById('charName').value,
-          race: document.getElementById('charRace').value,
-          class: document.getElementById('charClass').value,
-          appearance: document.getElementById('charAppearance').value,
-          bio: document.getElementById('charBio').value,
-          personality: { ideals: [], bonds: [], flaws: [] },
-          power_level: 10,
-          stats,
-          hp: stats.CON * 2 + 10,
-          max_hp: stats.CON * 2 + 10,
-          money: 50,
-        });
+      const requestPayload = {
+        session_id: sessionId,
+        user_id: user.id,
+        name: document.getElementById('charName').value,
+        race: document.getElementById('charRace').value,
+        class: document.getElementById('charClass').value,
+        appearance: document.getElementById('charAppearance').value,
+        bio: document.getElementById('charBio').value,
+        personality: { ideals: [], bonds: [], flaws: [] },
+        power_level: 10,
+        stats,
+        hp: stats.CON * 2 + 10,
+        max_hp: stats.CON * 2 + 10,
+        money: 50,
+      };
+      console.log('[create-character] request:', requestPayload);
 
+      try {
+        currentPlayer = await createPlayer(requestPayload);
+
+        console.log('[create-character] player created:', currentPlayer.id);
         allPlayers.push(currentPlayer);
         toast.success('Персонаж создан!');
         render();
         subscribeRealtime();
       } catch (err) {
+        console.error('[create-character] error:', err);
         toast.error('Ошибка создания: ' + err.message);
       }
     });

@@ -719,22 +719,27 @@ export function renderLobby(container, user) {
       const stats = {};
       STATS.forEach((s) => { stats[s] = parseInt(document.getElementById(`edit_stat_${s}`)?.value) || 10; });
 
+      const requestPayload = {
+        name: document.getElementById('editCharName').value,
+        race: document.getElementById('editCharRace').value,
+        class: document.getElementById('editCharClass').value,
+        appearance: document.getElementById('editCharAppearance').value,
+        bio: document.getElementById('editCharBio').value,
+        stats,
+        hp: stats.CON * 2 + 10,
+        max_hp: stats.CON * 2 + 10,
+      };
+      console.log('[edit-character-card] request:', { id, ...requestPayload });
+
       try {
         const { updateCharacterCard } = await import('../api/game.js');
-        await updateCharacterCard(id, {
-          name: document.getElementById('editCharName').value,
-          race: document.getElementById('editCharRace').value,
-          class: document.getElementById('editCharClass').value,
-          appearance: document.getElementById('editCharAppearance').value,
-          bio: document.getElementById('editCharBio').value,
-          stats,
-          hp: stats.CON * 2 + 10,
-          max_hp: stats.CON * 2 + 10,
-        });
+        const updated = await updateCharacterCard(id, requestPayload);
+        console.log('[edit-character-card] updated:', updated);
         toast.success('Персонаж обновлён!');
         document.getElementById('editCharModal').classList.remove('open');
         loadData();
       } catch (err) {
+        console.error('[edit-character-card] error:', err);
         toast.error('Ошибка: ' + err.message);
       }
     });
@@ -764,24 +769,32 @@ export function renderLobby(container, user) {
       btn.disabled = true;
       btn.textContent = '⏳ ...';
       try {
-        const { data, error } = await invokeFunction('generate-character', {
+        const requestPayload = {
             user_id: user.id,
             name: sanitizeAIText(document.getElementById('editCharName')?.value || ''),
             race: sanitizeAIText(document.getElementById('editCharRace')?.value || ''),
             class: sanitizeAIText(document.getElementById('editCharClass')?.value || ''),
             appearance: sanitizeAIText(document.getElementById('editCharAppearance')?.value || ''),
             bio: sanitizeAIText(bio),
-          });
+          };
+        console.log('[generate-character][edit] request:', requestPayload);
+
+        const { data, error } = await invokeFunction('generate-character', requestPayload);
+        console.log('[generate-character][edit] response:', { data, error });
         if (error) throw error;
         if (data.stats) {
+          console.log('[generate-character][edit] applying stats:', data.stats);
           STATS.forEach((s) => {
             const el = document.getElementById(`edit_stat_${s}`);
             if (el && data.stats[s] !== undefined) el.value = data.stats[s];
           });
           updateEditStatsSum();
           toast.success('Статы сгенерированы!');
+        } else {
+          console.warn('[generate-character][edit] response without stats:', data);
         }
       } catch (err) {
+        console.error('[generate-character][edit] error:', err);
         if (err?.data?.code === 'MISSING_API_KEY') {
           toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» и введите ключ.');
         } else {
@@ -839,25 +852,30 @@ export function renderLobby(container, user) {
       const stats = {};
       STATS.forEach((s) => { stats[s] = parseInt(document.getElementById(`stat_${s}`)?.value) || 10; });
 
+      const requestPayload = {
+        owner_id: user.id,
+        name: document.getElementById('charName').value,
+        race: document.getElementById('charRace').value,
+        class: document.getElementById('charClass').value,
+        appearance: document.getElementById('charAppearance').value,
+        bio: document.getElementById('charBio').value,
+        personality: { ideals: [], bonds: [], flaws: [] },
+        power_level: 10,
+        stats,
+        hp: stats.CON * 2 + 10,
+        max_hp: stats.CON * 2 + 10,
+        money: 50,
+      };
+      console.log('[create-character-card] request:', requestPayload);
+
       try {
-        await createCharacterCard({
-          owner_id: user.id,
-          name: document.getElementById('charName').value,
-          race: document.getElementById('charRace').value,
-          class: document.getElementById('charClass').value,
-          appearance: document.getElementById('charAppearance').value,
-          bio: document.getElementById('charBio').value,
-          personality: { ideals: [], bonds: [], flaws: [] },
-          power_level: 10,
-          stats,
-          hp: stats.CON * 2 + 10,
-          max_hp: stats.CON * 2 + 10,
-          money: 50,
-        });
+        const card = await createCharacterCard(requestPayload);
+        console.log('[create-character-card] created:', card);
         toast.success('Персонаж создан!');
         document.getElementById('newCharModal').classList.remove('open');
         loadData();
       } catch (err) {
+        console.error('[create-character-card] error:', err);
         toast.error('Ошибка: ' + err.message);
       }
     });
@@ -871,20 +889,28 @@ export function renderLobby(container, user) {
       btn.disabled = true;
       btn.textContent = '⏳ ...';
       try {
-        const { data, error } = await invokeFunction('generate-character', {
+        const requestPayload = {
             user_id: user.id,
             name: sanitizeAIText(document.getElementById('charName')?.value || ''),
             race: sanitizeAIText(document.getElementById('charRace')?.value || ''),
             class: sanitizeAIText(document.getElementById('charClass')?.value || ''),
             appearance: sanitizeAIText(document.getElementById('charAppearance')?.value || ''),
             bio: sanitizeAIText(bio),
-          });
+          };
+        console.log('[generate-character][new-card] request:', requestPayload);
+
+        const { data, error } = await invokeFunction('generate-character', requestPayload);
+        console.log('[generate-character][new-card] response:', { data, error });
         if (error) throw error;
         if (data.stats) {
+          console.log('[generate-character][new-card] applying stats:', data.stats);
           STATS.forEach((s) => { const el = document.getElementById(`stat_${s}`); if (el && data.stats[s] !== undefined) el.value = data.stats[s]; });
           toast.success('Статы сгенерированы!');
+        } else {
+          console.warn('[generate-character][new-card] response without stats:', data);
         }
       } catch (err) {
+        console.error('[generate-character][new-card] error:', err);
         if (err?.data?.code === 'MISSING_API_KEY') {
           toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» и введите ключ.');
         } else {

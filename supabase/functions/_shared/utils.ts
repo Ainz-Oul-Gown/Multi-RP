@@ -9,7 +9,7 @@ export function cleanTextForAI(raw: string | null | undefined): string {
   if (!raw) return "";
   let text = String(raw);
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
+  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF\u0400-\u04FF]/g, "");
   text = text.replace(/data:image\/[^;\n\r]+;base64,[^\s]+/gi, "");
   text = text.replace(/\b(?:image|img|photo|picture|avatar|icon|base64)\b[^\n\r]*?\.(?:png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
   text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");

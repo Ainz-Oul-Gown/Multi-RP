@@ -111,6 +111,12 @@ describe("cleanTextForAI", () => {
     const cleaned = cleanTextForAI(input);
     expect(cleaned).toBe("Hello, world! 123");
   });
+
+  it("preserves Russian/Cyrillic text", () => {
+    const input = "Привет, мир! Это тест.";
+    const cleaned = cleanTextForAI(input);
+    expect(cleaned).toBe("Привет, мир! Это тест.");
+  });
 });
 
 describe("sanitizeKey", () => {

@@ -76,6 +76,14 @@ describe("cleanTextForAI", () => {
     expect(cleaned.length).toBeLessThan(input.length);
   });
 
+  it("removes data URI image references", () => {
+    const input = "Avatar: data:image/png;base64,AAAA";
+    const cleaned = cleanTextForAI(input);
+    expect(cleaned).not.toContain("image/png");
+    expect(cleaned).not.toContain("base64");
+    expect(cleaned.trim()).toBe("Avatar:");
+  });
+
   it("removes http(s) URLs", () => {
     const input = "Visit https://example.com for more";
     expect(cleanTextForAI(input)).toBe("Visit for more");

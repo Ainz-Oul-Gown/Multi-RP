@@ -2,6 +2,7 @@
 // Конвертирует текстовое описание мира в структурированный JSON
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -34,24 +35,6 @@ const SYSTEM_PROMPT = `Ты — D&D-дизайнер мира. Твоя зада
 Если какая-то информация отсутствует в тексте — поставь пустой массив или значение по умолчанию.
 ВСЁ на русском языке.`;
 
-function sanitizeKey(raw: string): string {
-  return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
-}
-
-function cleanTextForAI(raw: string | null | undefined): string {
-  if (!raw) return "";
-  let text = String(raw);
-  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
-  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
-  text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");
-  text = text.replace(/https?:\/\/[^\s]+/g, "");
-  text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
-  text = text.replace(/\s+/g, " ").trim();
-  if (text.length > 4000) text = text.slice(0, 4000);
-  return text;
-}
-
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
@@ -71,7 +54,7 @@ serve(async (req) => {
     console.log('convert-world-text input:', { user_id, world_name, description: safeDescription });
 
     const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
-    if (imagePattern.test(safeDescription)) {
+    if (safeDescription && new RegExp(imagePattern.source, imagePattern.flags).test(safeDescription)) {
       return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
       });
@@ -134,16 +117,7 @@ serve(async (req) => {
     console.log('convert-world-text AI raw:', rawContent);
 
     let settings = null;
-    try { settings = JSON.parse(rawContent); } catch {}
-    if (!settings) {
-      const jsonMatch = rawContent.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-      if (jsonMatch) { try { settings = JSON.parse(jsonMatch[1]); } catch {} }
-    }
-    if (!settings) {
-      const objMatch = rawContent.match(/\{[\s\S]*\}/);
-      if (objMatch) { try { settings = JSON.parse(objMatch[0]); } catch {} }
-    }
-
+    try { settings = parseAIJson(rawContent); } catch {}
     if (!settings) {
       return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
         status: 422, headers: { ...CORS, "Content-Type": "application/json" },

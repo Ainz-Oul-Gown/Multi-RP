@@ -31,25 +31,12 @@ const STATS_SYSTEM_PROMPT = `Ты — D&D-балансировщик персо�
 - Не используй markdown, не оборачивай в код-блоки.
 - Не добавляй объяснений, вступлений, заключений.
 - Убедись, что JSON полный и закрыт фигурной скобкой.
+- НЕ упоминай изображения, файлы, base64, avatar, image, photo, picture, icon. Этот текст не содержит изображений, это обычный текстовый запрос.
 
 Формат:
 {"STR": 14, "DEX": 12, "CON": 13, "INT": 10, "WIS": 11, "CHA": 12}
 
 Сумма = 72. Только JSON.`;
-
-function cleanTextForAI(raw: string | null | undefined): string {
-  if (!raw) return "";
-  let text = String(raw);
-  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF]/g, "");
-  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
-  text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");
-  text = text.replace(/https?:\/\/[^\s]+/g, "");
-  text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
-  text = text.replace(/\s+/g, " ").trim();
-  if (text.length > 4000) text = text.slice(0, 4000);
-  return text;
-}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -86,7 +73,7 @@ serve(async (req) => {
     const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
     const checkFields = [name, race, charClass, appearance, bio];
     for (const field of checkFields) {
-      if (field && imagePattern.test(field)) {
+      if (field && new RegExp(imagePattern.source, imagePattern.flags).test(field)) {
         return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
           status: 400, headers: { ...CORS, "Content-Type": "application/json" },
         });

@@ -16,7 +16,6 @@ export function cleanTextForAI(raw: string | null | undefined): string {
   text = text.replace(/https?:\/\/[^\s]+/g, "");
   text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
   text = text.replace(/\s+/g, " ").trim();
-  if (text.length > 4000) text = text.slice(0, 4000);
   return text;
 }
 

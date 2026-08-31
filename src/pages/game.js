@@ -6,7 +6,7 @@ import {
   removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn, createPlayer,
   getCharacterCards
 } from '../api/game.js';
-import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
+import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows } from '../config.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 
@@ -680,6 +680,45 @@ export async function renderGame(container, sessionId, user) {
             </div>
           `;
         }).join('');
+
+        // Select existing card handler - inside callback where cards is in scope
+        cardsEl.querySelectorAll('.char-select-btn').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const cardId = btn.dataset.cardId;
+            try {
+              const card = cards.find((c) => c.id === cardId);
+              if (!card) return;
+
+              console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
+
+              currentPlayer = await createPlayer({
+                session_id: sessionId,
+                user_id: user.id,
+                name: card.name,
+                race: card.race,
+                class: card.class,
+                appearance: card.appearance,
+                bio: card.bio,
+                personality: card.personality || {},
+                power_level: card.power_level,
+                stats: card.stats || {},
+                hp: calculateHpFromStats(card.stats),
+                max_hp: calculateHpFromStats(card.stats),
+                money: card.money,
+                ...calculateDerivedStats(card.stats, card.race || 'Человек', [], getRaceAcBonus(card.race)),
+              });
+
+              console.log('[character-card] player created:', currentPlayer.id);
+              allPlayers.push(currentPlayer);
+              toast.success(`Герой «${card.name}» выбран!`);
+              render();
+              subscribeRealtime();
+            } catch (err) {
+              console.error('[character-card] select error:', err);
+              toast.error('Ошибка: ' + err.message);
+            }
+          });
+        });
       } else if (cardsEl) {
         cardsEl.innerHTML = '<p class="text-muted" style="text-align: center;">У вас пока нет карточек. Создайте нового героя ниже.</p>';
       }
@@ -748,45 +787,6 @@ export async function renderGame(container, sessionId, user) {
         </div>
       </div>
     `;
-
-    // Select existing card handler
-    container.querySelectorAll('.char-select-btn').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const cardId = btn.dataset.cardId;
-        try {
-          const card = cards.find((c) => c.id === cardId);
-          if (!card) return;
-
-          console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
-
-          currentPlayer = await createPlayer({
-            session_id: sessionId,
-            user_id: user.id,
-            name: card.name,
-            race: card.race,
-            class: card.class,
-            appearance: card.appearance,
-            bio: card.bio,
-            personality: card.personality || {},
-            power_level: card.power_level,
-            stats: card.stats || {},
-            hp: calculateHpFromStats(card.stats),
-            max_hp: calculateHpFromStats(card.stats),
-            money: card.money,
-            ...calculateDerivedStats(card.stats, card.race || 'Человек', [], getRaceAcBonus(card.race)),
-          });
-
-          console.log('[character-card] player created:', currentPlayer.id);
-          allPlayers.push(currentPlayer);
-          toast.success(`Герой «${card.name}» выбран!`);
-          render();
-          subscribeRealtime();
-        } catch (err) {
-          console.error('[character-card] select error:', err);
-          toast.error('Ошибка: ' + err.message);
-        }
-      });
-    });
 
     // Create new character
     document.getElementById('createCharacterForm')?.addEventListener('submit', async (e) => {

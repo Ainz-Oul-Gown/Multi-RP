@@ -144,12 +144,17 @@ serve(async (req) => {
     const stats = parseAIJson(rawContent);
 
     if (!stats) {
+      console.warn('generate-character: failed to parse AI response, using default stats');
+      const defaultStats = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
+      const race2 = cleanTextForAI(parsed.race) || 'Человек';
+      const derived = calculateDerivedStats(defaultStats, race2, [], 0);
       return new Response(JSON.stringify({
-        error: "Не удалось распарсить ответ ИИ",
+        stats: defaultStats,
+        warning: "Не удалось распарсить ответ ИИ, использованы стандартные статы",
         raw: rawContent || null,
-        stats: { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        ...derived,
       }), {
-        status: 422, headers: { ...CORS, "Content-Type": "application/json" },
+        status: 200, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 

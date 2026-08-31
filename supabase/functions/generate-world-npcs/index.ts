@@ -24,7 +24,9 @@ const SYSTEM_PROMPT = `Извлеки из текста всех упомяну�
 - Tier 4: Статы 18-22, HP 100-250.
 - Tier 5: Статы 22-26, HP 250-500.
 Шаг 2: Сгенерируй им статы в рамках этого Тира.
-Верни ТОЛЬКО JSON массив: [{name: 'Имя', role: 'main' или 'secondary', race: 'Раса', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Имя', role: 'main' или 'secondary', race: 'Раса', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]
+
+ВАЖНО: Обработай ВЕСЬ переданный текст без исключения. Извлеки абсолютно КАЖДОГО упомянутого NPC, монстра и животное. Не сокращай список, выведи их всех.`;
 
 async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string): Promise<string> {
   const response = await fetch(OPENROUTER_CHAT_URL, {
@@ -42,9 +44,9 @@ async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: st
         { role: "user", content: userMessage },
       ],
       temperature: 0.7,
-      max_tokens: 2000,
+      max_tokens: 16000,
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(120000),
   });
 
   if (!response.ok) {

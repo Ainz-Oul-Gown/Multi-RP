@@ -77,9 +77,16 @@ serve(async (req) => {
     const lore_text = cleanTextForAI(parsed.lore_text);
     const user_id = sanitizeKey(parsed.user_id);
 
-    console.log("generate-world-npcs input:", { world_id, user_id, lore_text_length: lore_text.length });
+    console.log(`\n[generate-world-npcs] ═══════════════════════════════════════════════`);
+    console.log(`[generate-world-npcs] 🐉 GENERATE WORLD NPCS START`);
+    console.log(`[generate-world-npcs] ═══════════════════════════════════════════════`);
+    console.log(`[generate-world-npcs] 📥 INPUT:`);
+    console.log(`[generate-world-npcs]    • world_id: ${world_id}`);
+    console.log(`[generate-world-npcs]    • user_id: ${user_id}`);
+    console.log(`[generate-world-npcs]    • lore_text length: ${lore_text.length} chars`);
 
     if (!world_id || !lore_text) {
+      console.error(`[generate-world-npcs] ❌ Missing required fields`);
       return new Response(
         JSON.stringify({ error: "world_id и lore_text обязательны" }),
         { status: 400, headers: { ...CORS, "Content-Type": "application/json" } },
@@ -90,6 +97,7 @@ serve(async (req) => {
 
     // Получаем API ключ
     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    console.log(`[generate-world-npcs] 🔑 Fallback key available: ${apiKey ? 'YES' : 'NO'}`);
 
     if (user_id) {
       const { data: userSettings } = await supabase
@@ -99,10 +107,12 @@ serve(async (req) => {
         .maybeSingle();
       if (userSettings?.openrouter_key) {
         apiKey = sanitizeKey(userSettings.openrouter_key);
+        console.log(`[generate-world-npcs] 🔑 Using user key from settings`);
       }
     }
 
     if (!apiKey) {
+      console.error(`[generate-world-npcs] ❌ No API key available`);
       return new Response(
         JSON.stringify({
           error: "Укажите ваш OpenRouter API Key в настройках аккаунта.",
@@ -113,13 +123,14 @@ serve(async (req) => {
     }
 
     // Вызываем LLM для генерации NPC
+    console.log(`\n[generate-world-npcs] 🤖 Calling LLM to extract NPCs from lore...`);
     let npcs: any[];
     try {
       const aiResponse = await callChatLLM(SYSTEM_PROMPT, lore_text, apiKey);
-      console.log("generate-world-npcs AI raw:", aiResponse);
+      console.log(`[generate-world-npcs] 🤖 LLM response: ${aiResponse.slice(0, 200)}...`);
       npcs = parseAIJson(aiResponse);
     } catch (err) {
-      console.error("AI call failed:", err);
+      console.error(`[generate-world-npcs] ❌ AI call failed:`, err);
       return new Response(
         JSON.stringify({ error: "Ошибка генерации NPC", details: err.message }),
         { status: 502, headers: { ...CORS, "Content-Type": "application/json" } },
@@ -127,11 +138,14 @@ serve(async (req) => {
     }
 
     if (!Array.isArray(npcs) || npcs.length === 0) {
+      console.error(`[generate-world-npcs] ❌ No NPCs extracted from text`);
       return new Response(
         JSON.stringify({ error: "Не удалось извлечь NPC из текста" }),
         { status: 422, headers: { ...CORS, "Content-Type": "application/json" } },
       );
     }
+
+    console.log(`[generate-world-npcs] ✅ Extracted ${npcs.length} NPCs`);
 
     // Подготавливаем данные для INSERT
     const npcsToInsert = npcs.map((npc) => ({
@@ -149,6 +163,11 @@ serve(async (req) => {
       max_hp: Number(npc.max_hp) || 30,
     }));
 
+    console.log(`\n[generate-world-npcs] 💾 Saving ${npcsToInsert.length} NPCs to DB...`);
+    for (const npc of npcsToInsert) {
+      console.log(`[generate-world-npcs]    • ${npc.name} (${npc.race}) - Tier: ${npc.tier || '?'}, HP: ${npc.hp}`);
+    }
+
     // Массовый INSERT
     const { data: insertedNpcs, error: insertError } = await supabase
       .from("npcs")
@@ -156,14 +175,16 @@ serve(async (req) => {
       .select();
 
     if (insertError) {
-      console.error("Failed to insert NPCs:", insertError);
+      console.error(`[generate-world-npcs] ❌ Failed to insert NPCs:`, insertError);
       return new Response(
         JSON.stringify({ error: "Ошибка сохранения NPC", details: insertError.message }),
         { status: 500, headers: { ...CORS, "Content-Type": "application/json" } },
       );
     }
 
-    console.log(`Generated ${insertedNpcs.length} NPCs for world ${world_id}`);
+    console.log(`\n[generate-world-npcs] ✅ GENERATE WORLD NPCS COMPLETE`);
+    console.log(`[generate-world-npcs]    • Inserted: ${insertedNpcs.length} NPCs`);
+    console.log(`[generate-world-npcs] ═══════════════════════════════════════════════\n`);
 
     return new Response(
       JSON.stringify({

@@ -196,33 +196,43 @@ serve(async (req) => {
     return new Response("ok", { headers: CORS });
   }
 
+  const requestId = crypto.randomUUID().slice(0, 8);
+  console.log(`\n[${requestId}] ═══════════════════════════════════════════════`);
+  console.log(`[${requestId}] 🎮 PROCESS-TURN START`);
+  console.log(`[${requestId}] ═══════════════════════════════════════════════`);
+
   try {
     const { session_id, player_id, action_text } = await req.json();
-
     const safeActionText = cleanTextForAI(action_text);
 
-    console.log('process-turn input:', { session_id, player_id, action_text: safeActionText });
+    console.log(`[${requestId}] 📥 INPUT:`);
+    console.log(`[${requestId}]    • session_id: ${session_id}`);
+    console.log(`[${requestId}]    • player_id: ${player_id}`);
+    console.log(`[${requestId}]    • action_text: "${safeActionText.slice(0, 80)}${safeActionText.length > 80 ? '...' : ''}"`);
 
     const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
     if (imagePattern.test(safeActionText)) {
+      console.warn(`[${requestId}] ⚠️ Image links detected - rejecting`);
       return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
     if (!session_id || !player_id || !safeActionText) {
+      console.error(`[${requestId}] ❌ Missing required fields`);
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
         headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
-    // Supabase client with service_role
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
     // ============================================
     // STEP 0: Load game state
     // ============================================
+    console.log(`\n[${requestId}] 📊 STEP 0: Loading game state...`);
+
     const { data: player, error: playerErr } = await supabase
       .from("players")
       .select("*, inventory(*)")
@@ -230,16 +240,24 @@ serve(async (req) => {
       .single();
 
     if (playerErr || !player) {
+      console.error(`[${requestId}] ❌ Player not found: ${playerErr?.message || 'unknown'}`);
       return new Response(JSON.stringify({ error: "Player not found" }), {
         status: 404,
         headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
+    console.log(`[${requestId}] 👤 Player loaded: ${player.name} (${player.race}, ${player.class})`);
+    console.log(`[${requestId}]    • HP: ${player.hp}/${player.max_hp}`);
+    console.log(`[${requestId}]    • Stats: STR=${player.stats?.STR} DEX=${player.stats?.DEX} CON=${player.stats?.CON}`);
+    console.log(`[${requestId}]    • Inventory: ${player.inventory?.length || 0} items`);
+
     // ============================================
     // STEP 0.1: Resolve user's OpenRouter API key
     // ============================================
     let openrouterApiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    console.log(`\n[${requestId}] 🔑 API Key resolution:`);
+    console.log(`[${requestId}]    • Fallback key available: ${openrouterApiKey ? 'YES' : 'NO'}`);
 
     if (player.user_id) {
       const { data: userSettings } = await supabase
@@ -250,10 +268,14 @@ serve(async (req) => {
 
       if (userSettings?.openrouter_key) {
         openrouterApiKey = sanitizeKey(userSettings.openrouter_key);
+        console.log(`[${requestId}]    • Using user's key from settings ✓`);
+      } else {
+        console.log(`[${requestId}]    • No user key found, using fallback`);
       }
     }
 
     if (!openrouterApiKey) {
+      console.error(`[${requestId}] ❌ No API key available`);
       return new Response(JSON.stringify({
         error: "Укажите ваш OpenRouter API Key в настройках аккаунта.",
         code: "MISSING_API_KEY",
@@ -270,14 +292,21 @@ serve(async (req) => {
       .single();
 
     if (!session) {
+      console.error(`[${requestId}] ❌ Session not found`);
       return new Response(JSON.stringify({ error: "Session not found" }), {
         status: 404,
         headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
+    console.log(`[${requestId}] 🎮 Session loaded:`);
+    console.log(`[${requestId}]    • World ID: ${session.world_id}`);
+    console.log(`[${requestId}]    • Difficulty: ${session.difficulty}`);
+    console.log(`[${requestId}]    • Plot stage: ${session.current_plot_stage || 'sandbox'}`);
+
     // Load lore context
     let loreContext = "";
+    console.log(`\n[${requestId}] 📚 Loading lore context...`);
     if (session.world_id) {
       const { data: loreFiles } = await supabase
         .from("lore_files")
@@ -286,15 +315,19 @@ serve(async (req) => {
         .limit(5);
 
       if (loreFiles?.length) {
+        console.log(`[${requestId}] 📚 Loaded ${loreFiles.length} lore files`);
         loreContext = loreFiles
           .map((f) => `### ${f.title}\n${cleanTextForAI(f.content).slice(0, 500)}`)
           .join("\n\n");
+      } else {
+        console.log(`[${requestId}] 📚 No lore files found`);
       }
     }
 
     // ============================================
     // STEP 0.2: Load NPC and Beliefs
     // ============================================
+    console.log(`\n[${requestId}] 🐉 STEP 0.2: Loading NPCs and beliefs...`);
     let worldNpcs: any[] = [];
     if (session.world_id) {
       const { data: npcs } = await supabase
@@ -302,6 +335,10 @@ serve(async (req) => {
         .select("id, name")
         .eq("world_id", session.world_id);
       worldNpcs = npcs || [];
+      console.log(`[${requestId}] 🐉 Found ${worldNpcs.length} NPCs in world`);
+      if (worldNpcs.length > 0) {
+        console.log(`[${requestId}]    • NPC names: ${worldNpcs.map(n => n.name).join(', ')}`);
+      }
 
       // Load beliefs about this player
       const { data: beliefs } = await supabase
@@ -311,16 +348,20 @@ serve(async (req) => {
         .eq("memory_type", "belief");
 
       if (beliefs && beliefs.length > 0) {
+        console.log(`[${requestId}] 💭 Found ${beliefs.length} beliefs about player`);
         const beliefsText = beliefs
           .map((b, i) => `${i + 1}. ${cleanTextForAI(b.memory_text).slice(0, 200)}`)
           .join("\n");
         loreContext += `\n\nУбеждения NPC о вас:\n${beliefsText}`;
+      } else {
+        console.log(`[${requestId}] 💭 No beliefs found`);
       }
     }
 
     // ============================================
     // STEP 0.3: Load plot storyline content
     // ============================================
+    console.log(`\n[${requestId}] 📖 Loading plot content...`);
     let plotContent: string | null = null;
     if (session.current_plot_stage && session.world_id) {
       const { data: plotFile } = await supabase
@@ -332,6 +373,9 @@ serve(async (req) => {
 
       if (plotFile?.content) {
         plotContent = cleanTextForAI(plotFile.content);
+        console.log(`[${requestId}] 📖 Plot content loaded (${plotContent.length} chars)`);
+      } else {
+        console.log(`[${requestId}] 📖 No plot content for stage: ${session.current_plot_stage}`);
       }
     }
 
@@ -347,19 +391,25 @@ serve(async (req) => {
       .reverse()
       .map((m) => `[${m.sender_type === "master" ? "Мастер" : "Игрок"}]: ${cleanTextForAI(m.content).slice(0, 200)}`);
 
+    console.log(`[${requestId}] 💬 Loaded ${recentMessages.length} recent messages`);
+
     // ============================================
     // STEP 1: AI-Парсер → JSON
     // ============================================
+    console.log(`\n[${requestId}] 🤖 STEP 1: Calling AI Parser...`);
     const parserUserMessage = `Игрок "${cleanTextForAI(player.name)}" (${cleanTextForAI(player.race)}, ${cleanTextForAI(player.class)}) пишет:
 "${safeActionText}"
 
 Инвентарь игрока: ${player.inventory?.map((i: any) => i.item_name).join(", ") || "пусто"}`;
 
     let rawParserResponse = await callAI(PARSER_SYSTEM_PROMPT, parserUserMessage, openrouterApiKey, 3);
+    console.log(`[${requestId}] 🤖 Parser response: ${rawParserResponse.slice(0, 150)}...`);
+
     let parsedAction = parseAIJson(rawParserResponse);
 
     // Retry if parse failed
     if (!parsedAction) {
+      console.warn(`[${requestId}] ⚠️ Failed to parse, retrying...`);
       for (let retry = 0; retry < 2; retry++) {
         rawParserResponse = await callAI(
           PARSER_SYSTEM_PROMPT + "\n\nВАЖНО: Ответ должен строго начинаться с { и заканчиваться }. Только JSON, без текста.",
@@ -373,6 +423,7 @@ serve(async (req) => {
     }
 
     if (!parsedAction) {
+      console.error(`[${requestId}] ❌ Failed to parse action after retries`);
       return new Response(JSON.stringify({
         error: "Не удалось распознать действие. Пожалуйста, перефразируйте.",
         raw: rawParserResponse,
@@ -382,13 +433,20 @@ serve(async (req) => {
       });
     }
 
+    console.log(`[${requestId}] ✅ Parsed action:`);
+    console.log(`[${requestId}]    • intent_type: ${parsedAction.intent_type}`);
+    console.log(`[${requestId}]    • target: ${parsedAction.target}`);
+    console.log(`[${requestId}]    • items_used: ${parsedAction.items_used?.join(', ') || 'none'}`);
+
     // ============================================
     // STEP 1.5: Валидация предметов (Фантомные предметы)
     // ============================================
+    console.log(`\n[${requestId}] 🎒 STEP 1.5: Validating items...`);
     const inventoryChanges: string[] = [];
     const itemsToRemove: string[] = [];
 
     if (parsedAction.items_used?.length) {
+      console.log(`[${requestId}] 🎒 Items to use: ${parsedAction.items_used.join(', ')}`);
       const safeStats = player.stats || {};
       const safeInventory = player.inventory || [];
       for (const itemName of parsedAction.items_used) {
@@ -396,7 +454,7 @@ serve(async (req) => {
           (i: any) => i.item_name.toLowerCase() === itemName.toLowerCase()
         );
         if (!ownedItem) {
-          // Фантомный предмет — прерываем конвейер
+          console.warn(`[${requestId}] 👻 Phantom item detected: ${itemName}`);
           return new Response(JSON.stringify({
             success: true,
             narrative: `Ты потянулся за «${itemName}», но нащупал лишь пустой карман. У тебя нет этого предмета.`,
@@ -408,7 +466,7 @@ serve(async (req) => {
           });
         }
 
-        // Оценка износа предмета после использования
+        console.log(`[${requestId}] 🎒 Checking durability for: ${ownedItem.item_name}`);
         try {
           const durabilityResponse = await fetch(`${SUPABASE_URL}/functions/v1/assess-durability`, {
             method: "POST",
@@ -430,14 +488,15 @@ serve(async (req) => {
 
           if (durabilityResponse.ok) {
             const durabilityResult = await durabilityResponse.json();
-            console.log('assess-durability result:', durabilityResult);
+            console.log(`[${requestId}] 🎒 Durability result:`, durabilityResult);
 
             if (durabilityResult.is_destroyed || durabilityResult.is_lost) {
               itemsToRemove.push(ownedItem.item_name);
+              console.log(`[${requestId}] 🎒 Item ${ownedItem.item_name} will be removed (destroyed/lost)`);
             }
           }
         } catch (durabilityErr) {
-          console.error('assess-durability call failed:', durabilityErr);
+          console.error(`[${requestId}] ❌ assess-durability call failed:`, durabilityErr);
         }
       }
     }
@@ -445,6 +504,7 @@ serve(async (req) => {
     // ============================================
     // STEP 2: Математика (Supabase RPC)
     // ============================================
+    console.log(`\n[${requestId}] 🎲 STEP 2: Rolling dice...`);
     let rollResult: any = { type: "none", roll: 0, total: 0, success: false, difficulty: 0 };
 
     if (parsedAction.required_check) {
@@ -453,7 +513,10 @@ serve(async (req) => {
       const statValue = player.stats?.[skill] || 10;
       const difficultyMod = difficulty - 10;
 
+      console.log(`[${requestId}] 🎲 Check: ${skill} vs DC ${difficulty}, stat=${statValue}, mod=${difficultyMod}`);
+
       if (session.difficulty === "easy") {
+        console.log(`[${requestId}] 🎲 Roll type: ADVANTAGE`);
         const { data: rollData } = await supabase.rpc("roll_d20_advantage", {
           stat_value: statValue,
         });
@@ -470,6 +533,7 @@ serve(async (req) => {
           };
         }
       } else if (session.difficulty === "hard") {
+        console.log(`[${requestId}] 🎲 Roll type: DISADVANTAGE`);
         const { data: rollData } = await supabase.rpc("roll_d20_disadvantage", {
           stat_value: statValue,
         });
@@ -486,6 +550,7 @@ serve(async (req) => {
           };
         }
       } else {
+        console.log(`[${requestId}] 🎲 Roll type: NORMAL`);
         const { data: rollData } = await supabase.rpc("roll_d20", {
           stat_value: statValue,
           difficulty_mod: difficultyMod,
@@ -502,20 +567,26 @@ serve(async (req) => {
           };
         }
       }
+      console.log(`[${requestId}] 🎲 Result: ${rollResult.type}, total=${rollResult.total}, success=${rollResult.success}`);
+    } else {
+      console.log(`[${requestId}] 🎲 No skill check required`);
     }
 
     // Handle damage
     let hpChange = 0;
     if (parsedAction.damage_received) {
       hpChange = -Math.abs(parsedAction.damage_received);
+      console.log(`[${requestId}] 💔 Damage received: ${hpChange}`);
     }
 
     // ============================================
     // STEP 2.5: Применяем изменения к БД
     // ============================================
+    console.log(`\n[${requestId}] 💾 STEP 2.5: Applying changes to DB...`);
 
     // Apply HP change
     if (hpChange !== 0) {
+      console.log(`[${requestId}] 💾 Updating HP: ${hpChange}`);
       const { data: hpData } = await supabase.rpc("update_player_hp", {
         p_player_id: player_id,
         p_hp_change: hpChange,
@@ -523,12 +594,14 @@ serve(async (req) => {
 
       if (hpData) {
         const hpStatus = !hpData.is_alive ? " (ПОТЕРЯ СОЗНАНИЯ!)" : "";
+        console.log(`[${requestId}] 💾 New HP: ${hpData.new_hp}/${hpData.new_max_hp}${hpStatus}`);
         inventoryChanges.push(`Здоровье${hpStatus}`);
       }
     }
 
     // Remove used items
     for (const itemName of itemsToRemove) {
+      console.log(`[${requestId}] 💾 Removing item: ${itemName}`);
       const { data: removed } = await supabase.rpc("remove_item_from_inventory", {
         p_player_id: player_id,
         p_item_name: itemName,
@@ -539,11 +612,6 @@ serve(async (req) => {
       } else {
         inventoryChanges.push(`Предмет «${itemName}» использован`);
       }
-    }
-
-    // Add loot if any
-    if (parsedAction.damage_dealt && !parsedAction.required_check) {
-      // Free-form combat without skill check still processes
     }
 
     // Format results for narrator (без цифр — только суть)
@@ -558,6 +626,7 @@ serve(async (req) => {
     // ============================================
     // STEP 3: AI-Рассказчик → Нарратив
     // ============================================
+    console.log(`\n[${requestId}] 📖 STEP 3: Generating narrative...`);
     const playerFlaws = player.personality?.flaws || [];
     const narratorSystemPrompt = buildNarratorPrompt({
       sessionMode: session.current_plot_stage ? "plot" : "sandbox",
@@ -579,6 +648,8 @@ serve(async (req) => {
     });
 
     const narrative = await callAI(narratorSystemPrompt, "Сгенерируй нарратив для этого действия.", openrouterApiKey, 2);
+    console.log(`[${requestId}] 📖 Narrative generated (${narrative.length} chars)`);
+    console.log(`[${requestId}]    • Preview: "${narrative.slice(0, 100)}..."`);
 
     // ============================================
     // STEP 3.5: Автоматическое определение отдыха через ИИ
@@ -589,6 +660,7 @@ serve(async (req) => {
     const isRestAction = restKeywords.some(keyword => actionTextLower.includes(keyword));
 
     if (isRestAction) {
+      console.log(`\n[${requestId}] 🛏️ STEP 3.5: Rest action detected, calling process-rest...`);
       try {
         const restResponse = await fetch(`${SUPABASE_URL}/functions/v1/process-rest`, {
           method: "POST",
@@ -610,21 +682,22 @@ serve(async (req) => {
 
         if (restResponse.ok) {
           restResult = await restResponse.json();
-          console.log('process-rest result:', restResult);
+          console.log(`[${requestId}] 🛏️ Rest result:`, restResult);
 
           if (restResult.new_hp !== undefined) {
             await supabase.from("players").update({ hp: restResult.new_hp }).eq("id", player.id);
+            console.log(`[${requestId}] 🛏️ HP updated to: ${restResult.new_hp}`);
           }
         }
       } catch (restErr) {
-        console.error('process-rest call failed:', restErr);
+        console.error(`[${requestId}] ❌ process-rest call failed:`, restErr);
       }
     }
 
     // ============================================
     // STEP 4: Сохраняем сообщения
     // ============================================
-    // Player action message
+    console.log(`\n[${requestId}] 💬 STEP 4: Saving messages to DB...`);
     await supabase.from("messages").insert({
       session_id,
       sender_type: "player",
@@ -632,8 +705,8 @@ serve(async (req) => {
       sender_name: player.name,
       content: safeActionText,
     });
+    console.log(`[${requestId}] 💬 Player action saved`);
 
-    // Master narrative message
     await supabase.from("messages").insert({
       session_id,
       sender_type: "master",
@@ -645,19 +718,22 @@ serve(async (req) => {
         items_used: parsedAction.items_used || [],
       },
     });
+    console.log(`[${requestId}] 💬 Master narrative saved`);
 
     // ============================================
     // STEP 4.5: Save NPC memories (async, no await)
     // ============================================
+    console.log(`\n[${requestId}] 🧠 STEP 4.5: Checking NPC memory triggers...`);
+    let memoryTriggers = 0;
     if (worldNpcs.length > 0) {
       for (const npc of worldNpcs) {
-        // Check if NPC name is mentioned in narrative or action
         const npcNameLower = npc.name?.toLowerCase() || "";
         const narrativeLower = narrative.toLowerCase();
         const actionLower = safeActionText.toLowerCase();
 
         if (npcNameLower && (narrativeLower.includes(npcNameLower) || actionLower.includes(npcNameLower))) {
-          // Fire and forget - do not block response
+          memoryTriggers++;
+          console.log(`[${requestId}] 🧠 Triggered memory for NPC: ${npc.name}`);
           fetch(`${SUPABASE_URL}/functions/v1/npc-memory-engine`, {
             method: "POST",
             headers: {
@@ -670,15 +746,23 @@ serve(async (req) => {
               memory_text: narrative,
             }),
           }).catch((err) => {
-            console.error(`Failed to save memory for NPC ${npc.id}:`, err);
+            console.error(`[${requestId}] ❌ Failed to save memory for NPC ${npc.id}:`, err);
           });
         }
       }
     }
+    console.log(`[${requestId}] 🧠 NPC memory triggers: ${memoryTriggers}`);
 
     // ============================================
     // Response
     // ============================================
+    console.log(`\n[${requestId}] ✅ PROCESS-TURN COMPLETE`);
+    console.log(`[${requestId}]    • Narrative length: ${narrative.length} chars`);
+    console.log(`[${requestId}]    • HP change: ${hpChange}`);
+    console.log(`[${requestId}]    • Items used: ${parsedAction.items_used?.length || 0}`);
+    console.log(`[${requestId}]    • NPC memories triggered: ${memoryTriggers}`);
+    console.log(`[${requestId}] ═══════════════════════════════════════════════\n`);
+
     return new Response(JSON.stringify({
       success: true,
       narrative: restResult?.narrative ? `${narrative}\n\n${restResult.narrative}` : narrative,
@@ -693,7 +777,9 @@ serve(async (req) => {
     });
 
   } catch (err) {
-    console.error("Process-turn error:", err);
+    console.error(`\n[${requestId}] ❌ PROCESS-TURN ERROR:`);
+    console.error(`[${requestId}]    • ${err.message || "Internal server error"}`);
+    console.error(`[${requestId}] ═══════════════════════════════════════════════\n`);
     return new Response(JSON.stringify({
       error: err.message || "Internal server error",
     }), {

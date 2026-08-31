@@ -106,9 +106,16 @@ serve(async (req) => {
     const player_id = sanitizeKey(parsed.player_id);
     const memory_text = cleanTextForAI(parsed.memory_text);
 
-    console.log("npc-memory-engine input:", { npc_id, player_id, memory_text });
+    console.log(`\n[npc-memory-engine] ═══════════════════════════════════════════════`);
+    console.log(`[npc-memory-engine] 🧠 NPC MEMORY ENGINE START`);
+    console.log(`[npc-memory-engine] ═══════════════════════════════════════════════`);
+    console.log(`[npc-memory-engine] 📥 INPUT:`);
+    console.log(`[npc-memory-engine]    • npc_id: ${npc_id}`);
+    console.log(`[npc-memory-engine]    • player_id: ${player_id}`);
+    console.log(`[npc-memory-engine]    • memory_text: "${memory_text.slice(0, 80)}${memory_text.length > 80 ? '...' : ''}"`);
 
     if (!npc_id || !player_id || !memory_text) {
+      console.error(`[npc-memory-engine] ❌ Missing required fields`);
       return new Response(
         JSON.stringify({ error: "npc_id, player_id и memory_text обязательны" }),
         { status: 400, headers: { ...CORS, "Content-Type": "application/json" } },
@@ -119,6 +126,7 @@ serve(async (req) => {
 
     // Получаем API ключ
     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    console.log(`[npc-memory-engine] 🔑 Fallback key available: ${apiKey ? 'YES' : 'NO'}`);
 
     // Получаем player для нахождения user_id
     const { data: player } = await supabase
@@ -135,10 +143,12 @@ serve(async (req) => {
         .maybeSingle();
       if (userSettings?.openrouter_key) {
         apiKey = sanitizeKey(userSettings.openrouter_key);
+        console.log(`[npc-memory-engine] 🔑 Using user key from settings`);
       }
     }
 
     if (!apiKey) {
+      console.error(`[npc-memory-engine] ❌ No API key available`);
       return new Response(
         JSON.stringify({
           error: "Укажите ваш OpenRouter API Key в настройках аккаунта.",
@@ -151,17 +161,20 @@ serve(async (req) => {
     // ============================================
     // Задача 1: Векторизация и сохранение (Яркая память)
     // ============================================
+    console.log(`\n[npc-memory-engine] 📝 STEP 1: Generating embedding...`);
     let embedding: number[];
     try {
       embedding = await generateEmbedding(memory_text, apiKey);
+      console.log(`[npc-memory-engine] 📝 Embedding generated (${embedding.length} dims)`);
     } catch (err) {
-      console.error("Embedding generation failed:", err);
+      console.error(`[npc-memory-engine] ❌ Embedding generation failed:`, err);
       return new Response(
         JSON.stringify({ error: "Ошибка генерации эмбеддинга", details: err.message }),
         { status: 502, headers: { ...CORS, "Content-Type": "application/json" } },
       );
     }
 
+    console.log(`[npc-memory-engine] 📝 Saving vivid memory to DB...`);
     const { error: insertError } = await supabase.from("npc_memories").insert({
       npc_id,
       player_id,
@@ -171,18 +184,19 @@ serve(async (req) => {
     });
 
     if (insertError) {
-      console.error("Failed to insert vivid memory:", insertError);
+      console.error(`[npc-memory-engine] ❌ Failed to insert vivid memory:`, insertError);
       return new Response(
         JSON.stringify({ error: "Ошибка сохранения воспоминания", details: insertError.message }),
         { status: 500, headers: { ...CORS, "Content-Type": "application/json" } },
       );
     }
 
-    console.log("Vivid memory saved for npc:", npc_id);
+    console.log(`[npc-memory-engine] ✅ Vivid memory saved for npc: ${npc_id}`);
 
     // ============================================
     // Задача 2: Логика каскада "Смещение 5-5-5"
     // ============================================
+    console.log(`\n[npc-memory-engine] 🔄 STEP 2: Checking cascade logic...`);
 
     let newBeliefCreated = false;
     let newBeliefText: string | null = null;
@@ -196,11 +210,14 @@ serve(async (req) => {
       .eq("memory_type", "vivid");
 
     if (vividCountErr) {
-      console.error("Failed to count vivid memories:", vividCountErr);
+      console.error(`[npc-memory-engine] ❌ Failed to count vivid memories:`, vividCountErr);
     }
+
+    console.log(`[npc-memory-engine] 📊 Vivid count: ${vividCount ?? 0} (limit: ${CASCADE_LIMIT})`);
 
     // Если vivid > 5 → перемещаем самую старую в medium
     if ((vividCount ?? 0) > CASCADE_LIMIT) {
+      console.log(`[npc-memory-engine] 🔄 Vivid limit exceeded, moving oldest to medium...`);
       const { data: oldestVivid } = await supabase
         .from("npc_memories")
         .select("id")
@@ -218,9 +235,9 @@ serve(async (req) => {
           .eq("id", oldestVivid.id);
 
         if (updateError) {
-          console.error("Failed to update vivid to medium:", updateError);
+          console.error(`[npc-memory-engine] ❌ Failed to update vivid to medium:`, updateError);
         } else {
-          console.log("Moved oldest vivid to medium:", oldestVivid.id);
+          console.log(`[npc-memory-engine] ✅ Moved oldest vivid to medium: ${oldestVivid.id}`);
         }
       }
     }
@@ -234,11 +251,14 @@ serve(async (req) => {
       .eq("memory_type", "medium");
 
     if (mediumCountErr) {
-      console.error("Failed to count medium memories:", mediumCountErr);
+      console.error(`[npc-memory-engine] ❌ Failed to count medium memories:`, mediumCountErr);
     }
+
+    console.log(`[npc-memory-engine] 📊 Medium count: ${mediumCount ?? 0} (limit: ${CASCADE_LIMIT})`);
 
     // Если medium > 5 → сжимаем 6 в 1 belief
     if ((mediumCount ?? 0) > CASCADE_LIMIT) {
+      console.log(`[npc-memory-engine] 🔄 Medium limit exceeded, compressing to belief...`);
       // Извлекаем текст всех 6 medium записей
       const { data: mediumMemories } = await supabase
         .from("npc_memories")
@@ -252,12 +272,13 @@ serve(async (req) => {
       if (mediumMemories && mediumMemories.length === 6) {
         const memoriesText = mediumMemories.map((m, i) => `${i + 1}. ${m.memory_text}`).join("\n");
 
-        // Вызываем LLM для сжатиения
+        console.log(`[npc-memory-engine] 🤖 Calling LLM to compress 6 memories into belief...`);
         const compressionPrompt = `Ты психолог. Прочитай 6 воспоминаний NPC об игроке. Объедини их смысл в 1 короткое фундаментальное Убеждение (Belief) NPC об этом игроке. Верни строго 1 предложение без списков и вступлений.`;
 
         try {
           const beliefText = await callChatLLM(compressionPrompt, memoriesText, apiKey);
           const cleanBelief = beliefText.trim();
+          console.log(`[npc-memory-engine] 🤖 Generated belief: "${cleanBelief}"`);
 
           // Удаляем 6 старых medium записей
           const idsToDelete = mediumMemories.map((m) => m.id);
@@ -265,8 +286,10 @@ serve(async (req) => {
             .from("npc_memories")
             .delete()
             .in("id", idsToDelete);
+          console.log(`[npc-memory-engine] 🗑️ Deleted 6 medium memories`);
 
           // Генерируем вектор для нового убеждения
+          console.log(`[npc-memory-engine] 📝 Generating embedding for belief...`);
           const beliefEmbedding = await generateEmbedding(cleanBelief, apiKey);
 
           // Сохраняем belief
@@ -280,9 +303,9 @@ serve(async (req) => {
 
           newBeliefCreated = true;
           newBeliefText = cleanBelief;
-          console.log("Created new belief:", cleanBelief);
+          console.log(`[npc-memory-engine] ✅ New belief saved`);
         } catch (err) {
-          console.error("Failed to compress medium to belief:", err);
+          console.error(`[npc-memory-engine] ❌ Failed to compress medium to belief:`, err);
         }
       }
     }
@@ -296,11 +319,14 @@ serve(async (req) => {
       .eq("memory_type", "belief");
 
     if (beliefCountErr) {
-      console.error("Failed to count belief memories:", beliefCountErr);
+      console.error(`[npc-memory-engine] ❌ Failed to count belief memories:`, beliefCountErr);
     }
+
+    console.log(`[npc-memory-engine] 📊 Belief count: ${beliefCount ?? 0} (limit: ${CASCADE_LIMIT})`);
 
     // Если belief > 5 → удаляем самое старое
     if ((beliefCount ?? 0) > CASCADE_LIMIT) {
+      console.log(`[npc-memory-engine] 🔄 Belief limit exceeded, removing oldest...`);
       const { data: oldestBelief } = await supabase
         .from("npc_memories")
         .select("id")
@@ -316,15 +342,15 @@ serve(async (req) => {
           .from("npc_memories")
           .delete()
           .eq("id", oldestBelief.id);
-        console.log("Deleted oldest belief:", oldestBelief.id);
+        console.log(`[npc-memory-engine] 🗑️ Deleted oldest belief: ${oldestBelief.id}`);
       }
     }
 
     // ============================================
     // Задача 3: Обновление Статуса (status_tags)
     // ============================================
-
     if (newBeliefCreated && newBeliefText) {
+      console.log(`\n[npc-memory-engine] 🏷️ STEP 3: Updating NPC status tags...`);
       // Получаем текущие status_tags NPC
       const { data: npcData } = await supabase
         .from("npcs")
@@ -333,6 +359,7 @@ serve(async (req) => {
         .single();
 
       const currentTags = npcData?.status_tags ?? [];
+      console.log(`[npc-memory-engine] 🏷️ Current tags: ${JSON.stringify(currentTags)}`);
 
       const statusPrompt = `Учитывая новое убеждение NPC об игроке, обнови его статус отношения. Верни массив из 1-3 коротких тегов в формате JSON: { "tags": ["друг", "наставник"] }. Допустимые примеры: Враг, Должник, Предатель, Раб, Любовь, Страх. Не пиши текст, только JSON.`;
 
@@ -343,6 +370,8 @@ serve(async (req) => {
           apiKey,
         );
 
+        console.log(`[npc-memory-engine] 🏷️ LLM response: ${tagsResponse}`);
+
         // Парсим JSON ответ
         const parsed = JSON.parse(tagsResponse);
         if (parsed.tags && Array.isArray(parsed.tags)) {
@@ -350,12 +379,16 @@ serve(async (req) => {
             .from("npcs")
             .update({ status_tags: parsed.tags })
             .eq("id", npc_id);
-          console.log("Updated NPC status_tags:", parsed.tags);
+          console.log(`[npc-memory-engine] ✅ Updated NPC status_tags: ${JSON.stringify(parsed.tags)}`);
         }
       } catch (err) {
-        console.error("Failed to update status_tags:", err);
+        console.error(`[npc-memory-engine] ❌ Failed to update status_tags:`, err);
       }
     }
+
+    console.log(`\n[npc-memory-engine] ✅ NPC MEMORY ENGINE COMPLETE`);
+    console.log(`[npc-memory-engine]    • New belief created: ${newBeliefCreated}`);
+    console.log(`[npc-memory-engine] ═══════════════════════════════════════════════\n`);
 
     return new Response(
       JSON.stringify({

@@ -69,9 +69,16 @@ serve(async (req) => {
     const days_passed = Number(parsed.days_passed) || 1;
     const user_id = sanitizeKey(parsed.user_id);
 
-    console.log("simulate-npc-background input:", { session_id, days_passed, user_id });
+    console.log(`\n[simulate-npc-background] ═══════════════════════════════════════════════`);
+    console.log(`[simulate-npc-background] 🎭 NPC BACKGROUND SIMULATION START`);
+    console.log(`[simulate-npc-background] ═══════════════════════════════════════════════`);
+    console.log(`[simulate-npc-background] 📥 INPUT:`);
+    console.log(`[simulate-npc-background]    • session_id: ${session_id}`);
+    console.log(`[simulate-npc-background]    • days_passed: ${days_passed}`);
+    console.log(`[simulate-npc-background]    • user_id: ${user_id}`);
 
     if (!session_id) {
+      console.error(`[simulate-npc-background] ❌ Missing session_id`);
       return new Response(
         JSON.stringify({ error: "session_id обязателен" }),
         { status: 400, headers: { ...CORS, "Content-Type": "application/json" } },
@@ -81,6 +88,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
     // Получаем мир сессии
+    console.log(`\n[simulate-npc-background] 📊 Loading session...`);
     const { data: session } = await supabase
       .from("sessions")
       .select("world_id")
@@ -88,13 +96,17 @@ serve(async (req) => {
       .single();
 
     if (!session) {
+      console.error(`[simulate-npc-background] ❌ Session not found`);
       return new Response(
         JSON.stringify({ error: "Сессия не найдена" }),
         { status: 404, headers: { ...CORS, "Content-Type": "application/json" } },
       );
     }
 
+    console.log(`[simulate-npc-background] 🌍 World ID: ${session.world_id}`);
+
     // Получаем главных NPC мира
+    console.log(`\n[simulate-npc-background] 🐉 Loading main NPCs...`);
     const { data: mainNpcs } = await supabase
       .from("npcs")
       .select("*")
@@ -102,14 +114,21 @@ serve(async (req) => {
       .eq("role", "main");
 
     if (!mainNpcs || mainNpcs.length === 0) {
+      console.log(`[simulate-npc-background] ⚠️ No main NPCs found, returning empty result`);
       return new Response(
         JSON.stringify({ success: true, message: "Нет главных NPC для симуляции", actions: [] }),
         { status: 200, headers: { ...CORS, "Content-Type": "application/json" } },
       );
     }
 
+    console.log(`[simulate-npc-background] 🐉 Found ${mainNpcs.length} main NPCs:`);
+    for (const npc of mainNpcs) {
+      console.log(`[simulate-npc-background]    • ${npc.name} (${npc.race})`);
+    }
+
     // Получаем API ключ
     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    console.log(`\n[simulate-npc-background] 🔑 Fallback key available: ${apiKey ? 'YES' : 'NO'}`);
     if (user_id) {
       const { data: userSettings } = await supabase
         .from("user_settings")
@@ -118,10 +137,12 @@ serve(async (req) => {
         .maybeSingle();
       if (userSettings?.openrouter_key) {
         apiKey = sanitizeKey(userSettings.openrouter_key);
+        console.log(`[simulate-npc-background] 🔑 Using user key from settings`);
       }
     }
 
     if (!apiKey) {
+      console.error(`[simulate-npc-background] ❌ No API key available`);
       return new Response(
         JSON.stringify({
           error: "Укажите ваш OpenRouter API Key в настройках аккаунта.",
@@ -134,7 +155,9 @@ serve(async (req) => {
     const actions: any[] = [];
 
     // Симулируем каждого главного NPC
+    console.log(`\n[simulate-npc-background] 🎭 Simulating ${mainNpcs.length} NPCs for ${days_passed} days...`);
     for (const npc of mainNpcs) {
+      console.log(`\n[simulate-npc-background] 🎭 Simulating: ${npc.name}`);
       const userMessage = `NPC: ${npc.name}
 Раса: ${npc.race}
 Предыстория: ${npc.background || "Неизвестно"}
@@ -143,6 +166,8 @@ serve(async (req) => {
 
       try {
         const aiResponse = await callChatLLM(SYSTEM_PROMPT.replace("[days_passed]", String(days_passed)), userMessage, apiKey);
+        console.log(`[simulate-npc-background] 🤖 AI response: ${aiResponse.slice(0, 100)}...`);
+
         const actionData = parseAIJson(aiResponse);
 
         if (actionData) {
@@ -156,6 +181,7 @@ serve(async (req) => {
 
           // Если NPC получил предмет - добавляем в инвентарь
           if (actionData.obtained_item_name) {
+            console.log(`[simulate-npc-background] 🎒 NPC ${npc.name} obtained item: ${actionData.obtained_item_name} (${actionData.item_type})`);
             const { error: itemError } = await supabase.rpc("add_item_to_inventory", {
               p_npc_id: npc.id,
               p_item_name: cleanTextForAI(actionData.obtained_item_name),
@@ -165,18 +191,25 @@ serve(async (req) => {
             });
 
             if (itemError) {
-              console.error(`Failed to add item to NPC ${npc.id} inventory:`, itemError);
+              console.error(`[simulate-npc-background] ❌ Failed to add item to NPC ${npc.id} inventory:`, itemError);
+            } else {
+              console.log(`[simulate-npc-background] ✅ Item added to NPC inventory`);
             }
+          } else {
+            console.log(`[simulate-npc-background] 📝 No item obtained`);
           }
 
           actions.push(action);
+          console.log(`[simulate-npc-background] ✅ Action: ${actionData.action_summary}`);
         }
       } catch (err) {
-        console.error(`Failed to simulate NPC ${npc.id}:`, err);
+        console.error(`[simulate-npc-background] ❌ Failed to simulate NPC ${npc.id}:`, err);
       }
     }
 
-    console.log(`Simulated ${actions.length} NPC actions`);
+    console.log(`\n[simulate-npc-background] ✅ NPC BACKGROUND SIMULATION COMPLETE`);
+    console.log(`[simulate-npc-background]    • Actions generated: ${actions.length}`);
+    console.log(`[simulate-npc-background] ═══════════════════════════════════════════════\n`);
 
     return new Response(
       JSON.stringify({

@@ -28,10 +28,11 @@ function sanitizeAIText(raw) {
 const lobbyState = {
   activeTab: 'sessions',
   currentBestiaryWorldId: null,
+  openModal: null, // Track which modal should be open after re-render
 };
 
 export function renderLobby(container, user) {
-  let { activeTab } = lobbyState;
+  let { activeTab, openModal } = lobbyState;
   let sessions = [];
   let worlds = [];
   let userSettings = null;
@@ -873,16 +874,21 @@ export function renderLobby(container, user) {
     });
 
     // New session button (both empty state and grid card)
-    const openNewSession = () => document.getElementById('newSessionModal').classList.add('open');
+    const openNewSession = () => {
+      document.getElementById('newSessionModal').classList.add('open');
+      lobbyState.openModal = 'newSessionModal';
+    };
     document.getElementById('newSessionBtn')?.addEventListener('click', openNewSession);
     document.getElementById('newSessionBtn2')?.addEventListener('click', openNewSession);
 
     // Join session button
     document.getElementById('joinSessionBtn')?.addEventListener('click', () => {
       document.getElementById('joinSessionModal').classList.add('open');
+      lobbyState.openModal = 'joinSessionModal';
     });
     document.getElementById('newSessionBtn2')?.addEventListener('click', () => {
       document.getElementById('newSessionModal').classList.add('open');
+      lobbyState.openModal = 'newSessionModal';
     });
 
     // Join session form
@@ -904,7 +910,10 @@ export function renderLobby(container, user) {
     });
 
     // New world button (both empty state and grid card)
-    const openNewWorld = () => document.getElementById('newWorldModal').classList.add('open');
+    const openNewWorld = () => {
+      document.getElementById('newWorldModal').classList.add('open');
+      lobbyState.openModal = 'newWorldModal';
+    };
     document.getElementById('newWorldBtn')?.addEventListener('click', openNewWorld);
     document.getElementById('newWorldBtn2')?.addEventListener('click', openNewWorld);
     document.getElementById('importWorldFromModalBtn')?.addEventListener('click', () => {
@@ -912,12 +921,16 @@ export function renderLobby(container, user) {
     });
 
     // Character card buttons
-    const openNewChar = () => document.getElementById('newCharModal').classList.add('open');
+    const openNewChar = () => {
+      document.getElementById('newCharModal').classList.add('open');
+      lobbyState.openModal = 'newCharModal';
+    };
     document.getElementById('newCharBtn')?.addEventListener('click', openNewChar);
     document.getElementById('newCharBtn2')?.addEventListener('click', openNewChar);
 
     document.getElementById('closeCharModal')?.addEventListener('click', () => {
       document.getElementById('newCharModal').classList.remove('open');
+      lobbyState.openModal = null;
     });
 
     // Import character buttons
@@ -1009,11 +1022,13 @@ export function renderLobby(container, user) {
           if (el) el.value = stats[s] || 10;
         });
         document.getElementById('editCharModal').classList.add('open');
+        lobbyState.openModal = 'editCharModal';
       });
     });
 
     document.getElementById('closeEditCharModal')?.addEventListener('click', () => {
       document.getElementById('editCharModal').classList.remove('open');
+      lobbyState.openModal = null;
     });
 
     document.getElementById('editCharForm')?.addEventListener('submit', async (e) => {
@@ -1119,6 +1134,7 @@ export function renderLobby(container, user) {
         document.getElementById('editWorldName').value = world.name || '';
         document.getElementById('editWorldSettings').value = JSON.stringify(world.settings || {}, null, 2);
         document.getElementById('editWorldModal').classList.add('open');
+        lobbyState.openModal = 'editWorldModal';
       });
     });
 
@@ -1140,10 +1156,12 @@ export function renderLobby(container, user) {
     // Close bestiary modal
     document.getElementById('closeBestiaryBtn')?.addEventListener('click', () => {
       document.getElementById('bestiaryModal').classList.remove('open');
+      lobbyState.openModal = null;
     });
 
     document.getElementById('closeEditWorldModal')?.addEventListener('click', () => {
       document.getElementById('editWorldModal').classList.remove('open');
+      lobbyState.openModal = null;
     });
 
     document.getElementById('editWorldForm')?.addEventListener('submit', async (e) => {
@@ -1254,9 +1272,11 @@ export function renderLobby(container, user) {
     // Close modals
     document.getElementById('closeModal')?.addEventListener('click', () => {
       document.getElementById('newSessionModal').classList.remove('open');
+      lobbyState.openModal = null;
     });
     document.getElementById('closeWorldModal')?.addEventListener('click', () => {
       document.getElementById('newWorldModal').classList.remove('open');
+      lobbyState.openModal = null;
     });
 
     // PVP toggle
@@ -1563,9 +1583,18 @@ export function renderLobby(container, user) {
     // Close modals on overlay click
     container.querySelectorAll('.modal-overlay').forEach((overlay) => {
       overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) overlay.classList.remove('open');
+        if (e.target === overlay) {
+          overlay.classList.remove('open');
+          lobbyState.openModal = null;
+        }
       });
     });
+  }
+
+  // Restore open modal after re-render (e.g., after file picker returns)
+  if (openModal) {
+    const modal = document.getElementById(openModal);
+    if (modal) modal.classList.add('open');
   }
 
   loadData();

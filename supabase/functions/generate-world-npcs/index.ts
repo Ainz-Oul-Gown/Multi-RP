@@ -61,34 +61,25 @@ async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: st
 // Split text into chunks by paragraphs, respecting max chunk size
 function splitTextIntoChunks(text: string, maxChunkSize: number = 50000): string[] {
   if (text.length <= maxChunkSize) return [text];
-  
+
   const chunks: string[] = [];
   const paragraphs = text.split(/\n\s*\n/);
-  let currentChunk = '';
-  
+  let currentChunk = "";
+
   for (const para of paragraphs) {
     if (currentChunk.length + para.length > maxChunkSize && currentChunk.length > 0) {
       chunks.push(currentChunk);
       currentChunk = para;
     } else {
-      currentChunk += (currentChunk ? '\n\n' : '') + para;
+      currentChunk += (currentChunk ? "\n\n" : "") + para;
     }
   }
-  
+
   if (currentChunk.length > 0) {
     chunks.push(currentChunk);
   }
-  
+
   return chunks;
-}
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Chat API error: ${response.status} - ${errText}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
 }
 
 serve(async (req) => {
@@ -132,7 +123,7 @@ serve(async (req) => {
 
     // Получаем API ключ
     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
-    console.log(`[generate-world-npcs] 🔑 Fallback key available: ${apiKey ? 'YES' : 'NO'}`);
+    console.log(`[generate-world-npcs] 🔑 Fallback key available: ${apiKey ? "YES" : "NO"}`);
 
     if (user_id) {
       const { data: userSettings } = await supabase
@@ -164,11 +155,11 @@ serve(async (req) => {
       // Split large text into chunks to avoid timeouts
       const chunks = splitTextIntoChunks(lore_text, 50000);
       console.log(`[generate-world-npcs] 📄 Text split into ${chunks.length} chunk(s)`);
-      
+
       const allNpcs: any[] = [];
       for (let i = 0; i < chunks.length; i++) {
         console.log(`[generate-world-npcs] 🤖 Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)...`);
-        const chunkPrompt = chunks.length > 1 
+        const chunkPrompt = chunks.length > 1
           ? `${SYSTEM_PROMPT}\n\nЭто часть ${i + 1} из ${chunks.length} текста. Извлеки NPC из этой части.`
           : SYSTEM_PROMPT;
         const aiResponse = await callChatLLM(chunkPrompt, chunks[i], apiKey);
@@ -215,7 +206,7 @@ serve(async (req) => {
 
     console.log(`\n[generate-world-npcs] 💾 Saving ${npcsToInsert.length} NPCs to DB...`);
     for (const npc of npcsToInsert) {
-      console.log(`[generate-world-npcs]    • ${npc.name} (${npc.race}) - Tier: ${npc.tier || '?'}, HP: ${npc.hp}`);
+      console.log(`[generate-world-npcs]    • ${npc.name} (${npc.race}) - Tier: ${npc.tier || "?"}, HP: ${npc.hp}`);
     }
 
     // Массовый INSERT

@@ -293,6 +293,32 @@ serve(async (req) => {
     }
 
     // ============================================
+    // STEP 0.2: Load NPC and Beliefs
+    // ============================================
+    let worldNpcs: any[] = [];
+    if (session.world_id) {
+      const { data: npcs } = await supabase
+        .from("npcs")
+        .select("id, name")
+        .eq("world_id", session.world_id);
+      worldNpcs = npcs || [];
+
+      // Load beliefs about this player
+      const { data: beliefs } = await supabase
+        .from("npc_memories")
+        .select("memory_text")
+        .eq("player_id", player.id)
+        .eq("memory_type", "belief");
+
+      if (beliefs && beliefs.length > 0) {
+        const beliefsText = beliefs
+          .map((b, i) => `${i + 1}. ${cleanTextForAI(b.memory_text).slice(0, 200)}`)
+          .join("\n");
+        loreContext += `\n\nУбеждения NPC о вас:\n${beliefsText}`;
+      }
+    }
+
+    // ============================================
     // STEP 0.3: Load plot storyline content
     // ============================================
     let plotContent: string | null = null;
@@ -619,6 +645,36 @@ serve(async (req) => {
         items_used: parsedAction.items_used || [],
       },
     });
+
+    // ============================================
+    // STEP 4.5: Save NPC memories (async, no await)
+    // ============================================
+    if (worldNpcs.length > 0) {
+      for (const npc of worldNpcs) {
+        // Check if NPC name is mentioned in narrative or action
+        const npcNameLower = npc.name?.toLowerCase() || "";
+        const narrativeLower = narrative.toLowerCase();
+        const actionLower = safeActionText.toLowerCase();
+
+        if (npcNameLower && (narrativeLower.includes(npcNameLower) || actionLower.includes(npcNameLower))) {
+          // Fire and forget - do not block response
+          fetch(`${SUPABASE_URL}/functions/v1/npc-memory-engine`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              npc_id: npc.id,
+              player_id: player.id,
+              memory_text: narrative,
+            }),
+          }).catch((err) => {
+            console.error(`Failed to save memory for NPC ${npc.id}:`, err);
+          });
+        }
+      }
+    }
 
     // ============================================
     // Response

@@ -1,5 +1,5 @@
 // src/pages/session-settings.js — Экран настроек сессии (для Админа)
-import { supabase } from '../api/supabase.js';
+import { supabase, invokeFunction } from '../api/supabase.js';
 import {
   getSession, updateSession, getSessionPlayers, createPlayer,
   getWorlds, getLoreFiles
@@ -106,6 +106,21 @@ export async function renderSessionSettings(container, sessionId, user) {
             ` : ''}
           </section>
 
+          <!-- Симуляция NPC -->
+          <section class="card">
+            <h2 class="card-title">🐉 Симуляция NPC</h2>
+            <p class="form-hint" style="margin-top: 0.5rem;">
+              Промотайте время, чтобы главные NPC совершили действия за кадром
+            </p>
+            <div class="form-group" style="margin-top: 1rem;">
+              <label class="form-label">Количество дней</label>
+              <input class="input" type="number" id="npcSimDays" value="1" min="1" max="30" />
+            </div>
+            <button class="btn btn-secondary btn-sm" id="simulateNpcBtn" style="margin-top: 0.5rem;">
+              ⏳ Симулировать жизнь NPC (Фон)
+            </button>
+          </section>
+
           <!-- Игроки в сессии -->
           <section class="card">
             <h2 class="card-title">👥 Игроки (${players.length})</h2>
@@ -188,6 +203,35 @@ export async function renderSessionSettings(container, sessionId, user) {
         toast.success(stage ? `Акт: ${stage}` : 'Режим: Песочница');
       } catch (err) {
         toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Simulate NPC background
+    document.getElementById('simulateNpcBtn')?.addEventListener('click', async (e) => {
+      const btn = e.target;
+      const daysInput = document.getElementById('npcSimDays');
+      const days = parseInt(daysInput?.value) || 1;
+
+      btn.textContent = '⏳ Симуляция...';
+      btn.disabled = true;
+
+      try {
+        const result = await invokeFunction('simulate-npc-background', {
+          session_id: sessionId,
+          days_passed: days,
+          user_id: user.id,
+        });
+
+        if (result && result.actions_count !== undefined) {
+          toast.success(`События сгенерированы. NPC совершили действия (${result.actions_count})`);
+        } else {
+          toast.success('Симуляция завершена');
+        }
+      } catch (err) {
+        toast.error('Ошибка симуляции: ' + (err.message || err));
+      } finally {
+        btn.textContent = '⏳ Симулировать жизнь NPC (Фон)';
+        btn.disabled = false;
       }
     });
 

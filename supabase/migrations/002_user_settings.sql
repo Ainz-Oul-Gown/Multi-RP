@@ -3,12 +3,18 @@
 -- ============================================
 
 -- Таблица настроек пользователя (API-ключи и пр.)
-CREATE TABLE user_settings (
+CREATE TABLE IF NOT EXISTS user_settings (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   openrouter_key TEXT DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Drop existing policies to allow re-running
+DROP POLICY IF EXISTS "UserSettings: owner read" ON user_settings;
+DROP POLICY IF EXISTS "UserSettings: owner insert" ON user_settings;
+DROP POLICY IF EXISTS "UserSettings: owner update" ON user_settings;
+DROP POLICY IF EXISTS "UserSettings: service read" ON user_settings;
 
 -- RLS: пользователь видит и редактирует ТОЛЬКО свою строку
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
@@ -29,6 +35,9 @@ CREATE POLICY "UserSettings: owner update"
 CREATE POLICY "UserSettings: service read"
   ON user_settings FOR SELECT
   USING (true);
+
+-- Drop existing trigger to allow re-running
+DROP TRIGGER IF EXISTS trigger_user_settings_updated_at ON user_settings;
 
 -- Триггер auto-updated_at
 CREATE TRIGGER trigger_user_settings_updated_at

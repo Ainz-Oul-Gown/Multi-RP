@@ -19,15 +19,14 @@ DROP FUNCTION IF EXISTS update_player_hp CASCADE;
 DROP FUNCTION IF EXISTS add_item_to_inventory CASCADE;
 DROP FUNCTION IF EXISTS remove_item_from_inventory CASCADE;
 
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Enable UUID extension (gen_random_uuid is built-in for PG 13+)
 
 -- ============================================
 -- TABLES (order matters for FK references)
 -- ============================================
 
 CREATE TABLE worlds (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   settings JSONB DEFAULT '{}',
@@ -36,7 +35,7 @@ CREATE TABLE worlds (
 );
 
 CREATE TABLE lore_files (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
   folder TEXT NOT NULL DEFAULT 'general',
   title TEXT NOT NULL,
@@ -47,7 +46,7 @@ CREATE TABLE lore_files (
 );
 
 CREATE TABLE sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE RESTRICT,
   difficulty TEXT NOT NULL DEFAULT 'normal' CHECK (difficulty IN ('easy', 'normal', 'hard')),
   is_pvp_enabled BOOLEAN DEFAULT FALSE,
@@ -57,7 +56,7 @@ CREATE TABLE sessions (
 );
 
 CREATE TABLE players (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
@@ -77,7 +76,7 @@ CREATE TABLE players (
 );
 
 CREATE TABLE inventory (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   item_name TEXT NOT NULL,
   quantity INT DEFAULT 1 CHECK (quantity >= 0),
@@ -87,7 +86,7 @@ CREATE TABLE inventory (
 );
 
 CREATE TABLE messages (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   sender_type TEXT NOT NULL CHECK (sender_type IN ('player', 'master', 'system')),
   sender_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -98,7 +97,7 @@ CREATE TABLE messages (
 );
 
 CREATE TABLE turn_queue (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'waiting', 'completed', 'skipped')),
@@ -237,7 +236,7 @@ BEGIN
     UPDATE inventory SET quantity = quantity + p_quantity WHERE id = existing_item_id;
     RETURN existing_item_id;
   ELSE
-    new_id := uuid_generate_v4();
+    new_id := gen_random_uuid();
     INSERT INTO inventory (id, player_id, item_name, quantity, type, attributes) VALUES (new_id, p_player_id, p_item_name, p_quantity, p_type, p_attributes);
     RETURN new_id;
   END IF;

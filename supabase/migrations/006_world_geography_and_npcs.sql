@@ -46,14 +46,20 @@ CREATE TABLE IF NOT EXISTS routes (
   location_b_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
   distance_km INT DEFAULT 0 CHECK (distance_km >= 0),
   travel_days INT DEFAULT 0 CHECK (travel_days >= 0),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  -- Запрещаем дубли путей (A->B и B->A)
-  CONSTRAINT routes_no_duplicates CHECK (location_a_id < location_b_id),
-  CONSTRAINT routes_different_locations CHECK (location_a_id != location_b_id)
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_routes_location_a ON routes(location_a_id);
 CREATE INDEX IF NOT EXISTS idx_routes_location_b ON routes(location_b_id);
+
+-- Добавляем ограничения после создания таблицы для идемпотентности
+ALTER TABLE routes
+  DROP CONSTRAINT IF EXISTS routes_no_duplicates,
+  ADD CONSTRAINT routes_no_duplicates CHECK (location_a_id < location_b_id);
+
+ALTER TABLE routes
+  DROP CONSTRAINT IF EXISTS routes_different_locations,
+  ADD CONSTRAINT routes_different_locations CHECK (location_a_id != location_b_id);
 
 -- Матрица NPC (без location_id и state_id — добавим позже)
 CREATE TABLE IF NOT EXISTS npcs (
@@ -87,9 +93,12 @@ CREATE INDEX IF NOT EXISTS idx_npcs_status_tags ON npcs USING GIN(status_tags);
 
 -- Теперь добавляем циклические FK через ALTER TABLE
 ALTER TABLE states
+  DROP CONSTRAINT IF EXISTS fk_states_ruler,
   ADD CONSTRAINT fk_states_ruler FOREIGN KEY (ruler_id) REFERENCES npcs(id) ON DELETE SET NULL;
 
 ALTER TABLE npcs
+  DROP CONSTRAINT IF EXISTS fk_npcs_location,
+  DROP CONSTRAINT IF EXISTS fk_npcs_state,
   ADD CONSTRAINT fk_npcs_location FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL,
   ADD CONSTRAINT fk_npcs_state FOREIGN KEY (state_id) REFERENCES states(id) ON DELETE SET NULL;
 
@@ -100,6 +109,7 @@ ALTER TABLE inventory
 
 -- Добавляем ограничение: хотя бы одно из полей должно быть заполнено
 ALTER TABLE inventory
+  DROP CONSTRAINT IF EXISTS inventory_owner_check,
   ADD CONSTRAINT inventory_owner_check CHECK (
     (player_id IS NOT NULL) OR (npc_id IS NOT NULL)
   );
@@ -176,6 +186,11 @@ $$;
 -- TRIGGERS для updated_at
 -- ============================================
 
+-- Drop existing triggers to allow re-running
+DROP TRIGGER IF EXISTS trigger_states_updated_at ON states;
+DROP TRIGGER IF EXISTS trigger_locations_updated_at ON locations;
+DROP TRIGGER IF EXISTS trigger_npcs_updated_at ON npcs;
+
 CREATE TRIGGER trigger_states_updated_at BEFORE UPDATE ON states FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trigger_locations_updated_at BEFORE UPDATE ON locations FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trigger_npcs_updated_at BEFORE UPDATE ON npcs FOR EACH ROW EXECUTE FUNCTION update_updated_at();
@@ -185,6 +200,18 @@ CREATE TRIGGER trigger_npcs_updated_at BEFORE UPDATE ON npcs FOR EACH ROW EXECUT
 -- ============================================
 
 ALTER TABLE states ENABLE ROW LEVEL SECURITY;
+-- Drop existing policies to allow re-running
+DROP POLICY IF EXISTS "States: read for authenticated" ON states;
+DROP POLICY IF EXISTS "States: owner write" ON states;
+DROP POLICY IF EXISTS "Locations: read for authenticated" ON locations;
+DROP POLICY IF EXISTS "Locations: owner write" ON locations;
+DROP POLICY IF EXISTS "Routes: read for authenticated" ON routes;
+DROP POLICY IF EXISTS "Routes: owner write" ON routes;
+DROP POLICY IF EXISTS "NPCs: read for authenticated" ON npcs;
+DROP POLICY IF EXISTS "NPCs: owner write" ON npcs;
+DROP POLICY IF EXISTS "Memories: read for authenticated" ON npc_memories;
+DROP POLICY IF EXISTS "Memories: system manage" ON npc_memories;
+
 CREATE POLICY "States: read for authenticated" ON states FOR SELECT TO authenticated USING (true);
 CREATE POLICY "States: owner write" ON states FOR ALL USING (world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid()));
 
@@ -293,3 +320,74 @@ SELECT * FROM match_npc_memories(
   '00000000-0000-0000-0000-000000000000'   -- p_player_id
 );
 */
+
+-- ============================================
+-- ОБНОВЛЕНИЕ RPC ФУНКЦИЙ ИНВЕНТАРЯ ДЛЯ ПОДДЕРЖКИ NPC
+-- ============================================
+
+-- Обновление функции add_item_to_inventory для поддержки NPC
+CREATE OR REPLACE FUNCTION add_item_to_inventory(
+  p_player_id UUID DEFAULT NULL,
+  p_item_name TEXT DEFAULT NULL,
+  p_quantity INT DEFAULT 1,
+  p_type TEXT DEFAULT 'misc',
+  p_attributes JSONB DEFAULT '{}',
+  p_npc_id UUID DEFAULT NULL
+)
+RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item_id UUID; new_id UUID;
+BEGIN
+  -- Ищем существующий предмет по player_id или npc_id
+  SELECT id INTO existing_item_id
+  FROM inventory
+  WHERE (
+    (p_player_id IS NOT NULL AND player_id = p_player_id)
+    OR (p_npc_id IS NOT NULL AND npc_id = p_npc_id)
+  )
+  AND item_name = p_item_name
+  AND type = p_type
+  FOR UPDATE;
+
+  IF existing_item_id IS NOT NULL THEN
+    UPDATE inventory SET quantity = quantity + p_quantity WHERE id = existing_item_id;
+    RETURN existing_item_id;
+  ELSE
+    new_id := gen_random_uuid();
+    INSERT INTO inventory (id, player_id, npc_id, item_name, quantity, type, attributes)
+    VALUES (new_id, p_player_id, p_npc_id, p_item_name, p_quantity, p_type, p_attributes);
+    RETURN new_id;
+  END IF;
+END;
+$$;
+
+-- Обновление функции remove_item_from_inventory для поддержки NPC
+CREATE OR REPLACE FUNCTION remove_item_from_inventory(
+  p_player_id UUID DEFAULT NULL,
+  p_item_name TEXT DEFAULT NULL,
+  p_quantity INT DEFAULT 1,
+  p_npc_id UUID DEFAULT NULL
+)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item RECORD;
+BEGIN
+  -- Ищем существующий предмет по player_id или npc_id
+  SELECT id, quantity INTO existing_item
+  FROM inventory
+  WHERE (
+    (p_player_id IS NOT NULL AND player_id = p_player_id)
+    OR (p_npc_id IS NOT NULL AND npc_id = p_npc_id)
+  )
+  AND item_name = p_item_name
+  FOR UPDATE;
+
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+
+  IF existing_item.quantity <= p_quantity THEN
+    DELETE FROM inventory WHERE id = existing_item.id;
+  ELSE
+    UPDATE inventory SET quantity = quantity - p_quantity WHERE id = existing_item.id;
+  END IF;
+
+  RETURN TRUE;
+END;
+$$;

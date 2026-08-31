@@ -4,7 +4,7 @@
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS player_injuries (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   injury_type TEXT NOT NULL,
@@ -22,6 +22,11 @@ CREATE INDEX IF NOT EXISTS idx_player_injuries_player ON player_injuries(player_
 CREATE INDEX IF NOT EXISTS idx_player_injuries_session ON player_injuries(session_id);
 
 ALTER TABLE player_injuries ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies to allow re-running
+DROP POLICY IF EXISTS "Injuries: session players read" ON player_injuries;
+DROP POLICY IF EXISTS "Injuries: system insert" ON player_injuries;
+DROP POLICY IF EXISTS "Injuries: system update" ON player_injuries;
 
 CREATE POLICY "Injuries: session players read" ON player_injuries
   FOR SELECT USING (

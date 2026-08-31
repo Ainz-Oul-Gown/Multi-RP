@@ -3,8 +3,8 @@
 -- Шаблоны персонажей, привязанные к пользователю
 -- ============================================
 
-CREATE TABLE character_cards (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+CREATE TABLE IF NOT EXISTS character_cards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   race TEXT NOT NULL DEFAULT 'Человек',
@@ -21,7 +21,13 @@ CREATE TABLE character_cards (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_character_cards_owner ON character_cards(owner_id);
+-- Drop existing policies to allow re-running
+DROP POLICY IF EXISTS "CharCards: owner read" ON character_cards;
+DROP POLICY IF EXISTS "CharCards: owner insert" ON character_cards;
+DROP POLICY IF EXISTS "CharCards: owner update" ON character_cards;
+DROP POLICY IF EXISTS "CharCards: owner delete" ON character_cards;
+
+CREATE INDEX IF NOT EXISTS idx_character_cards_owner ON character_cards(owner_id);
 
 ALTER TABLE character_cards ENABLE ROW LEVEL SECURITY;
 
@@ -37,6 +43,7 @@ CREATE POLICY "CharCards: owner update" ON character_cards
 CREATE POLICY "CharCards: owner delete" ON character_cards
   FOR DELETE USING (auth.uid() = owner_id);
 
+DROP TRIGGER IF EXISTS trigger_character_cards_updated_at ON character_cards;
 CREATE TRIGGER trigger_character_cards_updated_at
   BEFORE UPDATE ON character_cards
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();

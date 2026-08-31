@@ -474,3 +474,34 @@ export async function deleteNpc(id) {
   const { error } = await supabase.from('npcs').delete().eq('id', id);
   if (error) throw error;
 }
+
+export async function exportPlayer(playerId) {
+  const player = await getPlayer(playerId);
+  const inventory = await getPlayerInventory(playerId);
+
+  const exportData = {
+    version: '2.0',
+    exported_at: new Date().toISOString(),
+    player: {
+      name: player.name,
+      race: player.race,
+      class: player.class,
+      appearance: player.appearance,
+      personality: player.personality,
+      bio: player.bio,
+      power_level: player.power_level,
+      stats: player.stats,
+      hp: player.hp,
+      max_hp: player.max_hp,
+      money: player.money,
+    },
+    inventory: inventory.map((item) => ({
+      item_name: item.item_name,
+      quantity: item.quantity,
+      type: item.type,
+      attributes: item.attributes,
+    })),
+  };
+
+  return exportData;
+}

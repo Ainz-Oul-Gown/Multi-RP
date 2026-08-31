@@ -733,7 +733,6 @@ export function renderLobby(container, user) {
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
         race_ac_bonus: Number(document.getElementById('editCharRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('editCharRace').value)),
-        ...calculateDerivedStats(stats, document.getElementById('editCharRace').value || 'Человек', [], Number(document.getElementById('editCharRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('editCharRace').value))),
       };
       console.log('[edit-character-card] request:', { id, ...requestPayload });
 

@@ -1,6 +1,4 @@
 // supabase/functions/generate-character/index.ts
-// Генерация статов персонажа на основе биографии
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -81,13 +79,6 @@ serve(async (req) => {
       }
     }
 
-    if (!user_id || !bio) {
-      return new Response(JSON.stringify({ error: "user_id и bio обязательны" }), {
-        status: 400,
-        headers: { ...CORS, "Content-Type": "application/json" },
-      });
-    }
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
@@ -105,13 +96,7 @@ serve(async (req) => {
       }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
-    const userMessage = [
-      name ? `Имя: ${name}` : "",
-      race ? `Раса: ${race}` : "",
-      charClass ? `Класс: ${charClass}` : "",
-      appearance ? `Внешность: ${appearance}` : "",
-      `Биография: ${bio}`,
-    ].filter(Boolean).join("\n");
+    const userMessage = `Имя: ${name}\nРаса: ${race}\nКласс: ${charClass}\nВнешность: ${appearance}\nБиография: ${bio}\n\nСоздай характеристики персонажа.`;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -168,10 +153,10 @@ serve(async (req) => {
       });
     }
 
-    const result = validateAndFixStats(stats, { forceSum72: true });
-    const race = cleanTextForAI(parsed.race) || 'Человек';
-    const raceAcBonus = calculateDerivedStats(result, race, []).armor_class - 10 - Math.floor(((result.DEX || 10) - 10) / 2);
-    const derived = calculateDerivedStats(result, race, [], raceAcBonus);
+    const result = validateAndFixStats(stats);
+    const race2 = cleanTextForAI(parsed.race) || 'Человек';
+    const raceAcBonus = calculateDerivedStats(result, race2, []).armor_class - 10 - Math.floor(((result.DEX || 10) - 10) / 2);
+    const derived = calculateDerivedStats(result, race2, [], raceAcBonus);
 
     return new Response(JSON.stringify({ stats: result, race_ac_bonus: raceAcBonus, ...derived }), {
       status: 200, headers: { ...CORS, "Content-Type": "application/json" },
@@ -183,7 +168,8 @@ serve(async (req) => {
       error: err.message || "Internal error",
       details: err.message,
     }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...CORS, "Content-Type": "application/json" },
     });
   }
 });

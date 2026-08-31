@@ -1241,6 +1241,30 @@ export function renderLobby(container, user) {
           if (loreErr) console.error('Lore upload error:', loreErr);
         }
 
+        // Generate NPCs from lore text
+        createBtn.textContent = '⏳ Генерация бестиария...';
+        createBtn.disabled = true;
+
+        // Collect all lore text (description + file contents)
+        let combinedLoreText = description || '';
+        for (const file of pendingFiles) {
+          try {
+            const fileText = await file.text();
+            combinedLoreText += '\n\n' + fileText;
+          } catch {}
+        }
+
+        try {
+          await invokeFunction('generate-world-npcs', {
+            world_id: world.id,
+            user_id: user.id,
+            lore_text: combinedLoreText,
+          });
+        } catch (genErr) {
+          console.error('NPC generation error:', genErr);
+          toast.warning('Мир создан, но генерация бестиария не удалась: ' + (genErr.message || genErr));
+        }
+
         toast.success(`Мир «${name}» создан! ${pendingFiles.length ? `+ ${pendingFiles.length} файл(ов) лора` : ''}`);
         document.getElementById('newWorldModal').classList.remove('open');
         pendingFiles = [];

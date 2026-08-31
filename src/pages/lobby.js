@@ -5,7 +5,7 @@ import {
   importWorld, exportWorld, downloadJSON,
   getUserSettings, upsertUserSettings, updateSession,
   getCharacterCards, createCharacterCard, deleteCharacterCard,
-  exportPlayer, getNpcsByWorld, updateNpc, deleteNpc
+  exportPlayer, getNpcsByWorld, updateNpc, deleteNpc, createNpc
 } from '../api/game.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
@@ -31,6 +31,7 @@ export function renderLobby(container, user) {
   let worlds = [];
   let userSettings = null;
   let characterCards = [];
+  let currentBestiaryWorldId = null;
 
   function isTextFile(file) {
     if (file.type && file.type.startsWith('text/')) return true;
@@ -384,7 +385,84 @@ export function renderLobby(container, user) {
       <div class="modal" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
           <h2 class="card-title">🐉 Бестиарий: <span id="bestiaryWorldName"></span></h2>
-          <button class="btn btn-ghost btn-sm" id="closeBestiaryBtn">✕</button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-primary btn-sm" id="createNpcBtn">+ Создать NPC</button>
+            <button class="btn btn-ghost btn-sm" id="closeBestiaryBtn">✕</button>
+          </div>
+        </div>
+        <div id="createNpcForm" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
+          <h3 style="margin-bottom: 0.5rem;">Новый NPC</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="form-label">Имя *</label>
+              <input class="input" id="new-npc-name" placeholder="Имя NPC" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Роль</label>
+              <select class="input" id="new-npc-role">
+                <option value="secondary">Второстепенный</option>
+                <option value="main">Главный</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Раса</label>
+              <input class="input" id="new-npc-race" value="Человек" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">HP</label>
+              <input class="input" type="number" id="new-npc-hp" value="30" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Внешность</label>
+            <textarea class="input" id="new-npc-appearance" rows="2" placeholder="Описание внешности..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Предыстория</label>
+            <textarea class="input" id="new-npc-background" rows="2" placeholder="Предыстория NPC..."></textarea>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
+            <div class="form-group">
+              <label class="form-label">STR</label>
+              <input class="input" type="number" id="new-npc-str" value="10" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">DEX</label>
+              <input class="input" type="number" id="new-npc-dex" value="10" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">CON</label>
+              <input class="input" type="number" id="new-npc-con" value="10" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">INT</label>
+              <input class="input" type="number" id="new-npc-int" value="10" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">WIS</label>
+              <input class="input" type="number" id="new-npc-wis" value="10" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">CHA</label>
+              <input class="input" type="number" id="new-npc-cha" value="10" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Привычки (через запятую)</label>
+            <input class="input" id="new-npc-habits" placeholder="читать книги, гулять по саду" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Коронные фразы (через запятую)</label>
+            <input class="input" id="new-npc-catchphrases" placeholder="Корона тяжела, Нард превыше всего" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Теги статуса (через запятую)</label>
+            <input class="input" id="new-npc-status-tags" placeholder="друг, наставник" />
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button class="btn btn-primary btn-sm" id="saveNewNpcBtn">💾 Создать</button>
+            <button class="btn btn-ghost btn-sm" id="cancelNewNpcBtn">Отмена</button>
+          </div>
         </div>
         <div id="bestiaryContent">
           <p class="text-muted">Загрузка...</p>
@@ -664,6 +742,81 @@ export function renderLobby(container, user) {
         content.innerHTML = `<p class="text-muted">Ошибка загрузки: ${err.message}</p>`;
       }
     }
+
+    // Create NPC form toggle
+    document.getElementById('createNpcBtn')?.addEventListener('click', () => {
+      const form = document.getElementById('createNpcForm');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.getElementById('cancelNewNpcBtn')?.addEventListener('click', () => {
+      document.getElementById('createNpcForm').style.display = 'none';
+    });
+
+    // Save new NPC
+    document.getElementById('saveNewNpcBtn')?.addEventListener('click', async () => {
+      const name = document.getElementById('new-npc-name').value.trim();
+      if (!name) {
+        toast.error('Введите имя NPC');
+        return;
+      }
+
+      const role = document.getElementById('new-npc-role').value;
+      const race = document.getElementById('new-npc-race').value.trim() || 'Человек';
+      const hp = Number(document.getElementById('new-npc-hp').value) || 30;
+      const appearance = document.getElementById('new-npc-appearance').value.trim();
+      const background = document.getElementById('new-npc-background').value.trim();
+      const stats = {
+        STR: Number(document.getElementById('new-npc-str').value) || 10,
+        DEX: Number(document.getElementById('new-npc-dex').value) || 10,
+        CON: Number(document.getElementById('new-npc-con').value) || 10,
+        INT: Number(document.getElementById('new-npc-int').value) || 10,
+        WIS: Number(document.getElementById('new-npc-wis').value) || 10,
+        CHA: Number(document.getElementById('new-npc-cha').value) || 10,
+      };
+
+      // Parse comma-separated values into arrays
+      const parseArray = (str) => str.split(',').map(s => s.trim()).filter(Boolean);
+      const habits = parseArray(document.getElementById('new-npc-habits').value);
+      const catchphrases = parseArray(document.getElementById('new-npc-catchphrases').value);
+      const statusTags = parseArray(document.getElementById('new-npc-status-tags').value);
+
+      const saveBtn = document.getElementById('saveNewNpcBtn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Создание...';
+
+      try {
+        await createNpc({
+          world_id: currentBestiaryWorldId,
+          name,
+          role,
+          race,
+          hp,
+          max_hp: hp,
+          appearance,
+          background,
+          stats,
+          habits,
+          catchphrases,
+          status_tags: statusTags,
+        });
+        toast.success('NPC создан!');
+        document.getElementById('createNpcForm').style.display = 'none';
+        // Clear form
+        document.getElementById('new-npc-name').value = '';
+        document.getElementById('new-npc-appearance').value = '';
+        document.getElementById('new-npc-background').value = '';
+        document.getElementById('new-npc-habits').value = '';
+        document.getElementById('new-npc-catchphrases').value = '';
+        document.getElementById('new-npc-status-tags').value = '';
+        await loadBestiary(currentBestiaryWorldId);
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Создать';
+      }
+    });
 
     // Tab switching
     container.querySelectorAll('.lobby-tab').forEach((tab) => {
@@ -968,8 +1121,11 @@ export function renderLobby(container, user) {
       btn.addEventListener('click', async () => {
         const worldId = btn.dataset.id;
         const worldName = btn.dataset.name;
+        currentBestiaryWorldId = worldId;
         document.getElementById('bestiaryWorldName').textContent = worldName;
         document.getElementById('bestiaryModal').classList.add('open');
+        // Hide create form when opening bestiary for a new world
+        document.getElementById('createNpcForm').style.display = 'none';
         await loadBestiary(worldId);
       });
     });

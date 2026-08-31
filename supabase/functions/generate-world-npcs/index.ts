@@ -46,8 +46,41 @@ async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: st
       temperature: 0.7,
       max_tokens: 16000,
     }),
-    signal: AbortSignal.timeout(120000),
+    signal: AbortSignal.timeout(300000),
   });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Chat API error: ${response.status} - ${errText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// Split text into chunks by paragraphs, respecting max chunk size
+function splitTextIntoChunks(text: string, maxChunkSize: number = 50000): string[] {
+  if (text.length <= maxChunkSize) return [text];
+  
+  const chunks: string[] = [];
+  const paragraphs = text.split(/\n\s*\n/);
+  let currentChunk = '';
+  
+  for (const para of paragraphs) {
+    if (currentChunk.length + para.length > maxChunkSize && currentChunk.length > 0) {
+      chunks.push(currentChunk);
+      currentChunk = para;
+    } else {
+      currentChunk += (currentChunk ? '\n\n' : '') + para;
+    }
+  }
+  
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+  
+  return chunks;
+}
 
   if (!response.ok) {
     const errText = await response.text();
@@ -128,9 +161,24 @@ serve(async (req) => {
     console.log(`\n[generate-world-npcs] 🤖 Calling LLM to extract NPCs from lore...`);
     let npcs: any[];
     try {
-      const aiResponse = await callChatLLM(SYSTEM_PROMPT, lore_text, apiKey);
-      console.log(`[generate-world-npcs] 🤖 LLM response: ${aiResponse.slice(0, 200)}...`);
-      npcs = parseAIJson(aiResponse);
+      // Split large text into chunks to avoid timeouts
+      const chunks = splitTextIntoChunks(lore_text, 50000);
+      console.log(`[generate-world-npcs] 📄 Text split into ${chunks.length} chunk(s)`);
+      
+      const allNpcs: any[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`[generate-world-npcs] 🤖 Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)...`);
+        const chunkPrompt = chunks.length > 1 
+          ? `${SYSTEM_PROMPT}\n\nЭто часть ${i + 1} из ${chunks.length} текста. Извлеки NPC из этой части.`
+          : SYSTEM_PROMPT;
+        const aiResponse = await callChatLLM(chunkPrompt, chunks[i], apiKey);
+        console.log(`[generate-world-npcs] 🤖 Chunk ${i + 1} response: ${aiResponse.slice(0, 100)}...`);
+        const chunkNpcs = parseAIJson(aiResponse);
+        if (Array.isArray(chunkNpcs)) {
+          allNpcs.push(...chunkNpcs);
+        }
+      }
+      npcs = allNpcs;
     } catch (err) {
       console.error(`[generate-world-npcs] ❌ AI call failed:`, err);
       return new Response(

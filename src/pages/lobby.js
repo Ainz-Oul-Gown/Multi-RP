@@ -21,17 +21,22 @@ function sanitizeAIText(raw) {
   text = text.replace(/https?:\/\/[^\s]+/g, "");
   text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
   text = text.replace(/\s+/g, " ").trim();
-  if (text.length > 4000) text = text.slice(0, 4000);
   return text;
 }
 
+// Persist active tab across re-renders (e.g., when returning from file picker on mobile)
+const lobbyState = {
+  activeTab: 'sessions',
+  currentBestiaryWorldId: null,
+};
+
 export function renderLobby(container, user) {
-  let activeTab = 'sessions';
+  let { activeTab } = lobbyState;
   let sessions = [];
   let worlds = [];
   let userSettings = null;
   let characterCards = [];
-  let currentBestiaryWorldId = null;
+  let currentBestiaryWorldId = lobbyState.currentBestiaryWorldId;
 
   function isTextFile(file) {
     if (file.type && file.type.startsWith('text/')) return true;
@@ -821,6 +826,7 @@ export function renderLobby(container, user) {
     // Tab switching
     container.querySelectorAll('.lobby-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
+        lobbyState.activeTab = tab.dataset.tab;
         activeTab = tab.dataset.tab;
         render();
       });
@@ -1122,6 +1128,7 @@ export function renderLobby(container, user) {
         const worldId = btn.dataset.id;
         const worldName = btn.dataset.name;
         currentBestiaryWorldId = worldId;
+        lobbyState.currentBestiaryWorldId = worldId;
         document.getElementById('bestiaryWorldName').textContent = worldName;
         document.getElementById('bestiaryModal').classList.add('open');
         // Hide create form when opening bestiary for a new world

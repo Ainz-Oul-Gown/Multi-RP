@@ -5,7 +5,7 @@ import {
   importWorld, exportWorld, downloadJSON,
   getUserSettings, upsertUserSettings, updateSession,
   getCharacterCards, createCharacterCard, deleteCharacterCard,
-  exportPlayer
+  exportPlayer, getNpcsByWorld, updateNpc, deleteNpc
 } from '../api/game.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
@@ -376,6 +376,23 @@ export function renderLobby(container, user) {
       </div>
     `;
 
+    // Модальное окно: Бестиарий
+    const bestiaryModal = document.createElement('div');
+    bestiaryModal.className = 'modal-overlay';
+    bestiaryModal.id = 'bestiaryModal';
+    bestiaryModal.innerHTML = `
+      <div class="modal" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2 class="card-title">🐉 Бестиарий: <span id="bestiaryWorldName"></span></h2>
+          <button class="btn btn-ghost btn-sm" id="closeBestiaryBtn">✕</button>
+        </div>
+        <div id="bestiaryContent">
+          <p class="text-muted">Загрузка...</p>
+        </div>
+      </div>
+    `;
+    container.appendChild(bestiaryModal);
+
     bindEvents();
   }
 
@@ -456,7 +473,8 @@ export function renderLobby(container, user) {
               <h3 class="card-title">🌍 ${w.name}</h3>
             </div>
             <pre class="world-settings-preview">${JSON.stringify(w.settings || {}, null, 2).slice(0, 200)}</pre>
-            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="btn btn-secondary btn-sm" data-action="bestiary" data-id="${w.id}" data-name="${w.name}">🐉 Бестиарий</button>
               <button class="btn btn-secondary btn-sm" data-action="edit-world" data-id="${w.id}">✏️</button>
               <button class="btn btn-secondary btn-sm" data-action="export" data-id="${w.id}">📤</button>
               <button class="btn btn-ghost btn-sm" data-action="delete-world" data-id="${w.id}">🗑️</button>
@@ -525,6 +543,128 @@ export function renderLobby(container, user) {
   }
 
   function bindEvents() {
+    // Load bestiary for a world
+    async function loadBestiary(worldId) {
+      const content = document.getElementById('bestiaryContent');
+      content.innerHTML = '<p class="text-muted">Загрузка NPC...</p>';
+      try {
+        const npcs = await getNpcsByWorld(worldId);
+        if (!npcs.length) {
+          content.innerHTML = '<p class="text-muted">NPC не найдены. Создайте мир с описанием для автоматической генерации.</p>';
+          return;
+        }
+        content.innerHTML = npcs.map((npc) => `
+          <div class="card" style="margin-bottom: 0.5rem;">
+            <div class="card-header" style="cursor: pointer;" data-npc-toggle="${npc.id}">
+              <span class="badge ${npc.role === 'main' ? 'badge-primary' : 'badge-secondary'}">${npc.role === 'main' ? '⭐' : '○'}</span>
+              <strong>${npc.name}</strong>
+              <span class="text-muted">(${npc.race})</span>
+            </div>
+            <div id="npc-edit-${npc.id}" style="display: none; padding: 1rem;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div class="form-group">
+                  <label class="form-label">Имя</label>
+                  <input class="input" id="npc-name-${npc.id}" value="${npc.name}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Раса</label>
+                  <input class="input" id="npc-race-${npc.id}" value="${npc.race}" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Предыстория</label>
+                <textarea class="input" id="npc-background-${npc.id}" rows="2">${npc.background || ''}</textarea>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
+                <div class="form-group">
+                  <label class="form-label">STR</label>
+                  <input class="input" type="number" id="npc-str-${npc.id}" value="${npc.stats?.STR ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">DEX</label>
+                  <input class="input" type="number" id="npc-dex-${npc.id}" value="${npc.stats?.DEX ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">CON</label>
+                  <input class="input" type="number" id="npc-con-${npc.id}" value="${npc.stats?.CON ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">INT</label>
+                  <input class="input" type="number" id="npc-int-${npc.id}" value="${npc.stats?.INT ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">WIS</label>
+                  <input class="input" type="number" id="npc-wis-${npc.id}" value="${npc.stats?.WIS ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">CHA</label>
+                  <input class="input" type="number" id="npc-cha-${npc.id}" value="${npc.stats?.CHA ?? 10}" />
+                </div>
+              </div>
+              <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                <button class="btn btn-primary btn-sm" data-npc-save="${npc.id}">💾 Сохранить</button>
+                <button class="btn btn-ghost btn-sm" data-npc-delete="${npc.id}">🗑️ Удалить</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+
+        // Toggle NPC edit form
+        content.querySelectorAll('[data-npc-toggle]').forEach((header) => {
+          header.addEventListener('click', () => {
+            const npcId = header.dataset.npcToggle;
+            const editDiv = document.getElementById(`npc-edit-${npcId}`);
+            editDiv.style.display = editDiv.style.display === 'none' ? 'block' : 'none';
+          });
+        });
+
+        // Save NPC
+        content.querySelectorAll('[data-npc-save]').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const npcId = btn.dataset.npcSave;
+            const updates = {
+              name: document.getElementById(`npc-name-${npcId}`).value,
+              race: document.getElementById(`npc-race-${npcId}`).value,
+              background: document.getElementById(`npc-background-${npcId}`).value,
+              stats: {
+                STR: Number(document.getElementById(`npc-str-${npcId}`).value) || 10,
+                DEX: Number(document.getElementById(`npc-dex-${npcId}`).value) || 10,
+                CON: Number(document.getElementById(`npc-con-${npcId}`).value) || 10,
+                INT: Number(document.getElementById(`npc-int-${npcId}`).value) || 10,
+                WIS: Number(document.getElementById(`npc-wis-${npcId}`).value) || 10,
+                CHA: Number(document.getElementById(`npc-cha-${npcId}`).value) || 10,
+              },
+            };
+            try {
+              await updateNpc(npcId, updates);
+              toast.success('NPC обновлён!');
+            } catch (err) {
+              toast.error('Ошибка: ' + err.message);
+            }
+          });
+        });
+
+        // Delete NPC
+        content.querySelectorAll('[data-npc-delete]').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const npcId = btn.dataset.npcDelete;
+            if (!confirm('Удалить этого NPC?')) return;
+            try {
+              await deleteNpc(npcId);
+              toast.success('NPC удалён');
+              await loadBestiary(worldId);
+            } catch (err) {
+              toast.error('Ошибка: ' + err.message);
+            }
+          });
+        });
+      } catch (err) {
+        content.innerHTML = `<p class="text-muted">Ошибка загрузки: ${err.message}</p>`;
+      }
+    }
+
     // Tab switching
     container.querySelectorAll('.lobby-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
@@ -821,6 +961,22 @@ export function renderLobby(container, user) {
         document.getElementById('editWorldSettings').value = JSON.stringify(world.settings || {}, null, 2);
         document.getElementById('editWorldModal').classList.add('open');
       });
+    });
+
+    // Bestiary button
+    container.querySelectorAll('[data-action="bestiary"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const worldId = btn.dataset.id;
+        const worldName = btn.dataset.name;
+        document.getElementById('bestiaryWorldName').textContent = worldName;
+        document.getElementById('bestiaryModal').classList.add('open');
+        await loadBestiary(worldId);
+      });
+    });
+
+    // Close bestiary modal
+    document.getElementById('closeBestiaryBtn')?.addEventListener('click', () => {
+      document.getElementById('bestiaryModal').classList.remove('open');
     });
 
     document.getElementById('closeEditWorldModal')?.addEventListener('click', () => {

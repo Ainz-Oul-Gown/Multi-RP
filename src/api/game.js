@@ -426,25 +426,51 @@ export async function importWorld(jsonData, ownerId) {
   return world;
 }
 
-// Export player character
-export async function exportPlayer(playerId) {
-  const player = await getPlayer(playerId);
-  return {
-    version: '2.0',
-    exported_at: new Date().toISOString(),
-    character: {
-      name: player.name,
-      race: player.race,
-      class: player.class,
-      appearance: player.appearance,
-      personality: player.personality,
-      bio: player.bio,
-      power_level: player.power_level,
-      stats: player.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-      hp: player.hp,
-      max_hp: player.max_hp,
-      money: player.money,
-    },
-    inventory: player.inventory || [],
-  };
+// ===================== NPC BESTIARY =====================
+
+export async function getNpcsByWorld(worldId) {
+  const { data, error } = await supabase
+    .from('npcs')
+    .select('*')
+    .eq('world_id', worldId)
+    .order('role', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function getNpc(id) {
+  const { data, error } = await supabase
+    .from('npcs')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createNpc(npc) {
+  const { data, error } = await supabase
+    .from('npcs')
+    .insert(npc)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateNpc(id, updates) {
+  const { data, error } = await supabase
+    .from('npcs')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteNpc(id) {
+  const { error } = await supabase.from('npcs').delete().eq('id', id);
+  if (error) throw error;
 }

@@ -6,7 +6,7 @@ export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR
 export const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
 
 // AI Model Configuration
-export const AI_MODEL = 'openrouter/xiaomi/mimo-v2.5';
+export const AI_MODEL = 'xiaomi/mimo-v2.5';
 export const AI_PARSER_RETRIES = 3;
 export const AI_PARSER_TIMEOUT = 15000;
 export const AI_NARRATOR_TIMEOUT = 30000;

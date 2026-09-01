@@ -36,7 +36,7 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
     // Force Xiaomi provider for faster/more reliable responses
     provider: {
       order: ['Xiaomi'],
-      only: true,
+      allow_fallbacks: false,
     },
     // Control reasoning: low effort = faster thinking
     reasoning: {

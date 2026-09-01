@@ -473,6 +473,21 @@ LEVEL (1-100) = ТЕКУЩАЯ СИЛА (насколько раскрыт по�
 - d12 (7 среднее): варвар, берсерк
 Для зверей/монстров: d8 по умолчанию, d10 для боссов
 
+## ДИАПАЗОН УРОВНЕЙ (для неуникальных существ)
+Если существо НЕ уникально (is_unique: false), укажи диапазон уровней:
+- level_min: минимальный уровень при спавне
+- level_max: максимальный уровень при спавне
+- level: конкретный уровень (для уникальных) или среднее значение
+
+Примеры:
+- Слизь: 1-10 ур
+- Волк: 5-15 ур
+- Орк: 10-25 ур
+- Тролль: 15-35 ур
+- Дракон: 50-100 ур
+
+При спавне в игре уровень выбирается случайно из диапазона [level_min, level_max].
+
 ## ТИПЫ ПЕРСОНАЖЕЙ (ROLE)
 - 'main' — главные персонажи (протагонисты, антагонисты, ключевые фигуры)
 - 'secondary' — второстепенные (спутники, торговцы, стражники)
@@ -520,8 +535,9 @@ ${geographyContext}
 
 ВАЖНО: ВСЕ тексты (имя/вид, раса, описание внешности, предыстория, привычки, фразы) на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Имя или вид', class: 'Класс (воин/маг/жрец/etc)', role: 'main'|'secondary'|'tertiary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), hit_dice: INT (6|8|10|12), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Имя или вид', class: 'Класс (воин/маг/жрец/etc)', role: 'main'|'secondary'|'tertiary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), level_min: INT, level_max: INT, hit_dice: INT (6|8|10|12), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
 // Расчётные поля (hp, max_hp, armor_class, initiative, saving_throws) рассчитываются автоматически
+// level_min/level_max: для неуникальных существ — диапазон уровней при спавне
 
   const existingNpcsText = existingNames.length > 0
     ? `\n\nУже сгенерированные NPC (НЕ ДУБЛИРОВАТЬ): ${existingNames.join(', ')}`
@@ -1058,8 +1074,9 @@ ${geography ? `Доступные государства:\n${geography.states.ma
 
 ВАЖНО: ВСЕ тексты (вид, раса, описание внешности, предыстория) на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Название вида', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), hit_dice: INT (8|10), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Название вида', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), level_min: INT, level_max: INT, hit_dice: INT (8|10), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
 // Расчётные поля (hp, max_hp, armor_class, initiative, saving_throws) рассчитываются автоматически
+// level_min/level_max: для неуникальных существ — диапазон уровней при спавне
   
   // Save helper
   const saveNPCs = async (npcs) => {

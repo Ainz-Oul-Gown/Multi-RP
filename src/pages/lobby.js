@@ -730,6 +730,13 @@ export function renderLobby(container, user) {
               <li><strong>DoT (урон каждый ход):</strong> fire (2-3), acid (2), poison (3)</li>
               <li><strong>Спасброски:</strong> DEX (fire, lightning, acid), CON (cold, poison), WIS (psychic), STR (force)</li>
             </ul>
+            
+            <h5 style="margin-top: 0.75rem;">📊 Диапазон уровней (для неуникальных)</h5>
+            <ul>
+              <li><strong>level_min / level_max:</strong> диапазон уровней при спавне</li>
+              <li><strong>Примеры:</strong> Волк 5-15, Орк 10-25, Дракон 50-100</li>
+              <li><strong>Уникальные:</strong> level_min = level_max = level</li>
+            </ul>
           </div>
           
           <div class="schema-section">

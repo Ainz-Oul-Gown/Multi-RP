@@ -60,8 +60,11 @@ export async function countNPCs(loreText) {
 Ответь ТОЛЬКО одним числом (например: 22). Никакого текста, только число.`;
 
   const response = await callOpenRouter(SYSTEM_PROMPT, loreText);
+  console.log('[countNPCs] Raw response:', response);
   const match = response.match(/\d+/);
-  return match ? parseInt(match[1], 10) : 0;
+  const count = match ? parseInt(match[0], 10) : 0;
+  console.log('[countNPCs] Parsed count:', count);
+  return count;
 }
 
 // Generate a batch of NPCs
@@ -105,13 +108,17 @@ export async function generateNPCBatch(loreText, startIdx, endIdx, totalCount, e
 // Generate all NPCs in batches
 export async function generateAllNPCs(loreText, onProgress = () => {}) {
   const BATCH_SIZE = 5;
+  console.log('[generateAllNPCs] Starting, loreText length:', loreText.length);
   
   // Step 1: Count NPCs
   onProgress({ step: 'counting', message: 'Подсчёт NPC в тексте...' });
   let totalCount = await countNPCs(loreText);
+  console.log('[generateAllNPCs] Count result:', totalCount);
+  
   if (totalCount === 0) {
     // Fallback
     totalCount = 10;
+    console.log('[generateAllNPCs] Using fallback count:', totalCount);
   }
   onProgress({ step: 'counting', total: totalCount, message: `Найдено ${totalCount} NPC` });
 
@@ -120,9 +127,13 @@ export async function generateAllNPCs(loreText, onProgress = () => {}) {
   const allNpcs = [];
   const generatedNames = new Set();
 
+  console.log('[generateAllNPCs] Will generate in', totalBatches, 'batches');
+
   for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
     const startIdx = batchNum * BATCH_SIZE + 1;
     const endIdx = Math.min((batchNum + 1) * BATCH_SIZE, totalCount);
+    
+    console.log(`[generateAllNPCs] Batch ${batchNum + 1}/${totalBatches}: NPCs ${startIdx}-${endIdx}`);
     
     onProgress({
       step: 'generating',
@@ -133,25 +144,37 @@ export async function generateAllNPCs(loreText, onProgress = () => {}) {
       message: `Генерация NPC ${startIdx}-${endIdx} из ${totalCount}...`,
     });
 
-    const batchNpcs = await generateNPCBatch(
-      loreText,
-      startIdx,
-      endIdx,
-      totalCount,
-      Array.from(generatedNames)
-    );
+    try {
+      const batchNpcs = await generateNPCBatch(
+        loreText,
+        startIdx,
+        endIdx,
+        totalCount,
+        Array.from(generatedNames)
+      );
 
-    if (Array.isArray(batchNpcs)) {
-      for (const npc of batchNpcs) {
-        const name = (npc.name || '').toLowerCase().trim();
-        if (name && !generatedNames.has(name)) {
-          generatedNames.add(name);
-          allNpcs.push(npc);
+      console.log(`[generateAllNPCs] Batch ${batchNum + 1} result:`, Array.isArray(batchNpcs) ? batchNpcs.length : 'not array', 'NPCs');
+
+      if (Array.isArray(batchNpcs)) {
+        for (const npc of batchNpcs) {
+          const name = (npc.name || '').toLowerCase().trim();
+          if (name && !generatedNames.has(name)) {
+            generatedNames.add(name);
+            allNpcs.push(npc);
+          }
         }
       }
+    } catch (batchErr) {
+      console.error(`[generateAllNPCs] Batch ${batchNum + 1} failed:`, batchErr);
+      // Continue with what we have
+      if (allNpcs.length > 0) {
+        break;
+      }
+      throw batchErr;
     }
   }
 
+  console.log('[generateAllNPCs] Done. Total unique NPCs:', allNpcs.length);
   onProgress({ step: 'done', count: allNpcs.length, message: `Сгенерировано ${allNpcs.length} NPC` });
   return allNpcs;
 }

@@ -13,6 +13,51 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Валидация типа урона
+const VALID_DAMAGE_TYPES = ['slashing', 'piercing', 'bludgeoning', 'fire', 'cold', 'lightning', 'thunder', 'acid', 'poison', 'necrotic', 'radiant', 'psychic', 'force'];
+
+const DAMAGE_TYPE_NAMES: Record<string, string> = {
+  slashing: 'Режущий', piercing: 'Колющий', bludgeoning: 'Дробящий',
+  fire: 'Огненный', cold: 'Ледяной', lightning: 'Электрический', thunder: 'Звуковой',
+  acid: 'Кислотный', poison: 'Ядовитый', necrotic: 'Некротический',
+  radiant: 'Лучистый', psychic: 'Психический', force: 'Силовой',
+};
+
+const SAVE_ABILITIES: Record<string, string> = {
+  fire: 'DEX', cold: 'CON', lightning: 'DEX', thunder: 'CON',
+  acid: 'DEX', poison: 'CON', psychic: 'WIS', force: 'STR',
+};
+
+const DOT_TYPES = ['fire', 'acid', 'poison'];
+
+function cleanAttack(a: any) {
+  const damageType = VALID_DAMAGE_TYPES.includes(a?.damage_type) ? a.damage_type : 'slashing';
+  const damageDice = /^\d+d\d+([+-]\d+)?$/.test(a?.damage_dice || a?.damage) 
+    ? (a.damage_dice || a.damage) 
+    : '1d6';
+  
+  const canDot = DOT_TYPES.includes(damageType);
+  const isDot = canDot && (a?.is_dot === true || a?.is_damage_over_time === true);
+  
+  return {
+    name: cleanTextForAI(a?.name) || 'Атака',
+    description: cleanTextForAI(a?.description) || cleanTextForAI(a?.desc) || '',
+    damage_type: damageType,
+    damage_type_name: DAMAGE_TYPE_NAMES[damageType] || 'Физический',
+    damage_dice: damageDice,
+    damage_bonus: Number(a?.damage_bonus) || 0,
+    is_special: a?.is_special === true,
+    is_dot: isDot,
+    dot_name: isDot ? cleanTextForAI(a?.dot_name) || 'Урон' : null,
+    dot_duration: isDot ? Math.max(1, Math.min(10, Number(a?.dot_duration) || 2)) : 0,
+    dot_damage_dice: isDot ? (/^\d+d\d+([+-]\d+)?$/.test(a?.dot_damage_dice) ? a.dot_damage_dice : damageDice) : null,
+    half_on_save: SAVE_ABILITIES[damageType] !== undefined,
+    save_ability: SAVE_ABILITIES[damageType] || null,
+    range: cleanTextForAI(a?.range) || (a?.is_special ? '30 футов' : '5 футов'),
+    effects: Array.isArray(a?.effects) ? a.effects.slice(0, 3).map((e: any) => cleanTextForAI(e)) : [],
+  };
+}
+
 function cleanNPC(npc: any, world_id: string) {
   // Validate role
   const validRoles = ["main", "secondary", "tertiary"];
@@ -27,12 +72,6 @@ function cleanNPC(npc: any, world_id: string) {
   const baseAttacksCount = Math.max(2, Math.min(10, 2 + Math.floor((level - 1) / 10)));
   
   // Clean attacks arrays
-  const cleanAttack = (a: any) => ({
-    name: cleanTextForAI(a?.name) || "Атака",
-    description: cleanTextForAI(a?.description) || "",
-    damage: cleanTextForAI(a?.damage) || "1d6",
-  });
-  
   const specialAttacks = Array.isArray(npc.special_attacks) 
     ? npc.special_attacks.slice(0, specialAttacksCount).map(cleanAttack)
     : [];

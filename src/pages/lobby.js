@@ -714,6 +714,15 @@ export function renderLobby(container, user) {
               <li><strong>Инициатива:</strong> модификатор DEX</li>
               <li><strong>HP:</strong> CON × уровень × 1.5 (существа слабее игрока)</li>
             </ul>
+            
+            <h5 style="margin-top: 0.75rem;">⚔️ Типы урона (D&D)</h5>
+            <ul>
+              <li><strong>Физические:</strong> slashing (режущий), piercing (колющий), bludgeoning (дробящий)</li>
+              <li><strong>Стихийные:</strong> fire (огонь, DoT), cold (холод), lightning (молния), thunder (звук)</li>
+              <li><strong>Магические:</strong> acid (кислота, DoT), poison (яд, DoT), necrotic (некроз), radiant (свет), psychic (психический), force (силовой)</li>
+              <li><strong>DoT (урон каждый ход):</strong> fire (2-3), acid (2), poison (3)</li>
+              <li><strong>Спасброски:</strong> DEX (fire, lightning, acid), CON (cold, poison), WIS (psychic), STR (force)</li>
+            </ul>
           </div>
           
           <div class="schema-section">
@@ -738,8 +747,19 @@ export function renderLobby(container, user) {
         "stats": {"STR": 14, "DEX": 10, "CON": 12, "INT": 14, "WIS": 13, "CHA": 16},
         "armor_class": 11,
         "initiative": 0,
-        "special_attacks": [{"name": "Королевский приказ", description: "...", damage: "2d6"}],
-        "base_attacks": [{"name": "Меч", damage: "1d8+2"}]
+        "special_attacks": [{
+          "name": "Королевский приказ",
+          "description": "Призывает стражу",
+          "damage_type": "force",
+          "damage_dice": "2d6",
+          "is_dot": false
+        }],
+        "base_attacks": [{
+          "name": "Меч",
+          "description": "Удар мечом",
+          "damage_type": "slashing",
+          "damage_dice": "1d8+2"
+        }]
       },
       {
         "name": "Волк",
@@ -749,8 +769,19 @@ export function renderLobby(container, user) {
         "level": 8,
         "stats": {"STR": 12, "DEX": 14, "CON": 10, "INT": 3, "WIS": 8, "CHA": 4},
         "is_pack": true,
-        "special_attacks": [{"name": "Укус", damage": "1d6"}],
-        "base_attacks": [{"name": "Когти", damage": "1d4"}]
+        "special_attacks": [{
+          "name": "Укус",
+          "description": "Проникающий укус",
+          "damage_type": "piercing",
+          "damage_dice": "1d6",
+          "is_dot": false
+        }],
+        "base_attacks": [{
+          "name": "Когти",
+          "description": "Царапина когтями",
+          "damage_type": "slashing",
+          "damage_dice": "1d4"
+        }]
       }
     ]
   }

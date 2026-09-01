@@ -1,5 +1,7 @@
 // src/api/openrouter.js — Прямые запросы к OpenRouter (без лимитов Supabase)
 import { OPENROUTER_API_KEY, AI_MODEL, CARD_GENERATION_MODELS, calculateDerivedStats, getRaceAcBonus } from '../config.js';
+import { DAMAGE_TYPES, getDamageType, canBeDot, canHalfOnSave, getSaveAbility } from '../config/damageTypes.js';
+import { generateDamageDice, rollDice, getAverageDamage } from '../utils/dice.js';
 import { supabase, invokeFunction } from './supabase.js';
 import { saveGenerationProgress, loadGenerationProgress, clearGenerationProgress } from '../utils/generationStore.js';
 import { saveProgress, loadProgress, deleteProgress } from '../utils/indexedDB.js';
@@ -93,6 +95,106 @@ export function getSpecialAttacksCount(tier = 1) {
  */
 export function getBaseAttacksCount(level = 1) {
   return Math.max(2, Math.min(10, 2 + Math.floor((level - 1) / 10)));
+}
+
+/**
+ * Очищает и нормализует атаку в формате D&D
+ * @param {object} attack - сырые данные атаки
+ * @param {boolean} isSpecial - спецатака (больше урона)
+ * @param {number} tier - тир существа
+ * @param {number} level - уровень существа
+ * @returns {object} очищенная атака
+ */
+export function cleanAttack(attack = {}, isSpecial = false, tier = 1, level = 1) {
+  // Валидация типа урона
+  const damageTypeId = DAMAGE_TYPES[attack.damage_type] ? attack.damage_type : 'slashing';
+  const damageType = DAMAGE_TYPES[damageTypeId];
+  
+  // Генерация кубиков урона если не указаны
+  let damageDice = attack.damage_dice || attack.damage || generateDamageDice(level, tier, isSpecial);
+  
+  // Валидация формата кубиков
+  if (!/^\d+d\d+([+-]\d+)?$/.test(damageDice)) {
+    damageDice = generateDamageDice(level, tier, isSpecial);
+  }
+  
+  // DoT параметры (только для типов урона поддерживающих DoT)
+  const canDot = damageType.dot === true;
+  const isDot = canDot && (attack.is_dot === true || attack.is_damage_over_time === true);
+  
+  return {
+    name: (attack.name || (isSpecial ? 'Спецатака' : 'Атака')).slice(0, 50),
+    description: (attack.description || attack.desc || '').slice(0, 200),
+    damage_type: damageTypeId,
+    damage_type_name: damageType.name,
+    damage_dice: damageDice,
+    damage_bonus: Number(attack.damage_bonus) || 0,
+    is_special: isSpecial,
+    // DoT (Damage Over Time)
+    is_dot: isDot,
+    dot_name: isDot ? (attack.dot_name || damageType.dotName || 'Урон') : null,
+    dot_duration: isDot ? (Number(attack.dot_duration) || damageType.dotDefaultDuration || 2) : 0,
+    dot_damage_dice: isDot ? (attack.dot_damage_dice || damageDice) : null,
+    // Спасбросок
+    half_on_save: damageType.halfOnSave,
+    save_ability: damageType.saveAbility || null,
+    // Дополнительно
+    range: attack.range || (isSpecial ? '30 футов' : '5 футов'),
+    effects: Array.isArray(attack.effects) ? attack.effects.slice(0, 3) : [],
+  };
+}
+
+/**
+ * Генерирует атаки для существа на основе его параметров
+ * @param {number} tier - тир (количество спецатак)
+ * @param {number} level - уровень (количество базовых атак)
+ * @param {string} category - категория существа
+ * @param {string} race - раса
+ * @returns {object} { special_attacks, base_attacks }
+ */
+export function generateAttacksForCreature(tier, level, category = 'monster', race = 'Чудовище') {
+  const specialCount = getSpecialAttacksCount(tier);
+  const baseCount = getBaseAttacksCount(level);
+  
+  // Типы урона по умолчанию для категорий
+  const defaultTypes = {
+    beast: ['piercing', 'slashing'],
+    monster: ['bludgeoning', 'piercing', 'slashing'],
+    boss: ['fire', 'cold', 'lightning', 'necrotic', 'force'],
+  };
+  
+  const availableTypes = defaultTypes[category] || defaultTypes.monster;
+  
+  const specialAttacks = [];
+  const baseAttacks = [];
+  
+  // Генерация спецатак
+  for (let i = 0; i < specialCount; i++) {
+    const typeIdx = i % availableTypes.length;
+    specialAttacks.push({
+      name: `Спецатака ${i + 1}`,
+      description: 'Мощная специальная атака',
+      damage_type: availableTypes[typeIdx],
+      damage_dice: generateDamageDice(level, tier, true),
+      is_special: true,
+      is_dot: DAMAGE_TYPES[availableTypes[typeIdx]]?.dot || false,
+      dot_duration: DAMAGE_TYPES[availableTypes[typeIdx]]?.dotDefaultDuration || 2,
+    });
+  }
+  
+  // Генерация базовых атак
+  for (let i = 0; i < baseCount; i++) {
+    const typeIdx = i % availableTypes.length;
+    baseAttacks.push({
+      name: `Атака ${i + 1}`,
+      description: 'Базовая атака',
+      damage_type: availableTypes[typeIdx],
+      damage_dice: generateDamageDice(level, tier, false),
+      is_special: false,
+    });
+  }
+  
+  return { special_attacks: specialAttacks, base_attacks: baseAttacks };
 }
 
 // Get user settings (API key + models)
@@ -381,11 +483,37 @@ LEVEL (1-100) = ТЕКУЩАЯ СИЛА (насколько раскрыт по�
 - Имя даётся ТОЛЬКО: NPC-людям/эльфам/гномам (всегда) и уникальным боссам (is_unique: true)
 - Стаям (is_pack: true) имя не дают — это группа существ
 
+## АТАКИ (D&D система)
+У каждой атаки есть:
+- name: название атаки
+- description: описание для ДМ
+- damage_type: тип урона (slashing/piercing/bludgeoning/fire/cold/lightning/thunder/acid/poison/necrotic/radiant/psychic/force)
+- damage_dice: кубики урона (1d6, 2d8+3, 3d4, etc.)
+- is_dot: true если урон каждый ход (fire/acid/poison)
+- dot_duration: длительность в ходах (2-5)
+- half_on_save: можно спастись наполовину
+- save_ability: способность спасброска (DEX/CON/WIS)
+
+Спецатаки (special_attacks): 1 на каждый Tier (Tier 5 = 5 спецатак)
+Базовые атаки (base_attacks): 2 на уровни 1-10, +1 за каждые 10 уровней
+
+Типы урона:
+- slashing (режущий), piercing (колющий), bludgeoning (дробящий) — физические
+- fire (огонь) — DoT 2-3 хода
+- cold (холод) — замедление
+- lightning (молния) — DEX спасбросок
+- acid (кислота) — DoT 2 хода
+- poison (яд) — DoT 3 хода, CON спасбросок
+- necrotic (некроз) — вампиризм
+- radiant (свет) — силён против нежити
+- psychic (психический) — WIS спасбросок
+- force (силовой) — игнорирует броню
+
 ${geographyContext}
 
 ВАЖНО: ВСЕ тексты (имя/вид, раса, описание внешности, предыстория, привычки, фразы) на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Имя или вид', role: 'main'|'secondary'|'tertiary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание', damage: 'урон'}], base_attacks: [{name: 'Название', damage: 'урон'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Имя или вид', role: 'main'|'secondary'|'tertiary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
 
   const existingNpcsText = existingNames.length > 0
     ? `\n\nУже сгенерированные NPC (НЕ ДУБЛИРОВАТЬ): ${existingNames.join(', ')}`
@@ -458,11 +586,18 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
       
       // Clean special_attacks and base_attacks
       const specialAttacks = Array.isArray(npc.special_attacks) 
-        ? npc.special_attacks.slice(0, getSpecialAttacksCount(tier))
+        ? npc.special_attacks.slice(0, getSpecialAttacksCount(tier)).map(a => cleanAttack(a, true, tier, level))
         : [];
       const baseAttacks = Array.isArray(npc.base_attacks)
-        ? npc.base_attacks.slice(0, getBaseAttacksCount(level))
+        ? npc.base_attacks.slice(0, getBaseAttacksCount(level)).map(a => cleanAttack(a, false, tier, level))
         : [];
+      
+      // Если атаки не сгенерированы ИИ — генерируем автоматически
+      if (specialAttacks.length === 0 && baseAttacks.length === 0) {
+        const generated = generateAttacksForCreature(tier, level, category, npc.race);
+        specialAttacks.push(...generated.special_attacks);
+        baseAttacks.push(...generated.base_attacks);
+      }
       
       return {
         world_id: worldId,
@@ -646,7 +781,23 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
       const location_id = npc.location_name ? (locationMap[npc.location_name] || null) : null;
       const state_id = npc.state_name ? (stateMap[npc.state_name] || null) : null;
       const tier = Number(npc.tier) || 1;
-      const combatStats = calculateNPCCombatStats(npc.stats, npc.race, tier);
+      const level = Number(npc.level) || Math.max(1, Math.min(100, tier * 10 + Math.floor(Math.random() * 20)));
+      const combatStats = calculateNPCCombatStats(npc.stats, npc.race, tier, level);
+      
+      // Clean special_attacks and base_attacks
+      const specialAttacks = Array.isArray(npc.special_attacks) 
+        ? npc.special_attacks.slice(0, getSpecialAttacksCount(tier)).map(a => cleanAttack(a, true, tier, level))
+        : [];
+      const baseAttacks = Array.isArray(npc.base_attacks)
+        ? npc.base_attacks.slice(0, getBaseAttacksCount(level)).map(a => cleanAttack(a, false, tier, level))
+        : [];
+      
+      // Если атаки не сгенерированы ИИ — генерируем автоматически
+      if (specialAttacks.length === 0 && baseAttacks.length === 0) {
+        const generated = generateAttacksForCreature(tier, level, 'npc', npc.race);
+        specialAttacks.push(...generated.special_attacks);
+        baseAttacks.push(...generated.base_attacks);
+      }
       
       return {
         world_id: worldId,
@@ -660,15 +811,21 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
         habits: Array.isArray(npc.habits) ? npc.habits.slice(0, 10).map(String) : [],
         catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases.slice(0, 10).map(String) : [],
         stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-        hp: Number(npc.hp) || 30,
-        max_hp: Number(npc.max_hp) || 30,
+        hp: Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
+        max_hp: Number(npc.max_hp) || Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
         location_id,
         state_id,
         // Combat stats
-        level: combatStats.level,
+        level,
         armor_class: combatStats.armor_class,
         initiative: combatStats.initiative,
         saving_throws: combatStats.saving_throws,
+        // Attacks
+        special_attacks: specialAttacks,
+        base_attacks: baseAttacks,
+        // Pack/unique flags
+        is_pack_instance: false,
+        pack_size: 1,
       };
     });
     
@@ -855,11 +1012,32 @@ LEVEL (1-100) = ТЕКУЩАЯ СИЛА (насколько раскрыт по�
 - is_pack: false, is_unique: false — одиночное существо
 - is_unique: true — единственный экземпляр (получает имя!), например "Дракон Пепла"
 
+## АТАКИ (D&D система)
+У каждой атаки есть:
+- name: название атаки
+- description: описание для ДМ
+- damage_type: тип урона (slashing/piercing/bludgeoning/fire/cold/lightning/thunder/acid/poison/necrotic/radiant/psychic/force)
+- damage_dice: кубики урона (1d6, 2d8+3, 3d4, etc.)
+- is_dot: true если урон каждый ход (fire/acid/poison)
+- dot_duration: длительность в ходах (2-5)
+
+Типы урона:
+- slashing (режущий), piercing (колющий), bludgeoning (дробящий) — физические
+- fire (огонь) — DoT 2-3 хода, DEX спасбросок
+- cold (холод) — CON спасбросок
+- lightning (молния) — DEX спасбросок
+- acid (кислота) — DoT 2 хода, DEX спасбросок
+- poison (яд) — DoT 3 хода, CON спасбросок
+- necrotic (некроз) — вампиризм
+- radiant (свет) — силён против нежити
+- psychic (психический) — WIS спасбросок
+- force (силовой) — игнорирует броню
+
 ${geography ? `Доступные государства:\n${geography.states.map(s => `- ${s.name}`).join('\n')}` : ''}
 
 ВАЖНО: ВСЕ тексты (вид, раса, описание внешности, предыстория) на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Название вида', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание', damage: 'урон'}], base_attacks: [{name: 'Название', damage: 'урон'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Название вида', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
   
   // Save helper
   const saveNPCs = async (npcs) => {
@@ -873,11 +1051,18 @@ ${geography ? `Доступные государства:\n${geography.states.ma
       
       // Clean special_attacks and base_attacks
       const specialAttacks = Array.isArray(npc.special_attacks) 
-        ? npc.special_attacks.slice(0, getSpecialAttacksCount(tier))
+        ? npc.special_attacks.slice(0, getSpecialAttacksCount(tier)).map(a => cleanAttack(a, true, tier, level))
         : [];
       const baseAttacks = Array.isArray(npc.base_attacks)
-        ? npc.base_attacks.slice(0, getBaseAttacksCount(level))
+        ? npc.base_attacks.slice(0, getBaseAttacksCount(level)).map(a => cleanAttack(a, false, tier, level))
         : [];
+      
+      // Если атаки не сгенерированы ИИ — генерируем автоматически
+      if (specialAttacks.length === 0 && baseAttacks.length === 0) {
+        const generated = generateAttacksForCreature(tier, level, category, npc.race);
+        specialAttacks.push(...generated.special_attacks);
+        baseAttacks.push(...generated.base_attacks);
+      }
       
       return {
         world_id: worldId,

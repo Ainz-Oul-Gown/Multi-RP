@@ -26,6 +26,32 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
     throw new Error('Укажите OpenRouter API Key в настройках аккаунта');
   }
 
+  const requestBody = {
+    model: AI_MODEL,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ],
+    temperature: options.temperature ?? 0.7,
+    // Force Xiaomi provider for faster/more reliable responses
+    provider: {
+      order: ['Xiaomi'],
+      only: true,
+    },
+    // Control reasoning: low effort = faster thinking
+    reasoning: {
+      effort: 'low',
+    },
+    // No max_tokens limit - let the model generate as needed
+  };
+
+  console.log('[callOpenRouter] Request:', {
+    model: requestBody.model,
+    provider: requestBody.provider,
+    reasoning: requestBody.reasoning,
+    userMsgLength: userMessage.length,
+  });
+
   const response = await fetch(OPENROUTER_CHAT_URL, {
     method: 'POST',
     headers: {
@@ -34,15 +60,7 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
       'HTTP-Referer': window.location.origin,
       'X-Title': 'MultiRP-AI',
     },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-      temperature: options.temperature ?? 0.7,
-      // No max_tokens limit - let the model generate as needed
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -51,6 +69,13 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
   }
 
   const data = await response.json();
+  console.log('[callOpenRouter] Response:', {
+    provider: data.provider,
+    model: data.model,
+    reasoningTokens: data.usage?.completion_tokens_details?.reasoning_tokens,
+    totalTokens: data.usage?.total_tokens,
+    contentLength: data.choices?.[0]?.message?.content?.length,
+  });
   return data.choices?.[0]?.message?.content || '';
 }
 

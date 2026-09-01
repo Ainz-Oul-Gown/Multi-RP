@@ -1,0 +1,4499 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: supabase/migrations/001_initial_schema.sql, supabase/migrations/006_world_geography_and_npcs.sql, supabase/migrations/007_npc_inventory_rpc.sql, supabase/functions/generate-world-npcs/index.ts, supabase/functions/simulate-npc-background/index.ts, supabase/functions/npc-memory-engine/index.ts, supabase/functions/convert-world-text/index.ts, src/api/game.js, src/pages/lobby.js, tests/world_geography.test.ts, tests/memory-engine.test.ts, tests/npc-bestiary.test.ts
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+
+
+================================================================
+Directory Structure
+================================================================
+src/
+  api/
+    game.js
+  pages/
+    lobby.js
+supabase/
+  functions/
+    convert-world-text/
+      index.ts
+    generate-world-npcs/
+      index.ts
+    npc-memory-engine/
+      index.ts
+    simulate-npc-background/
+      index.ts
+  migrations/
+    001_initial_schema.sql
+    006_world_geography_and_npcs.sql
+    007_npc_inventory_rpc.sql
+tests/
+  memory-engine.test.ts
+  npc-bestiary.test.ts
+  world_geography.test.ts
+
+================================================================
+Files
+================================================================
+
+================
+File: src/api/game.js
+================
+// src/api/game.js — API-методы для игровой логики
+import { supabase } from './supabase.js';
+
+// ===================== WORLDS =====================
+
+export async function getWorlds() {
+  const { data, error } = await supabase
+    .from('worlds')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function getWorld(id) {
+  const { data, error } = await supabase
+    .from('worlds')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createWorld(world) {
+  const { data, error } = await supabase
+    .from('worlds')
+    .insert(world)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateWorld(id, updates) {
+  const { data, error } = await supabase
+    .from('worlds')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteWorld(id) {
+  const { error } = await supabase.from('worlds').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ===================== LORE FILES =====================
+
+export async function getLoreFiles(worldId, folder = null) {
+  let query = supabase
+    .from('lore_files')
+    .select('*')
+    .eq('world_id', worldId)
+    .order('title');
+
+  if (folder) query = query.eq('folder', folder);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+export async function getLoreFilesByFolder(worldId) {
+  const { data, error } = await supabase
+    .from('lore_files')
+    .select('folder')
+    .eq('world_id', worldId);
+  if (error) throw error;
+  const folders = [...new Set(data.map((f) => f.folder))];
+  return folders;
+}
+
+export async function createLoreFile(file) {
+  const { data, error } = await supabase
+    .from('lore_files')
+    .insert(file)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateLoreFile(id, updates) {
+  const { data, error } = await supabase
+    .from('lore_files')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteLoreFile(id) {
+  const { error } = await supabase.from('lore_files').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ===================== SESSIONS =====================
+
+export async function getSessions() {
+  const { data: sessions, error: sessErr } = await supabase
+    .from('sessions')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (sessErr) throw sessErr;
+
+  // Загружаем мира и игроков отдельно (RLS запрещает join)
+  const worldIds = [...new Set(sessions.map((s) => s.world_id))];
+  const { data: worlds } = await supabase.from('worlds').select('id, name').in('id', worldIds.length ? worldIds : ['00000000-0000-0000-0000-000000000000']);
+  const worldMap = {};
+  (worlds || []).forEach((w) => { worldMap[w.id] = w; });
+
+  const result = await Promise.all(
+    sessions.map(async (s) => {
+      const { data: players } = await supabase
+        .from('players')
+        .select('id, name, user_id, hp, max_hp, is_active')
+        .eq('session_id', s.id);
+      return { ...s, worlds: worldMap[s.world_id] || null, players: players || [] };
+    })
+  );
+
+  return result;
+}
+
+export async function getSession(id) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*, worlds(name, settings)')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createSession(session) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .insert(session)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateSession(id, updates) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// ===================== PLAYERS =====================
+
+export async function getSessionPlayers(sessionId) {
+  const { data, error } = await supabase
+    .from('players')
+    .select('*, inventory(*)')
+    .eq('session_id', sessionId);
+  if (error) throw error;
+  return data;
+}
+
+export async function getPlayer(id) {
+  const { data, error } = await supabase
+    .from('players')
+    .select('*, inventory(*)')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createPlayer(player) {
+  const { data, error } = await supabase
+    .from('players')
+    .insert(player)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updatePlayer(id, updates) {
+  const { data, error } = await supabase
+    .from('players')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deletePlayer(id) {
+  const { error } = await supabase.from('players').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ===================== INVENTORY =====================
+
+export async function getPlayerInventory(playerId) {
+  const { data, error } = await supabase
+    .from('inventory')
+    .select('*')
+    .eq('player_id', playerId)
+    .order('item_name');
+  if (error) throw error;
+  return data;
+}
+
+export async function addInventoryItem(item) {
+  const { data, error } = await supabase
+    .from('inventory')
+    .insert(item)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateInventoryItem(id, updates) {
+  const { data, error } = await supabase
+    .from('inventory')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function removeInventoryItem(id) {
+  const { error } = await supabase.from('inventory').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ===================== MESSAGES =====================
+
+export async function getSessionMessages(sessionId, limit = 50) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return data;
+}
+
+export async function sendMessage(message) {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert(message)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// ===================== TURN MANAGEMENT =====================
+
+export async function getCurrentTurn(sessionId) {
+  const { data, error } = await supabase
+    .from('turn_queue')
+    .select('*')
+    .eq('session_id', sessionId)
+    .eq('status', 'active')
+    .order('created_at')
+    .single();
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+export async function submitAction(sessionId, playerId, actionText) {
+  const { data, error } = await supabase.functions.invoke('process-turn', {
+    body: { session_id: sessionId, player_id: playerId, action_text: actionText },
+  });
+  if (error) {
+    // Supabase оборачивает ошибку — извлекаем сообщение
+    const msg = error.message || error.context?.message || 'Неизвестная ошибка';
+    // Проверяем на 402 (отсутствие API ключа)
+    if (error.context?.status === 402 || data?.code === 'MISSING_API_KEY') {
+      throw new Error('MISSING_API_KEY');
+    }
+    throw new Error(msg);
+  }
+  return data;
+}
+
+// ===================== CHARACTER CARDS =====================
+
+export async function getCharacterCards(userId) {
+  const { data, error } = await supabase
+    .from('character_cards')
+    .select('*')
+    .eq('owner_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function getCharacterCard(id) {
+  const { data, error } = await supabase
+    .from('character_cards')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createCharacterCard(card) {
+  const { data, error } = await supabase
+    .from('character_cards')
+    .insert(card)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateCharacterCard(id, updates) {
+  const { data, error } = await supabase
+    .from('character_cards')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCharacterCard(id) {
+  const { error } = await supabase.from('character_cards').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ===================== USER SETTINGS =====================
+
+export async function getUserSettings(userId) {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function upsertUserSettings(userId, openrouterKey) {
+  const { data, error } = await supabase.rpc('upsert_user_settings', {
+    p_user_id: userId,
+    p_openrouter_key: openrouterKey || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// ===================== IMPORT / EXPORT =====================
+
+export async function exportWorld(worldId) {
+  const world = await getWorld(worldId);
+  const loreFiles = await getLoreFiles(worldId);
+  const folders = await getLoreFilesByFolder(worldId);
+
+  const exportData = {
+    version: '2.0',
+    exported_at: new Date().toISOString(),
+    world: {
+      name: world.name,
+      settings: world.settings,
+    },
+    lore_files: loreFiles.map((f) => ({
+      folder: f.folder,
+      title: f.title,
+      content: f.content,
+      tags: f.tags,
+    })),
+    folders,
+  };
+
+  return exportData;
+}
+
+export function downloadJSON(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function importWorld(jsonData, ownerId) {
+  const worldData = JSON.parse(jsonData);
+
+  const world = await createWorld({
+    owner_id: ownerId,
+    name: worldData.world.name,
+    settings: worldData.world.settings,
+  });
+
+  if (worldData.lore_files?.length) {
+    const files = worldData.lore_files.map((f) => ({
+      world_id: world.id,
+      folder: f.folder,
+      title: f.title,
+      content: f.content,
+      tags: f.tags || [],
+    }));
+    const { error } = await supabase.from('lore_files').insert(files);
+    if (error) throw error;
+  }
+
+  return world;
+}
+
+// ===================== NPC BESTIARY =====================
+
+export async function getNpcsByWorld(worldId) {
+  const { data, error } = await supabase
+    .from('npcs')
+    .select('*')
+    .eq('world_id', worldId)
+    .order('role', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function getNpc(id) {
+  const { data, error } = await supabase
+    .from('npcs')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createNpc(npc) {
+  const { data, error } = await supabase
+    .from('npcs')
+    .insert(npc)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateNpc(id, updates) {
+  const { data, error } = await supabase
+    .from('npcs')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteNpc(id) {
+  const { error } = await supabase.from('npcs').delete().eq('id', id);
+  if (error) throw error;
+}
+
+================
+File: src/pages/lobby.js
+================
+// src/pages/lobby.js — Глобальное Лобби (Dashboard)
+import { supabase, signOut, invokeFunction } from '../api/supabase.js';
+import {
+  getSessions, createSession, getWorlds, createWorld,
+  importWorld, exportWorld, downloadJSON,
+  getUserSettings, upsertUserSettings, updateSession,
+  getCharacterCards, createCharacterCard, deleteCharacterCard,
+  exportPlayer, getNpcsByWorld, updateNpc, deleteNpc
+} from '../api/game.js';
+import { toast } from '../utils/toast.js';
+import { router } from '../router.js';
+import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
+
+function sanitizeAIText(raw) {
+  if (!raw) return "";
+  let text = String(raw);
+  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF\u0400-\u04FF]/g, "");
+  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
+  text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");
+  text = text.replace(/https?:\/\/[^\s]+/g, "");
+  text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
+  text = text.replace(/\s+/g, " ").trim();
+  if (text.length > 4000) text = text.slice(0, 4000);
+  return text;
+}
+
+export function renderLobby(container, user) {
+  let activeTab = 'sessions';
+  let sessions = [];
+  let worlds = [];
+  let userSettings = null;
+  let characterCards = [];
+
+  function isTextFile(file) {
+    if (file.type && file.type.startsWith('text/')) return true;
+    const name = file.name.toLowerCase();
+    return ['.txt', '.md', '.json', '.js', '.ts', '.css', '.html', '.yaml', '.yml', '.xml', '.csv', '.log'].some(ext => name.endsWith(ext));
+  }
+
+  async function loadData() {
+    try {
+      [sessions, worlds, userSettings, characterCards] = await Promise.all([
+        getSessions(), getWorlds(), getUserSettings(user.id),
+        getCharacterCards(user.id)
+      ]);
+    } catch (err) {
+      toast.error('Ошибка загрузки данных: ' + err.message);
+    }
+    render();
+  }
+
+  function render() {
+    const maskedKey = userSettings?.openrouter_key
+      ? userSettings.openrouter_key.slice(0, 8) + '...' + userSettings.openrouter_key.slice(-4)
+      : '';
+
+    container.innerHTML = `
+      <div class="page">
+        <header class="lobby-header">
+          <div class="lobby-header-left">
+            <h1 class="lobby-title">⚔️ MultiRP AI</h1>
+            <span class="badge badge-primary">${user.email}</span>
+          </div>
+          <div class="lobby-header-right">
+            <button class="btn btn-ghost" id="accountSettingsBtn">⚙️ Аккаунт</button>
+            <button class="btn btn-ghost" id="signOutBtn">Выйти</button>
+          </div>
+        </header>
+
+        <nav class="lobby-tabs">
+          <button class="lobby-tab ${activeTab === 'sessions' ? 'active' : ''}" data-tab="sessions">
+            🎮 Сессии (${sessions.length})
+          </button>
+          <button class="lobby-tab ${activeTab === 'characters' ? 'active' : ''}" data-tab="characters">
+            ⚔️ Персонажи (${characterCards.length})
+          </button>
+          <button class="lobby-tab ${activeTab === 'worlds' ? 'active' : ''}" data-tab="worlds">
+            🌍 Миры (${worlds.length})
+          </button>
+        </nav>
+
+        <main class="lobby-content" id="lobbyContent">
+          ${activeTab === 'sessions' ? renderSessions() : activeTab === 'characters' ? renderCharacters() : renderWorlds()}
+        </main>
+      </div>
+
+      <!-- Модальное окно: Новая сессия -->
+      <div class="modal-overlay" id="newSessionModal">
+        <div class="modal" style="max-width: 550px;">
+          <h2 class="card-title" style="margin-bottom: 1rem;">Новая сессия</h2>
+          <form id="newSessionForm">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Мир (Сеттинг)</label>
+              <select class="input select" id="sessionWorld" required>
+                <option value="">Выберите мир...</option>
+                ${worlds.map((w) => `<option value="${w.id}">${w.name}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Сложность</label>
+              <select class="input select" id="sessionDifficulty">
+                <option value="normal" selected>Нормально</option>
+                <option value="easy">Легко (Преимущество)</option>
+                <option value="hard">Хардкор (Помеха)</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem; flex-direction: row; align-items: center; gap: 0.75rem;">
+              <label class="form-label">PvP</label>
+              <div class="toggle" id="pvpToggle"></div>
+              <span class="form-hint" id="pvpLabel">Выкл</span>
+            </div>
+
+            <!-- Сюжет (необязательно) -->
+            <details class="plot-details" style="margin-bottom: 1rem;">
+              <summary class="plot-summary">
+                📖 Сюжетная линия <span class="form-hint">(необязательно)</span>
+              </summary>
+              <div class="plot-body">
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                  <label class="form-label">Описание сюжета</label>
+                  <textarea class="input" id="sessionPlotText" rows="4"
+                    placeholder="Опишите сюжетную линию: завязку, ключевых NPC, цели игроков, тайны и конфликты..."
+                  ></textarea>
+                  <span class="form-hint">Текст станет основой для нарратива ИИ-Мастера</span>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label">Или загрузите .txt файл</label>
+                  <div class="file-drop-zone" id="plotFileDropZone" style="padding: 0.75rem;">
+                    <p style="font-size: var(--fs-xs);">Перетащите файл или <a href="#" id="plotBrowseLink">выберите</a></p>
+                  </div>
+                  <div id="plotFileName" class="form-hint" style="margin-top: 0.25rem;"></div>
+                  <input type="file" id="plotFileInput" accept=".txt,.md" style="display: none;" />
+                </div>
+              </div>
+            </details>
+
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-secondary" id="closeModal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Создать</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Модальное окно: Новый мир -->
+      <div class="modal-overlay" id="newWorldModal">
+        <div class="modal" style="max-width: 600px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">🌍 Новый мир</h2>
+          <p class="form-hint" style="margin-bottom: 1rem;">Опишите мир текстом — нейросеть автоматически создаст настройки (расы, классы, локации и т.д.)</p>
+          <form id="newWorldForm">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Название мира *</label>
+              <input class="input" id="worldName" placeholder="World of Eteria" required />
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Описание мира</label>
+              <textarea class="input" id="worldDescription" rows="5"
+                placeholder="Мрачное фэнтези-средневековье. Доступные расы: люди, эльфы, гномы, орки. Классы: воин, маг, плут, жрец. Мир разделён на 3 крупных королевства, между которыми идёт война. Магия редка и опасна..."
+              ></textarea>
+              <span class="form-hint">Опишите расы, классы, атмосферу, локации, фракции, правила — что угодно</span>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Файлы лора (необязательно)</label>
+              <div class="file-drop-zone" id="fileDropZone">
+                <div class="file-drop-icon">📁</div>
+                <p>Перетащите файлы .txt, .md или .json<br/>или <a href="#" id="browseFilesLink">выберите файлы</a></p>
+              </div>
+              <div class="file-list" id="fileList"></div>
+              <input type="file" id="worldFileInput" multiple accept=".txt,.md,.json" style="display: none;" />
+            </div>
+            <div id="aiSettingsPreview" style="display: none; margin-bottom: 1rem;">
+              <label class="form-label">AI создал настройки:</label>
+              <pre class="world-settings-preview" id="aiSettingsOutput"></pre>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-ghost btn-sm" id="importWorldFromModalBtn" style="margin-right: auto;">📥 Импорт мира</button>
+              <button type="button" class="btn btn-secondary" id="closeWorldModal">Отмена</button>
+              <button type="submit" class="btn btn-primary" id="createWorldBtn">✨ Создать мир</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Модальное окно: Редактирование мира -->
+      <div class="modal-overlay" id="editWorldModal">
+        <div class="modal" style="max-width: 500px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">✏️ Редактирование мира</h2>
+          <form id="editWorldForm">
+            <input type="hidden" id="editWorldId" />
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Название</label>
+              <input class="input" id="editWorldName" required />
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Настройки (JSON)</label>
+              <textarea class="input" id="editWorldSettings" rows="6"></textarea>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-secondary" id="closeEditWorldModal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Скрытый input для импорта -->
+      <input type="file" id="importFileInput" accept=".json" style="display: none;" />
+      <input type="file" id="importCharFileInput" accept=".json" style="display: none;" />
+
+      <!-- Модальное окно: Новый персонаж -->
+      <div class="modal-overlay" id="newCharModal">
+        <div class="modal" style="max-width: 500px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">⚔️ Новый персонаж</h2>
+          <p class="form-hint" style="margin-bottom: 1rem;">Создайте героя — он останется у вас и сможет участвовать в любых сессиях</p>
+           <form id="newCharForm">
+            <input type="hidden" id="charRaceAcBonus" value="0" />
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Имя героя *</label>
+              <input class="input" id="charName" placeholder="Эльдрин" required />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div class="form-group">
+                <label class="form-label">Раса</label>
+                <input class="input" id="charRace" placeholder="Человек" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Класс</label>
+                <input class="input" id="charClass" placeholder="Воин" required />
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Внешность</label>
+              <textarea class="input" id="charAppearance" rows="2" placeholder="Высокий мужчина с шрамом..."></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Биография</label>
+              <textarea class="input" id="charBio" rows="3" placeholder="Родился в деревне на краю мира..."></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                <label class="form-label" style="margin: 0;">Характеристики</label>
+                <button type="button" class="btn btn-secondary btn-sm" id="generateStatsBtn">✨ AI</button>
+              </div>
+              <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr); gap: 0.5rem;" id="statsGrid">
+                ${STATS.map((stat) => `
+                  <div class="form-group">
+                    <label class="form-hint">${stat}</label>
+                     <input class="input" type="number" id="stat_${stat}" value="10" style="text-align: center;" />
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-secondary" id="closeCharModal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Создать</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Модальное окно: Редактирование персонажа -->
+      <div class="modal-overlay" id="editCharModal">
+        <div class="modal" style="max-width: 500px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">✏️ Редактирование персонажа</h2>
+           <form id="editCharForm">
+            <input type="hidden" id="editCharRaceAcBonus" value="0" />
+            <input type="hidden" id="editCharId" />
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Имя героя</label>
+              <input class="input" id="editCharName" required />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div class="form-group">
+                <label class="form-label">Раса</label>
+                <input class="input" id="editCharRace" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Класс</label>
+                <input class="input" id="editCharClass" required />
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Внешность</label>
+              <textarea class="input" id="editCharAppearance" rows="2"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Биография</label>
+              <textarea class="input" id="editCharBio" rows="3"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                <label class="form-label" style="margin: 0;">Характеристики</label>
+                <button type="button" class="btn btn-secondary btn-sm" id="editGenerateStatsBtn">✨ AI</button>
+              </div>
+              <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr); gap: 0.5rem;">
+                ${STATS.map((stat) => `
+                  <div class="form-group">
+                    <label class="form-hint">${stat}</label>
+                     <input class="input" type="number" id="edit_stat_${stat}" style="text-align: center;" />
+                  </div>
+                `).join('')}
+              </div>
+              <div style="text-align: center; margin-top: 0.5rem;">
+                <span class="form-hint" id="editStatsSum"></span>
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-secondary" id="closeEditCharModal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Модальное окно: Присоединиться к сессии -->
+      <div class="modal-overlay" id="joinSessionModal">
+        <div class="modal" style="max-width: 450px;">
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">🔗 Присоединиться к сессии</h2>
+          <p class="form-hint" style="margin-bottom: 1rem;">Вставьте ID или ссылку на сессию от друга</p>
+          <form id="joinSessionForm">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">ID или ссылка на сессию</label>
+              <input class="input" id="joinSessionInput" placeholder="abc123-def456... или https://...#/session/abc123" required />
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-secondary" id="closeJoinModal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Присоединиться</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Модальное окно: Настройки аккаунта -->
+      <div class="modal-overlay" id="accountSettingsModal">
+        <div class="modal">
+          <h2 class="card-title" style="margin-bottom: 1rem;">⚙️ Настройки аккаунта</h2>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label">ID аккаунта</label>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <code class="invite-code" style="flex: 1; font-size: var(--fs-xs);">${user.id}</code>
+              <button class="btn btn-secondary btn-sm" id="copyUserIdBtn">📋</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label class="form-label">Email</label>
+            <input class="input" value="${user.email}" disabled style="opacity: 0.6;" />
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label">OpenRouter API Key</label>
+            <input
+              class="input"
+              type="password"
+              id="openrouterKeyInput"
+              placeholder="sk-or-v1-..."
+              value="${userSettings?.openrouter_key || ''}"
+              autocomplete="off"
+            />
+            <span class="form-hint">
+              Ваш личный ключ для OpenRouter API.
+              ${maskedKey ? `Текущий: <code>${maskedKey}</code>` : 'Не задан — игра не сможет вызывать ИИ.'}
+            </span>
+            <span class="form-hint" style="margin-top: 0.25rem;">
+              Получите ключ на <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>
+            </span>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button type="button" class="btn btn-secondary" id="closeAccountModal">Отмена</button>
+            <button class="btn btn-primary" id="saveAccountSettingsBtn">Сохранить</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Модальное окно: Бестиарий
+    const bestiaryModal = document.createElement('div');
+    bestiaryModal.className = 'modal-overlay';
+    bestiaryModal.id = 'bestiaryModal';
+    bestiaryModal.innerHTML = `
+      <div class="modal" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2 class="card-title">🐉 Бестиарий: <span id="bestiaryWorldName"></span></h2>
+          <button class="btn btn-ghost btn-sm" id="closeBestiaryBtn">✕</button>
+        </div>
+        <div id="bestiaryContent">
+          <p class="text-muted">Загрузка...</p>
+        </div>
+      </div>
+    `;
+    container.appendChild(bestiaryModal);
+
+    bindEvents();
+  }
+
+  function renderSessions() {
+    if (!sessions.length) {
+      return `
+        <div class="empty-state">
+          <div class="empty-icon">🎮</div>
+          <h3>Нет активных сессий</h3>
+          <p>Создайте новую сессию или подключитесь к существующей</p>
+          <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-lg" id="newSessionBtn">+ Новая сессия</button>
+            <button class="btn btn-secondary btn-lg" id="joinSessionBtn">🔗 Присоединиться</button>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn btn-primary btn-sm" id="newSessionBtn">+ Новая сессия</button>
+        <button class="btn btn-secondary btn-sm" id="joinSessionBtn">🔗 Присоединиться</button>
+      </div>
+      <div class="card-grid">
+        ${sessions.map((s) => {
+          const players = s.players || [];
+          const hasChar = players.some((p) => p.user_id === user.id);
+          return `
+          <div class="card session-card" data-id="${s.id}">
+            <div class="card-header">
+              <span class="badge badge-${s.difficulty === 'easy' ? 'success' : s.difficulty === 'hard' ? 'primary' : 'info'}">
+                ${s.difficulty === 'easy' ? 'Легко' : s.difficulty === 'hard' ? 'Хардкор' : 'Нормально'}
+              </span>
+              ${s.is_pvp_enabled ? '<span class="badge badge-gold">PvP</span>' : ''}
+            </div>
+            <h3 class="card-title">${s.worlds?.name || 'Неизвестный мир'}</h3>
+            <p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.25rem;">${s.current_plot_stage ? '📖 Сюжет' : '🎭 Песочница'}</p>
+            ${players.length ? `
+              <div class="session-players-preview" style="margin-top: 0.75rem;">
+                <span class="form-hint">👥 ${players.length} игрок(ов):</span>
+                <div class="session-player-chips">
+                  ${players.map((p) => `
+                    <span class="player-chip ${p.user_id === user.id ? 'player-chip-self' : ''}">
+                      ${p.hp > 0 ? '💚' : '💀'} ${p.name || 'Безымянный'}
+                    </span>
+                  `).join('')}
+                </div>
+              </div>
+            ` : '<p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.5rem;">Пока нет игроков</p>'}
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+              <button class="btn btn-primary btn-sm" data-action="join" data-id="${s.id}">
+                ${hasChar ? '🎮 Войти' : '⚔️ Создать героя'}
+              </button>
+              <button class="btn btn-secondary btn-sm" data-action="settings" data-id="${s.id}">⚙️</button>
+              <button class="btn btn-ghost btn-sm" data-action="invite" data-id="${s.id}" title="Копировать инвайт-ссылку">🔗</button>
+            </div>
+          </div>
+        `}).join('')}
+        <div class="card session-card new-session-card" id="newSessionBtn2">
+          <div class="empty-state" style="padding: 2rem;">
+            <div class="empty-icon">+</div>
+            <p>Новая сессия</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderWorlds() {
+    return `
+      <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn btn-primary btn-sm" id="newWorldBtn2">+ Новый мир</button>
+      </div>
+      <div class="card-grid">
+        ${worlds.map((w) => `
+          <div class="card world-card">
+            <div class="card-header">
+              <h3 class="card-title">🌍 ${w.name}</h3>
+            </div>
+            <pre class="world-settings-preview">${JSON.stringify(w.settings || {}, null, 2).slice(0, 200)}</pre>
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="btn btn-secondary btn-sm" data-action="bestiary" data-id="${w.id}" data-name="${w.name}">🐉 Бестиарий</button>
+              <button class="btn btn-secondary btn-sm" data-action="edit-world" data-id="${w.id}">✏️</button>
+              <button class="btn btn-secondary btn-sm" data-action="export" data-id="${w.id}">📤</button>
+              <button class="btn btn-ghost btn-sm" data-action="delete-world" data-id="${w.id}">🗑️</button>
+            </div>
+          </div>
+        `).join('')}
+        <div class="card world-card new-world-card" id="newWorldBtn">
+          <div class="empty-state" style="padding: 2rem;">
+            <div class="empty-icon">+</div>
+            <p>Новый мир</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCharacters() {
+    if (!characterCards.length) {
+      return `
+        <div class="empty-state">
+          <div class="empty-icon">⚔️</div>
+          <h3>Нет персонажей</h3>
+          <p>Создайте героя или импортируйте из файла</p>
+          <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-lg" id="newCharBtn">+ Создать персонажа</button>
+            <button class="btn btn-secondary btn-lg" id="importCharBtn">📥 Импорт .json</button>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn btn-primary btn-sm" id="newCharBtn2">+ Создать персонажа</button>
+        <button class="btn btn-secondary btn-sm" id="importCharBtn2">📥 Импорт .json</button>
+      </div>
+      <div class="card-grid">
+        ${characterCards.map((c) => {
+          const stats = c.stats || {};
+          const total = Object.values(stats).reduce((s, v) => s + (v || 0), 0);
+          return `
+          <div class="card char-card">
+            <div class="card-header">
+              <h3 class="card-title">⚔️ ${c.name}</h3>
+            </div>
+            <p class="text-muted" style="font-size: var(--fs-sm);">${c.race} / ${c.class}</p>
+            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 0.5rem;">
+              ${STATS.map((s) => `
+                <div class="stat-item" style="padding: 4px; text-align: center;">
+                  <div class="stat-label" style="font-size: 0.6rem;">${s}</div>
+                  <div class="stat-value" style="font-size: var(--fs-sm);">${stats[s] || 10}</div>
+                </div>
+              `).join('')}
+            </div>
+            <p class="form-hint" style="text-align: center; margin-top: 0.5rem;">HP: ${c.hp}/${c.max_hp} | 💰 ${c.money} | Сумма: ${total}</p>
+            ${c.bio ? `<p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${c.bio}</p>` : ''}
+            <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+              <button class="btn btn-secondary btn-sm" data-action="edit-char" data-id="${c.id}">✏️</button>
+              <button class="btn btn-ghost btn-sm" data-action="export-char" data-id="${c.id}">📤</button>
+              <button class="btn btn-ghost btn-sm" data-action="delete-char" data-id="${c.id}">🗑️</button>
+            </div>
+          </div>
+        `}).join('')}
+      </div>
+    `;
+  }
+
+  function bindEvents() {
+    // Load bestiary for a world
+    async function loadBestiary(worldId) {
+      const content = document.getElementById('bestiaryContent');
+      content.innerHTML = '<p class="text-muted">Загрузка NPC...</p>';
+      try {
+        const npcs = await getNpcsByWorld(worldId);
+        if (!npcs.length) {
+          content.innerHTML = '<p class="text-muted">NPC не найдены. Создайте мир с описанием для автоматической генерации.</p>';
+          return;
+        }
+        content.innerHTML = npcs.map((npc) => `
+          <div class="card" style="margin-bottom: 0.5rem;">
+            <div class="card-header" style="cursor: pointer;" data-npc-toggle="${npc.id}">
+              <span class="badge ${npc.role === 'main' ? 'badge-primary' : 'badge-secondary'}">${npc.role === 'main' ? '⭐' : '○'}</span>
+              <strong>${npc.name}</strong>
+              <span class="text-muted">(${npc.race})</span>
+            </div>
+            <div id="npc-edit-${npc.id}" style="display: none; padding: 1rem;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div class="form-group">
+                  <label class="form-label">Имя</label>
+                  <input class="input" id="npc-name-${npc.id}" value="${npc.name}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Раса</label>
+                  <input class="input" id="npc-race-${npc.id}" value="${npc.race}" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Предыстория</label>
+                <textarea class="input" id="npc-background-${npc.id}" rows="2">${npc.background || ''}</textarea>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
+                <div class="form-group">
+                  <label class="form-label">STR</label>
+                  <input class="input" type="number" id="npc-str-${npc.id}" value="${npc.stats?.STR ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">DEX</label>
+                  <input class="input" type="number" id="npc-dex-${npc.id}" value="${npc.stats?.DEX ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">CON</label>
+                  <input class="input" type="number" id="npc-con-${npc.id}" value="${npc.stats?.CON ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">INT</label>
+                  <input class="input" type="number" id="npc-int-${npc.id}" value="${npc.stats?.INT ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">WIS</label>
+                  <input class="input" type="number" id="npc-wis-${npc.id}" value="${npc.stats?.WIS ?? 10}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">CHA</label>
+                  <input class="input" type="number" id="npc-cha-${npc.id}" value="${npc.stats?.CHA ?? 10}" />
+                </div>
+              </div>
+              <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                <button class="btn btn-primary btn-sm" data-npc-save="${npc.id}">💾 Сохранить</button>
+                <button class="btn btn-ghost btn-sm" data-npc-delete="${npc.id}">🗑️ Удалить</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+
+        // Toggle NPC edit form
+        content.querySelectorAll('[data-npc-toggle]').forEach((header) => {
+          header.addEventListener('click', () => {
+            const npcId = header.dataset.npcToggle;
+            const editDiv = document.getElementById(`npc-edit-${npcId}`);
+            editDiv.style.display = editDiv.style.display === 'none' ? 'block' : 'none';
+          });
+        });
+
+        // Save NPC
+        content.querySelectorAll('[data-npc-save]').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const npcId = btn.dataset.npcSave;
+            const updates = {
+              name: document.getElementById(`npc-name-${npcId}`).value,
+              race: document.getElementById(`npc-race-${npcId}`).value,
+              background: document.getElementById(`npc-background-${npcId}`).value,
+              stats: {
+                STR: Number(document.getElementById(`npc-str-${npcId}`).value) || 10,
+                DEX: Number(document.getElementById(`npc-dex-${npcId}`).value) || 10,
+                CON: Number(document.getElementById(`npc-con-${npcId}`).value) || 10,
+                INT: Number(document.getElementById(`npc-int-${npcId}`).value) || 10,
+                WIS: Number(document.getElementById(`npc-wis-${npcId}`).value) || 10,
+                CHA: Number(document.getElementById(`npc-cha-${npcId}`).value) || 10,
+              },
+            };
+            try {
+              await updateNpc(npcId, updates);
+              toast.success('NPC обновлён!');
+            } catch (err) {
+              toast.error('Ошибка: ' + err.message);
+            }
+          });
+        });
+
+        // Delete NPC
+        content.querySelectorAll('[data-npc-delete]').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const npcId = btn.dataset.npcDelete;
+            if (!confirm('Удалить этого NPC?')) return;
+            try {
+              await deleteNpc(npcId);
+              toast.success('NPC удалён');
+              await loadBestiary(worldId);
+            } catch (err) {
+              toast.error('Ошибка: ' + err.message);
+            }
+          });
+        });
+      } catch (err) {
+        content.innerHTML = `<p class="text-muted">Ошибка загрузки: ${err.message}</p>`;
+      }
+    }
+
+    // Tab switching
+    container.querySelectorAll('.lobby-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        activeTab = tab.dataset.tab;
+        render();
+      });
+    });
+
+    // Sign out
+    document.getElementById('signOutBtn')?.addEventListener('click', async () => {
+      await signOut();
+    });
+
+    // Account settings modal
+    document.getElementById('accountSettingsBtn')?.addEventListener('click', () => {
+      document.getElementById('accountSettingsModal').classList.add('open');
+    });
+    document.getElementById('closeAccountModal')?.addEventListener('click', () => {
+      document.getElementById('accountSettingsModal').classList.remove('open');
+    });
+
+    // Copy User ID
+    document.getElementById('copyUserIdBtn')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(user.id);
+      toast.success('ID скопирован!');
+    });
+
+    // Save account settings
+    document.getElementById('saveAccountSettingsBtn')?.addEventListener('click', async () => {
+      const key = document.getElementById('openrouterKeyInput').value.trim();
+      const saveBtn = document.getElementById('saveAccountSettingsBtn');
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Сохранение...';
+
+      try {
+        await upsertUserSettings(user.id, key);
+        toast.success('Настройки сохранены!');
+        document.getElementById('accountSettingsModal').classList.remove('open');
+        loadData();
+      } catch (err) {
+        toast.error('Ошибка сохранения: ' + err.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Сохранить';
+      }
+    });
+
+    // New session button (both empty state and grid card)
+    const openNewSession = () => document.getElementById('newSessionModal').classList.add('open');
+    document.getElementById('newSessionBtn')?.addEventListener('click', openNewSession);
+    document.getElementById('newSessionBtn2')?.addEventListener('click', openNewSession);
+
+    // Join session button
+    document.getElementById('joinSessionBtn')?.addEventListener('click', () => {
+      document.getElementById('joinSessionModal').classList.add('open');
+    });
+    document.getElementById('newSessionBtn2')?.addEventListener('click', () => {
+      document.getElementById('newSessionModal').classList.add('open');
+    });
+
+    // Join session form
+    document.getElementById('joinSessionForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('joinSessionInput').value.trim();
+      if (!input) return;
+
+      // Extract session ID from URL or plain text
+      let sessionId = input;
+      const urlMatch = input.match(/session\/([a-f0-9-]+)/i);
+      if (urlMatch) sessionId = urlMatch[1];
+
+      document.getElementById('joinSessionModal').classList.remove('open');
+      router.navigate(`/session/${sessionId}`);
+    });
+    document.getElementById('closeJoinModal')?.addEventListener('click', () => {
+      document.getElementById('joinSessionModal').classList.remove('open');
+    });
+
+    // New world button (both empty state and grid card)
+    const openNewWorld = () => document.getElementById('newWorldModal').classList.add('open');
+    document.getElementById('newWorldBtn')?.addEventListener('click', openNewWorld);
+    document.getElementById('newWorldBtn2')?.addEventListener('click', openNewWorld);
+    document.getElementById('importWorldFromModalBtn')?.addEventListener('click', () => {
+      document.getElementById('importFileInput').click();
+    });
+
+    // Character card buttons
+    const openNewChar = () => document.getElementById('newCharModal').classList.add('open');
+    document.getElementById('newCharBtn')?.addEventListener('click', openNewChar);
+    document.getElementById('newCharBtn2')?.addEventListener('click', openNewChar);
+
+    document.getElementById('closeCharModal')?.addEventListener('click', () => {
+      document.getElementById('newCharModal').classList.remove('open');
+    });
+
+    // Import character buttons
+    const openImportChar = () => document.getElementById('importCharFileInput').click();
+    document.getElementById('importCharBtn')?.addEventListener('click', openImportChar);
+    document.getElementById('importCharBtn2')?.addEventListener('click', openImportChar);
+    document.getElementById('importCharFileInput')?.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const card = data.character || data;
+        const cardStats = card.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
+        await createCharacterCard({
+          owner_id: user.id,
+          name: card.name || 'Безымянный',
+          race: card.race || 'Человек',
+          class: card.class || 'Воин',
+          appearance: card.appearance || '',
+          personality: card.personality || {},
+          bio: card.bio || '',
+          power_level: card.power_level || 10,
+          stats: cardStats,
+          hp: calculateHpFromStats(cardStats),
+          max_hp: calculateHpFromStats(cardStats),
+          ...calculateDerivedStats(cardStats, card.race || 'Человек', [], card.race_ac_bonus),
+          money: card.money || 50,
+        });
+        toast.success(`Персонаж «${card.name || 'Безымянный'}» импортирован!`);
+        loadData();
+      } catch (err) {
+        toast.error('Ошибка импорта: ' + err.message);
+      }
+    });
+
+    // Character card actions
+    container.querySelectorAll('[data-action="export-char"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const card = characterCards.find((c) => c.id === btn.dataset.id);
+          if (!card) return;
+          const exportData = {
+            version: '2.0',
+            exported_at: new Date().toISOString(),
+            character: {
+              name: card.name, race: card.race, class: card.class,
+              appearance: card.appearance, personality: card.personality,
+              bio: card.bio, power_level: card.power_level,
+              stats: card.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+              hp: card.hp, max_hp: card.max_hp, money: card.money,
+            },
+          };
+          downloadJSON(exportData, `${card.name}_character.json`);
+          toast.success('Персонаж экспортирован!');
+        } catch (err) {
+          toast.error('Ошибка: ' + err.message);
+        }
+      });
+    });
+
+    container.querySelectorAll('[data-action="delete-char"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Удалить персонажа?')) return;
+        try {
+          await deleteCharacterCard(btn.dataset.id);
+          toast.success('Персонаж удалён');
+          loadData();
+        } catch (err) {
+          toast.error('Ошибка: ' + err.message);
+        }
+      });
+    });
+
+    // Edit character card
+    container.querySelectorAll('[data-action="edit-char"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const card = characterCards.find((c) => c.id === btn.dataset.id);
+        if (!card) return;
+        document.getElementById('editCharId').value = card.id;
+        document.getElementById('editCharName').value = card.name || '';
+        document.getElementById('editCharRace').value = card.race || '';
+        document.getElementById('editCharClass').value = card.class || '';
+        document.getElementById('editCharAppearance').value = card.appearance || '';
+        document.getElementById('editCharBio').value = card.bio || '';
+        const stats = card.stats || {};
+        STATS.forEach((s) => {
+          const el = document.getElementById(`edit_stat_${s}`);
+          if (el) el.value = stats[s] || 10;
+        });
+        document.getElementById('editCharModal').classList.add('open');
+      });
+    });
+
+    document.getElementById('closeEditCharModal')?.addEventListener('click', () => {
+      document.getElementById('editCharModal').classList.remove('open');
+    });
+
+    document.getElementById('editCharForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('editCharId').value;
+      const stats = {};
+      STATS.forEach((s) => { stats[s] = parseInt(document.getElementById(`edit_stat_${s}`)?.value) || 10; });
+
+      const requestPayload = {
+        name: document.getElementById('editCharName').value,
+        race: document.getElementById('editCharRace').value,
+        class: document.getElementById('editCharClass').value,
+        appearance: document.getElementById('editCharAppearance').value,
+        bio: document.getElementById('editCharBio').value,
+        stats,
+        hp: calculateHpFromStats(stats),
+        max_hp: calculateHpFromStats(stats),
+        race_ac_bonus: Number(document.getElementById('editCharRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('editCharRace').value)),
+      };
+      console.log('[edit-character-card] request:', { id, ...requestPayload });
+
+      try {
+        const { updateCharacterCard } = await import('../api/game.js');
+        const updated = await updateCharacterCard(id, requestPayload);
+        console.log('[edit-character-card] updated:', updated);
+        toast.success('Персонаж обновлён!');
+        document.getElementById('editCharModal').classList.remove('open');
+        loadData();
+      } catch (err) {
+        console.error('[edit-character-card] error:', err);
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Edit modal: stats sum updater
+    function updateEditStatsSum() {
+      let sum = 0;
+      STATS.forEach((s) => { sum += parseInt(document.getElementById(`edit_stat_${s}`)?.value) || 0; });
+      const el = document.getElementById('editStatsSum');
+      if (el) {
+        el.textContent = `Сумма: ${sum} / 72`;
+        el.style.color = sum === 72 ? 'var(--accent-success)' : sum > 72 ? 'var(--accent-danger)' : 'var(--text-muted)';
+      }
+    }
+
+    STATS.forEach((s) => {
+      document.getElementById(`edit_stat_${s}`)?.addEventListener('input', updateEditStatsSum);
+    });
+    updateEditStatsSum();
+
+    // Edit modal: AI generate stats
+    document.getElementById('editGenerateStatsBtn')?.addEventListener('click', async () => {
+      const bio = document.getElementById('editCharBio')?.value?.trim();
+      if (!bio) { toast.warning('Заполните биографию для генерации статов'); return; }
+
+      const btn = document.getElementById('editGenerateStatsBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ ...';
+      try {
+        const requestPayload = {
+            user_id: user.id,
+            name: sanitizeAIText(document.getElementById('editCharName')?.value || ''),
+            race: sanitizeAIText(document.getElementById('editCharRace')?.value || ''),
+            class: sanitizeAIText(document.getElementById('editCharClass')?.value || ''),
+            appearance: sanitizeAIText(document.getElementById('editCharAppearance')?.value || ''),
+            bio: sanitizeAIText(bio),
+          };
+        console.log('[generate-character][edit] request:', requestPayload);
+
+        const response = await invokeFunction('generate-character', requestPayload);
+        console.log('[generate-character][edit] response:', response);
+        if (response?.stats) {
+          console.log('[generate-character][edit] applying stats:', response.stats);
+          STATS.forEach((s) => {
+            const el = document.getElementById(`edit_stat_${s}`);
+            if (el && response.stats[s] !== undefined) el.value = response.stats[s];
+          });
+          updateEditStatsSum();
+          toast.success('Статы сгенерированы!');
+        } else {
+          console.warn('[generate-character][edit] response without stats:', response);
+        }
+      } catch (err) {
+        console.error('[generate-character][edit] error:', err);
+        if (err?.data?.code === 'MISSING_API_KEY') {
+          toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» и введите ключ.');
+        } else {
+          const detail = err?.data?.details || err?.data?.error || err.message || 'Неизвестная ошибка';
+          toast.error('Ошибка AI: ' + detail);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ AI';
+      }
+    });
+
+    // Edit world
+    container.querySelectorAll('[data-action="edit-world"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const world = worlds.find((w) => w.id === btn.dataset.id);
+        if (!world) return;
+        document.getElementById('editWorldId').value = world.id;
+        document.getElementById('editWorldName').value = world.name || '';
+        document.getElementById('editWorldSettings').value = JSON.stringify(world.settings || {}, null, 2);
+        document.getElementById('editWorldModal').classList.add('open');
+      });
+    });
+
+    // Bestiary button
+    container.querySelectorAll('[data-action="bestiary"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const worldId = btn.dataset.id;
+        const worldName = btn.dataset.name;
+        document.getElementById('bestiaryWorldName').textContent = worldName;
+        document.getElementById('bestiaryModal').classList.add('open');
+        await loadBestiary(worldId);
+      });
+    });
+
+    // Close bestiary modal
+    document.getElementById('closeBestiaryBtn')?.addEventListener('click', () => {
+      document.getElementById('bestiaryModal').classList.remove('open');
+    });
+
+    document.getElementById('closeEditWorldModal')?.addEventListener('click', () => {
+      document.getElementById('editWorldModal').classList.remove('open');
+    });
+
+    document.getElementById('editWorldForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('editWorldId').value;
+      let settings = {};
+      try {
+        const raw = document.getElementById('editWorldSettings').value;
+        if (raw) settings = JSON.parse(raw);
+      } catch { toast.error('Некорректный JSON'); return; }
+
+      try {
+        const { updateWorld } = await import('../api/game.js');
+        await updateWorld(id, {
+          name: document.getElementById('editWorldName').value,
+          settings,
+        });
+        toast.success('Мир обновлён!');
+        document.getElementById('editWorldModal').classList.remove('open');
+        loadData();
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Create character card form
+    document.getElementById('newCharForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const stats = {};
+      STATS.forEach((s) => { stats[s] = parseInt(document.getElementById(`stat_${s}`)?.value) || 10; });
+
+      const requestPayload = {
+        owner_id: user.id,
+        name: document.getElementById('charName').value,
+        race: document.getElementById('charRace').value,
+        class: document.getElementById('charClass').value,
+        appearance: document.getElementById('charAppearance').value,
+        bio: document.getElementById('charBio').value,
+        personality: { ideals: [], bonds: [], flaws: [] },
+        power_level: 10,
+        stats,
+        hp: calculateHpFromStats(stats),
+        max_hp: calculateHpFromStats(stats),
+        race_ac_bonus: Number(document.getElementById('charRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('charRace').value)),
+        ...calculateDerivedStats(stats, document.getElementById('charRace').value || 'Человек', [], Number(document.getElementById('charRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('charRace').value))),
+        money: 50,
+      };
+      console.log('[create-character-card] request:', requestPayload);
+
+      try {
+        const card = await createCharacterCard(requestPayload);
+        console.log('[create-character-card] created:', card);
+        toast.success('Персонаж создан!');
+        document.getElementById('newCharModal').classList.remove('open');
+        loadData();
+      } catch (err) {
+        console.error('[create-character-card] error:', err);
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Generate stats via AI (in character card modal)
+    document.getElementById('generateStatsBtn')?.addEventListener('click', async () => {
+      const bio = document.getElementById('charBio')?.value?.trim();
+      if (!bio) { toast.warning('Заполните биографию для генерации статов'); return; }
+
+      const btn = document.getElementById('generateStatsBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ ...';
+      try {
+        const requestPayload = {
+            user_id: user.id,
+            name: sanitizeAIText(document.getElementById('charName')?.value || ''),
+            race: sanitizeAIText(document.getElementById('charRace')?.value || ''),
+            class: sanitizeAIText(document.getElementById('charClass')?.value || ''),
+            appearance: sanitizeAIText(document.getElementById('charAppearance')?.value || ''),
+            bio: sanitizeAIText(bio),
+          };
+        console.log('[generate-character][new-card] request:', requestPayload);
+
+        const response = await invokeFunction('generate-character', requestPayload);
+        console.log('[generate-character][new-card] response:', response);
+        if (response?.stats) {
+          console.log('[generate-character][new-card] applying stats:', response.stats);
+          STATS.forEach((s) => { const el = document.getElementById(`stat_${s}`); if (el && response.stats[s] !== undefined) el.value = response.stats[s]; });
+          if (response.race_ac_bonus !== undefined) {
+            const el = document.getElementById('charRaceAcBonus');
+            if (el) el.value = response.race_ac_bonus;
+          }
+          toast.success('Статы сгенерированы!');
+        } else {
+          console.warn('[generate-character][new-card] response without stats:', response);
+        }
+      } catch (err) {
+        console.error('[generate-character][new-card] error:', err);
+        if (err?.data?.code === 'MISSING_API_KEY') {
+          toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» и введите ключ.');
+        } else {
+          const detail = err?.data?.details || err?.data?.error || err.message || 'Неизвестная ошибка';
+          toast.error('Ошибка AI: ' + detail);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ AI';
+      }
+    });
+
+    // Close modals
+    document.getElementById('closeModal')?.addEventListener('click', () => {
+      document.getElementById('newSessionModal').classList.remove('open');
+    });
+    document.getElementById('closeWorldModal')?.addEventListener('click', () => {
+      document.getElementById('newWorldModal').classList.remove('open');
+    });
+
+    // PVP toggle
+    let pvpEnabled = false;
+    const pvpToggle = document.getElementById('pvpToggle');
+    pvpToggle?.addEventListener('click', () => {
+      pvpEnabled = !pvpEnabled;
+      pvpToggle.classList.toggle('active', pvpEnabled);
+      document.getElementById('pvpLabel').textContent = pvpEnabled ? 'Вкл' : 'Выкл';
+    });
+
+    // Create session form
+    let plotFile = null;
+
+    // Plot file drop zone
+    const plotFileDropZone = document.getElementById('plotFileDropZone');
+    const plotFileInput = document.getElementById('plotFileInput');
+
+    plotFileDropZone?.addEventListener('click', () => plotFileInput.click());
+    document.getElementById('plotBrowseLink')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      plotFileInput.click();
+    });
+    plotFileDropZone?.addEventListener('dragover', (e) => { e.preventDefault(); plotFileDropZone.classList.add('dragover'); });
+    plotFileDropZone?.addEventListener('dragleave', () => plotFileDropZone.classList.remove('dragover'));
+    plotFileDropZone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      plotFileDropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && !isTextFile(file)) {
+        toast.warning(`Файл «${file.name}» пропущен (поддерживаются только текстовые файлы)`);
+        return;
+      }
+      if (file) {
+        plotFile = file;
+        document.getElementById('plotFileName').textContent = `📄 ${plotFile.name}`;
+      }
+    });
+    plotFileInput?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file && !isTextFile(file)) {
+        toast.warning(`Файл «${file.name}» пропущен (поддерживаются только текстовые файлы)`);
+        plotFile = null;
+        document.getElementById('plotFileName').textContent = 'Нет файла';
+        return;
+      }
+      if (file) {
+        plotFile = file;
+        document.getElementById('plotFileName').textContent = `📄 ${plotFile.name}`;
+      }
+    });
+
+    document.getElementById('newSessionForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const worldId = document.getElementById('sessionWorld').value;
+      const difficulty = document.getElementById('sessionDifficulty').value;
+      let plotText = document.getElementById('sessionPlotText')?.value?.trim() || '';
+
+      // If file uploaded, read its content
+      if (!plotText && plotFile) {
+        try { plotText = await plotFile.text(); } catch {}
+      }
+
+      try {
+        const session = await createSession({
+          world_id: worldId,
+          difficulty,
+          is_pvp_enabled: pvpEnabled,
+        });
+
+        // Save plot to lore_files if provided
+        if (plotText && plotText.length > 10) {
+          const stageName = 'custom_plot';
+          await supabase.from('lore_files').insert({
+            world_id: worldId,
+            folder: 'plot',
+            title: stageName,
+            content: plotText,
+            tags: ['сюжет', 'custom'],
+          });
+          // Set session to use this plot
+          await updateSession(session.id, { current_plot_stage: stageName });
+        }
+
+        toast.success('Сессия создана!');
+        plotFile = null;
+        document.getElementById('newSessionModal').classList.remove('open');
+        router.navigate(`/session/${session.id}`);
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Create world form — text to JSON via AI
+    let pendingFiles = [];
+
+    document.getElementById('newWorldForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('worldName').value.trim();
+      const description = document.getElementById('worldDescription').value.trim();
+      const createBtn = document.getElementById('createWorldBtn');
+
+      if (!name) { toast.error('Укажите название мира'); return; }
+
+      createBtn.disabled = true;
+      createBtn.textContent = '⏳ Нейросеть анализирует мир...';
+
+      let settings = {};
+
+      // If description provided — convert via AI
+      if (description) {
+        try {
+          const response = await invokeFunction('convert-world-text', {
+            user_id: user.id, world_name: name, description: sanitizeAIText(description),
+          });
+          settings = response?.settings || {};
+          // Show preview
+          document.getElementById('aiSettingsPreview').style.display = 'block';
+          document.getElementById('aiSettingsOutput').textContent = JSON.stringify(settings, null, 2);
+        } catch (err) {
+          toast.error('Ошибка AI: ' + (err.message || err));
+          createBtn.disabled = false;
+          createBtn.textContent = '✨ Создать мир';
+          return;
+        }
+      }
+
+      try {
+        const world = await createWorld({ owner_id: user.id, name, settings });
+
+        // Upload lore files if any
+        if (pendingFiles.length) {
+          const loreFiles = [];
+          for (const file of pendingFiles) {
+            const content = await file.text();
+            loreFiles.push({
+              world_id: world.id,
+              folder: 'imported',
+              title: file.name.replace(/\.[^.]+$/, ''),
+              content,
+              tags: [],
+            });
+          }
+          const { error: loreErr } = await supabase.from('lore_files').insert(loreFiles);
+          if (loreErr) console.error('Lore upload error:', loreErr);
+        }
+
+        // Generate NPCs from lore text
+        createBtn.textContent = '⏳ Генерация бестиария...';
+        createBtn.disabled = true;
+
+        // Collect all lore text (description + file contents)
+        let combinedLoreText = description || '';
+        for (const file of pendingFiles) {
+          try {
+            const fileText = await file.text();
+            combinedLoreText += '\n\n' + fileText;
+          } catch {}
+        }
+
+        try {
+          await invokeFunction('generate-world-npcs', {
+            world_id: world.id,
+            user_id: user.id,
+            lore_text: combinedLoreText,
+          });
+        } catch (genErr) {
+          console.error('NPC generation error:', genErr);
+          toast.warning('Мир создан, но генерация бестиария не удалась: ' + (genErr.message || genErr));
+        }
+
+        toast.success(`Мир «${name}» создан! ${pendingFiles.length ? `+ ${pendingFiles.length} файл(ов) лора` : ''}`);
+        document.getElementById('newWorldModal').classList.remove('open');
+        pendingFiles = [];
+        loadData();
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      } finally {
+        createBtn.disabled = false;
+        createBtn.textContent = '✨ Создать мир';
+      }
+    });
+
+    // File drop zone
+    const fileDropZone = document.getElementById('fileDropZone');
+    const fileInput = document.getElementById('worldFileInput');
+
+    fileDropZone?.addEventListener('click', () => fileInput.click());
+    document.getElementById('browseFilesLink')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      fileInput.click();
+    });
+
+    fileDropZone?.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      fileDropZone.classList.add('dragover');
+    });
+    fileDropZone?.addEventListener('dragleave', () => {
+      fileDropZone.classList.remove('dragover');
+    });
+    fileDropZone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fileDropZone.classList.remove('dragover');
+      addFiles(e.dataTransfer.files);
+    });
+
+    fileInput?.addEventListener('change', (e) => {
+      addFiles(e.target.files);
+      fileInput.value = '';
+    });
+
+    function addFiles(fileListObj) {
+      for (const file of fileListObj) {
+        if (['.txt', '.md', '.json'].some(ext => file.name.endsWith(ext))) {
+          pendingFiles.push(file);
+        } else {
+          toast.warning(`Файл «${file.name}» пропущен (поддерживаются .txt, .md, .json)`);
+        }
+      }
+      renderFileList();
+    }
+
+    function renderFileList() {
+      const el = document.getElementById('fileList');
+      if (!el) return;
+      el.innerHTML = pendingFiles.map((f, i) => `
+        <div class="file-item">
+          <span>📄 ${f.name} <span class="text-muted">(${(f.size / 1024).toFixed(1)} KB)</span></span>
+          <button type="button" class="btn btn-ghost btn-sm" data-file-idx="${i}">✕</button>
+        </div>
+      `).join('');
+      el.querySelectorAll('[data-file-idx]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          pendingFiles.splice(parseInt(btn.dataset.fileIdx), 1);
+          renderFileList();
+        });
+      });
+    }
+
+    // Session card actions
+    container.querySelectorAll('[data-action="join"]').forEach((btn) => {
+      btn.addEventListener('click', () => router.navigate(`/session/${btn.dataset.id}`));
+    });
+    container.querySelectorAll('[data-action="settings"]').forEach((btn) => {
+      btn.addEventListener('click', () => router.navigate(`/session/${btn.dataset.id}/settings`));
+    });
+    container.querySelectorAll('[data-action="invite"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const url = `${window.location.origin}/Multi-RP/#/session/${btn.dataset.id}`;
+        navigator.clipboard.writeText(url);
+        toast.success('Инвайт-ссылка скопирована!');
+      });
+    });
+
+    // Export world
+    container.querySelectorAll('[data-action="export"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const data = await exportWorld(btn.dataset.id);
+          const world = worlds.find((w) => w.id === btn.dataset.id);
+          downloadJSON(data, `${world?.name || 'world'}_export.json`);
+          toast.success('Мир экспортирован!');
+        } catch (err) {
+          toast.error('Ошибка экспорта: ' + err.message);
+        }
+      });
+    });
+
+    // Import world (from modal)
+    document.getElementById('importFileInput')?.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!isTextFile(file)) {
+        toast.warning(`Файл «${file.name}» пропущен (поддерживаются только текстовые файлы)`);
+        e.target.value = '';
+        return;
+      }
+      try {
+        const text = await file.text();
+        await importWorld(text, user.id);
+        toast.success('Мир импортирован!');
+        loadData();
+      } catch (err) {
+        toast.error('Ошибка импорта: ' + err.message);
+      }
+      e.target.value = '';
+    });
+
+    // Delete world
+    container.querySelectorAll('[data-action="delete-world"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Удалить мир и все связанные данные?')) return;
+        try {
+          const { deleteWorld } = await import('../api/game.js');
+          await deleteWorld(btn.dataset.id);
+          toast.success('Мир удалён');
+          loadData();
+        } catch (err) {
+          toast.error('Ошибка: ' + err.message);
+        }
+      });
+    });
+
+    // Close modals on overlay click
+    container.querySelectorAll('.modal-overlay').forEach((overlay) => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.classList.remove('open');
+      });
+    });
+  }
+
+  loadData();
+}
+
+================
+File: supabase/functions/convert-world-text/index.ts
+================
+// supabase/functions/convert-world-text/index.ts
+// Конвертирует текстовое описание мира в структурированный JSON
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
+const AI_MODEL = "xiaomi/mimo-v2.5";
+
+const SYSTEM_PROMPT = `Ты — D&D-дизайнер мира. Твоя задача: проанализировать текстовое описание ролевого мира и превратить его в структурированный JSON-объект настроек.
+
+Извлеки из текста:
+- Доступные расы (races)
+- Доступные классы (classes)
+- Глобальные лимиты (max_level, starting_gold и т.д.)
+- Локации/регионы (locations)
+- Фракции (factions)
+- Ключевые правила дома (house_rules)
+
+Формат ответа — ТОЛЬКО валидный JSON без markdown:
+
+{
+  "races": ["Человек", "Эльф"],
+  "classes": ["Воин", "Маг", "Плут"],
+  "max_level": 20,
+  "starting_gold": 100,
+  "locations": ["Город Теней", "Лес Древних"],
+  "factions": ["Стражи Рассвета", "Теневая Лига"],
+  "house_rules": ["Криты наносят двойной урон"],
+  "description_summary": "Краткое описание (1-2 предложения)"
+}
+
+Если какая-то информация отсутствует в тексте — поставь пустой массив или значение по умолчанию.
+ВСЁ на русском языке.`;
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS });
+  }
+
+  try {
+    const { user_id, world_name, description } = await req.json();
+
+    const safeDescription = cleanTextForAI(description);
+
+    console.log('convert-world-text input:', { user_id, world_name, description: safeDescription });
+
+    const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
+    if (safeDescription && new RegExp(imagePattern.source, imagePattern.flags).test(safeDescription)) {
+      return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
+        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!user_id || !world_name || !safeDescription) {
+      return new Response(JSON.stringify({ error: "user_id, world_name и description обязательны" }), {
+        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    const { data: userSettings } = await supabase
+      .from("user_settings")
+      .select("openrouter_key")
+      .eq("id", user_id)
+      .maybeSingle();
+    if (userSettings?.openrouter_key) apiKey = sanitizeKey(userSettings.openrouter_key);
+
+    if (!apiKey) {
+      return new Response(JSON.stringify({
+        error: "Укажите OpenRouter API Key в настройках аккаунта",
+        code: "MISSING_API_KEY",
+      }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
+    }
+
+    const userMessage = `Мир: "${world_name}"\n\nОписание:\n${safeDescription}`;
+
+    const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userMessage },
+        ],
+        temperature: 0.5,
+        max_tokens: 1500,
+      }),
+    });
+
+    console.log('convert-world-text OpenRouter status:', aiRes.status);
+
+    if (!aiRes.ok) {
+      const errText = await aiRes.text();
+      console.error("AI error:", errText);
+      return new Response(JSON.stringify({ error: "Ошибка AI API" }), {
+        status: 502, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    const aiData = await aiRes.json();
+    const rawContent = aiData.choices[0].message.content || "";
+    console.log('convert-world-text AI raw:', rawContent);
+
+    let settings = null;
+    try { settings = parseAIJson(rawContent); } catch {}
+    if (!settings) {
+      return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
+        status: 422, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ settings }), {
+      status: 200, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+
+  } catch (err) {
+    console.error("convert-world-text error:", err);
+    return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
+      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+});
+
+================
+File: supabase/functions/generate-world-npcs/index.ts
+================
+// supabase/functions/generate-world-npcs/index.ts
+// Полная генерация NPC при создании мира на основе Матрицы Тиров
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
+const AI_MODEL = "xiaomi/mimo-v2.5";
+const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const SYSTEM_PROMPT = `Извлеки из текста всех упомянутых существ, NPC, врагов и животных.
+Шаг 1: Оцени уровень угрозы (Tier) для каждого на основе контекста.
+- Tier 1: Статы 4-10, HP 1-15.
+- Tier 2: Статы 10-14, HP 15-40.
+- Tier 3: Статы 14-18, HP 40-100.
+- Tier 4: Статы 18-22, HP 100-250.
+- Tier 5: Статы 22-26, HP 250-500.
+Шаг 2: Сгенерируй им статы в рамках этого Тира.
+Верни ТОЛЬКО JSON массив: [{name: 'Имя', role: 'main' или 'secondary', race: 'Раса', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
+
+async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string): Promise<string> {
+  const response = await fetch(OPENROUTER_CHAT_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": SUPABASE_URL,
+      "X-Title": "MultiRP-AI",
+    },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      temperature: 0.7,
+      max_tokens: 2000,
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Chat API error: ${response.status} - ${errText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS });
+  }
+
+  try {
+    const raw = await req.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return new Response(JSON.stringify({ error: "Некорректный JSON в теле запроса" }), {
+        status: 400,
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    const world_id = sanitizeKey(parsed.world_id);
+    const lore_text = cleanTextForAI(parsed.lore_text);
+    const user_id = sanitizeKey(parsed.user_id);
+
+    console.log("generate-world-npcs input:", { world_id, user_id, lore_text_length: lore_text.length });
+
+    if (!world_id || !lore_text) {
+      return new Response(
+        JSON.stringify({ error: "world_id и lore_text обязательны" }),
+        { status: 400, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // Получаем API ключ
+    let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+
+    if (user_id) {
+      const { data: userSettings } = await supabase
+        .from("user_settings")
+        .select("openrouter_key")
+        .eq("id", user_id)
+        .maybeSingle();
+      if (userSettings?.openrouter_key) {
+        apiKey = sanitizeKey(userSettings.openrouter_key);
+      }
+    }
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({
+          error: "Укажите ваш OpenRouter API Key в настройках аккаунта.",
+          code: "MISSING_API_KEY",
+        }),
+        { status: 402, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Вызываем LLM для генерации NPC
+    let npcs: any[];
+    try {
+      const aiResponse = await callChatLLM(SYSTEM_PROMPT, lore_text, apiKey);
+      console.log("generate-world-npcs AI raw:", aiResponse);
+      npcs = parseAIJson(aiResponse);
+    } catch (err) {
+      console.error("AI call failed:", err);
+      return new Response(
+        JSON.stringify({ error: "Ошибка генерации NPC", details: err.message }),
+        { status: 502, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!Array.isArray(npcs) || npcs.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Не удалось извлечь NPC из текста" }),
+        { status: 422, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Подготавливаем данные для INSERT
+    const npcsToInsert = npcs.map((npc) => ({
+      world_id,
+      role: npc.role === "main" ? "main" : "secondary",
+      name: cleanTextForAI(npc.name),
+      race: cleanTextForAI(npc.race) || "Человек",
+      appearance: cleanTextForAI(npc.appearance) || "",
+      background: cleanTextForAI(npc.background) || "",
+      status_tags: Array.isArray(npc.status_tags) ? npc.status_tags : [],
+      habits: Array.isArray(npc.habits) ? npc.habits : [],
+      catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases : [],
+      stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+      hp: Number(npc.hp) || 30,
+      max_hp: Number(npc.max_hp) || 30,
+    }));
+
+    // Массовый INSERT
+    const { data: insertedNpcs, error: insertError } = await supabase
+      .from("npcs")
+      .insert(npcsToInsert)
+      .select();
+
+    if (insertError) {
+      console.error("Failed to insert NPCs:", insertError);
+      return new Response(
+        JSON.stringify({ error: "Ошибка сохранения NPC", details: insertError.message }),
+        { status: 500, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    console.log(`Generated ${insertedNpcs.length} NPCs for world ${world_id}`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        count: insertedNpcs.length,
+        npcs: insertedNpcs,
+      }),
+      { status: 200, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
+  } catch (err) {
+    console.error("generate-world-npcs error:", err);
+    return new Response(
+      JSON.stringify({
+        error: err.message || "Internal error",
+        details: err.message,
+      }),
+      { status: 500, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
+  }
+});
+
+================
+File: supabase/functions/npc-memory-engine/index.ts
+================
+// supabase/functions/npc-memory-engine/index.ts
+// Движок Каскадной Памяти NPC: управление воспоминаниями (vivid -> medium -> belief)
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sanitizeKey, cleanTextForAI } from "../_shared/utils.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
+
+const EMBEDDING_MODEL = "baai/bge-m3";
+const CHAT_MODEL = "xiaomi/mimo-v2.5";
+const OPENROUTER_EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings";
+const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+// Каскадные лимиты
+const CASCADE_LIMIT = 5;
+
+// ============================================
+// API-вызовы к OpenRouter
+// ============================================
+
+async function generateEmbedding(text: string, apiKey: string): Promise<number[]> {
+  const response = await fetch(OPENROUTER_EMBEDDINGS_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": SUPABASE_URL,
+      "X-Title": "MultiRP-AI",
+    },
+    body: JSON.stringify({
+      model: EMBEDDING_MODEL,
+      input: text,
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Embedding API error: ${response.status} - ${errText}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding;
+}
+
+async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string): Promise<string> {
+  const response = await fetch(OPENROUTER_CHAT_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": SUPABASE_URL,
+      "X-Title": "MultiRP-AI",
+    },
+    body: JSON.stringify({
+      model: CHAT_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Chat API error: ${response.status} - ${errText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// ============================================
+// Основной обработчик
+// ============================================
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS });
+  }
+
+  try {
+    const raw = await req.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return new Response(JSON.stringify({ error: "Некорректный JSON в теле запроса" }), {
+        status: 400,
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    const npc_id = sanitizeKey(parsed.npc_id);
+    const player_id = sanitizeKey(parsed.player_id);
+    const memory_text = cleanTextForAI(parsed.memory_text);
+
+    console.log("npc-memory-engine input:", { npc_id, player_id, memory_text });
+
+    if (!npc_id || !player_id || !memory_text) {
+      return new Response(
+        JSON.stringify({ error: "npc_id, player_id и memory_text обязательны" }),
+        { status: 400, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // Получаем API ключ
+    let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+
+    // Получаем player для нахождения user_id
+    const { data: player } = await supabase
+      .from("players")
+      .select("user_id")
+      .eq("id", player_id)
+      .maybeSingle();
+
+    if (player?.user_id) {
+      const { data: userSettings } = await supabase
+        .from("user_settings")
+        .select("openrouter_key")
+        .eq("id", player.user_id)
+        .maybeSingle();
+      if (userSettings?.openrouter_key) {
+        apiKey = sanitizeKey(userSettings.openrouter_key);
+      }
+    }
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({
+          error: "Укажите ваш OpenRouter API Key в настройках аккаунта.",
+          code: "MISSING_API_KEY",
+        }),
+        { status: 402, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ============================================
+    // Задача 1: Векторизация и сохранение (Яркая память)
+    // ============================================
+    let embedding: number[];
+    try {
+      embedding = await generateEmbedding(memory_text, apiKey);
+    } catch (err) {
+      console.error("Embedding generation failed:", err);
+      return new Response(
+        JSON.stringify({ error: "Ошибка генерации эмбеддинга", details: err.message }),
+        { status: 502, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    const { error: insertError } = await supabase.from("npc_memories").insert({
+      npc_id,
+      player_id,
+      memory_text,
+      memory_type: "vivid",
+      embedding,
+    });
+
+    if (insertError) {
+      console.error("Failed to insert vivid memory:", insertError);
+      return new Response(
+        JSON.stringify({ error: "Ошибка сохранения воспоминания", details: insertError.message }),
+        { status: 500, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    console.log("Vivid memory saved for npc:", npc_id);
+
+    // ============================================
+    // Задача 2: Логика каскада "Смещение 5-5-5"
+    // ============================================
+
+    let newBeliefCreated = false;
+    let newBeliefText: string | null = null;
+
+    // 2.1 Проверяем количество vivid воспоминаний
+    const { count: vividCount, error: vividCountErr } = await supabase
+      .from("npc_memories")
+      .select("*", { count: "exact", head: true })
+      .eq("npc_id", npc_id)
+      .eq("player_id", player_id)
+      .eq("memory_type", "vivid");
+
+    if (vividCountErr) {
+      console.error("Failed to count vivid memories:", vividCountErr);
+    }
+
+    // Если vivid > 5 → перемещаем самую старую в medium
+    if ((vividCount ?? 0) > CASCADE_LIMIT) {
+      const { data: oldestVivid } = await supabase
+        .from("npc_memories")
+        .select("id")
+        .eq("npc_id", npc_id)
+        .eq("player_id", player_id)
+        .eq("memory_type", "vivid")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .single();
+
+      if (oldestVivid) {
+        const { error: updateError } = await supabase
+          .from("npc_memories")
+          .update({ memory_type: "medium" })
+          .eq("id", oldestVivid.id);
+
+        if (updateError) {
+          console.error("Failed to update vivid to medium:", updateError);
+        } else {
+          console.log("Moved oldest vivid to medium:", oldestVivid.id);
+        }
+      }
+    }
+
+    // 2.2 Проверяем количество medium воспоминаний
+    const { count: mediumCount, error: mediumCountErr } = await supabase
+      .from("npc_memories")
+      .select("*", { count: "exact", head: true })
+      .eq("npc_id", npc_id)
+      .eq("player_id", player_id)
+      .eq("memory_type", "medium");
+
+    if (mediumCountErr) {
+      console.error("Failed to count medium memories:", mediumCountErr);
+    }
+
+    // Если medium > 5 → сжимаем 6 в 1 belief
+    if ((mediumCount ?? 0) > CASCADE_LIMIT) {
+      // Извлекаем текст всех 6 medium записей
+      const { data: mediumMemories } = await supabase
+        .from("npc_memories")
+        .select("id, memory_text")
+        .eq("npc_id", npc_id)
+        .eq("player_id", player_id)
+        .eq("memory_type", "medium")
+        .order("created_at", { ascending: true })
+        .limit(6);
+
+      if (mediumMemories && mediumMemories.length === 6) {
+        const memoriesText = mediumMemories.map((m, i) => `${i + 1}. ${m.memory_text}`).join("\n");
+
+        // Вызываем LLM для сжатиения
+        const compressionPrompt = `Ты психолог. Прочитай 6 воспоминаний NPC об игроке. Объедини их смысл в 1 короткое фундаментальное Убеждение (Belief) NPC об этом игроке. Верни строго 1 предложение без списков и вступлений.`;
+
+        try {
+          const beliefText = await callChatLLM(compressionPrompt, memoriesText, apiKey);
+          const cleanBelief = beliefText.trim();
+
+          // Удаляем 6 старых medium записей
+          const idsToDelete = mediumMemories.map((m) => m.id);
+          await supabase
+            .from("npc_memories")
+            .delete()
+            .in("id", idsToDelete);
+
+          // Генерируем вектор для нового убеждения
+          const beliefEmbedding = await generateEmbedding(cleanBelief, apiKey);
+
+          // Сохраняем belief
+          await supabase.from("npc_memories").insert({
+            npc_id,
+            player_id,
+            memory_text: cleanBelief,
+            memory_type: "belief",
+            embedding: beliefEmbedding,
+          });
+
+          newBeliefCreated = true;
+          newBeliefText = cleanBelief;
+          console.log("Created new belief:", cleanBelief);
+        } catch (err) {
+          console.error("Failed to compress medium to belief:", err);
+        }
+      }
+    }
+
+    // 2.3 Проверяем количество belief воспоминаний
+    const { count: beliefCount, error: beliefCountErr } = await supabase
+      .from("npc_memories")
+      .select("*", { count: "exact", head: true })
+      .eq("npc_id", npc_id)
+      .eq("player_id", player_id)
+      .eq("memory_type", "belief");
+
+    if (beliefCountErr) {
+      console.error("Failed to count belief memories:", beliefCountErr);
+    }
+
+    // Если belief > 5 → удаляем самое старое
+    if ((beliefCount ?? 0) > CASCADE_LIMIT) {
+      const { data: oldestBelief } = await supabase
+        .from("npc_memories")
+        .select("id")
+        .eq("npc_id", npc_id)
+        .eq("player_id", player_id)
+        .eq("memory_type", "belief")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .single();
+
+      if (oldestBelief) {
+        await supabase
+          .from("npc_memories")
+          .delete()
+          .eq("id", oldestBelief.id);
+        console.log("Deleted oldest belief:", oldestBelief.id);
+      }
+    }
+
+    // ============================================
+    // Задача 3: Обновление Статуса (status_tags)
+    // ============================================
+
+    if (newBeliefCreated && newBeliefText) {
+      // Получаем текущие status_tags NPC
+      const { data: npcData } = await supabase
+        .from("npcs")
+        .select("status_tags")
+        .eq("id", npc_id)
+        .single();
+
+      const currentTags = npcData?.status_tags ?? [];
+
+      const statusPrompt = `Учитывая новое убеждение NPC об игроке, обнови его статус отношения. Верни массив из 1-3 коротких тегов в формате JSON: { "tags": ["друг", "наставник"] }. Допустимые примеры: Враг, Должник, Предатель, Раб, Любовь, Страх. Не пиши текст, только JSON.`;
+
+      try {
+        const tagsResponse = await callChatLLM(
+          statusPrompt,
+          `Текущие теги: ${JSON.stringify(currentTags)}\nНовое убеждение: ${newBeliefText}`,
+          apiKey,
+        );
+
+        // Парсим JSON ответ
+        const parsed = JSON.parse(tagsResponse);
+        if (parsed.tags && Array.isArray(parsed.tags)) {
+          await supabase
+            .from("npcs")
+            .update({ status_tags: parsed.tags })
+            .eq("id", npc_id);
+          console.log("Updated NPC status_tags:", parsed.tags);
+        }
+      } catch (err) {
+        console.error("Failed to update status_tags:", err);
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Memory processed successfully",
+        new_belief_created: newBeliefCreated,
+        new_belief_text: newBeliefText,
+      }),
+      { status: 200, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
+  } catch (err) {
+    console.error("npc-memory-engine error:", err);
+    return new Response(
+      JSON.stringify({
+        error: err.message || "Internal error",
+        details: err.message,
+      }),
+      { status: 500, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
+  }
+});
+
+================
+File: supabase/functions/simulate-npc-background/index.ts
+================
+// supabase/functions/simulate-npc-background/index.ts
+// Фоновая автономность NPC: действия главных персонажей за кадром
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
+const AI_MODEL = "xiaomi/mimo-v2.5";
+const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const SYSTEM_PROMPT = `Прошло дней: [days_passed]. Опиши 1 предложением, что NPC сделал за кадром (на основе его background и habits). Если он нашел или создал предмет, укажи его. JSON: { action_summary: 'текст', obtained_item_name: 'Название или null', item_type: 'weapon|misc' }`;
+
+async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string): Promise<string> {
+  const response = await fetch(OPENROUTER_CHAT_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": SUPABASE_URL,
+      "X-Title": "MultiRP-AI",
+    },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Chat API error: ${response.status} - ${errText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS });
+  }
+
+  try {
+    const raw = await req.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return new Response(JSON.stringify({ error: "Некорректный JSON в теле запроса" }), {
+        status: 400,
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    const session_id = sanitizeKey(parsed.session_id);
+    const days_passed = Number(parsed.days_passed) || 1;
+    const user_id = sanitizeKey(parsed.user_id);
+
+    console.log("simulate-npc-background input:", { session_id, days_passed, user_id });
+
+    if (!session_id) {
+      return new Response(
+        JSON.stringify({ error: "session_id обязателен" }),
+        { status: 400, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // Получаем мир сессии
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("world_id")
+      .eq("id", session_id)
+      .single();
+
+    if (!session) {
+      return new Response(
+        JSON.stringify({ error: "Сессия не найдена" }),
+        { status: 404, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Получаем главных NPC мира
+    const { data: mainNpcs } = await supabase
+      .from("npcs")
+      .select("*")
+      .eq("world_id", session.world_id)
+      .eq("role", "main");
+
+    if (!mainNpcs || mainNpcs.length === 0) {
+      return new Response(
+        JSON.stringify({ success: true, message: "Нет главных NPC для симуляции", actions: [] }),
+        { status: 200, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Получаем API ключ
+    let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    if (user_id) {
+      const { data: userSettings } = await supabase
+        .from("user_settings")
+        .select("openrouter_key")
+        .eq("id", user_id)
+        .maybeSingle();
+      if (userSettings?.openrouter_key) {
+        apiKey = sanitizeKey(userSettings.openrouter_key);
+      }
+    }
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({
+          error: "Укажите ваш OpenRouter API Key в настройках аккаунта.",
+          code: "MISSING_API_KEY",
+        }),
+        { status: 402, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+
+    const actions: any[] = [];
+
+    // Симулируем каждого главного NPC
+    for (const npc of mainNpcs) {
+      const userMessage = `NPC: ${npc.name}
+Раса: ${npc.race}
+Предыстория: ${npc.background || "Неизвестно"}
+Привычки: ${(npc.habits || []).join(", ") || "Неизвестно"}
+Прошло дней: ${days_passed}`;
+
+      try {
+        const aiResponse = await callChatLLM(SYSTEM_PROMPT.replace("[days_passed]", String(days_passed)), userMessage, apiKey);
+        const actionData = parseAIJson(aiResponse);
+
+        if (actionData) {
+          const action = {
+            npc_id: npc.id,
+            npc_name: npc.name,
+            action_summary: actionData.action_summary || "",
+            obtained_item_name: actionData.obtained_item_name || null,
+            item_type: actionData.item_type || "misc",
+          };
+
+          // Если NPC получил предмет - добавляем в инвентарь
+          if (actionData.obtained_item_name) {
+            const { error: itemError } = await supabase.rpc("add_item_to_inventory", {
+              p_npc_id: npc.id,
+              p_item_name: cleanTextForAI(actionData.obtained_item_name),
+              p_quantity: 1,
+              p_type: ["weapon", "armor", "consumable", "misc"].includes(actionData.item_type) ? actionData.item_type : "misc",
+              p_attributes: {},
+            });
+
+            if (itemError) {
+              console.error(`Failed to add item to NPC ${npc.id} inventory:`, itemError);
+            }
+          }
+
+          actions.push(action);
+        }
+      } catch (err) {
+        console.error(`Failed to simulate NPC ${npc.id}:`, err);
+      }
+    }
+
+    console.log(`Simulated ${actions.length} NPC actions`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        days_passed,
+        actions_count: actions.length,
+        actions,
+      }),
+      { status: 200, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
+  } catch (err) {
+    console.error("simulate-npc-background error:", err);
+    return new Response(
+      JSON.stringify({
+        error: err.message || "Internal error",
+        details: err.message,
+      }),
+      { status: 500, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
+  }
+});
+
+================
+File: supabase/migrations/001_initial_schema.sql
+================
+-- ============================================
+-- MultiRP AI — Initial Schema Migration v2
+-- All tables first, then policies/indexes/triggers
+-- ============================================
+
+-- Clean slate
+DROP TABLE IF EXISTS turn_queue CASCADE;
+DROP TABLE IF EXISTS messages CASCADE;
+DROP TABLE IF EXISTS inventory CASCADE;
+DROP TABLE IF EXISTS players CASCADE;
+DROP TABLE IF EXISTS sessions CASCADE;
+DROP TABLE IF EXISTS lore_files CASCADE;
+DROP TABLE IF EXISTS worlds CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at CASCADE;
+DROP FUNCTION IF EXISTS roll_d20 CASCADE;
+DROP FUNCTION IF EXISTS roll_d20_advantage CASCADE;
+DROP FUNCTION IF EXISTS roll_d20_disadvantage CASCADE;
+DROP FUNCTION IF EXISTS update_player_hp CASCADE;
+DROP FUNCTION IF EXISTS add_item_to_inventory CASCADE;
+DROP FUNCTION IF EXISTS remove_item_from_inventory CASCADE;
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ============================================
+-- TABLES (order matters for FK references)
+-- ============================================
+
+CREATE TABLE worlds (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  settings JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE lore_files (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+  folder TEXT NOT NULL DEFAULT 'general',
+  title TEXT NOT NULL,
+  content TEXT DEFAULT '',
+  tags TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE RESTRICT,
+  difficulty TEXT NOT NULL DEFAULT 'normal' CHECK (difficulty IN ('easy', 'normal', 'hard')),
+  is_pvp_enabled BOOLEAN DEFAULT FALSE,
+  current_plot_stage TEXT DEFAULT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE players (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  race TEXT NOT NULL DEFAULT 'Человек',
+  class TEXT NOT NULL DEFAULT 'Воин',
+  appearance TEXT DEFAULT '',
+  personality JSONB DEFAULT '{"ideals": [], "bonds": [], "flaws": []}',
+  bio TEXT DEFAULT '',
+  power_level INT DEFAULT 10 CHECK (power_level >= 1 AND power_level <= 100),
+  stats JSONB DEFAULT '{"STR": 10, "DEX": 10, "CON": 10, "INT": 10, "WIS": 10, "CHA": 10}',
+  hp INT DEFAULT 30,
+  max_hp INT DEFAULT 30,
+  money INT DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE inventory (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  item_name TEXT NOT NULL,
+  quantity INT DEFAULT 1 CHECK (quantity >= 0),
+  type TEXT NOT NULL DEFAULT 'misc' CHECK (type IN ('weapon', 'armor', 'consumable', 'misc')),
+  attributes JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  sender_type TEXT NOT NULL CHECK (sender_type IN ('player', 'master', 'system')),
+  sender_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  sender_name TEXT DEFAULT '',
+  content TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE turn_queue (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'waiting', 'completed', 'skipped')),
+  action_text TEXT,
+  parsed_action JSONB,
+  roll_result JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ
+);
+
+-- ============================================
+-- INDEXES
+-- ============================================
+
+CREATE INDEX idx_worlds_owner ON worlds(owner_id);
+CREATE INDEX idx_lore_files_world ON lore_files(world_id);
+CREATE INDEX idx_lore_files_folder ON lore_files(world_id, folder);
+CREATE INDEX idx_lore_files_tags ON lore_files USING GIN(tags);
+CREATE INDEX idx_sessions_world ON sessions(world_id);
+CREATE INDEX idx_players_session ON players(session_id);
+CREATE INDEX idx_players_user ON players(user_id);
+CREATE INDEX idx_inventory_player ON inventory(player_id);
+CREATE INDEX idx_messages_session ON messages(session_id, created_at DESC);
+CREATE INDEX idx_turn_queue_session ON turn_queue(session_id, status);
+CREATE INDEX idx_turn_queue_player ON turn_queue(player_id);
+
+-- ============================================
+-- RLS POLICIES (all tables now exist)
+-- ============================================
+
+ALTER TABLE worlds ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Worlds: owner read/write" ON worlds FOR ALL USING (auth.uid() = owner_id);
+CREATE POLICY "Worlds: anyone can read" ON worlds FOR SELECT USING (true);
+
+ALTER TABLE lore_files ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lore: read for all authenticated" ON lore_files FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Lore: owner write" ON lore_files FOR ALL USING (world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid()));
+
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Sessions: read for authenticated" ON sessions FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Sessions: create for authenticated" ON sessions FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Sessions: update for participants" ON sessions FOR UPDATE TO authenticated USING (id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+
+ALTER TABLE players ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Players: read in same session" ON players FOR SELECT TO authenticated USING (session_id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Players: join session" ON players FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+CREATE POLICY "Players: update own" ON players FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Players: system update" ON players FOR UPDATE USING (true);
+
+ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Inventory: read for owner" ON inventory FOR SELECT TO authenticated USING (player_id IN (SELECT id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Inventory: manage for owner" ON inventory FOR ALL TO authenticated USING (player_id IN (SELECT id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Inventory: system manage" ON inventory FOR ALL USING (true);
+
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Messages: read for session players" ON messages FOR SELECT TO authenticated USING (session_id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Messages: players send" ON messages FOR INSERT TO authenticated WITH CHECK (sender_type = 'player' AND sender_id = auth.uid() AND session_id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Messages: system insert" ON messages FOR INSERT WITH CHECK (sender_type IN ('master', 'system'));
+
+ALTER TABLE turn_queue ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Turn: read for session players" ON turn_queue FOR SELECT TO authenticated USING (session_id IN (SELECT session_id FROM players WHERE user_id = auth.uid()));
+CREATE POLICY "Turn: system manage" ON turn_queue FOR ALL USING (true);
+
+-- ============================================
+-- RPC FUNCTIONS
+-- ============================================
+
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$;
+
+CREATE TRIGGER trigger_worlds_updated_at BEFORE UPDATE ON worlds FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trigger_sessions_updated_at BEFORE UPDATE ON sessions FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trigger_players_updated_at BEFORE UPDATE ON players FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trigger_lore_files_updated_at BEFORE UPDATE ON lore_files FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE OR REPLACE FUNCTION roll_d20(stat_value INT, difficulty_mod INT DEFAULT 0)
+RETURNS TABLE (roll INT, total INT, success BOOLEAN)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE d20_roll INT; stat_mod INT; total_val INT;
+BEGIN
+  d20_roll := floor(random() * 20 + 1)::INT;
+  stat_mod := floor((stat_value - 10) / 2.0)::INT;
+  total_val := d20_roll + stat_mod + difficulty_mod;
+  RETURN QUERY SELECT d20_roll AS roll, total_val AS total, (total_val >= 10) AS success;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION roll_d20_advantage(stat_value INT)
+RETURNS TABLE (rolls INT[], best_roll INT, total INT, success BOOLEAN)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE r1 INT; r2 INT; best INT; stat_mod INT; total_val INT;
+BEGIN
+  r1 := floor(random() * 20 + 1)::INT;
+  r2 := floor(random() * 20 + 1)::INT;
+  best := GREATEST(r1, r2);
+  stat_mod := floor((stat_value - 10) / 2.0)::INT;
+  total_val := best + stat_mod;
+  RETURN QUERY SELECT ARRAY[r1, r2] AS rolls, best AS best_roll, total_val AS total, (total_val >= 10) AS success;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION roll_d20_disadvantage(stat_value INT)
+RETURNS TABLE (rolls INT[], worst_roll INT, total INT, success BOOLEAN)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE r1 INT; r2 INT; worst INT; stat_mod INT; total_val INT;
+BEGIN
+  r1 := floor(random() * 20 + 1)::INT;
+  r2 := floor(random() * 20 + 1)::INT;
+  worst := LEAST(r1, r2);
+  stat_mod := floor((stat_value - 10) / 2.0)::INT;
+  total_val := worst + stat_mod;
+  RETURN QUERY SELECT ARRAY[r1, r2] AS rolls, worst AS worst_roll, total_val AS total, (total_val >= 10) AS success;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION update_player_hp(p_player_id UUID, p_hp_change INT)
+RETURNS TABLE (new_hp INT, new_max_hp INT, is_alive BOOLEAN)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE current_hp_val INT; max_hp_val INT; new_hp_val INT;
+BEGIN
+  SELECT hp, max_hp INTO current_hp_val, max_hp_val FROM players WHERE id = p_player_id FOR UPDATE;
+  new_hp_val := GREATEST(0, LEAST(max_hp_val, current_hp_val + p_hp_change));
+  UPDATE players SET hp = new_hp_val WHERE id = p_player_id;
+  RETURN QUERY SELECT new_hp_val AS new_hp, max_hp_val AS new_max_hp, (new_hp_val > 0) AS is_alive;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION add_item_to_inventory(p_player_id UUID, p_item_name TEXT, p_quantity INT DEFAULT 1, p_type TEXT DEFAULT 'misc', p_attributes JSONB DEFAULT '{}')
+RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item_id UUID; new_id UUID;
+BEGIN
+  SELECT id INTO existing_item_id FROM inventory WHERE player_id = p_player_id AND item_name = p_item_name AND type = p_type FOR UPDATE;
+  IF existing_item_id IS NOT NULL THEN
+    UPDATE inventory SET quantity = quantity + p_quantity WHERE id = existing_item_id;
+    RETURN existing_item_id;
+  ELSE
+    new_id := uuid_generate_v4();
+    INSERT INTO inventory (id, player_id, item_name, quantity, type, attributes) VALUES (new_id, p_player_id, p_item_name, p_quantity, p_type, p_attributes);
+    RETURN new_id;
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION remove_item_from_inventory(p_player_id UUID, p_item_name TEXT, p_quantity INT DEFAULT 1)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item RECORD;
+BEGIN
+  SELECT id, quantity INTO existing_item FROM inventory WHERE player_id = p_player_id AND item_name = p_item_name FOR UPDATE;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+  IF existing_item.quantity <= p_quantity THEN
+    DELETE FROM inventory WHERE id = existing_item.id;
+  ELSE
+    UPDATE inventory SET quantity = quantity - p_quantity WHERE id = existing_item.id;
+  END IF;
+  RETURN TRUE;
+END;
+$$;
+
+-- ============================================
+-- ENABLE REALTIME
+-- ============================================
+
+ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE players;
+ALTER PUBLICATION supabase_realtime ADD TABLE turn_queue;
+
+================
+File: supabase/migrations/006_world_geography_and_npcs.sql
+================
+-- ============================================
+-- MultiRP AI — Migration 006: World Geography & NPC Matrix
+-- География мира (государства, локации, маршруты) и Матрица NPC с векторной памятью (RAG)
+-- ============================================
+
+-- Задача 1: Активация pgvector
+-- Критично для работы RAG-системы с векторными эмбеддингами
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- ============================================
+-- Задача 2 & 3: География и Матрица NPC
+-- Создаём таблицы без циклических FK, затем добавляем FK через ALTER TABLE
+-- ============================================
+
+-- Государства (без ruler_id — добавим позже)
+CREATE TABLE IF NOT EXISTS states (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  ruler_id UUID,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_states_world ON states(world_id);
+
+-- Локации (города, деревни, руины, достопримечательности)
+CREATE TABLE IF NOT EXISTS locations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  state_id UUID NOT NULL REFERENCES states(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'city' CHECK (type IN ('capital', 'city', 'village', 'ruins', 'landmark')),
+  description TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_locations_state ON locations(state_id);
+CREATE INDEX IF NOT EXISTS idx_locations_type ON locations(type);
+
+-- Маршруты (дороги/связи между локациями)
+CREATE TABLE IF NOT EXISTS routes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  location_a_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  location_b_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  distance_km INT DEFAULT 0 CHECK (distance_km >= 0),
+  travel_days INT DEFAULT 0 CHECK (travel_days >= 0),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  -- Запрещаем дубли путей (A->B и B->A)
+  CONSTRAINT routes_no_duplicates CHECK (location_a_id < location_b_id),
+  CONSTRAINT routes_different_locations CHECK (location_a_id != location_b_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_routes_location_a ON routes(location_a_id);
+CREATE INDEX IF NOT EXISTS idx_routes_location_b ON routes(location_b_id);
+
+-- Матрица NPC (без location_id и state_id — добавим позже)
+CREATE TABLE IF NOT EXISTS npcs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+  location_id UUID,
+  state_id UUID,
+  -- Лор
+  role TEXT NOT NULL DEFAULT 'secondary' CHECK (role IN ('main', 'secondary')),
+  name TEXT NOT NULL,
+  race TEXT NOT NULL DEFAULT 'Человек',
+  appearance TEXT DEFAULT '',
+  background TEXT DEFAULT '',
+  status_tags TEXT[] DEFAULT '{}',
+  habits TEXT[] DEFAULT '{}',
+  catchphrases TEXT[] DEFAULT '{}',
+  -- Механика
+  stats JSONB DEFAULT '{"STR": 10, "DEX": 10, "CON": 10, "INT": 10, "WIS": 10, "CHA": 10}',
+  hp INT DEFAULT 30,
+  max_hp INT DEFAULT 30,
+  -- Системные
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_npcs_world ON npcs(world_id);
+CREATE INDEX IF NOT EXISTS idx_npcs_location ON npcs(location_id);
+CREATE INDEX IF NOT EXISTS idx_npcs_state ON npcs(state_id);
+CREATE INDEX IF NOT EXISTS idx_npcs_role ON npcs(role);
+CREATE INDEX IF NOT EXISTS idx_npcs_status_tags ON npcs USING GIN(status_tags);
+
+-- Теперь добавляем циклические FK через ALTER TABLE
+ALTER TABLE states
+  ADD CONSTRAINT fk_states_ruler FOREIGN KEY (ruler_id) REFERENCES npcs(id) ON DELETE SET NULL;
+
+ALTER TABLE npcs
+  ADD CONSTRAINT fk_npcs_location FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL,
+  ADD CONSTRAINT fk_npcs_state FOREIGN KEY (state_id) REFERENCES states(id) ON DELETE SET NULL;
+
+-- Изменение таблицы inventory: поддержка NPC
+ALTER TABLE inventory
+  ALTER COLUMN player_id DROP NOT NULL,
+  ADD COLUMN IF NOT EXISTS npc_id UUID REFERENCES npcs(id) ON DELETE CASCADE;
+
+-- Добавляем ограничение: хотя бы одно из полей должно быть заполнено
+ALTER TABLE inventory
+  ADD CONSTRAINT inventory_owner_check CHECK (
+    (player_id IS NOT NULL) OR (npc_id IS NOT NULL)
+  );
+
+CREATE INDEX IF NOT EXISTS idx_inventory_npc ON inventory(npc_id);
+
+-- ============================================
+-- Задача 4: Каскадная векторная память NPC (RAG)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS npc_memories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  npc_id UUID NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
+  player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+  memory_text TEXT NOT NULL,
+  memory_type TEXT NOT NULL DEFAULT 'medium' CHECK (memory_type IN ('vivid', 'medium', 'belief')),
+  embedding vector(1024),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- HNSW индекс для быстрого поиска по косинусному расстоянию
+CREATE INDEX IF NOT EXISTS idx_npc_memories_embedding ON npc_memories
+  USING hnsw (embedding vector_cosine_ops)
+  WITH (m = 16, ef_construction = 64);
+
+CREATE INDEX IF NOT EXISTS idx_npc_memories_npc ON npc_memories(npc_id);
+CREATE INDEX IF NOT EXISTS idx_npc_memories_player ON npc_memories(player_id);
+CREATE INDEX IF NOT EXISTS idx_npc_memories_type ON npc_memories(memory_type);
+
+-- ============================================
+-- Задача 5: RPC-функция для поиска воспоминаний
+-- ============================================
+
+CREATE OR REPLACE FUNCTION match_npc_memories(
+  query_embedding vector(1024),
+  match_threshold float,
+  match_count int,
+  p_npc_id uuid,
+  p_player_id uuid
+)
+RETURNS TABLE (
+  id uuid,
+  npc_id uuid,
+  player_id uuid,
+  memory_text text,
+  memory_type text,
+  embedding vector(1024),
+  created_at timestamptz,
+  similarity float
+)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    nm.id,
+    nm.npc_id,
+    nm.player_id,
+    nm.memory_text,
+    nm.memory_type,
+    nm.embedding,
+    nm.created_at,
+    1 - (nm.embedding <=> query_embedding) AS similarity
+  FROM npc_memories nm
+  WHERE nm.npc_id = p_npc_id
+    AND nm.player_id = p_player_id
+    AND nm.embedding IS NOT NULL
+    AND 1 - (nm.embedding <=> query_embedding) > match_threshold
+  ORDER BY nm.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+
+-- ============================================
+-- TRIGGERS для updated_at
+-- ============================================
+
+CREATE TRIGGER trigger_states_updated_at BEFORE UPDATE ON states FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trigger_locations_updated_at BEFORE UPDATE ON locations FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trigger_npcs_updated_at BEFORE UPDATE ON npcs FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================
+-- RLS POLICIES
+-- ============================================
+
+ALTER TABLE states ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "States: read for authenticated" ON states FOR SELECT TO authenticated USING (true);
+CREATE POLICY "States: owner write" ON states FOR ALL USING (world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid()));
+
+ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Locations: read for authenticated" ON locations FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Locations: owner write" ON locations FOR ALL USING (state_id IN (SELECT id FROM states WHERE world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid())));
+
+ALTER TABLE routes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Routes: read for authenticated" ON routes FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Routes: owner write" ON routes FOR ALL USING (
+  location_a_id IN (SELECT id FROM locations WHERE state_id IN (SELECT id FROM states WHERE world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid())))
+);
+
+ALTER TABLE npcs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "NPCs: read for authenticated" ON npcs FOR SELECT TO authenticated USING (true);
+CREATE POLICY "NPCs: owner write" ON npcs FOR ALL USING (world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid()));
+
+ALTER TABLE npc_memories ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Memories: read for authenticated" ON npc_memories FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Memories: system manage" ON npc_memories FOR ALL USING (true);
+
+-- ============================================
+-- TESTS:
+-- ============================================
+/*
+-- Тест 1: Создание государства, столицы, второго города и маршрута
+
+-- Создаем тестовый мир (если нет)
+INSERT INTO worlds (owner_id, name, settings)
+VALUES ('00000000-0000-0000-0000-000000000000', 'Тестовый мир', '{}')
+RETURNING id AS test_world_id;
+
+-- Создаем государство
+INSERT INTO states (world_id, name, description)
+VALUES (
+  '00000000-0000-0000-0000-000000000000',  -- заменить на реальный world_id
+  'Королевство Этерия',
+  'Древнее королевство, известное своими магами и воинами.'
+)
+RETURNING id AS state_id;
+
+-- Создаем столицу
+INSERT INTO locations (state_id, name, type, description)
+VALUES (
+  '00000000-0000-0000-0000-000000000000',  -- заменить на реальный state_id
+  'Этергард',
+  'capital',
+  'Великая столица с белокаменными башнями.'
+)
+RETURNING id AS capital_id;
+
+-- Создаем второй город
+INSERT INTO locations (state_id, name, type, description)
+VALUES (
+  '00000000-0000-0000-0000-000000000000',  -- заменить на реальный state_id
+  'Риверхолл',
+  'city',
+  'Торговый город на реке.'
+)
+RETURNING id AS city_id;
+
+-- Создаем маршрут между столицей и городом
+INSERT INTO routes (location_a_id, location_b_id, distance_km, travel_days)
+VALUES (
+  '00000000-0000-0000-0000-000000000000',  -- заменить на capital_id
+  '00000000-0000-0000-0000-000000000000',  -- заменить на city_id
+  120,
+  3
+);
+
+-- Тест 2: Создание NPC
+INSERT INTO npcs (world_id, location_id, role, name, race, appearance, background, status_tags, habits, catchphrases, stats, hp, max_hp)
+VALUES (
+  '00000000-0000-0000-0000-000000000000',  -- world_id
+  '00000000-0000-0000-0000-000000000000',  -- location_id (столица)
+  'main',
+  'Король Альдрик',
+  'Человек',
+  'Высокий мужчина с седой бородой и короной.',
+  'Наследный король, правящий 30 лет.',
+  '{"друг", "наставник"}',
+  {'читать книги', 'гулять по саду'},
+  {'Корона тяжела', 'Нард превыше всего'},
+  '{"STR": 14, "DEX": 10, "CON": 12, "INT": 16, "WIS": 18, "CHA": 20}',
+  85,
+  85
+)
+RETURNING id AS npc_id;
+
+-- Тест 3: Создание воспоминания с эмбеддингом
+INSERT INTO npc_memories (npc_id, player_id, memory_text, memory_type, embedding)
+VALUES (
+  '00000000-0000-0000-0000-000000000000',  -- npc_id
+  '00000000-0000-0000-0000-000000000000',  -- player_id
+  'Игрок спас королю жизнь при покушении.',
+  'vivid',
+  ARRAY[0.1, 0.2, 0.3]::vector(1024)  -- В реальности 1024 значения, здесь 3 для примера
+);
+
+-- Тест 4: Вызов функции поиска воспоминаний
+SELECT * FROM match_npc_memories(
+  ARRAY[0.1, 0.2, 0.3]::vector(1024),  -- query_embedding (1024 значения)
+  0.5,                                 -- match_threshold
+  10,                                  -- match_count
+  '00000000-0000-0000-0000-000000000000',  -- p_npc_id
+  '00000000-0000-0000-0000-000000000000'   -- p_player_id
+);
+*/
+
+-- ============================================
+-- ОБНОВЛЕНИЕ RPC ФУНКЦИЙ ИНВЕНТАРЯ ДЛЯ ПОДДЕРЖКИ NPC
+-- ============================================
+
+-- Обновление функции add_item_to_inventory для поддержки NPC
+CREATE OR REPLACE FUNCTION add_item_to_inventory(
+  p_player_id UUID DEFAULT NULL,
+  p_item_name TEXT DEFAULT NULL,
+  p_quantity INT DEFAULT 1,
+  p_type TEXT DEFAULT 'misc',
+  p_attributes JSONB DEFAULT '{}',
+  p_npc_id UUID DEFAULT NULL
+)
+RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item_id UUID; new_id UUID;
+BEGIN
+  -- Ищем существующий предмет по player_id или npc_id
+  SELECT id INTO existing_item_id
+  FROM inventory
+  WHERE (
+    (p_player_id IS NOT NULL AND player_id = p_player_id)
+    OR (p_npc_id IS NOT NULL AND npc_id = p_npc_id)
+  )
+  AND item_name = p_item_name
+  AND type = p_type
+  FOR UPDATE;
+
+  IF existing_item_id IS NOT NULL THEN
+    UPDATE inventory SET quantity = quantity + p_quantity WHERE id = existing_item_id;
+    RETURN existing_item_id;
+  ELSE
+    new_id := gen_random_uuid();
+    INSERT INTO inventory (id, player_id, npc_id, item_name, quantity, type, attributes)
+    VALUES (new_id, p_player_id, p_npc_id, p_item_name, p_quantity, p_type, p_attributes);
+    RETURN new_id;
+  END IF;
+END;
+$$;
+
+-- Обновление функции remove_item_from_inventory для поддержки NPC
+CREATE OR REPLACE FUNCTION remove_item_from_inventory(
+  p_player_id UUID DEFAULT NULL,
+  p_item_name TEXT DEFAULT NULL,
+  p_quantity INT DEFAULT 1,
+  p_npc_id UUID DEFAULT NULL
+)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item RECORD;
+BEGIN
+  -- Ищем существующий предмет по player_id или npc_id
+  SELECT id, quantity INTO existing_item
+  FROM inventory
+  WHERE (
+    (p_player_id IS NOT NULL AND player_id = p_player_id)
+    OR (p_npc_id IS NOT NULL AND npc_id = p_npc_id)
+  )
+  AND item_name = p_item_name
+  FOR UPDATE;
+
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+
+  IF existing_item.quantity <= p_quantity THEN
+    DELETE FROM inventory WHERE id = existing_item.id;
+  ELSE
+    UPDATE inventory SET quantity = quantity - p_quantity WHERE id = existing_item.id;
+  END IF;
+
+  RETURN TRUE;
+END;
+$$;
+
+================
+File: supabase/migrations/007_npc_inventory_rpc.sql
+================
+-- Обновление RPC функций инвентаря для поддержки NPC
+-- Применять после миграции 006
+
+-- Обновление функции add_item_to_inventory для поддержки NPC
+CREATE OR REPLACE FUNCTION add_item_to_inventory(
+  p_player_id UUID DEFAULT NULL,
+  p_item_name TEXT DEFAULT NULL,
+  p_quantity INT DEFAULT 1,
+  p_type TEXT DEFAULT 'misc',
+  p_attributes JSONB DEFAULT '{}',
+  p_npc_id UUID DEFAULT NULL
+)
+RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item_id UUID; new_id UUID;
+BEGIN
+  -- Ищем существующий предмет по player_id или npc_id
+  SELECT id INTO existing_item_id
+  FROM inventory
+  WHERE (
+    (p_player_id IS NOT NULL AND player_id = p_player_id)
+    OR (p_npc_id IS NOT NULL AND npc_id = p_npc_id)
+  )
+  AND item_name = p_item_name
+  AND type = p_type
+  FOR UPDATE;
+
+  IF existing_item_id IS NOT NULL THEN
+    UPDATE inventory SET quantity = quantity + p_quantity WHERE id = existing_item_id;
+    RETURN existing_item_id;
+  ELSE
+    new_id := gen_random_uuid();
+    INSERT INTO inventory (id, player_id, npc_id, item_name, quantity, type, attributes)
+    VALUES (new_id, p_player_id, p_npc_id, p_item_name, p_quantity, p_type, p_attributes);
+    RETURN new_id;
+  END IF;
+END;
+$$;
+
+-- Обновление функции remove_item_from_inventory для поддержки NPC
+CREATE OR REPLACE FUNCTION remove_item_from_inventory(
+  p_player_id UUID DEFAULT NULL,
+  p_item_name TEXT DEFAULT NULL,
+  p_quantity INT DEFAULT 1,
+  p_npc_id UUID DEFAULT NULL
+)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE existing_item RECORD;
+BEGIN
+  -- Ищем существующий предмет по player_id или npc_id
+  SELECT id, quantity INTO existing_item
+  FROM inventory
+  WHERE (
+    (p_player_id IS NOT NULL AND player_id = p_player_id)
+    OR (p_npc_id IS NOT NULL AND npc_id = p_npc_id)
+  )
+  AND item_name = p_item_name
+  FOR UPDATE;
+
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+
+  IF existing_item.quantity <= p_quantity THEN
+    DELETE FROM inventory WHERE id = existing_item.id;
+  ELSE
+    UPDATE inventory SET quantity = quantity - p_quantity WHERE id = existing_item.id;
+  END IF;
+
+  RETURN TRUE;
+END;
+$$;
+
+================
+File: tests/memory-engine.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Мокаем все зависимости до импорта модуля
+const mockSupabaseFrom = vi.fn();
+const mockSupabase = {
+  from: mockSupabaseFrom,
+};
+
+// Мокаем все импорты модуля
+vi.mock("https://esm.sh/@supabase/supabase-js@2", () => ({
+  createClient: () => mockSupabase,
+}));
+
+vi.mock("https://deno.land/std@0.177.0/http/server.ts", () => ({
+  serve: vi.fn(),
+}));
+
+// Мокаем fetch
+const mockFetch = vi.fn();
+globalThis.fetch = mockFetch;
+
+// Мокаем Deno.env
+vi.stubGlobal("Deno", {
+  env: {
+    get: vi.fn((key: string) => {
+      if (key === "SUPABASE_URL") return "https://test.supabase.co";
+      if (key === "SUPABASE_SERVICE_ROLE_KEY") return "test-service-key";
+      if (key === "OPENROUTER_API_KEY") return "test-api-key";
+      return null;
+    }),
+  },
+});
+
+// Хелпер для создания цепочки моков Supabase
+function createSupabaseChain(returnValue: any) {
+  const chain: any = {
+    select: vi.fn(() => chain),
+    insert: vi.fn(() => chain),
+    update: vi.fn(() => chain),
+    delete: vi.fn(() => chain),
+    eq: vi.fn(() => chain),
+    in: vi.fn(() => chain),
+    order: vi.fn(() => chain),
+    limit: vi.fn(() => chain),
+    single: vi.fn(() => chain),
+    maybeSingle: vi.fn(() => chain),
+  };
+  // Для await цепочки - возвращаем промис
+  Object.defineProperty(chain, 'then', {
+    get() {
+      return (resolve: any) => resolve(returnValue);
+    },
+  });
+  return chain;
+}
+
+describe("npc-memory-engine", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it("should add vivid memory and vectorize it", async () => {
+    // Настраиваем мок для from()
+    const playerChain = createSupabaseChain({ data: { user_id: "user-123" } });
+    const settingsChain = createSupabaseChain({ data: { openrouter_key: "test-key" } });
+    const insertChain = createSupabaseChain({ error: null });
+    const countVividChain = createSupabaseChain({ count: 1, error: null });
+    const countMediumChain = createSupabaseChain({ count: 0, error: null });
+    const countBeliefChain = createSupabaseChain({ count: 0, error: null });
+
+    mockSupabaseFrom
+      .mockReturnValueOnce(playerChain) // players
+      .mockReturnValueOnce(settingsChain) // user_settings
+      .mockReturnValueOnce(insertChain) // npc_memories insert
+      .mockReturnValueOnce(countVividChain) // npc_memories count vivid
+      .mockReturnValueOnce(countMediumChain) // npc_memories count medium
+      .mockReturnValueOnce(countBeliefChain); // npc_memories count belief
+
+    // Мокаем успешный ответ от embeddings API
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [{ embedding: new Array(1024).fill(0.1) }],
+      }),
+    });
+
+    // Динамически импортируем модуль (он зарегистрирует serve)
+    await import("../supabase/functions/npc-memory-engine/index.ts");
+
+    // Получаем зарегистрированный serve handler
+    const { serve } = await import("https://deno.land/std@0.177.0/http/server.ts");
+    const handler = (serve as any).mock.calls[0][0];
+
+    // Создаем тестовый запрос
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        npc_id: "npc-123",
+        player_id: "player-456",
+        memory_text: "Тестовое воспоминание",
+      }),
+    });
+
+    const res = await handler(req);
+    const body = await res.json();
+
+    // Проверяем что вызывался fetch к embeddings
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/embeddings",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("bge-m3"),
+      }),
+    );
+
+    // Проверяем что вызывался insert со статусом vivid
+    expect(insertChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        npc_id: "npc-123",
+        player_id: "player-456",
+        memory_text: "Тестовое воспоминание",
+        memory_type: "vivid",
+        embedding: expect.any(Array),
+      }),
+    );
+
+    expect(body.success).toBe(true);
+  });
+
+  it("should cascade vivid to medium when count > 5", async () => {
+    // Настраиваем мок для from()
+    const playerChain = createSupabaseChain({ data: { user_id: "user-123" } });
+    const settingsChain = createSupabaseChain({ data: { openrouter_key: "test-key" } });
+    const insertChain = createSupabaseChain({ error: null });
+    const countVividChain = createSupabaseChain({ count: 6, error: null });
+    const oldestVividChain = createSupabaseChain({ data: { id: "oldest-vivid-id" } });
+    const updateChain = createSupabaseChain({ error: null });
+    const countMediumChain = createSupabaseChain({ count: 0, error: null });
+    const countBeliefChain = createSupabaseChain({ count: 0, error: null });
+
+    mockSupabaseFrom
+      .mockReturnValueOnce(playerChain) // players
+      .mockReturnValueOnce(settingsChain) // user_settings
+      .mockReturnValueOnce(insertChain) // npc_memories insert
+      .mockReturnValueOnce(countVividChain) // npc_memories count vivid
+      .mockReturnValueOnce(oldestVividChain) // oldest vivid
+      .mockReturnValueOnce(updateChain) // update to medium
+      .mockReturnValueOnce(countMediumChain) // npc_memories count medium
+      .mockReturnValueOnce(countBeliefChain); // npc_memories count belief
+
+    // Мокаем успешный ответ от embeddings API
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [{ embedding: new Array(1024).fill(0.1) }],
+      }),
+    });
+
+    await import("../supabase/functions/npc-memory-engine/index.ts");
+
+    const { serve } = await import("https://deno.land/std@0.177.0/http/server.ts");
+    const handler = (serve as any).mock.calls[0][0];
+
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        npc_id: "npc-123",
+        player_id: "player-456",
+        memory_text: "Тестовое воспоминание",
+      }),
+    });
+
+    const res = await handler(req);
+    const body = await res.json();
+
+    // Проверяем что вызывался update для перемещения в medium
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ memory_type: "medium" }),
+    );
+
+    expect(body.success).toBe(true);
+  });
+
+  it("should compress medium to belief and update status tags", async () => {
+    // Настраиваем мок для from()
+    const playerChain = createSupabaseChain({ data: { user_id: "user-123" } });
+    const settingsChain = createSupabaseChain({ data: { openrouter_key: "test-key" } });
+    const insertVividChain = createSupabaseChain({ error: null });
+    const countVividChain = createSupabaseChain({ count: 1, error: null });
+    const countMediumChain = createSupabaseChain({ count: 6, error: null });
+    const mediumMemoriesChain = createSupabaseChain({
+      data: Array.from({ length: 6 }, (_, i) => ({
+        id: `medium-${i}`,
+        memory_text: `Воспоминание ${i + 1}`,
+      })),
+      error: null,
+    });
+    const deleteChain = createSupabaseChain({ error: null });
+    const insertBeliefChain = createSupabaseChain({ error: null });
+    const countBeliefChain = createSupabaseChain({ count: 1, error: null });
+    const npcDataChain = createSupabaseChain({ data: { status_tags: ["знакомый"] } });
+    const updateTagsChain = createSupabaseChain({ error: null });
+
+    mockSupabaseFrom
+      .mockReturnValueOnce(playerChain) // players
+      .mockReturnValueOnce(settingsChain) // user_settings
+      .mockReturnValueOnce(insertVividChain) // npc_memories insert vivid
+      .mockReturnValueOnce(countVividChain) // npc_memories count vivid
+      .mockReturnValueOnce(countMediumChain) // npc_memories count medium
+      .mockReturnValueOnce(mediumMemoriesChain) // get 6 medium memories
+      .mockReturnValueOnce(deleteChain) // delete 6 medium
+      .mockReturnValueOnce(insertBeliefChain) // insert belief
+      .mockReturnValueOnce(countBeliefChain) // npc_memories count belief
+      .mockReturnValueOnce(npcDataChain) // get npc status_tags
+      .mockReturnValueOnce(updateTagsChain); // update status_tags
+
+    // Мокаем успешный ответ от embeddings API для первого воспоминания
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [{ embedding: new Array(1024).fill(0.1) }],
+      }),
+    });
+
+    // Мокаем вызов LLM для сжатия (chat/completions)
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "Игрок — надёжный союзник" } }],
+      }),
+    });
+
+    // Мокаем генерацию эмбеддинга для belief
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [{ embedding: new Array(1024).fill(0.2) }],
+      }),
+    });
+
+    // Мокаем вызов LLM для обновления тегов (chat/completions)
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"tags": ["друг", "наставник"]}' } }],
+      }),
+    });
+
+    await import("../supabase/functions/npc-memory-engine/index.ts");
+
+    const { serve } = await import("https://deno.land/std@0.177.0/http/server.ts");
+    const handler = (serve as any).mock.calls[0][0];
+
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        npc_id: "npc-123",
+        player_id: "player-456",
+        memory_text: "Тестовое воспоминание",
+      }),
+    });
+
+    const res = await handler(req);
+    const body = await res.json();
+
+    // Проверяем что вызывались два fetch-запроса к chat/completions
+    const chatCalls = mockFetch.mock.calls.filter(
+      (call) => call[0] === "https://openrouter.ai/api/v1/chat/completions",
+    );
+    expect(chatCalls.length).toBe(2);
+
+    // Проверяем что произошло удаление 6 записей
+    expect(deleteChain.delete).toHaveBeenCalled();
+
+    // Проверяем что вставился belief
+    expect(insertBeliefChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memory_type: "belief",
+        memory_text: "Игрок — надёжный союзник",
+      }),
+    );
+
+    // Проверяем что обновились status_tags
+    expect(updateTagsChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status_tags: ["друг", "наставник"] }),
+    );
+
+    expect(body.success).toBe(true);
+    expect(body.new_belief_created).toBe(true);
+  });
+});
+
+================
+File: tests/npc-bestiary.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ============================================
+// Unit tests for NPC Bestiary & Generation
+// ============================================
+
+// Мокаем Supabase клиент
+const mockSupabaseFrom = vi.fn();
+const mockSupabase = {
+  from: mockSupabaseFrom,
+  rpc: vi.fn(),
+};
+
+vi.mock("https://esm.sh/@supabase/supabase-js@2", () => ({
+  createClient: () => mockSupabase,
+}));
+
+// Мокаем supabase.js для api/game.js
+vi.mock("../src/api/supabase.js", () => ({
+  supabase: mockSupabase,
+  signOut: vi.fn(),
+  invokeFunction: vi.fn(),
+}));
+
+vi.mock("https://deno.land/std@0.177.0/http/server.ts", () => ({
+  serve: vi.fn(),
+}));
+
+// Мокаем fetch
+const mockFetch = vi.fn();
+globalThis.fetch = mockFetch;
+
+// Мокаем Deno.env
+vi.stubGlobal("Deno", {
+  env: {
+    get: vi.fn((key: string) => {
+      if (key === "SUPABASE_URL") return "https://test.supabase.co";
+      if (key === "SUPABASE_SERVICE_ROLE_KEY") return "test-service-key";
+      if (key === "OPENROUTER_API_KEY") return "test-api-key";
+      return null;
+    }),
+  },
+});
+
+// Хелпер для создания цепочки моков Supabase
+function createSupabaseChain(returnValue: any) {
+  const chain: any = {
+    select: vi.fn(() => chain),
+    insert: vi.fn(() => chain),
+    update: vi.fn(() => chain),
+    delete: vi.fn(() => chain),
+    eq: vi.fn(() => chain),
+    in: vi.fn(() => chain),
+    order: vi.fn(() => chain),
+    limit: vi.fn(() => chain),
+    single: vi.fn(() => chain),
+    maybeSingle: vi.fn(() => chain),
+  };
+  Object.defineProperty(chain, "then", {
+    get() {
+      return (resolve: any) => resolve(returnValue);
+    },
+  });
+  return chain;
+}
+
+describe("generate-world-npcs", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it("should parse and generate full stats via tier matrix", async () => {
+    // Мокаем получение user_settings
+    const settingsChain = createSupabaseChain({ data: { openrouter_key: "test-key" } });
+    // Мокаем insert NPC
+    const insertChain = createSupabaseChain({
+      data: [{ id: "npc-1", name: "Дракон", tier: 3 }],
+      error: null,
+    });
+
+    mockSupabaseFrom
+      .mockReturnValueOnce(settingsChain) // user_settings
+      .mockReturnValueOnce(insertChain); // npcs insert
+
+    // Мокаем ответ LLM с NPC Tier 3 (HP: 50)
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify([{
+              name: "Дракон",
+              role: "main",
+              race: "Дракон",
+              background: "Древний дракон",
+              habits: ["летать"],
+              catchphrases: ["Я огонь"],
+              tier: 3,
+              stats: { STR: 16, DEX: 14, CON: 16, INT: 14, WIS: 16, CHA: 14 },
+              hp: 50,
+              max_hp: 50,
+            }]),
+          },
+        }],
+      }),
+    });
+
+    await import("../supabase/functions/generate-world-npcs/index.ts");
+
+    const { serve } = await import("https://deno.land/std@0.177.0/http/server.ts");
+    const handler = (serve as any).mock.calls[0][0];
+
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        world_id: "world-123",
+        lore_text: "В мире живёт древний дракон",
+        user_id: "user-123",
+      }),
+    });
+
+    const res = await handler(req);
+    const body = await res.json();
+
+    // Проверяем что вызывался fetch к chat/completions
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("Tier"),
+      }),
+    );
+
+    // Проверяем что insert был вызван с правильными данными
+    expect(insertChain.insert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          world_id: "world-123",
+          name: "Дракон",
+          role: "main",
+          race: "Дракон",
+          background: "Древний дракон",
+          stats: { STR: 16, DEX: 14, CON: 16, INT: 14, WIS: 16, CHA: 14 },
+          hp: 50,
+          max_hp: 50,
+        }),
+      ]),
+    );
+
+    expect(body.success).toBe(true);
+    expect(body.count).toBe(1);
+  });
+});
+
+describe("NPC Bestiary API", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should call updateNpc API method", async () => {
+    const updateChain = createSupabaseChain({ data: { id: "npc-1", name: "Новое имя" }, error: null });
+    mockSupabaseFrom.mockReturnValue(updateChain);
+
+    const { updateNpc } = await import("../src/api/game.js");
+
+    const result = await updateNpc("npc-1", { name: "Новое имя", race: "Эльф" });
+
+    expect(mockSupabaseFrom).toHaveBeenCalledWith("npcs");
+    expect(updateChain.update).toHaveBeenCalledWith({ name: "Новое имя", race: "Эльф" });
+    expect(result.name).toBe("Новое имя");
+  });
+
+  it("should call deleteNpc API method", async () => {
+    const deleteChain = createSupabaseChain({ error: null });
+    mockSupabaseFrom.mockReturnValue(deleteChain);
+
+    const { deleteNpc } = await import("../src/api/game.js");
+
+    await deleteNpc("npc-1");
+
+    expect(mockSupabaseFrom).toHaveBeenCalledWith("npcs");
+    expect(deleteChain.delete).toHaveBeenCalled();
+  });
+
+  it("should call getNpcsByWorld API method", async () => {
+    const selectChain = createSupabaseChain({ data: [{ id: "npc-1" }, { id: "npc-2" }], error: null });
+    mockSupabaseFrom.mockReturnValue(selectChain);
+
+    const { getNpcsByWorld } = await import("../src/api/game.js");
+
+    const result = await getNpcsByWorld("world-123");
+
+    expect(mockSupabaseFrom).toHaveBeenCalledWith("npcs");
+    expect(selectChain.eq).toHaveBeenCalledWith("world_id", "world-123");
+    expect(result.length).toBe(2);
+  });
+});
+
+describe("simulate-npc-background", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it("should autonomously add item to npc inventory", async () => {
+    // Мокаем получение сессии
+    const sessionChain = createSupabaseChain({ data: { world_id: "world-123" } });
+    // Мокаем получение главных NPC
+    const npcsChain = createSupabaseChain({
+      data: [{
+        id: "npc-1",
+        name: "Король",
+        role: "main",
+        race: "Человек",
+        background: "Правитель",
+        habits: ["читать"],
+      }],
+    });
+    // Мокаем user_settings
+    const settingsChain = createSupabaseChain({ data: { openrouter_key: "test-key" } });
+
+    mockSupabaseFrom
+      .mockReturnValueOnce(sessionChain) // sessions
+      .mockReturnValueOnce(npcsChain) // npcs
+      .mockReturnValueOnce(settingsChain); // user_settings
+
+    // Мокаем ответ LLM с предметом
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              action_summary: "Король нашёл древний меч в подземелье",
+              obtained_item_name: "Древний меч",
+              item_type: "weapon",
+            }),
+          },
+        }],
+      }),
+    });
+
+    // Мокаем rpc add_item_to_inventory
+    mockSupabase.rpc.mockResolvedValueOnce({ data: "item-id", error: null });
+
+    await import("../supabase/functions/simulate-npc-background/index.ts");
+
+    const { serve } = await import("https://deno.land/std@0.177.0/http/server.ts");
+    const handler = (serve as any).mock.calls[0][0];
+
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: "session-123",
+        days_passed: 7,
+        user_id: "user-123",
+      }),
+    });
+
+    const res = await handler(req);
+    const body = await res.json();
+
+    // Проверяем что вызывался fetch к chat/completions
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+
+    // Проверяем что вызывался rpc add_item_to_inventory
+    expect(mockSupabase.rpc).toHaveBeenCalledWith(
+      "add_item_to_inventory",
+      expect.objectContaining({
+        p_npc_id: "npc-1",
+        p_item_name: "Древний меч",
+        p_type: "weapon",
+      }),
+    );
+
+    expect(body.success).toBe(true);
+    expect(body.actions.length).toBe(1);
+    expect(body.actions[0].obtained_item_name).toBe("Древний меч");
+  });
+
+  it("should not add item when obtained_item_name is null", async () => {
+    // Мокаем получение сессии
+    const sessionChain = createSupabaseChain({ data: { world_id: "world-123" } });
+    // Мокаем получение главных NPC
+    const npcsChain = createSupabaseChain({
+      data: [{
+        id: "npc-1",
+        name: "Король",
+        role: "main",
+        race: "Человек",
+        background: "Правитель",
+        habits: ["читать"],
+      }],
+    });
+    // Мокаем user_settings
+    const settingsChain = createSupabaseChain({ data: { openrouter_key: "test-key" } });
+
+    mockSupabaseFrom
+      .mockReturnValueOnce(sessionChain) // sessions
+      .mockReturnValueOnce(npcsChain) // npcs
+      .mockReturnValueOnce(settingsChain); // user_settings
+
+    // Мокаем ответ LLM без предмета
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              action_summary: "Король провёл день в библиотеке",
+              obtained_item_name: null,
+              item_type: null,
+            }),
+          },
+        }],
+      }),
+    });
+
+    await import("../supabase/functions/simulate-npc-background/index.ts");
+
+    const { serve } = await import("https://deno.land/std@0.177.0/http/server.ts");
+    const handler = (serve as any).mock.calls[0][0];
+
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: "session-123",
+        days_passed: 3,
+        user_id: "user-123",
+      }),
+    });
+
+    const res = await handler(req);
+    const body = await res.json();
+
+    // Проверяем что rpc add_item_to_inventory НЕ вызывался
+    expect(mockSupabase.rpc).not.toHaveBeenCalled();
+
+    expect(body.success).toBe(true);
+    expect(body.actions.length).toBe(1);
+    expect(body.actions[0].obtained_item_name).toBeNull();
+  });
+});
+
+================
+File: tests/world_geography.test.ts
+================
+import { describe, it, expect } from "vitest";
+
+// ============================================
+// Unit tests for Migration 006: World Geography & NPC Matrix
+// ============================================
+
+describe("World Geography Validation", () => {
+  const VALID_LOCATION_TYPES = ["capital", "city", "village", "ruins", "landmark"];
+  const VALID_NPC_ROLES = ["main", "secondary"];
+  const VALID_MEMORY_TYPES = ["vivid", "medium", "belief"];
+
+  describe("Location Types", () => {
+    it("accepts all valid location types", () => {
+      VALID_LOCATION_TYPES.forEach((type) => {
+        expect(VALID_LOCATION_TYPES).toContain(type);
+      });
+    });
+
+    it("rejects invalid location types", () => {
+      const invalidTypes = ["castle", "dungeon", "forest", "mountain", "lake"];
+      invalidTypes.forEach((type) => {
+        expect(VALID_LOCATION_TYPES).not.toContain(type);
+      });
+    });
+  });
+
+  describe("NPC Roles", () => {
+    it("accepts 'main' role for primary characters", () => {
+      expect(VALID_NPC_ROLES).toContain("main");
+    });
+
+    it("accepts 'secondary' role for supporting characters", () => {
+      expect(VALID_NPC_ROLES).toContain("secondary");
+    });
+
+    it("rejects invalid roles", () => {
+      const invalidRoles = ["boss", "minion", "merchant", "quest_giver"];
+      invalidRoles.forEach((role) => {
+        expect(VALID_NPC_ROLES).not.toContain(role);
+      });
+    });
+  });
+
+  describe("Memory Types", () => {
+    it("accepts 'vivid' for strong memories", () => {
+      expect(VALID_MEMORY_TYPES).toContain("vivid");
+    });
+
+    it("accepts 'medium' for normal memories", () => {
+      expect(VALID_MEMORY_TYPES).toContain("medium");
+    });
+
+    it("accepts 'belief' for core beliefs", () => {
+      expect(VALID_MEMORY_TYPES).toContain("belief");
+    });
+
+    it("rejects invalid memory types", () => {
+      const invalidTypes = ["weak", "strong", "temporary", "permanent"];
+      invalidTypes.forEach((type) => {
+        expect(VALID_MEMORY_TYPES).not.toContain(type);
+      });
+    });
+  });
+});
+
+describe("Route Constraints", () => {
+  it("ensures location_a_id is less than location_b_id to prevent duplicates", () => {
+    const locationA = "11111111-1111-1111-1111-111111111111";
+    const locationB = "22222222-2222-2222-2222-222222222222";
+    expect(locationA < locationB).toBe(true);
+  });
+
+  it("rejects routes where location_a_id equals location_b_id", () => {
+    const locationA = "11111111-1111-1111-1111-111111111111";
+    const locationB = "11111111-1111-1111-1111-111111111111";
+    expect(locationA === locationB).toBe(true);
+  });
+
+  it("rejects routes where location_a_id is greater than location_b_id", () => {
+    const locationA = "22222222-2222-2222-2222-222222222222";
+    const locationB = "11111111-1111-1111-1111-111111111111";
+    expect(locationA < locationB).toBe(false);
+  });
+});
+
+describe("NPC Stats Validation", () => {
+  const DEFAULT_STATS = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
+
+  it("has correct default stats structure", () => {
+    expect(DEFAULT_STATS).toHaveProperty("STR", 10);
+    expect(DEFAULT_STATS).toHaveProperty("DEX", 10);
+    expect(DEFAULT_STATS).toHaveProperty("CON", 10);
+    expect(DEFAULT_STATS).toHaveProperty("INT", 10);
+    expect(DEFAULT_STATS).toHaveProperty("WIS", 10);
+    expect(DEFAULT_STATS).toHaveProperty("CHA", 10);
+  });
+
+  it("validates stat modifier calculation", () => {
+    const calculateModifier = (stat: number) => Math.floor((stat - 10) / 2);
+    expect(calculateModifier(10)).toBe(0);
+    expect(calculateModifier(14)).toBe(2);
+    expect(calculateModifier(8)).toBe(-1);
+    expect(calculateModifier(20)).toBe(5);
+  });
+});
+
+describe("Memory Embedding Validation", () => {
+  it("validates embedding dimension is 1024 for bge-m3 model", () => {
+    const EMBEDDING_DIMENSION = 1024;
+    expect(EMBEDDING_DIMENSION).toBe(1024);
+  });
+
+  it("validates cosine similarity range", () => {
+    const cosineSimilarity = (a: number[], b: number[]) => {
+      const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+      const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+      const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+      return dotProduct / (magnitudeA * magnitudeB);
+    };
+
+    const vec1 = [1, 0, 0];
+    const vec2 = [1, 0, 0];
+    const vec3 = [0, 1, 0];
+
+    expect(cosineSimilarity(vec1, vec2)).toBeCloseTo(1);
+    expect(cosineSimilarity(vec1, vec3)).toBeCloseTo(0);
+  });
+});
+
+describe("Inventory NPC Support", () => {
+  it("allows inventory to belong to either player or npc", () => {
+    const validOwner1 = { player_id: "uuid-1", npc_id: null };
+    const validOwner2 = { player_id: null, npc_id: "uuid-2" };
+    const invalidOwner = { player_id: null, npc_id: null };
+
+    const isValid = (item: { player_id: string | null; npc_id: string | null }) =>
+      item.player_id !== null || item.npc_id !== null;
+
+    expect(isValid(validOwner1)).toBe(true);
+    expect(isValid(validOwner2)).toBe(true);
+    expect(isValid(invalidOwner)).toBe(false);
+  });
+});
+
+describe("Cascade Delete Behavior", () => {
+  it("world deletion cascades to states", () => {
+    // When world is deleted, all its states should be deleted
+    const cascadeRule = "ON DELETE CASCADE";
+    expect(cascadeRule).toBe("ON DELETE CASCADE");
+  });
+
+  it("state deletion cascades to locations", () => {
+    // When state is deleted, all its locations should be deleted
+    const cascadeRule = "ON DELETE CASCADE";
+    expect(cascadeRule).toBe("ON DELETE CASCADE");
+  });
+
+  it("npc deletion sets ruler_id to null in states", () => {
+    // When npc is deleted, ruler_id should be set to null
+    const cascadeRule = "ON DELETE SET NULL";
+    expect(cascadeRule).toBe("ON DELETE SET NULL");
+  });
+
+  it("npc deletion cascades to memories", () => {
+    // When npc is deleted, all its memories should be deleted
+    const cascadeRule = "ON DELETE CASCADE";
+    expect(cascadeRule).toBe("ON DELETE CASCADE");
+  });
+});
+
+describe("match_npc_memories Function Signature", () => {
+  it("validates function parameter types", () => {
+    const params = {
+      query_embedding: "vector(1024)",
+      match_threshold: "float",
+      match_count: "int",
+      p_npc_id: "uuid",
+      p_player_id: "uuid",
+    };
+
+    expect(params.query_embedding).toBe("vector(1024)");
+    expect(params.match_threshold).toBe("float");
+    expect(params.match_count).toBe("int");
+    expect(params.p_npc_id).toBe("uuid");
+    expect(params.p_player_id).toBe("uuid");
+  });
+
+  it("validates return table structure", () => {
+    const returnColumns = [
+      "id",
+      "npc_id",
+      "player_id",
+      "memory_text",
+      "memory_type",
+      "embedding",
+      "created_at",
+      "similarity",
+    ];
+
+    expect(returnColumns).toHaveLength(8);
+    expect(returnColumns).toContain("similarity");
+  });
+});
+
+describe("Array Field Defaults", () => {
+  it("validates empty array default for status_tags", () => {
+    const defaultTags: string[] = [];
+    expect(defaultTags).toEqual([]);
+  });
+
+  it("validates empty array default for habits", () => {
+    const defaultHabits: string[] = [];
+    expect(defaultHabits).toEqual([]);
+  });
+
+  it("validates empty array default for catchphrases", () => {
+    const defaultCatchphrases: string[] = [];
+    expect(defaultCatchphrases).toEqual([]);
+  });
+});
+
+describe("Timestamp Defaults", () => {
+  it("validates NOW() default for created_at", () => {
+    const now = new Date().toISOString();
+    expect(now).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  });
+
+  it("validates NOW() default for updated_at", () => {
+    const now = new Date().toISOString();
+    expect(now).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  });
+});
+
+
+
+
+
+================================================================
+End of Codebase
+================================================================

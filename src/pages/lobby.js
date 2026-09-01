@@ -408,17 +408,28 @@ export function renderLobby(container, user) {
     bestiaryModal.className = 'modal-overlay';
     bestiaryModal.id = 'bestiaryModal';
     bestiaryModal.innerHTML = `
-      <div class="modal" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
+      <div class="modal" style="max-width: 700px; max-height: 85vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
           <h2 class="card-title">🐉 Бестиарий: <span id="bestiaryWorldName"></span></h2>
           <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary btn-sm" id="openGeoBtn">🗺️ География</button>
             <button class="btn btn-primary btn-sm" id="createNpcBtn">+ Создать NPC</button>
             <button class="btn btn-ghost btn-sm" id="closeBestiaryBtn">✕</button>
           </div>
         </div>
+        
+        <!-- Вкладки категорий -->
+        <div class="bestiary-tabs">
+          <button class="bestiary-tab active" data-category="all">👥 Все</button>
+          <button class="bestiary-tab" data-category="npc">🧠 NPC</button>
+          <button class="bestiary-tab" data-category="beast">🐾 Звери</button>
+          <button class="bestiary-tab" data-category="monster">👹 Монстры</button>
+          <button class="bestiary-tab" data-category="boss">💀 Боссы</button>
+        </div>
+        
         <div id="createNpcForm" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
           <h3 style="margin-bottom: 0.5rem;">Новый NPC</h3>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+          <div class="npc-form-grid">
             <div class="form-group">
               <label class="form-label">Имя *</label>
               <input class="input" id="new-npc-name" placeholder="Имя NPC" />
@@ -437,6 +448,19 @@ export function renderLobby(container, user) {
             <div class="form-group">
               <label class="form-label">HP</label>
               <input class="input" type="number" id="new-npc-hp" value="30" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Категория</label>
+              <select class="input" id="new-npc-category">
+                <option value="npc">🧠 NPC (разумное)</option>
+                <option value="beast">🐾 Зверь</option>
+                <option value="monster">👹 Монстр</option>
+                <option value="boss">💀 Босс</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Локация</label>
+              <input class="input" id="new-npc-location" placeholder="Название города" />
             </div>
           </div>
           <div class="form-group">
@@ -496,6 +520,77 @@ export function renderLobby(container, user) {
       </div>
     `;
     container.appendChild(bestiaryModal);
+
+    // Модальное окно: География (Государства и Города)
+    const geoModal = document.createElement('div');
+    geoModal.className = 'modal-overlay';
+    geoModal.id = 'geoModal';
+    geoModal.innerHTML = `
+      <div class="modal" style="max-width: 700px; max-height: 85vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2 class="card-title">🗺️ География: <span id="geoWorldName"></span></h2>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-primary btn-sm" id="createStateBtn">+ Государство</button>
+            <button class="btn btn-ghost btn-sm" id="closeGeoBtn">✕</button>
+          </div>
+        </div>
+        
+        <!-- Форма создания государства -->
+        <div id="createStateForm" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
+          <h3 style="margin-bottom: 0.5rem;">Новое государство</h3>
+          <div class="form-group">
+            <label class="form-label">Название *</label>
+            <input class="input" id="new-state-name" placeholder="Название государства" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Описание</label>
+            <textarea class="input" id="new-state-desc" rows="2" placeholder="Описание государства..."></textarea>
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button class="btn btn-primary" id="saveNewStateBtn">💾 Создать</button>
+            <button class="btn btn-ghost" id="cancelNewStateBtn">Отмена</button>
+          </div>
+        </div>
+        
+        <!-- Форма создания города -->
+        <div id="createCityForm" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
+          <h3 style="margin-bottom: 0.5rem;">Новая локация</h3>
+          <div class="npc-form-grid">
+            <div class="form-group">
+              <label class="form-label">Название *</label>
+              <input class="input" id="new-city-name" placeholder="Название локации" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Тип</label>
+              <select class="input" id="new-city-type">
+                <option value="city">🏘️ Город</option>
+                <option value="capital">👑 Столица</option>
+                <option value="village">🏡 Деревня</option>
+                <option value="ruins">🏚️ Руины</option>
+                <option value="landmark">⛰️ Достопримечательность</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Государство</label>
+            <select class="input" id="new-city-state"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Описание</label>
+            <textarea class="input" id="new-city-desc" rows="2" placeholder="Описание локации..."></textarea>
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button class="btn btn-primary" id="saveNewCityBtn">💾 Создать</button>
+            <button class="btn btn-ghost" id="cancelNewCityBtn">Отмена</button>
+          </div>
+        </div>
+        
+        <div id="geoContent">
+          <p class="text-muted">Загрузка географии...</p>
+        </div>
+      </div>
+    `;
+    container.appendChild(geoModal);
 
     bindEvents();
   }
@@ -664,7 +759,7 @@ export function renderLobby(container, user) {
           const categoryColors = { npc: 'badge-info', beast: 'badge-success', monster: 'badge-warning', boss: 'badge-danger' };
           const category = npc.category || 'npc';
           return `
-          <div class="card npc-card" style="margin-bottom: 0.75rem;">
+          <div class="card npc-card" data-category="${category}" style="margin-bottom: 0.75rem;">
             <div class="npc-header" data-npc-toggle="${npc.id}">
               <div class="npc-header-info">
                 <span class="npc-role-badge ${npc.role === 'main' ? 'npc-role-main' : 'npc-role-secondary'}">${npc.role === 'main' ? '⭐ Главный' : '○ Второстепенный'}</span>
@@ -859,6 +954,238 @@ export function renderLobby(container, user) {
         saveBtn.disabled = false;
         saveBtn.textContent = '💾 Создать';
       }
+    });
+
+    // ===================== GEOGRAPHY =====================
+    
+    // Load geography
+    async function loadGeography(worldId) {
+      const content = document.getElementById('geoContent');
+      const stateSelect = document.getElementById('new-city-state');
+      content.innerHTML = '<p class="text-muted">Загрузка географии...</p>';
+      
+      try {
+        const { data: states, error: statesError } = await supabase
+          .from('states')
+          .select('*, locations(*)')
+          .eq('world_id', worldId)
+          .order('name');
+        
+        if (statesError) throw statesError;
+        
+        // Update state dropdown
+        stateSelect.innerHTML = states.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        
+        if (!states.length) {
+          content.innerHTML = '<p class="text-muted">Государства не созданы. Создайте новое или сгенерируйте при создании мира.</p>';
+          return;
+        }
+        
+        content.innerHTML = states.map(state => `
+          <div class="card state-card" style="margin-bottom: 1rem;">
+            <div class="state-header" data-state-toggle="${state.id}">
+              <div class="state-header-info">
+                <strong class="state-name">🏰 ${state.name}</strong>
+                <span class="state-locations-count">${state.locations?.length || 0} локаций</span>
+              </div>
+              <div class="state-actions">
+                <button class="btn btn-secondary btn-sm" data-add-city="${state.id}" data-state-name="${state.name}">+ Город</button>
+                <button class="btn btn-ghost btn-sm" data-delete-state="${state.id}">🗑️</button>
+                <span class="npc-toggle-icon">▼</span>
+              </div>
+            </div>
+            <div id="state-edit-${state.id}" class="state-edit-form" style="display: none;">
+              <div class="form-group">
+                <label class="form-label">Название</label>
+                <input class="input" id="state-name-${state.id}" value="${state.name}" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Описание</label>
+                <textarea class="input" id="state-desc-${state.id}" rows="2">${state.description || ''}</textarea>
+              </div>
+              <button class="btn btn-primary btn-sm" data-save-state="${state.id}">💾 Сохранить</button>
+            </div>
+            <div id="cities-${state.id}" class="cities-list" style="display: none;">
+              ${state.locations?.map(loc => `
+                <div class="city-item" data-city-id="${loc.id}">
+                  <div class="city-info">
+                    <span class="city-type-icon">${loc.type === 'capital' ? '👑' : loc.type === 'city' ? '🏘️' : loc.type === 'village' ? '🏡' : loc.type === 'ruins' ? '🏚️' : '⛰️'}</span>
+                    <span class="city-name">${loc.name}</span>
+                    <span class="city-type">${loc.type}</span>
+                  </div>
+                  <div class="city-actions">
+                    <button class="btn btn-ghost btn-sm" data-edit-city="${loc.id}" data-city-name="${loc.name}" data-city-type="${loc.type}" data-city-desc="${(loc.description || '').replace(/"/g, '&quot;')}">✏️</button>
+                    <button class="btn btn-ghost btn-sm" data-delete-city="${loc.id}">🗑️</button>
+                  </div>
+                </div>
+              `).join('') || '<p class="text-muted">Нет локаций</p>'}
+            </div>
+          </div>
+        `).join('');
+        
+        // Toggle state expand
+        content.querySelectorAll('[data-state-toggle]').forEach(header => {
+          header.addEventListener('click', () => {
+            const stateId = header.dataset.stateToggle;
+            const citiesDiv = document.getElementById(`cities-${stateId}`);
+            const editDiv = document.getElementById(`state-edit-${stateId}`);
+            const isOpen = citiesDiv.style.display !== 'none';
+            citiesDiv.style.display = isOpen ? 'none' : 'block';
+            editDiv.style.display = isOpen ? 'none' : 'block';
+            header.closest('.state-card').classList.toggle('open', !isOpen);
+          });
+        });
+        
+        // Delete state
+        content.querySelectorAll('[data-delete-state]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm('Удалить государство и все его локации?')) return;
+            try {
+              await supabase.from('states').delete().eq('id', btn.dataset.deleteState);
+              toast.success('Государство удалено');
+              await loadGeography(worldId);
+            } catch (err) {
+              toast.error('Ошибка: ' + err.message);
+            }
+          });
+        });
+        
+        // Save state
+        content.querySelectorAll('[data-save-state]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const stateId = btn.dataset.saveState;
+            try {
+              await supabase.from('states').update({
+                name: document.getElementById(`state-name-${stateId}`).value,
+                description: document.getElementById(`state-desc-${stateId}`).value,
+              }).eq('id', stateId);
+              toast.success('Государство обновлено');
+              await loadGeography(worldId);
+            } catch (err) {
+              toast.error('Ошибка: ' + err.message);
+            }
+          });
+        });
+        
+        // Add city button
+        content.querySelectorAll('[data-add-city]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('new-city-state').value = btn.dataset.addCity;
+            document.getElementById('createCityForm').style.display = 'block';
+            document.getElementById('createCityForm').scrollIntoView({ behavior: 'smooth' });
+          });
+        });
+        
+        // Delete city
+        content.querySelectorAll('[data-delete-city]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm('Удалить эту локацию?')) return;
+            try {
+              await supabase.from('locations').delete().eq('id', btn.dataset.deleteCity);
+              toast.success('Локация удалена');
+              await loadGeography(worldId);
+            } catch (err) {
+              toast.error('Ошибка: ' + err.message);
+            }
+          });
+        });
+        
+      } catch (err) {
+        content.innerHTML = `<p class="text-muted">Ошибка загрузки: ${err.message}</p>`;
+      }
+    }
+    
+    // Open geography modal
+    document.getElementById('openGeoBtn')?.addEventListener('click', () => {
+      document.getElementById('geoModal').classList.add('open');
+      document.getElementById('geoWorldName').textContent = document.getElementById('bestiaryWorldName').textContent;
+      loadGeography(currentBestiaryWorldId);
+    });
+    
+    document.getElementById('closeGeoBtn')?.addEventListener('click', () => {
+      document.getElementById('geoModal').classList.remove('open');
+    });
+    
+    // Create state form toggle
+    document.getElementById('createStateBtn')?.addEventListener('click', () => {
+      const form = document.getElementById('createStateForm');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+    
+    document.getElementById('cancelNewStateBtn')?.addEventListener('click', () => {
+      document.getElementById('createStateForm').style.display = 'none';
+    });
+    
+    // Save new state
+    document.getElementById('saveNewStateBtn')?.addEventListener('click', async () => {
+      const name = document.getElementById('new-state-name').value.trim();
+      if (!name) { toast.error('Введите название'); return; }
+      try {
+        await supabase.from('states').insert({
+          world_id: currentBestiaryWorldId,
+          name,
+          description: document.getElementById('new-state-desc').value.trim(),
+        });
+        toast.success('Государство создано!');
+        document.getElementById('createStateForm').style.display = 'none';
+        document.getElementById('new-state-name').value = '';
+        document.getElementById('new-state-desc').value = '';
+        await loadGeography(currentBestiaryWorldId);
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
+    
+    // Create city form toggle
+    document.getElementById('createCityForm')?.addEventListener('click', (e) => {
+      if (e.target.id === 'createCityForm') return;
+    });
+    
+    document.getElementById('cancelNewCityBtn')?.addEventListener('click', () => {
+      document.getElementById('createCityForm').style.display = 'none';
+    });
+    
+    // Save new city
+    document.getElementById('saveNewCityBtn')?.addEventListener('click', async () => {
+      const name = document.getElementById('new-city-name').value.trim();
+      if (!name) { toast.error('Введите название'); return; }
+      try {
+        await supabase.from('locations').insert({
+          state_id: document.getElementById('new-city-state').value,
+          name,
+          type: document.getElementById('new-city-type').value,
+          description: document.getElementById('new-city-desc').value.trim(),
+        });
+        toast.success('Локация создана!');
+        document.getElementById('createCityForm').style.display = 'none';
+        document.getElementById('new-city-name').value = '';
+        document.getElementById('new-city-desc').value = '';
+        await loadGeography(currentBestiaryWorldId);
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // ===================== BESTIARY TABS =====================
+    
+    // Tab filtering
+    container.querySelectorAll('.bestiary-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        container.querySelectorAll('.bestiary-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const category = tab.dataset.category;
+        container.querySelectorAll('.npc-card').forEach(card => {
+          if (category === 'all' || card.dataset.category === category) {
+            card.style.display = '';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      });
     });
 
     // Tab switching

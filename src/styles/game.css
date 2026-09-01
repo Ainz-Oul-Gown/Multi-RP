@@ -799,6 +799,139 @@
   transform: rotate(180deg);
 }
 
+/* ===================== Bestiary Tabs ===================== */
+.bestiary-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  margin: 0 -1rem 1rem;
+  padding: 0 1rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bestiary-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.bestiary-tab {
+  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.bestiary-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.bestiary-tab.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+/* ===================== State Cards ===================== */
+.state-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.state-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.state-header:hover {
+  background: var(--bg-hover);
+}
+
+.state-header-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex: 1;
+}
+
+.state-name {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.state-locations-count {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.state-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.state-edit-form {
+  padding: var(--space-md);
+  padding-top: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.cities-list {
+  padding: 0 var(--space-md) var(--space-md);
+}
+
+.city-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-xs);
+}
+
+.city-item:hover {
+  background: var(--bg-hover);
+}
+
+.city-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.city-type-icon {
+  font-size: var(--fs-base);
+}
+
+.city-name {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+
+.city-type {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.city-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.state-card.open .npc-toggle-icon {
+  transform: rotate(180deg);
+}
+
 .npc-edit-form {
   padding: var(--space-md);
   padding-top: 0;
@@ -1245,5 +1378,37 @@
     font-size: 0.6rem;
     width: 100%;
     margin-top: 2px;
+  }
+
+  /* Bestiary Tabs Mobile */
+  .bestiary-tab {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--fs-xs);
+  }
+
+  /* State Cards Mobile */
+  .state-header {
+    padding: var(--space-sm);
+  }
+
+  .state-header-info {
+    gap: var(--space-sm);
+  }
+
+  .state-name {
+    font-size: var(--fs-base);
+  }
+
+  .state-actions .btn {
+    padding: var(--space-xs);
+    font-size: var(--fs-xs);
+  }
+
+  .city-item {
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  .city-name {
+    font-size: var(--fs-xs);
   }
 }

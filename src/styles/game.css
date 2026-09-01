@@ -971,6 +971,54 @@
   transition: width 0.3s ease;
 }
 
+/* ===================== Schema Modal ===================== */
+.schema-content {
+  font-size: var(--fs-sm);
+}
+
+.schema-section {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.schema-section:last-child {
+  border-bottom: none;
+}
+
+.schema-section h4 {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.schema-section ul {
+  list-style: none;
+  padding: 0;
+}
+
+.schema-section li {
+  padding: 0.25rem 0;
+  color: var(--text-secondary);
+}
+
+.schema-section li strong {
+  color: var(--accent-gold);
+}
+
+.code-example {
+  background: var(--bg-primary);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .npc-edit-form {
   padding: var(--space-md);
   padding-top: 0;

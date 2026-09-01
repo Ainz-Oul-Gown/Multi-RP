@@ -374,13 +374,30 @@ export async function exportWorld(worldId) {
   const world = await getWorld(worldId);
   const loreFiles = await getLoreFiles(worldId);
   const folders = await getLoreFilesByFolder(worldId);
+  
+  // Get states with locations
+  const { data: states } = await supabase
+    .from('states')
+    .select('*, locations(*)')
+    .eq('world_id', worldId)
+    .order('name');
+  
+  // Get NPCs with location info
+  const { data: npcs } = await supabase
+    .from('npcs')
+    .select('*')
+    .eq('world_id', worldId)
+    .order('role')
+    .order('name');
 
   const exportData = {
-    version: '2.0',
+    version: '3.0',
     exported_at: new Date().toISOString(),
+    schema: 'multirp_world_full',
     world: {
       name: world.name,
       settings: world.settings,
+      description: world.description || '',
     },
     lore_files: loreFiles.map((f) => ({
       folder: f.folder,
@@ -389,6 +406,39 @@ export async function exportWorld(worldId) {
       tags: f.tags,
     })),
     folders,
+    geography: {
+      states: states?.map(s => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        ruler_id: s.ruler_id,
+        locations: s.locations?.map(l => ({
+          id: l.id,
+          name: l.name,
+          type: l.type,
+          description: l.description,
+        })) || [],
+      })) || [],
+    },
+    bestiary: {
+      npcs: npcs?.map(n => ({
+        id: n.id,
+        name: n.name,
+        race: n.race,
+        category: n.category,
+        role: n.role,
+        appearance: n.appearance,
+        background: n.background,
+        stats: n.stats,
+        hp: n.hp,
+        max_hp: n.max_hp,
+        status_tags: n.status_tags,
+        habits: n.habits,
+        catchphrases: n.catchphrases,
+        location_id: n.location_id,
+        state_id: n.state_id,
+      })) || [],
+    },
   };
 
   return exportData;
@@ -404,15 +454,80 @@ export function downloadJSON(data, filename) {
   URL.revokeObjectURL(url);
 }
 
+// Get schema info for display
+export function getWorldSchema() {
+  return {
+    version: '3.0',
+    description: 'Полный экспорт мира MultiRP',
+    structure: {
+      version: 'string - версии формата',
+      exported_at: 'ISO timestamp',
+      schema: 'идентификатор схемы',
+      world: {
+        name: 'string - название мира',
+        settings: 'object - настройки мира',
+        description: 'string - описание',
+      },
+      lore_files: [{
+        folder: 'string - папка',
+        title: 'string - заголовок',
+        content: 'string - содержимое',
+        tags: ['string - теги'],
+      }],
+      folders: ['string - список папок'],
+      geography: {
+        states: [{
+          id: 'UUID',
+          name: 'string - название государства',
+          description: 'string - описание',
+          ruler_id: 'UUID - ID правителя (NPC)',
+          locations: [{
+            id: 'UUID',
+            name: 'string - название локации',
+            type: 'capital|city|village|ruins|landmark',
+            description: 'string - описание',
+          }],
+        }],
+      },
+      bestiary: {
+        npcs: [{
+          id: 'UUID',
+          name: 'string - имя',
+          race: 'string - раса',
+          category: 'npc|beast|monster|boss',
+          role: 'main|secondary',
+          appearance: 'string - внешность',
+          background: 'string - предыстория',
+          stats: { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 },
+          hp: 'number',
+          max_hp: 'number',
+          status_tags: ['string'],
+          habits: ['string - привычки'],
+          catchphrases: ['string - фразы'],
+          location_id: 'UUID - ID локации',
+          state_id: 'UUID - ID государства',
+        }],
+      },
+    },
+  };
+}
+
 export async function importWorld(jsonData, ownerId) {
   const worldData = JSON.parse(jsonData);
+  
+  // Validate schema
+  if (!worldData.world || !worldData.version) {
+    throw new Error('Некорректный формат файла мира');
+  }
 
   const world = await createWorld({
     owner_id: ownerId,
     name: worldData.world.name,
     settings: worldData.world.settings,
+    description: worldData.world.description || '',
   });
 
+  // Import lore files
   if (worldData.lore_files?.length) {
     const files = worldData.lore_files.map((f) => ({
       world_id: world.id,
@@ -423,6 +538,75 @@ export async function importWorld(jsonData, ownerId) {
     }));
     const { error } = await supabase.from('lore_files').insert(files);
     if (error) throw error;
+  }
+
+  // Import geography (states + locations)
+  const locationIdMap = {}; // old ID -> new ID
+  const stateIdMap = {}; // old ID -> new ID
+  
+  if (worldData.geography?.states?.length) {
+    for (const state of worldData.geography.states) {
+      const { data: newState, error: stateError } = await supabase
+        .from('states')
+        .insert({
+          world_id: world.id,
+          name: state.name,
+          description: state.description || '',
+        })
+        .select()
+        .single();
+      
+      if (stateError) throw stateError;
+      stateIdMap[state.id] = newState.id;
+      
+      // Import locations for this state
+      if (state.locations?.length) {
+        const locations = state.locations.map(l => ({
+          state_id: newState.id,
+          name: l.name,
+          type: l.type || 'city',
+          description: l.description || '',
+        }));
+        
+        const { data: newLocations, error: locError } = await supabase
+          .from('locations')
+          .insert(locations)
+          .select();
+        
+        if (locError) throw locError;
+        
+        // Map old location IDs to new ones
+        state.locations.forEach((oldLoc, idx) => {
+          if (newLocations[idx]) {
+            locationIdMap[oldLoc.id] = newLocations[idx].id;
+          }
+        });
+      }
+    }
+  }
+
+  // Import NPCs
+  if (worldData.bestiary?.npcs?.length) {
+    const npcs = worldData.bestiary.npcs.map(n => ({
+      world_id: world.id,
+      name: n.name,
+      race: n.race || 'Человек',
+      category: n.category || 'npc',
+      role: n.role || 'secondary',
+      appearance: n.appearance || '',
+      background: n.background || '',
+      stats: n.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+      hp: n.hp || 30,
+      max_hp: n.max_hp || 30,
+      status_tags: n.status_tags || [],
+      habits: n.habits || [],
+      catchphrases: n.catchphrases || [],
+      location_id: n.location_id ? locationIdMap[n.location_id] : null,
+      state_id: n.state_id ? stateIdMap[n.state_id] : null,
+    }));
+    
+    const { error: npcError } = await supabase.from('npcs').insert(npcs);
+    if (npcError) throw npcError;
   }
 
   return world;

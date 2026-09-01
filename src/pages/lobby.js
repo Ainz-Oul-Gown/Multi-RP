@@ -622,6 +622,73 @@ export function renderLobby(container, user) {
     `;
     container.appendChild(geoModal);
 
+    // Модальное окно: Структура файла экспорта
+    const schemaModal = document.createElement('div');
+    schemaModal.className = 'modal-overlay';
+    schemaModal.id = 'schemaModal';
+    schemaModal.innerHTML = `
+      <div class="modal" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2 class="card-title">ℹ️ Структура файла экспорта</h2>
+          <button class="btn btn-ghost btn-sm" id="closeSchemaBtn">✕</button>
+        </div>
+        <div class="schema-content">
+          <p class="form-hint" style="margin-bottom: 1rem;">Файл экспорта мира содержит все данные для полного восстановления:</p>
+          <div class="schema-section">
+            <h4>📁 Основные данные</h4>
+            <ul>
+              <li><strong>world</strong> — название, настройки, описание</li>
+              <li><strong>lore_files</strong> — файлы лора (папка, заголовок, содержимое, теги)</li>
+              <li><strong>folders</strong> — структура папок</li>
+            </ul>
+          </div>
+          <div class="schema-section">
+            <h4>🗺️ География (geography)</h4>
+            <ul>
+              <li><strong>states[]</strong> — государства</li>
+              <li style="margin-left: 1rem;">name, description, ruler_id</li>
+              <li><strong>locations[]</strong> — локации</li>
+              <li style="margin-left: 1rem;">name (название), type (capital/city/village/ruins/landmark), description</li>
+            </ul>
+          </div>
+          <div class="schema-section">
+            <h4>🐉 Бестиарий (bestiary)</h4>
+            <ul>
+              <li><strong>npcs[]</strong> — все NPC и существа</li>
+              <li style="margin-left: 1rem;">name (имя), race (раса), category (npc/beast/monster/boss)</li>
+              <li style="margin-left: 1rem;">role (main/secondary), appearance (внешность), background (предыстория)</li>
+              <li style="margin-left: 1rem;">stats (STR/DEX/CON/INT/WIS/CHA), hp, max_hp</li>
+              <li style="margin-left: 1rem;">status_tags[], habits[], catchphrases[]</li>
+              <li style="margin-left: 1rem;">location_id, state_id — привязка к географии</li>
+            </ul>
+          </div>
+          <div class="schema-section">
+            <h4>📋 Пример JSON</h4>
+            <pre class="code-example">{
+  "version": "3.0",
+  "world": { "name": "...", "settings": {} },
+  "geography": {
+    "states": [{
+      "name": "Королевство",
+      "locations": [
+        { "name": "Столица", "type": "capital" }
+      ]
+    }]
+  },
+  "bestiary": {
+    "npcs": [{
+      "name": "Король",
+      "category": "npc",
+      "stats": {"STR": 14, "DEX": 10, ...}
+    }]
+  }
+}</pre>
+          </div>
+        </div>
+      </div>
+    `;
+    container.appendChild(schemaModal);
+
     bindEvents();
   }
 
@@ -710,6 +777,7 @@ export function renderLobby(container, user) {
               ${canResume ? `<button class="btn btn-primary btn-sm" data-action="resume-gen" data-id="${w.id}" data-name="${w.name}">⏳ Продолжить</button>` : ''}
               <button class="btn btn-secondary btn-sm" data-action="edit-world" data-id="${w.id}">✏️</button>
               <button class="btn btn-secondary btn-sm" data-action="export" data-id="${w.id}">📤</button>
+              <button class="btn btn-ghost btn-sm" data-action="schema-info" data-id="${w.id}" title="Структура файла экспорта">ℹ️</button>
               <button class="btn btn-ghost btn-sm" data-action="delete-world" data-id="${w.id}">🗑️</button>
             </div>
           </div>
@@ -2296,6 +2364,18 @@ export function renderLobby(container, user) {
           toast.error('Ошибка экспорта: ' + err.message);
         }
       });
+    });
+
+    // Schema info button
+    container.querySelectorAll('[data-action="schema-info"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.getElementById('schemaModal').classList.add('open');
+      });
+    });
+
+    // Close schema modal
+    document.getElementById('closeSchemaBtn')?.addEventListener('click', () => {
+      document.getElementById('schemaModal').classList.remove('open');
     });
 
     // Import world (from modal)

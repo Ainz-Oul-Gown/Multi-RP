@@ -357,10 +357,12 @@ export async function getUserSettings(userId) {
   return data;
 }
 
-export async function upsertUserSettings(userId, openrouterKey) {
+export async function upsertUserSettings(userId, openrouterKey, models = {}) {
   const { data, error } = await supabase.rpc('upsert_user_settings', {
     p_user_id: userId,
     p_openrouter_key: openrouterKey || null,
+    p_card_model: models.card_model || null,
+    p_dm_model: models.dm_model || null,
   });
   if (error) throw error;
   return data;

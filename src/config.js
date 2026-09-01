@@ -11,6 +11,22 @@ export const AI_PARSER_RETRIES = 3;
 export const AI_PARSER_TIMEOUT = 15000;
 export const AI_NARRATOR_TIMEOUT = 30000;
 
+// Model options for card generation (бестиарий)
+export const CARD_GENERATION_MODELS = [
+  { id: 'xiaomi/mimo-v2.5', name: 'MiMo v2.5 (наша)', provider: 'Xiaomi' },
+  { id: 'z-ai/glm-5.2:free', name: 'GLM 5.2 (free)', provider: 'Z-AI' },
+  { id: 'thinkingmachines/inkling-small:free', name: 'Inkling Small (free)', provider: 'Thinking Machines' },
+  { id: 'minimax/minimax-m3:free', name: 'MiniMax M3 (free)', provider: 'MiniMax' },
+  { id: 'thinkingmachines/inkling:free', name: 'Inkling (free)', provider: 'Thinking Machines' },
+];
+
+// Model options for DM (narrator)
+export const DM_MODELS = [
+  { id: 'xiaomi/mimo-v2.5', name: 'MiMo v2.5 (наша)', provider: 'Xiaomi' },
+  { id: 'minimax/minimax-m3:free', name: 'MiniMax M3 (free)', provider: 'MiniMax' },
+  { id: 'thinkingmachines/inkling:free', name: 'Inkling (free)', provider: 'Thinking Machines' },
+];
+
 // Game Constants
 export const STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 

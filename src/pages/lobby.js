@@ -7,10 +7,11 @@ import {
   getCharacterCards, createCharacterCard, deleteCharacterCard,
   exportPlayer, getNpcsByWorld, updateNpc, deleteNpc, createNpc
 } from '../api/game.js';
-import { generateAllNPCs, generateWorldGeography, saveWorldGeography } from '../api/openrouter.js';
+import { generateAllNPCs, generateWorldGeography, saveWorldGeography, generateIntelligentNPCs, generateCreatures, canResumeGeneration, clearWorldGenerationProgress } from '../api/openrouter.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
-import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
+import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, CARD_GENERATION_MODELS, DM_MODELS } from '../config.js';
+import { savePageState, loadPageState } from '../utils/generationStore.js';
 
 function sanitizeAIText(raw) {
   if (!raw) return "";
@@ -376,29 +377,45 @@ export function renderLobby(container, user) {
             <input class="input" value="${user.email}" disabled style="opacity: 0.6;" />
           </div>
 
-          <div class="form-group" style="margin-bottom: 1rem;">
-            <label class="form-label">OpenRouter API Key</label>
-            <input
-              class="input"
-              type="password"
-              id="openrouterKeyInput"
-              placeholder="sk-or-v1-..."
-              value="${userSettings?.openrouter_key || ''}"
-              autocomplete="off"
-            />
-            <span class="form-hint">
-              Ваш личный ключ для OpenRouter API.
-              ${maskedKey ? `Текущий: <code>${maskedKey}</code>` : 'Не задан — игра не сможет вызывать ИИ.'}
-            </span>
-            <span class="form-hint" style="margin-top: 0.25rem;">
-              Получите ключ на <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>
-            </span>
-          </div>
+           <div class="form-group" style="margin-bottom: 1rem;">
+             <label class="form-label">OpenRouter API Key</label>
+             <input
+               class="input"
+               type="password"
+               id="openrouterKeyInput"
+               placeholder="sk-or-v1-..."
+               value="${userSettings?.openrouter_key || ''}"
+               autocomplete="off"
+             />
+             <span class="form-hint">
+               Ваш личный ключ для OpenRouter API.
+               ${maskedKey ? `Текущий: <code>${maskedKey}</code>` : 'Не задан — игра не сможет вызывать ИИ.'}
+             </span>
+             <span class="form-hint" style="margin-top: 0.25rem;">
+               Получите ключ на <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>
+             </span>
+           </div>
 
-          <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-            <button type="button" class="btn btn-secondary" id="closeAccountModal">Отмена</button>
-            <button class="btn btn-primary" id="saveAccountSettingsBtn">Сохранить</button>
-          </div>
+           <div class="form-group" style="margin-bottom: 1rem;">
+             <label class="form-label">Модель для генерации карточек</label>
+             <select class="input" id="cardModelInput">
+               ${CARD_GENERATION_MODELS.map(m => `<option value="${m.id}" ${userSettings?.card_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+             </select>
+             <span class="form-hint">Модель для генерации NPC, географии и бестиария</span>
+           </div>
+
+           <div class="form-group" style="margin-bottom: 1.5rem;">
+             <label class="form-label">Модель для ДМа (рассказчик)</label>
+             <select class="input" id="dmModelInput">
+               ${DM_MODELS.map(m => `<option value="${m.id}" ${userSettings?.dm_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+             </select>
+             <span class="form-hint">Модель для  narration и ответов в игре</span>
+           </div>
+
+           <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+             <button type="button" class="btn btn-secondary" id="closeAccountModal">Отмена</button>
+             <button class="btn btn-primary" id="saveAccountSettingsBtn">Сохранить</button>
+           </div>
         </div>
       </div>
     `;
@@ -666,7 +683,10 @@ export function renderLobby(container, user) {
         <button class="btn btn-primary btn-sm" id="newWorldBtn2">+ Новый мир</button>
       </div>
       <div class="card-grid">
-        ${worlds.map((w) => `
+        ${worlds.map((w) => {
+          const genStatus = canResumeGeneration(w.id);
+          const canResume = genStatus.intelligent || genStatus.creatures;
+          return `
           <div class="card world-card">
             <div class="card-header">
               <h3 class="card-title">🌍 ${w.name}</h3>
@@ -674,12 +694,13 @@ export function renderLobby(container, user) {
             <pre class="world-settings-preview">${JSON.stringify(w.settings || {}, null, 2).slice(0, 200)}</pre>
             <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button class="btn btn-secondary btn-sm" data-action="bestiary" data-id="${w.id}" data-name="${w.name}">🐉 Бестиарий</button>
+              ${canResume ? `<button class="btn btn-primary btn-sm" data-action="resume-gen" data-id="${w.id}" data-name="${w.name}">⏳ Продолжить</button>` : ''}
               <button class="btn btn-secondary btn-sm" data-action="edit-world" data-id="${w.id}">✏️</button>
               <button class="btn btn-secondary btn-sm" data-action="export" data-id="${w.id}">📤</button>
               <button class="btn btn-ghost btn-sm" data-action="delete-world" data-id="${w.id}">🗑️</button>
             </div>
           </div>
-        `).join('')}
+        `}).join('')}
         <div class="card world-card new-world-card" id="newWorldBtn">
           <div class="empty-state" style="padding: 2rem;">
             <div class="empty-icon">+</div>
@@ -1219,13 +1240,15 @@ export function renderLobby(container, user) {
     // Save account settings
     document.getElementById('saveAccountSettingsBtn')?.addEventListener('click', async () => {
       const key = document.getElementById('openrouterKeyInput').value.trim();
+      const cardModel = document.getElementById('cardModelInput').value;
+      const dmModel = document.getElementById('dmModelInput').value;
       const saveBtn = document.getElementById('saveAccountSettingsBtn');
 
       saveBtn.disabled = true;
       saveBtn.textContent = 'Сохранение...';
 
       try {
-        await upsertUserSettings(user.id, key);
+        await upsertUserSettings(user.id, key, { card_model: cardModel, dm_model: dmModel });
         toast.success('Настройки сохранены!');
         document.getElementById('accountSettingsModal').classList.remove('open');
         loadData();
@@ -1514,6 +1537,88 @@ export function renderLobby(container, user) {
         // Hide create form when opening bestiary for a new world
         document.getElementById('createNpcForm').style.display = 'none';
         await loadBestiary(worldId);
+      });
+    });
+
+    // Resume generation button
+    container.querySelectorAll('[data-action="resume-gen"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const worldId = btn.dataset.id;
+        const worldName = btn.dataset.name;
+        
+        // Get world lore text for regeneration
+        const world = worlds.find(w => w.id === worldId);
+        if (!world) return;
+        
+        // Collect lore text
+        let combinedLoreText = world.description || world.settings?.description || '';
+        
+        // If no description, try to get from lore files
+        if (!combinedLoreText.trim()) {
+          const { data: loreFiles } = await supabase
+            .from('lore_files')
+            .select('content')
+            .eq('world_id', worldId);
+          if (loreFiles?.length) {
+            combinedLoreText = loreFiles.map(f => f.content).join('\n\n');
+          }
+        }
+        
+        if (!combinedLoreText.trim()) {
+          toast.error('Нет текста для генерации. Добавьте описание мира.');
+          return;
+        }
+        
+        // Check what needs to be resumed
+        const status = canResumeGeneration(worldId);
+        
+        if (!status.intelligent && !status.creatures) {
+          toast.info('Генерация уже завершена или не начата');
+          return;
+        }
+        
+        // Confirm
+        if (!confirm('Продолжить генерацию бестиария?')) return;
+        
+        // Get geography
+        const { data: states } = await supabase
+          .from('states')
+          .select('*, locations(*)')
+          .eq('world_id', worldId);
+        
+        const geographyWithIds = {
+          states: states?.map(s => ({ id: s.id, name: s.name })) || [],
+          locations: states?.flatMap(s => s.locations?.map(l => ({
+            id: l.id,
+            name: l.name,
+            state_name: s.name,
+            state_id: s.id,
+          })) || []) || [],
+        };
+        
+        try {
+          // Resume intelligent NPCs if needed
+          if (status.intelligent) {
+            toast.info('Продолжаем генерацию разумных NPC...');
+            await generateIntelligentNPCs(combinedLoreText, worldId, geographyWithIds, (progress) => {
+              console.log('[resume-gen] Intelligent:', progress);
+            });
+          }
+          
+          // Resume creatures if needed
+          if (status.creatures) {
+            toast.info('Продолжаем генерацию существ...');
+            await generateCreatures(combinedLoreText, worldId, geographyWithIds, (progress) => {
+              console.log('[resume-gen] Creatures:', progress);
+            });
+          }
+          
+          toast.success('Генерация завершена!');
+          loadData();
+        } catch (err) {
+          console.error('[resume-gen] Error:', err);
+          toast.error('Ошибка: ' + err.message + '. Можно продолжить позже.');
+        }
       });
     });
 
@@ -1845,30 +1950,47 @@ export function renderLobby(container, user) {
             })),
           };
 
-          // Step 3: Generate NPCs with geography context
-          createBtn.textContent = '⏳ Подсчёт NPC...';
-          toast.info('Генерация бестиария...');
-
-          const result = await generateAllNPCs(combinedLoreText, world.id, geographyWithIds, (progress) => {
+          // Step 3: Generate intelligent NPCs (with progress saving)
+          createBtn.textContent = '⏳ Генерация разумных NPC...';
+          toast.info('Генерация разумных существ...');
+          
+          const intelligentResult = await generateIntelligentNPCs(combinedLoreText, world.id, geographyWithIds, (progress) => {
             if (progress.step === 'counting') {
-              createBtn.textContent = `⏳ Найдено ${progress.total || '?'} NPC...`;
+              createBtn.textContent = `⏳ Найдено ${progress.total || '?'} разумных...`;
             } else if (progress.step === 'generating') {
-              createBtn.textContent = `⏳ NPC ${progress.current}/${progress.total}...`;
+              createBtn.textContent = `⏳ Разумные ${progress.current}/${progress.total}...`;
             } else if (progress.step === 'saving') {
               createBtn.textContent = `⏳ Сохранение...`;
             }
           });
 
-          console.log(`[create-world] Generated ${result.npcs.length} NPCs, saved ${result.saved} to DB`);
+          console.log(`[create-world] Intelligent NPCs: ${intelligentResult.npcs.length}, saved ${intelligentResult.saved}`);
 
-          if (result.npcs.length > 0) {
-            toast.success(`Бестиарий создан: ${result.npcs.length} NPC (сохранено ${result.saved})`);
+          // Step 4: Generate creatures (beasts, monsters, bosses)
+          createBtn.textContent = '⏳ Генерация существ...';
+          toast.info('Генерация зверей, монстров и боссов...');
+          
+          const creatureResult = await generateCreatures(combinedLoreText, world.id, geographyWithIds, (progress) => {
+            if (progress.step === 'counting') {
+              createBtn.textContent = `⏳ Найдено ${progress.total || '?'} существ...`;
+            } else if (progress.step === 'generating') {
+              createBtn.textContent = `⏳ Существа ${progress.current}/${progress.total}...`;
+            } else if (progress.step === 'saving') {
+              createBtn.textContent = `⏳ Сохранение...`;
+            }
+          });
+
+          console.log(`[create-world] Creatures: ${creatureResult.npcs.length}, saved ${creatureResult.saved}`);
+
+          const totalNpcs = intelligentResult.saved + creatureResult.saved;
+          if (totalNpcs > 0) {
+            toast.success(`Бестиарий создан: ${totalNpcs} существ (🧠 ${intelligentResult.saved} + 🐾👹💀 ${creatureResult.saved})`);
           } else {
             toast.warning('NPC не сгенерированы');
           }
         } catch (genErr) {
           console.error('NPC generation error:', genErr);
-          toast.warning('Мир создан, но генерация бестиария не удалась: ' + (genErr.message || genErr));
+          toast.warning('Мир создан, но генерация бестиария не удалась: ' + (genErr.message || genErr) + '. Можно продолжить в карточке мира.');
         }
 
         toast.success(`Мир «${name}» создан! ${pendingFiles.length ? `+ ${pendingFiles.length} файл(ов) лора` : ''}`);

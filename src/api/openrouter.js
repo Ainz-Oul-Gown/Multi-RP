@@ -1,21 +1,34 @@
 // src/api/openrouter.js — Прямые запросы к OpenRouter (без лимитов Supabase)
-import { OPENROUTER_API_KEY, AI_MODEL } from '../config.js';
+import { OPENROUTER_API_KEY, AI_MODEL, CARD_GENERATION_MODELS } from '../config.js';
 import { supabase, invokeFunction } from './supabase.js';
+import { saveGenerationProgress, loadGenerationProgress, clearGenerationProgress } from '../utils/generationStore.js';
 
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-// Get API key from user settings or fallback
-async function getApiKey() {
+// Get user settings (API key + models)
+async function getUserSettings() {
   const { data: { session } } = await supabase.auth.getSession();
   if (session?.user?.id) {
     const { data } = await supabase
       .from('user_settings')
-      .select('openrouter_key')
+      .select('openrouter_key, card_model, dm_model')
       .eq('id', session.user.id)
       .maybeSingle();
-    if (data?.openrouter_key) return data.openrouter_key;
+    return data || {};
   }
-  return OPENROUTER_API_KEY;
+  return {};
+}
+
+// Get API key from user settings or fallback
+async function getApiKey() {
+  const settings = await getUserSettings();
+  return settings.openrouter_key || OPENROUTER_API_KEY;
+}
+
+// Get card generation model
+async function getCardModel() {
+  const settings = await getUserSettings();
+  return settings.card_model || AI_MODEL;
 }
 
 // Call OpenRouter directly from frontend (no Edge Function limits)
@@ -25,23 +38,32 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
     throw new Error('Укажите OpenRouter API Key в настройках аккаунта');
   }
 
+  // Use specified model or get from user settings
+  const model = options.model || await getCardModel();
+  
+  // Determine provider based on model
+  const getProvider = (modelId) => {
+    if (modelId.includes('xiaomi')) return ['Xiaomi'];
+    if (modelId.includes('z-ai')) return ['Z-AI'];
+    if (modelId.includes('thinkingmachines')) return ['Thinking Machines'];
+    if (modelId.includes('minimax')) return ['MiniMax'];
+    return ['Xiaomi']; // default
+  };
+
   const requestBody = {
-    model: AI_MODEL,
+    model,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage },
     ],
     temperature: options.temperature ?? 0.7,
-    // Force Xiaomi provider for faster/more reliable responses
     provider: {
-      order: ['Xiaomi'],
-      allow_fallbacks: false,
+      order: getProvider(model),
+      allow_fallbacks: options.allow_fallbacks ?? false,
     },
-    // Control reasoning: low effort = faster thinking
     reasoning: {
-      effort: 'low',
+      effort: options.reasoningEffort || 'low',
     },
-    // No max_tokens limit - let the model generate as needed
   };
 
   console.log('[callOpenRouter] Request:', {
@@ -410,4 +432,347 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
   console.log('[generateAllNPCs] Done. Total unique NPCs:', allNpcs.length, 'saved to DB:', totalSaved);
   onProgress({ step: 'done', count: allNpcs.length, saved: totalSaved, message: `Сгенерировано ${allNpcs.length}, сохранено ${totalSaved} NPC` });
   return { npcs: allNpcs, saved: totalSaved };
+}
+
+// Generate intelligent NPCs (category: npc) with progress saving
+export async function generateIntelligentNPCs(loreText, worldId, geography = null, onProgress = () => {}) {
+  const BATCH_SIZE = 5;
+  const STORAGE_KEY = `intelligent_npcs`;
+  
+  console.log('[generateIntelligentNPCs] Starting');
+  
+  // Load saved progress
+  const progress = loadGenerationProgress(worldId) || {};
+  const savedIntelligent = progress[STORAGE_KEY] || { generatedNames: [], totalSaved: 0, completed: false };
+  
+  if (savedIntelligent.completed) {
+    console.log('[generateIntelligentNPCs] Already completed');
+    onProgress({ step: 'done', message: 'Уже сгенерировано ранее', saved: savedIntelligent.totalSaved });
+    return { npcs: [], saved: savedIntelligent.totalSaved, alreadyCompleted: true };
+  }
+  
+  const generatedNames = new Set(savedIntelligent.generatedNames || []);
+  let totalSaved = savedIntelligent.totalSaved || 0;
+  
+  // Count intelligent NPCs
+  onProgress({ step: 'counting', message: 'Подсчёт разумных NPC...' });
+  const totalCount = await countNPCs(loreText);
+  const intelligentCount = Math.ceil(totalCount * 0.6); // ~60% are intelligent
+  
+  onProgress({ step: 'counting', total: intelligentCount, message: `Найдено ${intelligentCount} разумных NPC` });
+  
+  // Create location/state maps
+  const locationMap = {};
+  const stateMap = {};
+  if (geography) {
+    geography.states.forEach(s => stateMap[s.name] = s.id);
+    geography.locations.forEach(l => {
+      locationMap[l.name] = l.id;
+      if (!stateMap[l.state_name] && l.state_id) {
+        stateMap[l.state_name] = l.state_id;
+      }
+    });
+  }
+  
+  // Save helper
+  const saveNPCs = async (npcs) => {
+    if (!npcs || npcs.length === 0) return 0;
+    const cleanedNpcs = npcs.map(npc => {
+      const location_id = npc.location_name ? (locationMap[npc.location_name] || null) : null;
+      const state_id = npc.state_name ? (stateMap[npc.state_name] || null) : null;
+      return {
+        world_id: worldId,
+        role: npc.role === 'main' ? 'main' : 'secondary',
+        name: (npc.name || 'Безымянный').slice(0, 100),
+        race: (npc.race || 'Человек').slice(0, 50),
+        category: 'npc',
+        appearance: (npc.appearance || '').slice(0, 500),
+        background: (npc.background || '').slice(0, 1000),
+        status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10).map(String) : [],
+        habits: Array.isArray(npc.habits) ? npc.habits.slice(0, 10).map(String) : [],
+        catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases.slice(0, 10).map(String) : [],
+        stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        hp: Number(npc.hp) || 30,
+        max_hp: Number(npc.max_hp) || 30,
+        location_id,
+        state_id,
+      };
+    });
+    
+    try {
+      const result = await invokeFunction('generate-world-npcs', {
+        world_id: worldId,
+        npcs: cleanedNpcs,
+      });
+      return result.count || 0;
+    } catch (err) {
+      console.error('[saveNPCs] Failed:', err);
+      throw err;
+    }
+  };
+  
+  // Generate in batches
+  const totalBatches = Math.ceil(intelligentCount / BATCH_SIZE);
+  const allNpcs = [];
+  
+  for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
+    const startIdx = batchNum * BATCH_SIZE + 1;
+    const endIdx = Math.min((batchNum + 1) * BATCH_SIZE, intelligentCount);
+    
+    onProgress({
+      step: 'generating',
+      batch: batchNum + 1,
+      totalBatches,
+      current: endIdx,
+      total: intelligentCount,
+      message: `Генерация разумных NPC ${startIdx}-${endIdx} из ${intelligentCount}...`,
+    });
+    
+    try {
+      const batchNpcs = await generateNPCBatch(
+        loreText, startIdx, endIdx, intelligentCount,
+        Array.from(generatedNames), geography
+      );
+      
+      if (Array.isArray(batchNpcs) && batchNpcs.length > 0) {
+        const newNpcs = [];
+        for (const npc of batchNpcs) {
+          const name = (npc.name || '').toLowerCase().trim();
+          if (name && !generatedNames.has(name)) {
+            generatedNames.add(name);
+            // Force category to 'npc' for intelligent batch
+            npc.category = 'npc';
+            allNpcs.push(npc);
+            newNpcs.push(npc);
+          }
+        }
+        
+        if (newNpcs.length > 0) {
+          const saved = await saveNPCs(newNpcs);
+          totalSaved += saved;
+          
+          // Save progress after each batch
+          saveGenerationProgress(worldId, {
+            [STORAGE_KEY]: {
+              generatedNames: Array.from(generatedNames),
+              totalSaved,
+              completed: false,
+            }
+          });
+        }
+        
+        if (batchNpcs.length >= intelligentCount) break;
+      }
+    } catch (batchErr) {
+      console.error(`[generateIntelligentNPCs] Batch ${batchNum + 1} failed:`, batchErr);
+      // Save progress before throwing
+      saveGenerationProgress(worldId, {
+        [STORAGE_KEY]: {
+          generatedNames: Array.from(generatedNames),
+          totalSaved,
+          completed: false,
+        }
+      });
+      if (allNpcs.length > 0) break;
+      throw batchErr;
+    }
+  }
+  
+  // Mark as completed
+  saveGenerationProgress(worldId, {
+    [STORAGE_KEY]: {
+      generatedNames: Array.from(generatedNames),
+      totalSaved,
+      completed: true,
+    }
+  });
+  
+  onProgress({ step: 'done', count: allNpcs.length, saved: totalSaved, message: `Разумные NPC сгенерировано: ${allNpcs.length}` });
+  return { npcs: allNpcs, saved: totalSaved };
+}
+
+// Generate non-intelligent creatures (beast, monster, boss) with progress saving
+export async function generateCreatures(loreText, worldId, geography = null, onProgress = () => {}) {
+  const BATCH_SIZE = 3;
+  const STORAGE_KEY = `creatures`;
+  
+  console.log('[generateCreatures] Starting');
+  
+  // Load saved progress
+  const progress = loadGenerationProgress(worldId) || {};
+  const savedCreatures = progress[STORAGE_KEY] || { generatedNames: [], totalSaved: 0, completed: false };
+  
+  if (savedCreatures.completed) {
+    console.log('[generateCreatures] Already completed');
+    onProgress({ step: 'done', message: 'Уже сгенерировано ранее', saved: savedCreatures.totalSaved });
+    return { npcs: [], saved: savedCreatures.totalSaved, alreadyCompleted: true };
+  }
+  
+  const generatedNames = new Set(savedCreatures.generatedNames || []);
+  let totalSaved = savedCreatures.totalSaved || 0;
+  
+  // Count creatures
+  onProgress({ step: 'counting', message: 'Подсчёт существ...' });
+  const totalCount = await countNPCs(loreText);
+  const creatureCount = Math.ceil(totalCount * 0.4); // ~40% are creatures
+  
+  onProgress({ step: 'counting', total: creatureCount, message: `Найдено ${creatureCount} существ` });
+  
+  // Create state map
+  const stateMap = {};
+  if (geography) {
+    geography.states.forEach(s => stateMap[s.name] = s.id);
+  }
+  
+  // Creature generation prompt
+  const creaturePrompt = `На основе описания мира создай существ (звери, монстры, боссы).
+Определи категорию на основе имени, расы и описания:
+- 'beast' — животные и звери (волки, медведи, драконы, крысы)
+- 'monster' — монстры (гоблины, тролли, скелеты, демон)
+- 'boss' — могущественные существа (короли демонов, древние драконы, лорды)
+
+${geography ? `Доступные государства:\n${geography.states.map(s => `- ${s.name}`).join('\n')}` : ''}
+
+Верни ТОЛЬКО JSON массив: [{name: 'Имя', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
+  
+  // Save helper
+  const saveNPCs = async (npcs) => {
+    if (!npcs || npcs.length === 0) return 0;
+    const cleanedNpcs = npcs.map(npc => {
+      const state_id = npc.state_name ? (stateMap[npc.state_name] || null) : null;
+      return {
+        world_id: worldId,
+        role: 'secondary',
+        name: (npc.name || 'Безымянный').slice(0, 100),
+        race: (npc.race || 'Человек').slice(0, 50),
+        category: ['beast', 'monster', 'boss'].includes(npc.category) ? npc.category : 'monster',
+        appearance: (npc.appearance || '').slice(0, 500),
+        background: (npc.background || '').slice(0, 1000),
+        status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10).map(String) : [],
+        habits: [],
+        catchphrases: [],
+        stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        hp: Number(npc.hp) || 30,
+        max_hp: Number(npc.max_hp) || 30,
+        location_id: null, // Creatures don't have locations
+        state_id,
+      };
+    });
+    
+    try {
+      const result = await invokeFunction('generate-world-npcs', {
+        world_id: worldId,
+        npcs: cleanedNpcs,
+      });
+      return result.count || 0;
+    } catch (err) {
+      console.error('[saveNPCs] Failed:', err);
+      throw err;
+    }
+  };
+  
+  // Generate in batches
+  const totalBatches = Math.ceil(creatureCount / BATCH_SIZE);
+  const allNpcs = [];
+  
+  for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
+    const startIdx = batchNum * BATCH_SIZE + 1;
+    const endIdx = Math.min((batchNum + 1) * BATCH_SIZE, creatureCount);
+    
+    onProgress({
+      step: 'generating',
+      batch: batchNum + 1,
+      totalBatches,
+      current: endIdx,
+      total: creatureCount,
+      message: `Генерация существ ${startIdx}-${endIdx} из ${creatureCount}...`,
+    });
+    
+    try {
+      const userMessage = `${loreText}\n\nСгенерируй существ (звери, монстры, боссы) с ${startIdx} по ${endIdx} (всего ${creatureCount}). Только этих, без дубликатов. Уже сгенерированные: ${Array.from(generatedNames).join(', ')}`;
+      
+      const response = await callOpenRouter(creaturePrompt, userMessage);
+      
+      let batchNpcs;
+      try {
+        batchNpcs = JSON.parse(response);
+      } catch {
+        const jsonMatch = response.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+        if (jsonMatch) {
+          batchNpcs = JSON.parse(jsonMatch[1]);
+        } else {
+          const arrayMatch = response.match(/\[[\s\S]*\]/);
+          batchNpcs = arrayMatch ? JSON.parse(arrayMatch[0]) : [];
+        }
+      }
+      
+      if (Array.isArray(batchNpcs) && batchNpcs.length > 0) {
+        const newNpcs = [];
+        for (const npc of batchNpcs) {
+          const name = (npc.name || '').toLowerCase().trim();
+          if (name && !generatedNames.has(name)) {
+            generatedNames.add(name);
+            allNpcs.push(npc);
+            newNpcs.push(npc);
+          }
+        }
+        
+        if (newNpcs.length > 0) {
+          const saved = await saveNPCs(newNpcs);
+          totalSaved += saved;
+          
+          // Save progress after each batch
+          saveGenerationProgress(worldId, {
+            [STORAGE_KEY]: {
+              generatedNames: Array.from(generatedNames),
+              totalSaved,
+              completed: false,
+            }
+          });
+        }
+        
+        if (batchNpcs.length >= creatureCount) break;
+      }
+    } catch (batchErr) {
+      console.error(`[generateCreatures] Batch ${batchNum + 1} failed:`, batchErr);
+      // Save progress before throwing
+      saveGenerationProgress(worldId, {
+        [STORAGE_KEY]: {
+          generatedNames: Array.from(generatedNames),
+          totalSaved,
+          completed: false,
+        }
+      });
+      if (allNpcs.length > 0) break;
+      throw batchErr;
+    }
+  }
+  
+  // Mark as completed
+  saveGenerationProgress(worldId, {
+    [STORAGE_KEY]: {
+      generatedNames: Array.from(generatedNames),
+      totalSaved,
+      completed: true,
+    }
+  });
+  
+  onProgress({ step: 'done', count: allNpcs.length, saved: totalSaved, message: `Существа сгенерированы: ${allNpcs.length}` });
+  return { npcs: allNpcs, saved: totalSaved };
+}
+
+// Check if generation can be resumed
+export function canResumeGeneration(worldId) {
+  const progress = loadGenerationProgress(worldId);
+  if (!progress) return { intelligent: false, creatures: false };
+  
+  return {
+    intelligent: progress.intelligent_npcs && !progress.intelligent_npcs.completed,
+    creatures: progress.creatures && !progress.creatures.completed,
+  };
+}
+
+// Clear all generation progress for a world
+export function clearWorldGenerationProgress(worldId) {
+  clearGenerationProgress(worldId);
 }

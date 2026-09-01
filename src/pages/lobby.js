@@ -673,39 +673,46 @@ export function renderLobby(container, user) {
             <ul>
               <li>Все имена на русском языке (транслитерация запрещена)</li>
               <li>Расы и классы из настроек мира (world.settings)</li>
-              <li>Статы в диапазоне 3-26, сумма для игроков = 72</li>
-              <li>HP = CON * 2 + 10</li>
+              <li>Статы в диапазоне 1-30, сумма: 50 (слабые) до 200 (легендарные)</li>
+              <li>Игрок начинает с 72 — существа могут быть слабее или сильнее</li>
             </ul>
             
             <h5 style="margin-top: 0.75rem;">👥 Стироля персонажей</h5>
             <ul>
               <li><strong>main</strong> — главные (протагонисты, антагонисты)</li>
               <li><strong>secondary</strong> — второстепенные (спутники, торговцы)</li>
-              <li><strong>tertiary</strong> — третьестепенные (звери, монстры без имени)</li>
+              <li><strong>tertiary</strong> — третьестепенные (звери, монстры)</li>
             </ul>
             
             <h5 style="margin-top: 0.75rem;">📝 Правила именования</h5>
             <ul>
-              <li>Tier 1-3 (звери/монстры): только вид (Волк, Гоблин)</li>
-              <li>Tier 4-5: можно дать имя-прозвище (Дракон Пепла)</li>
-              <li>Все NPC-люди: всегда дают имя</li>
+              <li>Звери/монстры: имя НЕ ДАВАТЬ! Только вид: "Волк", "Гоблин"</li>
+              <li>Исключение: уникальные боссы (is_unique: true) получают имя</li>
+              <li>Все NPC-люди/эльфы/гномы: всегда дают имя</li>
+              <li>Стаи (is_pack: true) — группа существ без имени</li>
             </ul>
             
-            <h5 style="margin-top: 0.75rem;">⚔️ Уровни угрозы (Tier)</h5>
+            <h5 style="margin-top: 0.75rem;">⚔️ Потенциал (Tier) vs Уровень (Level)</h5>
             <ul>
-              <li><strong>Tier 1:</strong> статы 4-10, HP 1-15, уровень 2</li>
-              <li><strong>Tier 2:</strong> статы 10-14, HP 15-40, уровень 5</li>
-              <li><strong>Tier 3:</strong> статы 14-18, HP 40-100, уровень 8</li>
-              <li><strong>Tier 4:</strong> статы 18-22, HP 100-250, уровень 13</li>
-              <li><strong>Tier 5:</strong> статы 22-26, HP 250-500, уровень 18</li>
+              <li><strong>Tier (1-5)</strong> = потенциал, определяет количество спецатак</li>
+              <li><strong>Level (1-100)</strong> = текущая сила</li>
+              <li>Детеныш дракона: Tier 5, Level 1 (слаб, но 5 спецатак)</li>
+              <li>Взрослый дракон: Tier 5, Level 80 (могуществен)</li>
+            </ul>
+            
+            <h5 style="margin-top: 0.75rem;">📊 Диапазоны уровней по видам</h5>
+            <ul>
+              <li>Слизь: 1-10 | Волк: 5-15 | Орк: 10-25</li>
+              <li>Тролль: 15-35 | Демон: 30-80 | Дракон: 50-100</li>
             </ul>
             
             <h5 style="margin-top: 0.75rem;">🎲 Боевые характеристики</h5>
             <ul>
-              <li><strong>Уровень:</strong> определяется по Tier</li>
-              <li><strong>КД (armor_class):</strong> 10 + модификатор DEX + расовый бонус</li>
+              <li><strong>Спецатаки:</strong> 1 на каждый Tier (Tier 5 = 5 спецатак)</li>
+              <li><strong>Базовые атаки:</strong> 2-3 на каждые 10 уровней</li>
+              <li><strong>КД:</strong> 10 + модификатор DEX + расовый бонус</li>
               <li><strong>Инициатива:</strong> модификатор DEX</li>
-              <li><strong>Спасброски:</strong> модификатор стата + бонус мастерства</li>
+              <li><strong>HP:</strong> CON × уровень × 1.5 (существа слабее игрока)</li>
             </ul>
           </div>
           
@@ -721,16 +728,31 @@ export function renderLobby(container, user) {
     }]
   },
   "bestiary": {
-    "npcs": [{
-      "name": "Король",
-      "category": "npc",
-      "role": "main",
-      "stats": {"STR": 14, "DEX": 10, "CON": 12, "INT": 14, "WIS": 13, "CHA": 16},
-      "level": 8,
-      "armor_class": 11,
-      "initiative": 0,
-      "saving_throws": {"STR": 4, "DEX": 2, "CON": 3, "INT": 4, "WIS": 3, "CHA": 5}
-    }]
+    "npcs": [
+      {
+        "name": "Король",
+        "category": "npc",
+        "role": "main",
+        "tier": 3,
+        "level": 15,
+        "stats": {"STR": 14, "DEX": 10, "CON": 12, "INT": 14, "WIS": 13, "CHA": 16},
+        "armor_class": 11,
+        "initiative": 0,
+        "special_attacks": [{"name": "Королевский приказ", description: "...", damage: "2d6"}],
+        "base_attacks": [{"name": "Меч", damage: "1d8+2"}]
+      },
+      {
+        "name": "Волк",
+        "category": "beast",
+        "role": "tertiary",
+        "tier": 2,
+        "level": 8,
+        "stats": {"STR": 12, "DEX": 14, "CON": 10, "INT": 3, "WIS": 8, "CHA": 4},
+        "is_pack": true,
+        "special_attacks": [{"name": "Укус", damage": "1d6"}],
+        "base_attacks": [{"name": "Когти", damage": "1d4"}]
+      }
+    ]
   }
 }</pre>
           </div>

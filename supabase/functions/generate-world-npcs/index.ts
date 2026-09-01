@@ -18,6 +18,28 @@ function cleanNPC(npc: any, world_id: string) {
   const validRoles = ["main", "secondary", "tertiary"];
   const role = validRoles.includes(npc.role) ? npc.role : "secondary";
   
+  // Validate tier and level
+  const tier = Math.max(1, Math.min(5, Number(npc.tier) || 1));
+  const level = Math.max(1, Math.min(100, Number(npc.level) || 1));
+  
+  // Calculate special attacks count by tier
+  const specialAttacksCount = Math.max(1, Math.min(5, tier));
+  const baseAttacksCount = Math.max(2, Math.min(10, 2 + Math.floor((level - 1) / 10)));
+  
+  // Clean attacks arrays
+  const cleanAttack = (a: any) => ({
+    name: cleanTextForAI(a?.name) || "Атака",
+    description: cleanTextForAI(a?.description) || "",
+    damage: cleanTextForAI(a?.damage) || "1d6",
+  });
+  
+  const specialAttacks = Array.isArray(npc.special_attacks) 
+    ? npc.special_attacks.slice(0, specialAttacksCount).map(cleanAttack)
+    : [];
+  const baseAttacks = Array.isArray(npc.base_attacks)
+    ? npc.base_attacks.slice(0, baseAttacksCount).map(cleanAttack)
+    : [];
+  
   return {
     world_id,
     role,
@@ -31,14 +53,22 @@ function cleanNPC(npc: any, world_id: string) {
     catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases.slice(0, 10) : [],
     stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
     hp: Number(npc.hp) || 30,
-    max_hp: Number(npc.max_hp) || 30,
+    max_hp: Number(npc.max_hp) || Number(npc.hp) || 30,
     location_id: npc.location_id || null,
     state_id: npc.state_id || null,
     // Combat stats
-    level: Number(npc.level) || 1,
+    level,
     armor_class: Number(npc.armor_class) || 10,
     initiative: Number(npc.initiative) || 0,
     saving_throws: npc.saving_throws && typeof npc.saving_throws === 'object' ? npc.saving_throws : {},
+    // Attacks
+    special_attacks: specialAttacks,
+    base_attacks: baseAttacks,
+    // Pack/unique
+    is_pack_instance: npc.is_pack_instance === true,
+    pack_size: Math.max(1, Math.min(50, Number(npc.pack_size) || 1)),
+    // Template reference
+    template_id: npc.template_id || null,
   };
 }
 

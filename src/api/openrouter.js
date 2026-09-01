@@ -9,13 +9,21 @@ const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 // ===================== NPC STATS CALCULATION =====================
 
 /**
- * Calculate all derived combat stats for an NPC
+ * Calculate all derived combat stats for an NPC/creature
+ * 
+ * SYSTEM:
+ * - Tier (1-5) = POTENTIAL — max capability, determines special attacks count
+ * - Level (1-100) = CURRENT POWER — how much of potential is realized
+ * - Stat sum: 50 (level 1, tier 1) to 200 (level 100, tier 5)
+ * - Player starts at 72 stat sum, so creatures can be weaker or stronger
+ * 
  * @param {object} stats - Raw stats {STR, DEX, CON, INT, WIS, CHA}
  * @param {string} race - Race name
- * @param {number} tier - Threat tier (1-5)
- * @returns {object} { level, armor_class, initiative, saving_throws }
+ * @param {number} tier - Potential tier (1-5)
+ * @param {number} level - Current level (1-100)
+ * @returns {object} { level, armor_class, initiative, saving_throws, stat_sum }
  */
-export function calculateNPCCombatStats(stats = {}, race = 'Человек', tier = 1) {
+export function calculateNPCCombatStats(stats = {}, race = 'Человек', tier = 1, level = 1) {
   const safeStats = {
     STR: Number.isFinite(Number(stats.STR)) ? Math.round(Number(stats.STR)) : 10,
     DEX: Number.isFinite(Number(stats.DEX)) ? Math.round(Number(stats.DEX)) : 10,
@@ -28,11 +36,7 @@ export function calculateNPCCombatStats(stats = {}, race = 'Человек', tie
   const dexMod = Math.floor((safeStats.DEX - 10) / 2);
   const raceBonus = getRaceAcBonus(race);
   
-  // Level based on tier: Tier 1=1-3, Tier 2=4-6, Tier 3=7-10, Tier 4=11-15, Tier 5=16-20
-  const levelMap = { 1: 2, 2: 5, 3: 8, 4: 13, 5: 18 };
-  const level = levelMap[tier] || 1;
-  
-  // AC: 10 + DEX mod + race bonus
+  // AC: 10 + DEX mod + race bonus (same as player)
   const armorClass = 10 + dexMod + raceBonus;
   
   // Initiative: DEX modifier
@@ -46,12 +50,49 @@ export function calculateNPCCombatStats(stats = {}, race = 'Человек', tie
     savingThrows[stat] = mod + proficiencyBonus;
   }
   
+  // Calculate stat sum for reference
+  const stat_sum = Object.values(safeStats).reduce((a, b) => a + b, 0);
+  
   return {
     level,
     armor_class: armorClass,
     initiative,
     saving_throws: savingThrows,
+    stat_sum,
   };
+}
+
+/**
+ * Calculate expected stat sum for a creature at given level/tier
+ * Base 50 at level 1 tier 1, +2 per level, +10 per tier, max 200
+ */
+export function getExpectedStatSum(level = 1, tier = 1) {
+  return Math.min(200, 50 + ((level - 1) * 2) + ((tier - 1) * 10));
+}
+
+/**
+ * Calculate creature HP: CON * level * multiplier (default 1.5)
+ * Weaker than player (CON * 2 + 10), creatures start weaker
+ */
+export function calculateCreatureHp(con = 10, level = 1, tier = 1, multiplier = 1.5) {
+  const baseHp = Math.max(1, Math.round(con * multiplier));
+  const levelHp = Math.max(1, Math.round(con * multiplier * (level - 1)));
+  const tierBonus = tier * 5;
+  return baseHp + levelHp + tierBonus;
+}
+
+/**
+ * Get special attacks count by tier (Tier 1 = 1, Tier 5 = 5)
+ */
+export function getSpecialAttacksCount(tier = 1) {
+  return Math.max(1, Math.min(5, tier));
+}
+
+/**
+ * Get base attacks count by level (2 per 10 levels)
+ */
+export function getBaseAttacksCount(level = 1) {
+  return Math.max(2, Math.min(10, 2 + Math.floor((level - 1) / 10)));
 }
 
 // Get user settings (API key + models)
@@ -292,38 +333,59 @@ ${geography.states.map(s => `- ${s.name}: ${geography.locations.filter(l => l.st
 
   const SYSTEM_PROMPT = `Извлеки из текста указанных NPC и сгенерируй для них характеристики.
 
-## СИСТЕМА УРОВНЕЙ УГРОЗЫ (TIER)
-- Tier 1: Статы 4-10, HP 1-15 (слабые существа)
-- Tier 2: Статы 10-14, HP 15-40 (обычные существа)
-- Tier 3: Статы 14-18, HP 40-100 (сильные существа)
-- Tier 4: Статы 18-22, HP 100-250 (элитные существа)
-- Tier 5: Статы 22-26, HP 250-500 (легендарные существа)
+## СИСТЕМА ПОТЕНЦИАЛА И УРОВНЯ
+TIER (1-5) = ПОТЕНЦИАЛ существа (максимальные возможности):
+- Tier 1: Слабые существа (крысы, слизни, гоблины)
+- Tier 2: Обычные существа (волки, орки, тролли)
+- Tier 3: Сильные существа (огры, демоны, молодые драконы)
+- Tier 4: Элитные существа (древние драконы, вампиры, лорды)
+- Tier 5: Легендарные существа (божества, титаны, древнейшие драконы)
+
+LEVEL (1-100) = ТЕКУЩАЯ СИЛА (насколько раскрыт потенциал):
+- Детеныш дракона: Tier 5, но Level 1 (слаб, но имеет потенциал)
+- Взрослый дракон: Tier 5, Level 80 (могуществен)
+- Существо может быть любого уровня в пределах своего Tier
+
+## ДИАПАЗОНЫ УРОВНЕЙ ПО ВИДАМ
+Примеры для шаблонов:
+- Слизь: 1-10 ур
+- Волк: 5-15 ур
+- Орк: 10-25 ур
+- Тролль: 15-35 ур
+- Дракон: 50-100 ур
+- Демон: 30-80 ур
+
+## ХАРАКТЕРИСТИКИ
+Сумма статов (STR+DEX+CON+INT+WIS+CHA):
+- Уровень 1, Tier 1: ~50 (слабее игрока)
+- Уровень 100, Tier 5: ~200 (значительно сильнее игрока)
+- Игрок начинает с 72
+
+Спецатаки: 1 на каждый Tier (Tier 1 = 1 спецатака, Tier 5 = 5 спецатак)
+Базовые атаки: 2-3 на каждые 10 уровней (level 1-10 = 2, level 11-20 = 3, и т.д.)
 
 ## ТИПЫ ПЕРСОНАЖЕЙ (ROLE)
-- 'main' — главные персонажи (протагонисты, антагонисты, ключевые фигуры сюжета)
-- 'secondary' — второстепенные персонажи (спутники, торговцы, стражники)
-- 'tertiary' — третьестепенные персонажи (звери, монстры, рядовые враги)
+- 'main' — главные персонажи (протагонисты, антагонисты, ключевые фигуры)
+- 'secondary' — второстепенные (спутники, торговцы, стражники)
+- 'tertiary' — третьестепенные (звери, монстры, рядовые враги)
 
 ## КАТЕГОРИИ
-- 'npc' — разумные существа (люди, эльфы, гномы, орки), живут в городах, имеют role: main/secondary
-- 'beast' — животные и звери (волки, медведи, драконы, крысы), имеют role: tertiary
-- 'monster' — монстры (гоблины, тролли, скелеты, демоны), имеют role: tertiary
-- 'boss' — могущественные существа (короли демонов, древние драконы), имеют role: main/secondary
+- 'npc' — разумные существа (люди, эльфы, гномы, орки), role: main/secondary
+- 'beast' — животные/звери (волки, медведи, драконы), role: tertiary
+- 'monster' — монстры (гоблины, тролли, скелеты), role: tertiary
+- 'boss' — могущественные (короли демонов, древние драконы), role: main/secondary
 
 ## ПРАВИЛА ИМЕНОВАНИЯ
-ВАЖНО: Имена давай ТОЛЬКО персонажам с role 'main' или 'secondary'.
-Персонажам с role 'tertiary' (звери, монстры) имя НЕ ДАВАТЬ — только название вида:
-- Правильно: name: "Волк", name: "Гоблин", name: "Скелет"
-- Неправильно: name: "Серый Волк", name: "Гоблин Крикун"
-
-ИСКЛЮЧЕНИЕ: Если зверь/монстр имеет Tier 4-5 (очень силен/уникален), можно дать ему имя-прозвище:
-- Пример: "Дракон Пепла" (Tier 5), "Арагорн Жадный" (Tier 4)
+ГЛАВНОЕ ПРАВИЛО: Зверям и монстрам имя НЕ ДАВАТЬ!
+- Только название вида: "Волк", "Гоблин", "Дракон", "Скелет"
+- Имя даётся ТОЛЬКО: NPC-людям/эльфам/гномам (всегда) и уникальным боссам (is_unique: true)
+- Стаям (is_pack: true) имя не дают — это группа существ
 
 ${geographyContext}
 
-ВАЖНО: ВСЕ тексты (имя, раса, описание внешности, предыстория, привычки, фразы) должны быть на русском языке!
+ВАЖНО: ВСЕ тексты (имя/вид, раса, описание внешности, предыстория, привычки, фразы) на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Имя или название вида', role: 'main'|'secondary'|'tertiary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Имя или вид', role: 'main'|'secondary'|'tertiary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание', damage: 'урон'}], base_attacks: [{name: 'Название', damage: 'урон'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
 
   const existingNpcsText = existingNames.length > 0
     ? `\n\nУже сгенерированные NPC (НЕ ДУБЛИРОВАТЬ): ${existingNames.join(', ')}`
@@ -389,9 +451,18 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
         role = 'secondary';
       }
       
-      // Calculate combat stats
+      // Calculate combat stats with level
       const tier = Number(npc.tier) || 1;
-      const combatStats = calculateNPCCombatStats(npc.stats, npc.race, tier);
+      const level = Number(npc.level) || Math.max(1, Math.min(100, tier * 10 + Math.floor(Math.random() * 20)));
+      const combatStats = calculateNPCCombatStats(npc.stats, npc.race, tier, level);
+      
+      // Clean special_attacks and base_attacks
+      const specialAttacks = Array.isArray(npc.special_attacks) 
+        ? npc.special_attacks.slice(0, getSpecialAttacksCount(tier))
+        : [];
+      const baseAttacks = Array.isArray(npc.base_attacks)
+        ? npc.base_attacks.slice(0, getBaseAttacksCount(level))
+        : [];
       
       return {
         world_id: worldId,
@@ -405,15 +476,21 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
         habits: Array.isArray(npc.habits) ? npc.habits.slice(0, 10).map(String) : [],
         catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases.slice(0, 10).map(String) : [],
         stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-        hp: Number(npc.hp) || 30,
-        max_hp: Number(npc.max_hp) || 30,
+        hp: Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
+        max_hp: Number(npc.max_hp) || Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
         location_id,
         state_id,
         // Combat stats
-        level: combatStats.level,
+        level,
         armor_class: combatStats.armor_class,
         initiative: combatStats.initiative,
         saving_throws: combatStats.saving_throws,
+        // Attacks
+        special_attacks: specialAttacks,
+        base_attacks: baseAttacks,
+        // Pack/unique flags
+        is_pack_instance: npc.is_pack === true,
+        pack_size: npc.is_pack ? (npc.pack_size || 2 + Math.floor(Math.random() * 5)) : 1,
       };
     });
 
@@ -729,31 +806,60 @@ export async function generateCreatures(loreText, worldId, geography = null, onP
   // Creature generation prompt
   const creaturePrompt = `На основе описания мира создай существ (звери, монстры, боссы).
 
-## СИСТЕМА УРОВНЕЙ УГРОЗЫ (TIER)
-- Tier 1: Статы 4-10, HP 1-15 (слабые существа: крысы, волки, гоблины)
-- Tier 2: Статы 10-14, HP 15-40 (обычные существа: медведи, тролли, орки)
-- Tier 3: Статы 14-18, HP 40-100 (сильные существа: огры, демоны, молодые драконы)
-- Tier 4: Статы 18-22, HP 100-250 (элитные существа: древние драконы, вампиры)
-- Tier 5: Статы 22-26, HP 250-500 (легендарные существа: божества, титаны)
+## СИСТЕМА ПОТЕНЦИАЛА И УРОВНЯ
+TIER (1-5) = ПОТЕНЦИАЛ существа (максимальные возможности, количество спецатак):
+- Tier 1: Слабые существа — крысы, слизни, гоблины (1 спецатака)
+- Tier 2: Обычные существа — волки, орки, тролли (2 спецатаки)
+- Tier 3: Сильные существа — огры, демоны, молодые драконы (3 спецатаки)
+- Tier 4: Элитные существа — древние драконы, вампиры, лорды (4 спецатаки)
+- Tier 5: Легендарные существа — божества, титаны, древнейшие драконы (5 спецатак)
+
+LEVEL (1-100) = ТЕКУЩАЯ СИЛА (насколько раскрыт потенциал):
+- Детеныш дракона: Tier 5, Level 1 (слаб, но имеет потенциал и 5 спецатак)
+- Взрослый дракон: Tier 5, Level 80 (могуществен)
+
+## ДИАПАЗОНЫ УРОВНЕЙ ПО ВИДАМ (ВАЖНО!)
+Каждый вид имеет свой диапазон уровней:
+- Слизь: 1-10 ур
+- Крыса: 1-5 ур
+- Волк: 5-15 ур
+- Медведь: 10-25 ур
+- Орк: 10-25 ур
+- Гоблин: 1-15 ур
+- Тролль: 15-35 ур
+- Огр: 20-40 ур
+- Демон: 30-80 ур
+- Дракон: 50-100 ур
+- Вампир: 25-60 ур
+- Скелет: 1-10 ур
+- Зомби: 1-8 ур
+- Паук: 3-20 ур
+
+## ХАРАКТЕРИСТИКИ
+Спецатаки: 1 на каждый Tier (Tier 1 = 1, Tier 5 = 5)
+Базовые атаки: 2 на уровни 1-10, +1 за каждые 10 уровней
 
 ## КАТЕГОРИИ
-- 'beast' — животные и звери (волки, медведи, драконы, крысы)
+- 'beast' — животные/звери (волки, медведи, драконы, крысы)
 - 'monster' — монстры (гоблины, тролли, скелеты, демоны)
-- 'boss' — могущественные существа (короли демонов, древние драконы, лорды)
+- 'boss' — могущественные (короли демонов, древние драконы)
 
 ## ПРАВИЛА ИМЕНОВАНИЯ
-ВАЖНО: Существам Tier 1-3 имя НЕ ДАВАТЬ — только название вида:
-- Правильно: name: "Волк", name: "Гоблин", name: "Скелет", name: "Медведь"
-- Неправильно: name: "Серый Волк", name: "Гоблин Крикун"
+ГЛАВНОЕ ПРАВИЛО: Зверям и монстрам имя НЕ ДАВАТЬ!
+- Только название вида: "Волк", "Гоблин", "Дракон", "Скелет"
+- Имя даётся ТОЛЬКО уникальным боссам (is_unique: true)
+- Стаям (is_pack: true) имя не дают — это группа существ
 
-ИСКЛЮЧЕНИЕ: Существа Tier 4-5 могут иметь имя-прозвище:
-- Пример: "Дракон Пепла" (Tier 5), "Арагорн Жадный" (Tier 4), "Король Троллей" (Tier 4)
+## СТАИ И УНИКАЛЬНОСТЬ
+- is_pack: true — существо ходит стаей (2-10 особей), например волки, гоблины
+- is_pack: false, is_unique: false — одиночное существо
+- is_unique: true — единственный экземпляр (получает имя!), например "Дракон Пепла"
 
 ${geography ? `Доступные государства:\n${geography.states.map(s => `- ${s.name}`).join('\n')}` : ''}
 
-ВАЖНО: ВСЕ тексты (имя/название, раса, описание внешности, предыстория) должны быть на русском языке!
+ВАЖНО: ВСЕ тексты (вид, раса, описание внешности, предыстория) на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Название вида или имя', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Название вида', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание', damage: 'урон'}], base_attacks: [{name: 'Название', damage: 'урон'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
   
   // Save helper
   const saveNPCs = async (npcs) => {
@@ -762,7 +868,16 @@ ${geography ? `Доступные государства:\n${geography.states.ma
       const state_id = npc.state_name ? (stateMap[npc.state_name] || null) : null;
       const category = ['beast', 'monster', 'boss'].includes(npc.category) ? npc.category : 'monster';
       const tier = Number(npc.tier) || 1;
-      const combatStats = calculateNPCCombatStats(npc.stats, npc.race, tier);
+      const level = Number(npc.level) || Math.max(1, Math.min(100, tier * 10));
+      const combatStats = calculateNPCCombatStats(npc.stats, npc.race, tier, level);
+      
+      // Clean special_attacks and base_attacks
+      const specialAttacks = Array.isArray(npc.special_attacks) 
+        ? npc.special_attacks.slice(0, getSpecialAttacksCount(tier))
+        : [];
+      const baseAttacks = Array.isArray(npc.base_attacks)
+        ? npc.base_attacks.slice(0, getBaseAttacksCount(level))
+        : [];
       
       return {
         world_id: worldId,
@@ -776,15 +891,21 @@ ${geography ? `Доступные государства:\n${geography.states.ma
         habits: [],
         catchphrases: [],
         stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-        hp: Number(npc.hp) || 30,
-        max_hp: Number(npc.max_hp) || 30,
+        hp: Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
+        max_hp: Number(npc.max_hp) || Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
         location_id: null, // Creatures don't have locations
         state_id,
         // Combat stats
-        level: combatStats.level,
+        level,
         armor_class: combatStats.armor_class,
         initiative: combatStats.initiative,
         saving_throws: combatStats.saving_throws,
+        // Attacks
+        special_attacks: specialAttacks,
+        base_attacks: baseAttacks,
+        // Pack/unique flags
+        is_pack_instance: npc.is_pack === true,
+        pack_size: npc.is_pack ? (npc.pack_size || 2 + Math.floor(Math.random() * 5)) : 1,
       };
     });
     

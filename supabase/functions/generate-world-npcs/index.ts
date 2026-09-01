@@ -14,9 +14,13 @@ const CORS = {
 };
 
 function cleanNPC(npc: any, world_id: string) {
+  // Validate role
+  const validRoles = ["main", "secondary", "tertiary"];
+  const role = validRoles.includes(npc.role) ? npc.role : "secondary";
+  
   return {
     world_id,
-    role: npc.role === "main" ? "main" : "secondary",
+    role,
     name: cleanTextForAI(npc.name) || "Безымянный",
     race: cleanTextForAI(npc.race) || "Человек",
     category: ["npc", "beast", "monster", "boss"].includes(npc.category) ? npc.category : "npc",
@@ -30,6 +34,11 @@ function cleanNPC(npc: any, world_id: string) {
     max_hp: Number(npc.max_hp) || 30,
     location_id: npc.location_id || null,
     state_id: npc.state_id || null,
+    // Combat stats
+    level: Number(npc.level) || 1,
+    armor_class: Number(npc.armor_class) || 10,
+    initiative: Number(npc.initiative) || 0,
+    saving_throws: npc.saving_throws && typeof npc.saving_throws === 'object' ? npc.saving_throws : {},
   };
 }
 

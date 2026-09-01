@@ -391,7 +391,7 @@ export async function exportWorld(worldId) {
     .order('name');
 
   const exportData = {
-    version: '3.0',
+    version: '3.1',
     exported_at: new Date().toISOString(),
     schema: 'multirp_world_full',
     world: {
@@ -432,6 +432,10 @@ export async function exportWorld(worldId) {
         stats: n.stats,
         hp: n.hp,
         max_hp: n.max_hp,
+        level: n.level,
+        armor_class: n.armor_class,
+        initiative: n.initiative,
+        saving_throws: n.saving_throws,
         status_tags: n.status_tags,
         habits: n.habits,
         catchphrases: n.catchphrases,
@@ -457,7 +461,7 @@ export function downloadJSON(data, filename) {
 // Get schema info for display
 export function getWorldSchema() {
   return {
-    version: '3.0',
+    version: '3.1',
     description: 'Полный экспорт мира MultiRP',
     structure: {
       version: 'string - версии формата',
@@ -465,7 +469,7 @@ export function getWorldSchema() {
       schema: 'идентификатор схемы',
       world: {
         name: 'string - название мира',
-        settings: 'object - настройки мира',
+        settings: 'object - настройки мира (races, classes, max_level и т.д.)',
         description: 'string - описание',
       },
       lore_files: [{
@@ -492,21 +496,75 @@ export function getWorldSchema() {
       bestiary: {
         npcs: [{
           id: 'UUID',
-          name: 'string - имя',
+          name: 'string - имя или название вида (для зверей/монстров)',
           race: 'string - раса',
           category: 'npc|beast|monster|boss',
-          role: 'main|secondary',
+          role: 'main|secondary|tertiary',
           appearance: 'string - внешность',
           background: 'string - предыстория',
           stats: { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 },
-          hp: 'number',
-          max_hp: 'number',
+          hp: 'number - текущее здоровье',
+          max_hp: 'number - максимальное здоровье',
+          level: 'number - уровень (1-20)',
+          armor_class: 'number - класс брони (КД)',
+          initiative: 'number - инициатива (модификатор DEX)',
+          saving_throws: { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 },
           status_tags: ['string'],
           habits: ['string - привычки'],
           catchphrases: ['string - фразы'],
-          location_id: 'UUID - ID локации',
+          location_id: 'UUID - ID локации (только для NPC)',
           state_id: 'UUID - ID государства',
         }],
+      },
+    },
+    // Критерии ИИ для генерации
+    ai_criteria: {
+      description: 'Система правил для генерации контента ИИ',
+      entity_unification: {
+        description: 'Унификация сущностей — приведение к единому формату',
+        rules: [
+          'Все имена собственные на русском языке (транслитерация запрещена)',
+          'Расы из настроек мира (world.settings.races) — если не указаны, использовать стандартные D&D',
+          'Классы из настроек мира (world.settings.classes)',
+          'Статы в диапазоне 3-26, сумма для игроков = 72',
+          'HP = CON * 2 + 10 (базовая формула)',
+          'Уровень (level) определяется по Tier: T1=2, T2=5, T3=8, T4=13, T5=18',
+        ],
+      },
+      character_tiers: {
+        description: 'Система уровней персонажей',
+        tiers: {
+          main: 'Главные персонажи (протагонисты, антагонисты, ключевые фигуры)',
+          secondary: 'Второстепенные персонажи (спутники, торговцы, стражники)',
+          tertiary: 'Третьестепенные (звери, монстры, рядовые враги — без имени, только вид)',
+        },
+      },
+      naming_rules: {
+        description: 'Правила именования',
+        rules: [
+          'Tier 1-3 (звери/монстры): только название вида (Волк, Гоблин, Скелет)',
+          'Tier 4-5 (звери/монстры): можно дать имя-прозвище (Дракон Пепла, Арагорн Жадный)',
+          'Все NPC (люди/эльфы/гномы и т.д.): всегда дают имя',
+        ],
+      },
+      threat_tiers: {
+        description: 'Система уровней угрозы',
+        tiers: {
+          'Tier 1': 'Статы 4-10, HP 1-15 (слабые)',
+          'Tier 2': 'Статы 10-14, HP 15-40 (обычные)',
+          'Tier 3': 'Статы 14-18, HP 40-100 (сильные)',
+          'Tier 4': 'Статы 18-22, HP 100-250 (элитные)',
+          'Tier 5': 'Статы 22-26, HP 250-500 (легендарные)',
+        },
+      },
+      combat_stats: {
+        description: 'Расчёт боевых характеристик',
+        formulas: {
+          level: 'По Tier: T1=2, T2=5, T3=8, T4=13, T5=18',
+          armor_class: '10 + модификатор DEX + расовый бонус',
+          initiative: 'Модификатор DEX = floor((DEX - 10) / 2)',
+          saving_throws: 'Модификатор стата + бонус мастерства (зависит от уровня)',
+        },
       },
     },
   };
@@ -528,6 +586,7 @@ export async function importWorld(jsonData, ownerId) {
   });
 
   // Import lore files
+  let loreCount = 0;
   if (worldData.lore_files?.length) {
     const files = worldData.lore_files.map((f) => ({
       world_id: world.id,
@@ -538,11 +597,14 @@ export async function importWorld(jsonData, ownerId) {
     }));
     const { error } = await supabase.from('lore_files').insert(files);
     if (error) throw error;
+    loreCount = files.length;
   }
 
   // Import geography (states + locations)
   const locationIdMap = {}; // old ID -> new ID
   const stateIdMap = {}; // old ID -> new ID
+  let stateCount = 0;
+  let locationCount = 0;
   
   if (worldData.geography?.states?.length) {
     for (const state of worldData.geography.states) {
@@ -558,6 +620,7 @@ export async function importWorld(jsonData, ownerId) {
       
       if (stateError) throw stateError;
       stateIdMap[state.id] = newState.id;
+      stateCount++;
       
       // Import locations for this state
       if (state.locations?.length) {
@@ -574,6 +637,7 @@ export async function importWorld(jsonData, ownerId) {
           .select();
         
         if (locError) throw locError;
+        locationCount += newLocations.length;
         
         // Map old location IDs to new ones
         state.locations.forEach((oldLoc, idx) => {
@@ -586,18 +650,23 @@ export async function importWorld(jsonData, ownerId) {
   }
 
   // Import NPCs
+  let npcCount = 0;
   if (worldData.bestiary?.npcs?.length) {
     const npcs = worldData.bestiary.npcs.map(n => ({
       world_id: world.id,
       name: n.name,
       race: n.race || 'Человек',
       category: n.category || 'npc',
-      role: n.role || 'secondary',
+      role: ['main', 'secondary', 'tertiary'].includes(n.role) ? n.role : 'secondary',
       appearance: n.appearance || '',
       background: n.background || '',
       stats: n.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
       hp: n.hp || 30,
       max_hp: n.max_hp || 30,
+      level: n.level || 1,
+      armor_class: n.armor_class || 10,
+      initiative: n.initiative || 0,
+      saving_throws: n.saving_throws && typeof n.saving_throws === 'object' ? n.saving_throws : {},
       status_tags: n.status_tags || [],
       habits: n.habits || [],
       catchphrases: n.catchphrases || [],
@@ -607,9 +676,20 @@ export async function importWorld(jsonData, ownerId) {
     
     const { error: npcError } = await supabase.from('npcs').insert(npcs);
     if (npcError) throw npcError;
+    npcCount = npcs.length;
   }
 
-  return world;
+  return {
+    world,
+    stats: {
+      loreCount,
+      stateCount,
+      locationCount,
+      npcCount,
+      hasGeography: stateCount > 0,
+      hasBestiary: npcCount > 0,
+    },
+  };
 }
 
 // ===================== NPC BESTIARY =====================

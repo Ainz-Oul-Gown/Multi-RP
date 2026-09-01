@@ -754,6 +754,20 @@
   color: var(--text-muted);
 }
 
+.npc-role-tertiary {
+  background: rgba(100, 100, 100, 0.15);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.npc-combat-stats {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
 .npc-name {
   font-size: var(--fs-base);
   font-weight: 700;

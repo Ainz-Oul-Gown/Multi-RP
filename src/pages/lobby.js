@@ -627,59 +627,109 @@ export function renderLobby(container, user) {
     schemaModal.className = 'modal-overlay';
     schemaModal.id = 'schemaModal';
     schemaModal.innerHTML = `
-      <div class="modal" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+      <div class="modal" style="max-width: 700px; max-height: 85vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
           <h2 class="card-title">ℹ️ Структура файла экспорта</h2>
           <button class="btn btn-ghost btn-sm" id="closeSchemaBtn">✕</button>
         </div>
         <div class="schema-content">
           <p class="form-hint" style="margin-bottom: 1rem;">Файл экспорта мира содержит все данные для полного восстановления:</p>
+          
           <div class="schema-section">
             <h4>📁 Основные данные</h4>
             <ul>
-              <li><strong>world</strong> — название, настройки, описание</li>
+              <li><strong>world</strong> — название, настройки (races, classes, max_level), описание</li>
               <li><strong>lore_files</strong> — файлы лора (папка, заголовок, содержимое, теги)</li>
               <li><strong>folders</strong> — структура папок</li>
             </ul>
           </div>
+          
           <div class="schema-section">
             <h4>🗺️ География (geography)</h4>
             <ul>
-              <li><strong>states[]</strong> — государства</li>
-              <li style="margin-left: 1rem;">name, description, ruler_id</li>
-              <li><strong>locations[]</strong> — локации</li>
-              <li style="margin-left: 1rem;">name (название), type (capital/city/village/ruins/landmark), description</li>
+              <li><strong>states[]</strong> — государства (name, description, ruler_id)</li>
+              <li><strong>locations[]</strong> — локации (name, type: capital/city/village/ruins/landmark, description)</li>
             </ul>
           </div>
+          
           <div class="schema-section">
             <h4>🐉 Бестиарий (bestiary)</h4>
             <ul>
               <li><strong>npcs[]</strong> — все NPC и существа</li>
-              <li style="margin-left: 1rem;">name (имя), race (раса), category (npc/beast/monster/boss)</li>
-              <li style="margin-left: 1rem;">role (main/secondary), appearance (внешность), background (предыстория)</li>
+              <li style="margin-left: 1rem;">name (имя/название вида), race, category (npc/beast/monster/boss)</li>
+              <li style="margin-left: 1rem;">role (main/secondary/tertiary), appearance, background</li>
               <li style="margin-left: 1rem;">stats (STR/DEX/CON/INT/WIS/CHA), hp, max_hp</li>
+              <li style="margin-left: 1rem;"><strong>Боевые характеристики:</strong> level, armor_class (КД), initiative, saving_throws</li>
               <li style="margin-left: 1rem;">status_tags[], habits[], catchphrases[]</li>
-              <li style="margin-left: 1rem;">location_id, state_id — привязка к географии</li>
+              <li style="margin-left: 1rem;">location_id (только NPC), state_id</li>
             </ul>
           </div>
+          
+          <div class="schema-section" style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+            <h4>🤖 Критерии ИИ для генерации</h4>
+            <p class="form-hint" style="margin-bottom: 0.5rem;">При генерации контента ИИ следует этим правилам:</p>
+            
+            <h5 style="margin-top: 0.75rem;">📐 Унификация сущностей</h5>
+            <ul>
+              <li>Все имена на русском языке (транслитерация запрещена)</li>
+              <li>Расы и классы из настроек мира (world.settings)</li>
+              <li>Статы в диапазоне 3-26, сумма для игроков = 72</li>
+              <li>HP = CON * 2 + 10</li>
+            </ul>
+            
+            <h5 style="margin-top: 0.75rem;">👥 Стироля персонажей</h5>
+            <ul>
+              <li><strong>main</strong> — главные (протагонисты, антагонисты)</li>
+              <li><strong>secondary</strong> — второстепенные (спутники, торговцы)</li>
+              <li><strong>tertiary</strong> — третьестепенные (звери, монстры без имени)</li>
+            </ul>
+            
+            <h5 style="margin-top: 0.75rem;">📝 Правила именования</h5>
+            <ul>
+              <li>Tier 1-3 (звери/монстры): только вид (Волк, Гоблин)</li>
+              <li>Tier 4-5: можно дать имя-прозвище (Дракон Пепла)</li>
+              <li>Все NPC-люди: всегда дают имя</li>
+            </ul>
+            
+            <h5 style="margin-top: 0.75rem;">⚔️ Уровни угрозы (Tier)</h5>
+            <ul>
+              <li><strong>Tier 1:</strong> статы 4-10, HP 1-15, уровень 2</li>
+              <li><strong>Tier 2:</strong> статы 10-14, HP 15-40, уровень 5</li>
+              <li><strong>Tier 3:</strong> статы 14-18, HP 40-100, уровень 8</li>
+              <li><strong>Tier 4:</strong> статы 18-22, HP 100-250, уровень 13</li>
+              <li><strong>Tier 5:</strong> статы 22-26, HP 250-500, уровень 18</li>
+            </ul>
+            
+            <h5 style="margin-top: 0.75rem;">🎲 Боевые характеристики</h5>
+            <ul>
+              <li><strong>Уровень:</strong> определяется по Tier</li>
+              <li><strong>КД (armor_class):</strong> 10 + модификатор DEX + расовый бонус</li>
+              <li><strong>Инициатива:</strong> модификатор DEX</li>
+              <li><strong>Спасброски:</strong> модификатор стата + бонус мастерства</li>
+            </ul>
+          </div>
+          
           <div class="schema-section">
             <h4>📋 Пример JSON</h4>
             <pre class="code-example">{
-  "version": "3.0",
-  "world": { "name": "...", "settings": {} },
+  "version": "3.1",
+  "world": { "name": "...", "settings": { "races": [...] } },
   "geography": {
     "states": [{
       "name": "Королевство",
-      "locations": [
-        { "name": "Столица", "type": "capital" }
-      ]
+      "locations": [{ "name": "Столица", "type": "capital" }]
     }]
   },
   "bestiary": {
     "npcs": [{
       "name": "Король",
       "category": "npc",
-      "stats": {"STR": 14, "DEX": 10, ...}
+      "role": "main",
+      "stats": {"STR": 14, "DEX": 10, "CON": 12, "INT": 14, "WIS": 13, "CHA": 16},
+      "level": 8,
+      "armor_class": 11,
+      "initiative": 0,
+      "saving_throws": {"STR": 4, "DEX": 2, "CON": 3, "INT": 4, "WIS": 3, "CHA": 5}
     }]
   }
 }</pre>
@@ -859,15 +909,22 @@ export function renderLobby(container, user) {
         content.innerHTML = npcs.map((npc) => {
           const categoryLabels = { npc: '🧠 NPC', beast: '🐾 Зверь', monster: '👹 Монстр', boss: '💀 Босс' };
           const categoryColors = { npc: 'badge-info', beast: 'badge-success', monster: 'badge-warning', boss: 'badge-danger' };
+          const roleLabels = { main: '⭐ Главный', secondary: '○ Второстепенный', tertiary: '· Третий' };
+          const roleColors = { main: 'npc-role-main', secondary: 'npc-role-secondary', tertiary: 'npc-role-tertiary' };
           const category = npc.category || 'npc';
+          const role = npc.role || 'secondary';
+          const level = npc.level || 1;
+          const ac = npc.armor_class || 10;
+          const init = npc.initiative || 0;
           return `
           <div class="card npc-card" data-category="${category}" style="margin-bottom: 0.75rem;">
             <div class="npc-header" data-npc-toggle="${npc.id}">
               <div class="npc-header-info">
-                <span class="npc-role-badge ${npc.role === 'main' ? 'npc-role-main' : 'npc-role-secondary'}">${npc.role === 'main' ? '⭐ Главный' : '○ Второстепенный'}</span>
+                <span class="npc-role-badge ${roleColors[role] || 'npc-role-secondary'}">${roleLabels[role] || '○ Второстепенный'}</span>
                 <strong class="npc-name">${npc.name}</strong>
                 <span class="npc-category ${categoryColors[category]}">${categoryLabels[category]}</span>
                 <span class="npc-race">${npc.race}</span>
+                <span class="npc-combat-stats">Ур.${level} КД${ac} Иниц.${init >= 0 ? '+' : ''}${init}</span>
                 ${npc.location_name ? `<span class="npc-location">📍 ${npc.location_name}</span>` : ''}
               </div>
               <span class="npc-toggle-icon">▼</span>
@@ -875,7 +932,7 @@ export function renderLobby(container, user) {
             <div id="npc-edit-${npc.id}" class="npc-edit-form" style="display: none;">
               <div class="npc-form-grid">
                 <div class="form-group">
-                  <label class="form-label">Имя</label>
+                  <label class="form-label">Имя / Название вида</label>
                   <input class="input" id="npc-name-${npc.id}" value="${npc.name}" />
                 </div>
                 <div class="form-group">
@@ -889,6 +946,14 @@ export function renderLobby(container, user) {
                     <option value="beast" ${category === 'beast' ? 'selected' : ''}>🐾 Зверь</option>
                     <option value="monster" ${category === 'monster' ? 'selected' : ''}>👹 Монстр</option>
                     <option value="boss" ${category === 'boss' ? 'selected' : ''}>💀 Босс</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Роль</label>
+                  <select class="input" id="npc-role-${npc.id}">
+                    <option value="main" ${role === 'main' ? 'selected' : ''}>⭐ Главный</option>
+                    <option value="secondary" ${role === 'secondary' ? 'selected' : ''}>○ Второстепенный</option>
+                    <option value="tertiary" ${role === 'tertiary' ? 'selected' : ''}>· Третьестепенный</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -911,6 +976,20 @@ export function renderLobby(container, user) {
                     <input class="stat-card-input" type="number" id="npc-${stat.toLowerCase()}-${npc.id}" value="${npc.stats?.[stat] ?? 10}" min="1" max="30" />
                   </div>
                 `).join('')}
+              </div>
+              <div class="npc-combat-stats-form" style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 80px;">
+                  <label class="form-label">Уровень</label>
+                  <input class="input" type="number" id="npc-level-${npc.id}" value="${level}" min="1" max="20" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 80px;">
+                  <label class="form-label">КД</label>
+                  <input class="input" type="number" id="npc-ac-${npc.id}" value="${ac}" min="1" max="40" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 80px;">
+                  <label class="form-label">Инициатива</label>
+                  <input class="input" type="number" id="npc-initiative-${npc.id}" value="${init}" min="-10" max="20" />
+                </div>
               </div>
               <div class="npc-actions">
                 <button class="btn btn-primary" data-npc-save="${npc.id}">💾 Сохранить</button>
@@ -942,6 +1021,7 @@ export function renderLobby(container, user) {
               name: document.getElementById(`npc-name-${npcId}`).value,
               race: document.getElementById(`npc-race-${npcId}`).value,
               category: document.getElementById(`npc-category-${npcId}`).value || 'npc',
+              role: document.getElementById(`npc-role-${npcId}`).value || 'secondary',
               appearance: document.getElementById(`npc-appearance-${npcId}`).value,
               background: document.getElementById(`npc-background-${npcId}`).value,
               location_name: locationName,
@@ -953,6 +1033,9 @@ export function renderLobby(container, user) {
                 WIS: Number(document.getElementById(`npc-wis-${npcId}`).value) || 10,
                 CHA: Number(document.getElementById(`npc-cha-${npcId}`).value) || 10,
               },
+              level: Number(document.getElementById(`npc-level-${npcId}`).value) || 1,
+              armor_class: Number(document.getElementById(`npc-ac-${npcId}`).value) || 10,
+              initiative: Number(document.getElementById(`npc-initiative-${npcId}`).value) || 0,
             };
             try {
               await updateNpc(npcId, updates);
@@ -2389,8 +2472,28 @@ export function renderLobby(container, user) {
       }
       try {
         const text = await file.text();
-        await importWorld(text, user.id);
-        toast.success('Мир импортирован!');
+        const result = await importWorld(text, user.id);
+        const { stats } = result;
+        
+        // Build informative message about what was imported
+        const parts = [];
+        if (stats.stateCount) parts.push(`${stats.stateCount} гос.`);
+        if (stats.locationCount) parts.push(`${stats.locationCount} лок.`);
+        if (stats.npcCount) parts.push(`${stats.npcCount} NPC`);
+        if (stats.loreCount) parts.push(`${stats.loreCount} файлов`);
+        
+        let msg = `Мир «${result.world.name}» импортирован!`;
+        if (parts.length) msg += ` (${parts.join(', ')})`;
+        
+        if (!stats.hasGeography && !stats.hasBestiary) {
+          msg += '. Географию и бестиарий можно сгенерировать в настройках мира.';
+        } else if (!stats.hasGeography) {
+          msg += '. Географию можно сгенерировать в настройках мира.';
+        } else if (!stats.hasBestiary) {
+          msg += '. Бестиарий можно дополнить в настройках мира.';
+        }
+        
+        toast.success(msg);
         loadData();
       } catch (err) {
         toast.error('Ошибка импорта: ' + err.message);

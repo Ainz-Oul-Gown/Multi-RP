@@ -1,10 +1,58 @@
 // src/api/openrouter.js — Прямые запросы к OpenRouter (без лимитов Supabase)
-import { OPENROUTER_API_KEY, AI_MODEL, CARD_GENERATION_MODELS } from '../config.js';
+import { OPENROUTER_API_KEY, AI_MODEL, CARD_GENERATION_MODELS, calculateDerivedStats, getRaceAcBonus } from '../config.js';
 import { supabase, invokeFunction } from './supabase.js';
 import { saveGenerationProgress, loadGenerationProgress, clearGenerationProgress } from '../utils/generationStore.js';
 import { saveProgress, loadProgress, deleteProgress } from '../utils/indexedDB.js';
 
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+// ===================== NPC STATS CALCULATION =====================
+
+/**
+ * Calculate all derived combat stats for an NPC
+ * @param {object} stats - Raw stats {STR, DEX, CON, INT, WIS, CHA}
+ * @param {string} race - Race name
+ * @param {number} tier - Threat tier (1-5)
+ * @returns {object} { level, armor_class, initiative, saving_throws }
+ */
+export function calculateNPCCombatStats(stats = {}, race = 'Человек', tier = 1) {
+  const safeStats = {
+    STR: Number.isFinite(Number(stats.STR)) ? Math.round(Number(stats.STR)) : 10,
+    DEX: Number.isFinite(Number(stats.DEX)) ? Math.round(Number(stats.DEX)) : 10,
+    CON: Number.isFinite(Number(stats.CON)) ? Math.round(Number(stats.CON)) : 10,
+    INT: Number.isFinite(Number(stats.INT)) ? Math.round(Number(stats.INT)) : 10,
+    WIS: Number.isFinite(Number(stats.WIS)) ? Math.round(Number(stats.WIS)) : 10,
+    CHA: Number.isFinite(Number(stats.CHA)) ? Math.round(Number(stats.CHA)) : 10,
+  };
+
+  const dexMod = Math.floor((safeStats.DEX - 10) / 2);
+  const raceBonus = getRaceAcBonus(race);
+  
+  // Level based on tier: Tier 1=1-3, Tier 2=4-6, Tier 3=7-10, Tier 4=11-15, Tier 5=16-20
+  const levelMap = { 1: 2, 2: 5, 3: 8, 4: 13, 5: 18 };
+  const level = levelMap[tier] || 1;
+  
+  // AC: 10 + DEX mod + race bonus
+  const armorClass = 10 + dexMod + raceBonus;
+  
+  // Initiative: DEX modifier
+  const initiative = dexMod;
+  
+  // Saving throws: stat modifier + proficiency bonus (based on level)
+  const proficiencyBonus = Math.ceil(level / 4) + 1;
+  const savingThrows = {};
+  for (const stat of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']) {
+    const mod = Math.floor((safeStats[stat] - 10) / 2);
+    savingThrows[stat] = mod + proficiencyBonus;
+  }
+  
+  return {
+    level,
+    armor_class: armorClass,
+    initiative,
+    saving_throws: savingThrows,
+  };
+}
 
 // Get user settings (API key + models)
 async function getUserSettings() {
@@ -243,22 +291,39 @@ ${geography.states.map(s => `- ${s.name}: ${geography.locations.filter(l => l.st
 Для разумных NPC указывай и location_name, и state_name.` : '';
 
   const SYSTEM_PROMPT = `Извлеки из текста указанных NPC и сгенерируй для них характеристики.
-Оцени уровень угрозы (Tier):
-- Tier 1: Статы 4-10, HP 1-15.
-- Tier 2: Статы 10-14, HP 15-40.
-- Tier 3: Статы 14-18, HP 40-100.
-- Tier 4: Статы 18-22, HP 100-250.
-- Tier 5: Статы 22-26, HP 250-500.
+
+## СИСТЕМА УРОВНЕЙ УГРОЗЫ (TIER)
+- Tier 1: Статы 4-10, HP 1-15 (слабые существа)
+- Tier 2: Статы 10-14, HP 15-40 (обычные существа)
+- Tier 3: Статы 14-18, HP 40-100 (сильные существа)
+- Tier 4: Статы 18-22, HP 100-250 (элитные существа)
+- Tier 5: Статы 22-26, HP 250-500 (легендарные существа)
+
+## ТИПЫ ПЕРСОНАЖЕЙ (ROLE)
+- 'main' — главные персонажи (протагонисты, антагонисты, ключевые фигуры сюжета)
+- 'secondary' — второстепенные персонажи (спутники, торговцы, стражники)
+- 'tertiary' — третьестепенные персонажи (звери, монстры, рядовые враги)
+
+## КАТЕГОРИИ
+- 'npc' — разумные существа (люди, эльфы, гномы, орки), живут в городах, имеют role: main/secondary
+- 'beast' — животные и звери (волки, медведи, драконы, крысы), имеют role: tertiary
+- 'monster' — монстры (гоблины, тролли, скелеты, демоны), имеют role: tertiary
+- 'boss' — могущественные существа (короли демонов, древние драконы), имеют role: main/secondary
+
+## ПРАВИЛА ИМЕНОВАНИЯ
+ВАЖНО: Имена давай ТОЛЬКО персонажам с role 'main' или 'secondary'.
+Персонажам с role 'tertiary' (звери, монстры) имя НЕ ДАВАТЬ — только название вида:
+- Правильно: name: "Волк", name: "Гоблин", name: "Скелет"
+- Неправильно: name: "Серый Волк", name: "Гоблин Крикун"
+
+ИСКЛЮЧЕНИЕ: Если зверь/монстр имеет Tier 4-5 (очень силен/уникален), можно дать ему имя-прозвище:
+- Пример: "Дракон Пепла" (Tier 5), "Арагорн Жадный" (Tier 4)
+
 ${geographyContext}
-Для каждого NPC определи категорию на основе имени, расы и описания:
-- 'npc' — разумные существа (люди, эльфы, гномы, орки и т.д.), которые живут в городах
-- 'beast' — животные и звери (волки, медведи, драконы, крысы и т.д.)
-- 'monster' — монстры (гоблины, тролли, скелеты, демоны и т.д.)
-- 'boss' — могущественные существа (короли демонов, древние драконы, лорды и т.д.)
 
 ВАЖНО: ВСЕ тексты (имя, раса, описание внешности, предыстория, привычки, фразы) должны быть на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Имя', role: 'main' или 'secondary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Имя или название вида', role: 'main'|'secondary'|'tertiary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
 
   const existingNpcsText = existingNames.length > 0
     ? `\n\nУже сгенерированные NPC (НЕ ДУБЛИРОВАТЬ): ${existingNames.join(', ')}`
@@ -316,9 +381,21 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
       const location_id = (category === 'npc' && npc.location_name) ? (locationMap[npc.location_name] || null) : null;
       const state_id = npc.state_name ? (stateMap[npc.state_name] || null) : null;
       
+      // Determine role: beasts/monsters are tertiary by default
+      let role = npc.role;
+      if (category === 'beast' || category === 'monster') {
+        role = 'tertiary';
+      } else if (role !== 'main' && role !== 'secondary') {
+        role = 'secondary';
+      }
+      
+      // Calculate combat stats
+      const tier = Number(npc.tier) || 1;
+      const combatStats = calculateNPCCombatStats(npc.stats, npc.race, tier);
+      
       return {
         world_id: worldId,
-        role: npc.role === 'main' ? 'main' : 'secondary',
+        role,
         name: (npc.name || 'Безымянный').slice(0, 100),
         race: (npc.race || 'Человек').slice(0, 50),
         category,
@@ -332,6 +409,11 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
         max_hp: Number(npc.max_hp) || 30,
         location_id,
         state_id,
+        // Combat stats
+        level: combatStats.level,
+        armor_class: combatStats.armor_class,
+        initiative: combatStats.initiative,
+        saving_throws: combatStats.saving_throws,
       };
     });
 
@@ -486,6 +568,9 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
     const cleanedNpcs = npcs.map(npc => {
       const location_id = npc.location_name ? (locationMap[npc.location_name] || null) : null;
       const state_id = npc.state_name ? (stateMap[npc.state_name] || null) : null;
+      const tier = Number(npc.tier) || 1;
+      const combatStats = calculateNPCCombatStats(npc.stats, npc.race, tier);
+      
       return {
         world_id: worldId,
         role: npc.role === 'main' ? 'main' : 'secondary',
@@ -502,6 +587,11 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
         max_hp: Number(npc.max_hp) || 30,
         location_id,
         state_id,
+        // Combat stats
+        level: combatStats.level,
+        armor_class: combatStats.armor_class,
+        initiative: combatStats.initiative,
+        saving_throws: combatStats.saving_throws,
       };
     });
     
@@ -638,28 +728,48 @@ export async function generateCreatures(loreText, worldId, geography = null, onP
   
   // Creature generation prompt
   const creaturePrompt = `На основе описания мира создай существ (звери, монстры, боссы).
-Определи категорию на основе имени, расы и описания:
+
+## СИСТЕМА УРОВНЕЙ УГРОЗЫ (TIER)
+- Tier 1: Статы 4-10, HP 1-15 (слабые существа: крысы, волки, гоблины)
+- Tier 2: Статы 10-14, HP 15-40 (обычные существа: медведи, тролли, орки)
+- Tier 3: Статы 14-18, HP 40-100 (сильные существа: огры, демоны, молодые драконы)
+- Tier 4: Статы 18-22, HP 100-250 (элитные существа: древние драконы, вампиры)
+- Tier 5: Статы 22-26, HP 250-500 (легендарные существа: божества, титаны)
+
+## КАТЕГОРИИ
 - 'beast' — животные и звери (волки, медведи, драконы, крысы)
-- 'monster' — монстры (гоблины, тролли, скелеты, демон)
-- 'boss' — могущественные существа (короли демонов, древние драконы, лордов)
+- 'monster' — монстры (гоблины, тролли, скелеты, демоны)
+- 'boss' — могущественные существа (короли демонов, древние драконы, лорды)
+
+## ПРАВИЛА ИМЕНОВАНИЯ
+ВАЖНО: Существам Tier 1-3 имя НЕ ДАВАТЬ — только название вида:
+- Правильно: name: "Волк", name: "Гоблин", name: "Скелет", name: "Медведь"
+- Неправильно: name: "Серый Волк", name: "Гоблин Крикун"
+
+ИСКЛЮЧЕНИЕ: Существа Tier 4-5 могут иметь имя-прозвище:
+- Пример: "Дракон Пепла" (Tier 5), "Арагорн Жадный" (Tier 4), "Король Троллей" (Tier 4)
 
 ${geography ? `Доступные государства:\n${geography.states.map(s => `- ${s.name}`).join('\n')}` : ''}
 
-ВАЖНО: ВСЕ тексты (имя, раса, описание внешности, предыстория) должны быть на русском языке!
+ВАЖНО: ВСЕ тексты (имя/название, раса, описание внешности, предыстория) должны быть на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Имя', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Название вида или имя', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
   
   // Save helper
   const saveNPCs = async (npcs) => {
     if (!npcs || npcs.length === 0) return 0;
     const cleanedNpcs = npcs.map(npc => {
       const state_id = npc.state_name ? (stateMap[npc.state_name] || null) : null;
+      const category = ['beast', 'monster', 'boss'].includes(npc.category) ? npc.category : 'monster';
+      const tier = Number(npc.tier) || 1;
+      const combatStats = calculateNPCCombatStats(npc.stats, npc.race, tier);
+      
       return {
         world_id: worldId,
-        role: 'secondary',
+        role: 'tertiary',
         name: (npc.name || 'Безымянный').slice(0, 100),
         race: (npc.race || 'Человек').slice(0, 50),
-        category: ['beast', 'monster', 'boss'].includes(npc.category) ? npc.category : 'monster',
+        category,
         appearance: (npc.appearance || '').slice(0, 500),
         background: (npc.background || '').slice(0, 1000),
         status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10).map(String) : [],
@@ -670,6 +780,11 @@ ${geography ? `Доступные государства:\n${geography.states.ma
         max_hp: Number(npc.max_hp) || 30,
         location_id: null, // Creatures don't have locations
         state_id,
+        // Combat stats
+        level: combatStats.level,
+        armor_class: combatStats.armor_class,
+        initiative: combatStats.initiative,
+        saving_throws: combatStats.saving_throws,
       };
     });
     

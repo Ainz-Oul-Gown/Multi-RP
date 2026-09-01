@@ -430,6 +430,7 @@ export function renderLobby(container, user) {
           <h2 class="card-title">🐉 Бестиарий: <span id="bestiaryWorldName"></span></h2>
           <div style="display: flex; gap: 0.5rem;">
             <button class="btn btn-secondary btn-sm" id="openGeoBtn">🗺️ География</button>
+            <button class="btn btn-warning btn-sm" id="resumeGenBtn" style="display: none;">⏳ Продолжить</button>
             <button class="btn btn-primary btn-sm" id="createNpcBtn">+ Создать NPC</button>
             <button class="btn btn-ghost btn-sm" id="closeBestiaryBtn">✕</button>
           </div>
@@ -1536,89 +1537,133 @@ export function renderLobby(container, user) {
         document.getElementById('bestiaryModal').classList.add('open');
         // Hide create form when opening bestiary for a new world
         document.getElementById('createNpcForm').style.display = 'none';
+        
+        // Check if generation can be resumed
+        const status = canResumeGeneration(worldId);
+        const resumeBtn = document.getElementById('resumeGenBtn');
+        if (status.intelligent || status.creatures) {
+          resumeBtn.style.display = '';
+        } else {
+          resumeBtn.style.display = 'none';
+        }
+        
         await loadBestiary(worldId);
       });
     });
 
-    // Resume generation button
+    // Resume generation button (in bestiary modal)
+    document.getElementById('resumeGenBtn')?.addEventListener('click', async () => {
+      const worldId = currentBestiaryWorldId;
+      if (!worldId) return;
+      
+      // Get world lore text for regeneration
+      const world = worlds.find(w => w.id === worldId);
+      if (!world) return;
+      
+      // Collect lore text
+      let combinedLoreText = world.description || world.settings?.description || '';
+      
+      // If no description, try to get from lore files
+      if (!combinedLoreText.trim()) {
+        const { data: loreFiles } = await supabase
+          .from('lore_files')
+          .select('content')
+          .eq('world_id', worldId);
+        if (loreFiles?.length) {
+          combinedLoreText = loreFiles.map(f => f.content).join('\n\n');
+        }
+      }
+      
+      if (!combinedLoreText.trim()) {
+        toast.error('Нет текста для генерации. Добавьте описание мира.');
+        return;
+      }
+      
+      // Check what needs to be resumed
+      const status = canResumeGeneration(worldId);
+      
+      if (!status.intelligent && !status.creatures) {
+        toast.info('Генерация уже завершена или не начата');
+        return;
+      }
+      
+      // Confirm
+      if (!confirm('Продолжить генерацию бестиария?')) return;
+      
+      // Get geography
+      const { data: states } = await supabase
+        .from('states')
+        .select('*, locations(*)')
+        .eq('world_id', worldId);
+      
+      const geographyWithIds = {
+        states: states?.map(s => ({ id: s.id, name: s.name })) || [],
+        locations: states?.flatMap(s => s.locations?.map(l => ({
+          id: l.id,
+          name: l.name,
+          state_name: s.name,
+          state_id: s.id,
+        })) || []) || [],
+      };
+      
+      const resumeBtn = document.getElementById('resumeGenBtn');
+      resumeBtn.disabled = true;
+      resumeBtn.textContent = '⏳ Генерация...';
+      
+      try {
+        // Resume intelligent NPCs if needed
+        if (status.intelligent) {
+          toast.info('Продолжаем генерацию разумных NPC...');
+          await generateIntelligentNPCs(combinedLoreText, worldId, geographyWithIds, (progress) => {
+            if (progress.step === 'generating') {
+              resumeBtn.textContent = `⏳ Разумные ${progress.current}/${progress.total}`;
+            }
+          });
+        }
+        
+        // Resume creatures if needed
+        if (status.creatures) {
+          toast.info('Продолжаем генерацию существ...');
+          await generateCreatures(combinedLoreText, worldId, geographyWithIds, (progress) => {
+            if (progress.step === 'generating') {
+              resumeBtn.textContent = `⏳ Существа ${progress.current}/${progress.total}`;
+            }
+          });
+        }
+        
+        toast.success('Генерация завершена!');
+        resumeBtn.style.display = 'none';
+        await loadBestiary(worldId);
+      } catch (err) {
+        console.error('[resume-gen] Error:', err);
+        toast.error('Ошибка: ' + err.message + '. Можно продолжить позже.');
+      } finally {
+        resumeBtn.disabled = false;
+        resumeBtn.textContent = '⏳ Продолжить';
+      }
+    });
+
+    // Resume generation button (in world card - keep for compatibility)
     container.querySelectorAll('[data-action="resume-gen"]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const worldId = btn.dataset.id;
         const worldName = btn.dataset.name;
+        // Open bestiary modal and trigger resume
+        currentBestiaryWorldId = worldId;
+        updateLobbyState('currentBestiaryWorldId', worldId);
+        document.getElementById('bestiaryWorldName').textContent = worldName;
+        document.getElementById('bestiaryModal').classList.add('open');
+        document.getElementById('createNpcForm').style.display = 'none';
         
-        // Get world lore text for regeneration
-        const world = worlds.find(w => w.id === worldId);
-        if (!world) return;
-        
-        // Collect lore text
-        let combinedLoreText = world.description || world.settings?.description || '';
-        
-        // If no description, try to get from lore files
-        if (!combinedLoreText.trim()) {
-          const { data: loreFiles } = await supabase
-            .from('lore_files')
-            .select('content')
-            .eq('world_id', worldId);
-          if (loreFiles?.length) {
-            combinedLoreText = loreFiles.map(f => f.content).join('\n\n');
-          }
-        }
-        
-        if (!combinedLoreText.trim()) {
-          toast.error('Нет текста для генерации. Добавьте описание мира.');
-          return;
-        }
-        
-        // Check what needs to be resumed
         const status = canResumeGeneration(worldId);
-        
-        if (!status.intelligent && !status.creatures) {
-          toast.info('Генерация уже завершена или не начата');
-          return;
+        const resumeBtn = document.getElementById('resumeGenBtn');
+        if (status.intelligent || status.creatures) {
+          resumeBtn.style.display = '';
+        } else {
+          resumeBtn.style.display = 'none';
         }
         
-        // Confirm
-        if (!confirm('Продолжить генерацию бестиария?')) return;
-        
-        // Get geography
-        const { data: states } = await supabase
-          .from('states')
-          .select('*, locations(*)')
-          .eq('world_id', worldId);
-        
-        const geographyWithIds = {
-          states: states?.map(s => ({ id: s.id, name: s.name })) || [],
-          locations: states?.flatMap(s => s.locations?.map(l => ({
-            id: l.id,
-            name: l.name,
-            state_name: s.name,
-            state_id: s.id,
-          })) || []) || [],
-        };
-        
-        try {
-          // Resume intelligent NPCs if needed
-          if (status.intelligent) {
-            toast.info('Продолжаем генерацию разумных NPC...');
-            await generateIntelligentNPCs(combinedLoreText, worldId, geographyWithIds, (progress) => {
-              console.log('[resume-gen] Intelligent:', progress);
-            });
-          }
-          
-          // Resume creatures if needed
-          if (status.creatures) {
-            toast.info('Продолжаем генерацию существ...');
-            await generateCreatures(combinedLoreText, worldId, geographyWithIds, (progress) => {
-              console.log('[resume-gen] Creatures:', progress);
-            });
-          }
-          
-          toast.success('Генерация завершена!');
-          loadData();
-        } catch (err) {
-          console.error('[resume-gen] Error:', err);
-          toast.error('Ошибка: ' + err.message + '. Можно продолжить позже.');
-        }
+        await loadBestiary(worldId);
       });
     });
 

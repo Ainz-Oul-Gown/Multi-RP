@@ -148,6 +148,20 @@ img {
   background: #d4940a;
 }
 
+.btn-warning {
+  background: #f39c12;
+  color: #fff;
+}
+
+.btn-warning:hover {
+  background: #e67e22;
+}
+
+.btn-warning:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

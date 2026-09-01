@@ -47,6 +47,8 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
     if (modelId.includes('z-ai')) return ['Z-AI'];
     if (modelId.includes('thinkingmachines')) return ['Thinking Machines'];
     if (modelId.includes('minimax')) return ['MiniMax'];
+    if (modelId.includes('meta-llama')) return ['Meta'];
+    if (modelId === 'openrouter/free') return []; // Auto-select
     return ['Xiaomi']; // default
   };
 

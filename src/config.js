@@ -18,6 +18,8 @@ export const CARD_GENERATION_MODELS = [
   { id: 'thinkingmachines/inkling-small:free', name: 'Inkling Small (free)', provider: 'Thinking Machines' },
   { id: 'minimax/minimax-m3:free', name: 'MiniMax M3 (free)', provider: 'MiniMax' },
   { id: 'thinkingmachines/inkling:free', name: 'Inkling (free)', provider: 'Thinking Machines' },
+  { id: 'openrouter/free', name: 'Auto (free)', provider: 'OpenRouter' },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B (free)', provider: 'Meta' },
 ];
 
 // Model options for DM (narrator)
@@ -25,6 +27,8 @@ export const DM_MODELS = [
   { id: 'xiaomi/mimo-v2.5', name: 'MiMo v2.5 (наша)', provider: 'Xiaomi' },
   { id: 'minimax/minimax-m3:free', name: 'MiniMax M3 (free)', provider: 'MiniMax' },
   { id: 'thinkingmachines/inkling:free', name: 'Inkling (free)', provider: 'Thinking Machines' },
+  { id: 'openrouter/free', name: 'Auto (free)', provider: 'OpenRouter' },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B (free)', provider: 'Meta' },
 ];
 
 // Game Constants

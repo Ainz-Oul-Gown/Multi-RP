@@ -660,14 +660,17 @@ export function renderLobby(container, user) {
           return;
         }
         content.innerHTML = npcs.map((npc) => `
-          <div class="card" style="margin-bottom: 0.5rem;">
-            <div class="card-header" style="cursor: pointer;" data-npc-toggle="${npc.id}">
-              <span class="badge ${npc.role === 'main' ? 'badge-primary' : 'badge-secondary'}">${npc.role === 'main' ? '⭐' : '○'}</span>
-              <strong>${npc.name}</strong>
-              <span class="text-muted">(${npc.race})</span>
+          <div class="card npc-card" style="margin-bottom: 0.75rem;">
+            <div class="npc-header" data-npc-toggle="${npc.id}">
+              <div class="npc-header-info">
+                <span class="npc-role-badge ${npc.role === 'main' ? 'npc-role-main' : 'npc-role-secondary'}">${npc.role === 'main' ? '⭐ Главный' : '○ Второстепенный'}</span>
+                <strong class="npc-name">${npc.name}</strong>
+                <span class="npc-race">${npc.race}</span>
+              </div>
+              <span class="npc-toggle-icon">▼</span>
             </div>
-            <div id="npc-edit-${npc.id}" style="display: none; padding: 1rem;">
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div id="npc-edit-${npc.id}" class="npc-edit-form" style="display: none;">
+              <div class="npc-form-grid">
                 <div class="form-group">
                   <label class="form-label">Имя</label>
                   <input class="input" id="npc-name-${npc.id}" value="${npc.name}" />
@@ -681,35 +684,17 @@ export function renderLobby(container, user) {
                 <label class="form-label">Предыстория</label>
                 <textarea class="input" id="npc-background-${npc.id}" rows="2">${npc.background || ''}</textarea>
               </div>
-              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
-                <div class="form-group">
-                  <label class="form-label">STR</label>
-                  <input class="input" type="number" id="npc-str-${npc.id}" value="${npc.stats?.STR ?? 10}" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">DEX</label>
-                  <input class="input" type="number" id="npc-dex-${npc.id}" value="${npc.stats?.DEX ?? 10}" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">CON</label>
-                  <input class="input" type="number" id="npc-con-${npc.id}" value="${npc.stats?.CON ?? 10}" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">INT</label>
-                  <input class="input" type="number" id="npc-int-${npc.id}" value="${npc.stats?.INT ?? 10}" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">WIS</label>
-                  <input class="input" type="number" id="npc-wis-${npc.id}" value="${npc.stats?.WIS ?? 10}" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">CHA</label>
-                  <input class="input" type="number" id="npc-cha-${npc.id}" value="${npc.stats?.CHA ?? 10}" />
-                </div>
+              <div class="stats-grid-3">
+                ${['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map(stat => `
+                  <div class="stat-card">
+                    <div class="stat-card-label">${stat}</div>
+                    <input class="stat-card-input" type="number" id="npc-${stat.toLowerCase()}-${npc.id}" value="${npc.stats?.[stat] ?? 10}" min="1" max="30" />
+                  </div>
+                `).join('')}
               </div>
-              <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                <button class="btn btn-primary btn-sm" data-npc-save="${npc.id}">💾 Сохранить</button>
-                <button class="btn btn-ghost btn-sm" data-npc-delete="${npc.id}">🗑️ Удалить</button>
+              <div class="npc-actions">
+                <button class="btn btn-primary" data-npc-save="${npc.id}">💾 Сохранить</button>
+                <button class="btn btn-ghost" data-npc-delete="${npc.id}">🗑️ Удалить</button>
               </div>
             </div>
           </div>
@@ -720,7 +705,10 @@ export function renderLobby(container, user) {
           header.addEventListener('click', () => {
             const npcId = header.dataset.npcToggle;
             const editDiv = document.getElementById(`npc-edit-${npcId}`);
-            editDiv.style.display = editDiv.style.display === 'none' ? 'block' : 'none';
+            const card = header.closest('.npc-card');
+            const isOpen = editDiv.style.display !== 'none';
+            editDiv.style.display = isOpen ? 'none' : 'block';
+            card.classList.toggle('open', !isOpen);
           });
         });
 

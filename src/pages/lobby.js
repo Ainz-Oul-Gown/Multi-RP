@@ -734,9 +734,10 @@ export function renderLobby(container, user) {
           
           <div class="schema-section">
             <h4>📋 Пример JSON</h4>
+            <p class="form-hint" style="margin-bottom: 0.5rem;">Расчётные поля (hp, max_hp, armor_class, initiative, saving_throws) рассчитываются автоматически:</p>
             <pre class="code-example">{
   "version": "3.1",
-  "world": { "name": "...", "settings": { "races": [...] } },
+  "world": { "name": "...", "settings": { "races": [...] }, "description": "..." },
   "geography": {
     "states": [{
       "name": "Королевство",
@@ -747,13 +748,13 @@ export function renderLobby(container, user) {
     "npcs": [
       {
         "name": "Король",
+        "class": "Рыцарь",
         "category": "npc",
         "role": "main",
         "tier": 3,
         "level": 15,
+        "hit_dice": 10,
         "stats": {"STR": 14, "DEX": 10, "CON": 12, "INT": 14, "WIS": 13, "CHA": 16},
-        "armor_class": 11,
-        "initiative": 0,
         "special_attacks": [{
           "name": "Королевский приказ",
           "description": "Призывает стражу",
@@ -774,6 +775,7 @@ export function renderLobby(container, user) {
         "role": "tertiary",
         "tier": 2,
         "level": 8,
+        "hit_dice": 8,
         "stats": {"STR": 12, "DEX": 14, "CON": 10, "INT": 3, "WIS": 8, "CHA": 4},
         "is_pack": true,
         "special_attacks": [{

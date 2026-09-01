@@ -62,7 +62,12 @@ async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: st
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    console.error(`  ❌ LLM returned empty response: ${JSON.stringify(data).slice(0, 200)}`);
+    throw new Error("LLM returned empty response");
+  }
+  return content;
 }
 
 function parseNPCCount(text: string): number {
@@ -153,15 +158,14 @@ serve(async (req) => {
     let totalCount = 0;
     try {
       const countResponse = await callChatLLM(SYSTEM_PROMPT_COUNT, lore_text, apiKey, 100);
-      console.log(`[generate-world-npcs:${requestId}] 📊 Raw count response: "${countResponse.trim()}"`);
-      totalCount = parseNPCCount(countResponse);
+      console.log(`[generate-world-npcs:${requestId}] 📊 Raw count response: "${(countResponse || '').trim()}"`);
+      totalCount = parseNPCCount(countResponse || '');
       console.log(`[generate-world-npcs:${requestId}] 📊 Total NPCs detected: ${totalCount}`);
     } catch (err) {
       console.error(`[generate-world-npcs:${requestId}] ❌ Count failed:`, err);
-      return new Response(
-        JSON.stringify({ error: "Ошибка подсчёта NPC", details: err.message }),
-        { status: 502, headers: { ...CORS, "Content-Type": "application/json" } },
-      );
+      // Fallback: try to generate directly with a reasonable default
+      console.log(`[generate-world-npcs:${requestId}] ⚠️ Falling back to default count of 10`);
+      totalCount = 10;
     }
 
     if (totalCount === 0) {

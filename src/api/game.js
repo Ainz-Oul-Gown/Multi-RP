@@ -1,5 +1,7 @@
 // src/api/game.js — API-методы для игровой логики
 import { supabase } from './supabase.js';
+import { calculateHpDnd, getHitDice, getDieAverage } from '../config/hitDice.js';
+import { getRaceAcBonus } from '../config.js';
 
 // ===================== WORLDS =====================
 
@@ -716,19 +718,56 @@ export async function importWorld(jsonData, ownerId) {
         }
       }
       
+      // Расчётные поля
+      const safeStats = {
+        STR: Number(n.stats?.STR) || 10,
+        DEX: Number(n.stats?.DEX) || 10,
+        CON: Number(n.stats?.CON) || 10,
+        INT: Number(n.stats?.INT) || 10,
+        WIS: Number(n.stats?.WIS) || 10,
+        CHA: Number(n.stats?.CHA) || 10,
+      };
+      const nLevel = Number(n.level) || 1;
+      const nHitDie = [6, 8, 10, 12].includes(Number(n.hit_dice)) ? Number(n.hit_dice) : 8;
+      const nRace = n.race || 'Человек';
+      
+      // HP: уровень 1 = макс кости + CON mod + 10, каждый следующий = среднее + CON mod
+      const calculatedHp = calculateHpDnd(safeStats.CON, nLevel, nHitDie);
+      
+      // AC: 10 + DEX mod + расовый бонус
+      const dexMod = Math.floor((safeStats.DEX - 10) / 2);
+      const raceBonus = getRaceAcBonus(nRace);
+      const calculatedAC = 10 + dexMod + raceBonus;
+      
+      // Initiative: DEX mod
+      const calculatedInit = dexMod;
+      
+      // Saving throws: stat mod + proficiency bonus
+      const proficiencyBonus = Math.ceil(nLevel / 4) + 1;
+      const calculatedSaves = {};
+      for (const stat of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']) {
+        const statMod = Math.floor((safeStats[stat] - 10) / 2);
+        calculatedSaves[stat] = statMod + proficiencyBonus;
+      }
+      
       return {
         world_id: world.id,
         name: n.name,
-        race: n.race || 'Человек',
+        race: nRace,
         category: n.category || 'npc',
         role: ['main', 'secondary', 'tertiary'].includes(n.role) ? n.role : 'secondary',
         appearance: n.appearance || '',
         background: n.background || '',
-        stats: n.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-        // Расчётные поля (hp, max_hp, armor_class, initiative, saving_throws) рассчитываются автоматически в saveNPCs
-        level: n.level || 1,
+        stats: safeStats,
+        // Расчётные поля
+        hp: calculatedHp,
+        max_hp: calculatedHp,
+        armor_class: calculatedAC,
+        initiative: calculatedInit,
+        saving_throws: calculatedSaves,
+        level: nLevel,
         tier: n.tier || 1,
-        hit_dice: [6, 8, 10, 12].includes(n.hit_dice) ? n.hit_dice : 8,
+        hit_dice: nHitDie,
         status_tags: n.status_tags || [],
         habits: n.habits || [],
         catchphrases: n.catchphrases || [],

@@ -7,6 +7,7 @@ import {
   getCharacterCards, createCharacterCard, deleteCharacterCard,
   exportPlayer, getNpcsByWorld, updateNpc, deleteNpc, createNpc
 } from '../api/game.js';
+import { generateAllNPCs } from '../api/openrouter.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
@@ -1456,12 +1457,26 @@ export function renderLobby(container, user) {
           } catch {}
         }
 
+        // Generate NPCs on frontend, then save to DB
         try {
-          await invokeFunction('generate-world-npcs', {
-            world_id: world.id,
-            user_id: user.id,
-            lore_text: combinedLoreText,
+          createBtn.textContent = '⏳ Генерация бестиария...';
+          
+          const npcs = await generateAllNPCs(combinedLoreText, (progress) => {
+            if (progress.step === 'counting') {
+              createBtn.textContent = `⏳ Найдено ${progress.total || '?'} NPC...`;
+            } else if (progress.step === 'generating') {
+              createBtn.textContent = `⏳ NPC ${progress.current}/${progress.total}...`;
+            }
           });
+
+          if (npcs.length > 0) {
+            // Save generated NPCs to DB via Edge Function
+            await invokeFunction('generate-world-npcs', {
+              world_id: world.id,
+              npcs: npcs,
+            });
+            console.log(`[create-world] Generated and saved ${npcs.length} NPCs`);
+          }
         } catch (genErr) {
           console.error('NPC generation error:', genErr);
           toast.warning('Мир создан, но генерация бестиария не удалась: ' + (genErr.message || genErr));

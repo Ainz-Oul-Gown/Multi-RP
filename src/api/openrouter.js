@@ -99,8 +99,122 @@ export async function countNPCs(loreText) {
   return count;
 }
 
-// Generate a batch of NPCs
-export async function generateNPCBatch(loreText, startIdx, endIdx, totalCount, existingNames = []) {
+// Generate world geography (states and cities)
+export async function generateWorldGeography(loreText, worldId, onProgress = () => {}) {
+  console.log('[generateWorldGeography] Starting, loreText length:', loreText.length);
+  
+  const SYSTEM_PROMPT = `На основе описания мира создай географию: государства и города.
+Правила:
+- Создай от 1 до 3 государств (государство = крупная региональная единица)
+- Для каждого государства создай минимум 6 локаций: 1 столица (type: capital) + 5 городов/деревень/руин (type: city, village, ruins, landmark)
+- Названия должны быть уникальными и соответствовать сеттингу мира
+- Описания краткие, но атмосферные (1-2 предложения)
+
+Верни ТОЛЬКО JSON объект:
+{
+  "states": [{"name": "Название государства", "description": "Описание"}],
+  "locations": [{"name": "Название локации", "type": "capital|city|village|ruins|landmark", "state_name": "Название государства", "description": "Описание"}]
+}`;
+
+  onProgress({ step: 'geography_start', message: 'Генерация государств и городов...' });
+  
+  const response = await callOpenRouter(SYSTEM_PROMPT, loreText);
+  
+  let parsed;
+  try {
+    parsed = JSON.parse(response);
+  } catch {
+    const jsonMatch = response.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (jsonMatch) {
+      parsed = JSON.parse(jsonMatch[1]);
+    } else {
+      const objMatch = response.match(/\{[\s\S]*\}/);
+      if (objMatch) {
+        parsed = JSON.parse(objMatch[0]);
+      } else {
+        throw new Error('Не удалось распарсить ответ географии');
+      }
+    }
+  }
+  
+  if (!parsed.states || !parsed.locations) {
+    throw new Error('Некорректный формат ответа географии');
+  }
+  
+  console.log('[generateWorldGeography] Generated:', parsed.states.length, 'states,', parsed.locations.length, 'locations');
+  onProgress({ step: 'geography_done', states: parsed.states.length, locations: parsed.locations.length });
+  
+  return parsed;
+}
+
+// Save geography to DB
+export async function saveWorldGeography(worldId, geography) {
+  console.log('[saveWorldGeography] Saving geography for world:', worldId);
+  
+  const { supabase } = await import('./supabase.js');
+  
+  // Insert states
+  const statesToInsert = geography.states.map(s => ({
+    world_id: worldId,
+    name: s.name,
+    description: s.description || '',
+  }));
+  
+  const { data: insertedStates, error: statesError } = await supabase
+    .from('states')
+    .insert(statesToInsert)
+    .select();
+  
+  if (statesError) {
+    console.error('[saveWorldGeography] States error:', statesError);
+    throw statesError;
+  }
+  
+  console.log('[saveWorldGeography] Saved', insertedStates.length, 'states');
+  
+  // Create state name -> id mapping
+  const stateMap = {};
+  insertedStates.forEach(s => {
+    stateMap[s.name] = s.id;
+  });
+  
+  // Insert locations
+  const locationsToInsert = geography.locations.map(l => ({
+    state_id: stateMap[l.state_name] || insertedStates[0]?.id,
+    name: l.name,
+    type: l.type || 'city',
+    description: l.description || '',
+  }));
+  
+  const { data: insertedLocations, error: locationsError } = await supabase
+    .from('locations')
+    .insert(locationsToInsert)
+    .select();
+  
+  if (locationsError) {
+    console.error('[saveWorldGeography] Locations error:', locationsError);
+    throw locationsError;
+  }
+  
+  console.log('[saveWorldGeography] Saved', insertedLocations.length, 'locations');
+  
+  return { states: insertedStates, locations: insertedLocations };
+}
+
+// Generate a batch of NPCs with geography context
+export async function generateNPCBatch(loreText, startIdx, endIdx, totalCount, existingNames = [], geography = null) {
+  const geographyContext = geography ? `
+Доступные государства и локации мира:
+${geography.states.map(s => `- ${s.name}: ${geography.locations.filter(l => l.state_name === s.name).map(l => l.name).join(', ')}`).join('\n')}
+
+Для каждого NPC определи:
+1. category: 'npc' (разумное существо), 'beast' (зверь), 'monster' (монстр), или 'boss' (босс)
+2. location_name: название локации (только для category='npc')
+3. state_name: название государства (для всех категорий)
+
+Для зверей, монстров и боссов указывай только state_name (не location_name).
+Для разумных NPC указывай и location_name, и state_name.` : '';
+
   const SYSTEM_PROMPT = `Извлеки из текста указанных NPC и сгенерируй для них характеристики.
 Оцени уровень угрозы (Tier):
 - Tier 1: Статы 4-10, HP 1-15.
@@ -108,7 +222,8 @@ export async function generateNPCBatch(loreText, startIdx, endIdx, totalCount, e
 - Tier 3: Статы 14-18, HP 40-100.
 - Tier 4: Статы 18-22, HP 100-250.
 - Tier 5: Статы 22-26, HP 250-500.
-Верни ТОЛЬКО JSON массив: [{name: 'Имя', role: 'main' или 'secondary', race: 'Раса', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
+${geographyContext}
+Верни ТОЛЬКО JSON массив: [{name: 'Имя', role: 'main' или 'secondary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
 
   const existingNpcsText = existingNames.length > 0
     ? `\n\nУже сгенерированные NPC (НЕ ДУБЛИРОВАТЬ): ${existingNames.join(', ')}`
@@ -138,28 +253,52 @@ export async function generateNPCBatch(loreText, startIdx, endIdx, totalCount, e
 }
 
 // Generate all NPCs in batches and save to DB after each batch
-export async function generateAllNPCs(loreText, worldId, onProgress = () => {}) {
+export async function generateAllNPCs(loreText, worldId, geography = null, onProgress = () => {}) {
   const BATCH_SIZE = 5;
   console.log('[generateAllNPCs] Starting, loreText length:', loreText.length, 'worldId:', worldId);
+  
+  // Create location/state maps from geography
+  const locationMap = {};
+  const stateMap = {};
+  if (geography) {
+    geography.states.forEach(s => stateMap[s.name] = s.id);
+    geography.locations.forEach(l => {
+      locationMap[l.name] = l.id;
+      // Also map by state for fallback
+      if (!stateMap[l.state_name] && l.state_id) {
+        stateMap[l.state_name] = l.state_id;
+      }
+    });
+  }
   
   // Helper to clean and save NPCs
   const saveNPCs = async (npcs) => {
     if (!npcs || npcs.length === 0) return 0;
     
-    const cleanedNpcs = npcs.map(npc => ({
-      world_id: worldId,
-      role: npc.role === 'main' ? 'main' : 'secondary',
-      name: (npc.name || 'Безымянный').slice(0, 100),
-      race: (npc.race || 'Человек').slice(0, 50),
-      appearance: (npc.appearance || '').slice(0, 500),
-      background: (npc.background || '').slice(0, 1000),
-      status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10).map(String) : [],
-      habits: Array.isArray(npc.habits) ? npc.habits.slice(0, 10).map(String) : [],
-      catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases.slice(0, 10).map(String) : [],
-      stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-      hp: Number(npc.hp) || 30,
-      max_hp: Number(npc.max_hp) || 30,
-    }));
+    const cleanedNpcs = npcs.map(npc => {
+      const category = ['npc', 'beast', 'monster', 'boss'].includes(npc.category) ? npc.category : 'npc';
+      // Only intelligent NPCs get a location
+      const location_id = (category === 'npc' && npc.location_name) ? (locationMap[npc.location_name] || null) : null;
+      const state_id = npc.state_name ? (stateMap[npc.state_name] || null) : null;
+      
+      return {
+        world_id: worldId,
+        role: npc.role === 'main' ? 'main' : 'secondary',
+        name: (npc.name || 'Безымянный').slice(0, 100),
+        race: (npc.race || 'Человек').slice(0, 50),
+        category,
+        appearance: (npc.appearance || '').slice(0, 500),
+        background: (npc.background || '').slice(0, 1000),
+        status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10).map(String) : [],
+        habits: Array.isArray(npc.habits) ? npc.habits.slice(0, 10).map(String) : [],
+        catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases.slice(0, 10).map(String) : [],
+        stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        hp: Number(npc.hp) || 30,
+        max_hp: Number(npc.max_hp) || 30,
+        location_id,
+        state_id,
+      };
+    });
 
     console.log(`[saveNPCs] Saving ${cleanedNpcs.length} NPCs to DB...`);
     
@@ -216,7 +355,8 @@ export async function generateAllNPCs(loreText, worldId, onProgress = () => {}) 
         startIdx,
         endIdx,
         totalCount,
-        Array.from(generatedNames)
+        Array.from(generatedNames),
+        geography
       );
 
       console.log(`[generateAllNPCs] Batch ${batchNum + 1} result:`, Array.isArray(batchNpcs) ? batchNpcs.length : 'not array', 'NPCs');

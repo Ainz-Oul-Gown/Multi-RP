@@ -769,6 +769,24 @@
   flex-shrink: 0;
 }
 
+.npc-category {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.65rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.npc-location {
+  font-size: var(--fs-xs);
+  color: var(--accent-info);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .npc-toggle-icon {
   font-size: var(--fs-xs);
   color: var(--text-muted);
@@ -1217,5 +1235,15 @@
 
   .npc-race {
     display: none;
+  }
+
+  .npc-category {
+    font-size: 0.6rem;
+  }
+
+  .npc-location {
+    font-size: 0.6rem;
+    width: 100%;
+    margin-top: 2px;
   }
 }

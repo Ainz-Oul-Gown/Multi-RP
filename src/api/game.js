@@ -431,12 +431,17 @@ export async function importWorld(jsonData, ownerId) {
 export async function getNpcsByWorld(worldId) {
   const { data, error } = await supabase
     .from('npcs')
-    .select('*')
+    .select('*, locations(name)')
     .eq('world_id', worldId)
     .order('role', { ascending: true })
     .order('name', { ascending: true });
   if (error) throw error;
-  return data;
+  // Flatten location name for easier access
+  return data?.map(npc => ({
+    ...npc,
+    location_name: npc.locations?.name || null,
+    locations: undefined,
+  })) || [];
 }
 
 export async function getNpc(id) {
@@ -460,6 +465,22 @@ export async function createNpc(npc) {
 }
 
 export async function updateNpc(id, updates) {
+  // Resolve location_name to location_id if provided
+  if (updates.location_name !== undefined) {
+    const locationName = updates.location_name;
+    delete updates.location_name;
+    if (locationName) {
+      const { data: location } = await supabase
+        .from('locations')
+        .select('id')
+        .ilike('name', locationName)
+        .maybeSingle();
+      updates.location_id = location?.id || null;
+    } else {
+      updates.location_id = null;
+    }
+  }
+  
   const { data, error } = await supabase
     .from('npcs')
     .update(updates)

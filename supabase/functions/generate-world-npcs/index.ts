@@ -19,6 +19,7 @@ function cleanNPC(npc: any, world_id: string) {
     role: npc.role === "main" ? "main" : "secondary",
     name: cleanTextForAI(npc.name) || "Безымянный",
     race: cleanTextForAI(npc.race) || "Человек",
+    category: ["npc", "beast", "monster", "boss"].includes(npc.category) ? npc.category : "npc",
     appearance: cleanTextForAI(npc.appearance) || "",
     background: cleanTextForAI(npc.background) || "",
     status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10) : [],
@@ -27,6 +28,8 @@ function cleanNPC(npc: any, world_id: string) {
     stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
     hp: Number(npc.hp) || 30,
     max_hp: Number(npc.max_hp) || 30,
+    location_id: npc.location_id || null,
+    state_id: npc.state_id || null,
   };
 }
 

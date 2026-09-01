@@ -7,7 +7,7 @@ import {
   getCharacterCards, createCharacterCard, deleteCharacterCard,
   exportPlayer, getNpcsByWorld, updateNpc, deleteNpc, createNpc
 } from '../api/game.js';
-import { generateAllNPCs } from '../api/openrouter.js';
+import { generateAllNPCs, generateWorldGeography, saveWorldGeography } from '../api/openrouter.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
@@ -659,13 +659,19 @@ export function renderLobby(container, user) {
           content.innerHTML = '<p class="text-muted">NPC не найдены. Создайте мир с описанием для автоматической генерации.</p>';
           return;
         }
-        content.innerHTML = npcs.map((npc) => `
+        content.innerHTML = npcs.map((npc) => {
+          const categoryLabels = { npc: '🧠 NPC', beast: '🐾 Зверь', monster: '👹 Монстр', boss: '💀 Босс' };
+          const categoryColors = { npc: 'badge-info', beast: 'badge-success', monster: 'badge-warning', boss: 'badge-danger' };
+          const category = npc.category || 'npc';
+          return `
           <div class="card npc-card" style="margin-bottom: 0.75rem;">
             <div class="npc-header" data-npc-toggle="${npc.id}">
               <div class="npc-header-info">
                 <span class="npc-role-badge ${npc.role === 'main' ? 'npc-role-main' : 'npc-role-secondary'}">${npc.role === 'main' ? '⭐ Главный' : '○ Второстепенный'}</span>
                 <strong class="npc-name">${npc.name}</strong>
+                <span class="npc-category ${categoryColors[category]}">${categoryLabels[category]}</span>
                 <span class="npc-race">${npc.race}</span>
+                ${npc.location_name ? `<span class="npc-location">📍 ${npc.location_name}</span>` : ''}
               </div>
               <span class="npc-toggle-icon">▼</span>
             </div>
@@ -679,6 +685,23 @@ export function renderLobby(container, user) {
                   <label class="form-label">Раса</label>
                   <input class="input" id="npc-race-${npc.id}" value="${npc.race}" />
                 </div>
+                <div class="form-group">
+                  <label class="form-label">Категория</label>
+                  <select class="input" id="npc-category-${npc.id}">
+                    <option value="npc" ${category === 'npc' ? 'selected' : ''}>🧠 NPC (разумное)</option>
+                    <option value="beast" ${category === 'beast' ? 'selected' : ''}>🐾 Зверь</option>
+                    <option value="monster" ${category === 'monster' ? 'selected' : ''}>👹 Монстр</option>
+                    <option value="boss" ${category === 'boss' ? 'selected' : ''}>💀 Босс</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Локация</label>
+                  <input class="input" id="npc-location-${npc.id}" value="${npc.location_name || ''}" placeholder="Город или пусто" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Внешность</label>
+                <textarea class="input" id="npc-appearance-${npc.id}" rows="2">${npc.appearance || ''}</textarea>
               </div>
               <div class="form-group">
                 <label class="form-label">Предыстория</label>
@@ -698,7 +721,7 @@ export function renderLobby(container, user) {
               </div>
             </div>
           </div>
-        `).join('');
+        `}).join('');
 
         // Toggle NPC edit form
         content.querySelectorAll('[data-npc-toggle]').forEach((header) => {
@@ -717,10 +740,14 @@ export function renderLobby(container, user) {
           btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const npcId = btn.dataset.npcSave;
+            const locationName = document.getElementById(`npc-location-${npcId}`)?.value || '';
             const updates = {
               name: document.getElementById(`npc-name-${npcId}`).value,
               race: document.getElementById(`npc-race-${npcId}`).value,
+              category: document.getElementById(`npc-category-${npcId}`).value || 'npc',
+              appearance: document.getElementById(`npc-appearance-${npcId}`).value,
               background: document.getElementById(`npc-background-${npcId}`).value,
+              location_name: locationName,
               stats: {
                 STR: Number(document.getElementById(`npc-str-${npcId}`).value) || 10,
                 DEX: Number(document.getElementById(`npc-dex-${npcId}`).value) || 10,
@@ -1464,10 +1491,38 @@ export function renderLobby(container, user) {
 
         // Generate NPCs on frontend, then save to DB
         try {
-          createBtn.textContent = '⏳ Подсчёт NPC...';
-          toast.info('Начинаем генерацию бестиария...');
+          createBtn.textContent = '⏳ Генерация географии...';
+          toast.info('Создаём государства и города...');
 
-          const result = await generateAllNPCs(combinedLoreText, world.id, (progress) => {
+          // Step 1: Generate geography (states and cities)
+          const geography = await generateWorldGeography(combinedLoreText, world.id, (progress) => {
+            if (progress.step === 'geography_start') {
+              createBtn.textContent = '⏳ Государства и города...';
+            }
+          });
+
+          console.log('[create-world] Geography generated:', geography.states.length, 'states,', geography.locations.length, 'locations');
+
+          // Step 2: Save geography to DB
+          createBtn.textContent = '⏳ Сохранение географии...';
+          const savedGeo = await saveWorldGeography(world.id, geography);
+          console.log('[create-world] Geography saved:', savedGeo.states.length, 'states,', savedGeo.locations.length, 'locations');
+
+          // Add IDs to geography for NPC generation
+          const geographyWithIds = {
+            states: savedGeo.states.map(s => ({ ...s, id: s.id })),
+            locations: savedGeo.locations.map(l => ({
+              ...l,
+              id: l.id,
+              state_name: savedGeo.states.find(s => s.id === l.state_id)?.name || '',
+            })),
+          };
+
+          // Step 3: Generate NPCs with geography context
+          createBtn.textContent = '⏳ Подсчёт NPC...';
+          toast.info('Генерация бестиария...');
+
+          const result = await generateAllNPCs(combinedLoreText, world.id, geographyWithIds, (progress) => {
             if (progress.step === 'counting') {
               createBtn.textContent = `⏳ Найдено ${progress.total || '?'} NPC...`;
             } else if (progress.step === 'generating') {

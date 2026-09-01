@@ -1450,11 +1450,26 @@ export function renderLobby(container, user) {
 
         // Collect all lore text (description + file contents)
         let combinedLoreText = description || '';
+        console.log('[create-world] Description length:', combinedLoreText.length);
+        
         for (const file of pendingFiles) {
           try {
             const fileText = await file.text();
             combinedLoreText += '\n\n' + fileText;
-          } catch {}
+            console.log(`[create-world] Added file: ${file.name}, length: ${fileText.length}`);
+          } catch (err) {
+            console.error('[create-world] Error reading file:', err);
+          }
+        }
+
+        console.log('[create-world] Total combinedLoreText length:', combinedLoreText.length);
+        
+        // Skip generation if no text
+        if (!combinedLoreText.trim()) {
+          toast.warning('Нет текста для генерации NPC. Добавьте описание или файлы.');
+          createBtn.disabled = false;
+          createBtn.textContent = '✨ Создать мир';
+          return;
         }
 
         // Generate NPCs on frontend, then save to DB

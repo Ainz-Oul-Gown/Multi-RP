@@ -52,6 +52,14 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
     userMsgLength: userMessage.length,
   });
 
+  console.log('[callOpenRouter] Request:', {
+    model: requestBody.model,
+    provider: requestBody.provider,
+    reasoning: requestBody.reasoning,
+    userMsgLength: userMessage.length,
+    systemMsgLength: systemPrompt.length,
+  });
+
   const response = await fetch(OPENROUTER_CHAT_URL, {
     method: 'POST',
     headers: {

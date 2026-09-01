@@ -1,5 +1,6 @@
 // src/config.js — Конфигурация приложения
 // Замените значения на свои после создания проекта в Supabase
+import { getHitDice, calculateHpDnd } from './config/hitDice.js';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://YOUR_PROJECT.supabase.co';
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_ANON_KEY';
@@ -34,9 +35,10 @@ export const DM_MODELS = [
 // Game Constants
 export const STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 
-export function calculateHpFromStats(stats = {}) {
+export function calculateHpFromStats(stats = {}, level = 1, hitDie = 8) {
   const con = stats && typeof stats.CON === 'number' ? stats.CON : 10;
-  return con * 2 + 10;
+  // D&D система: уровень 1 = макс кости + CON mod + 10, каждый следующий = среднее + CON mod
+  return calculateHpDnd(con, level, hitDie);
 }
 
 export function calculateInitiative(stats = {}) {

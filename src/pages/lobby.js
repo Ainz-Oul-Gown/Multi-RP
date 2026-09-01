@@ -706,13 +706,20 @@ export function renderLobby(container, user) {
               <li>Тролль: 15-35 | Демон: 30-80 | Дракон: 50-100</li>
             </ul>
             
-            <h5 style="margin-top: 0.75rem;">🎲 Боевые характеристики</h5>
+            <h5 style="margin-top: 0.75rem;">🎲 Кости хитов (Hit Dice)</h5>
             <ul>
-              <li><strong>Спецатаки:</strong> 1 на каждый Tier (Tier 5 = 5 спецатак)</li>
-              <li><strong>Базовые атаки:</strong> 2-3 на каждые 10 уровней</li>
-              <li><strong>КД:</strong> 10 + модификатор DEX + расовый бонус</li>
-              <li><strong>Инициатива:</strong> модификатор DEX</li>
-              <li><strong>HP:</strong> CON × уровень × 1.5 (существа слабее игрока)</li>
+              <li><strong>d6 (среднее 4):</strong> волшебник, чародей, маг</li>
+              <li><strong>d8 (среднее 5):</strong> бард, жрец, друид, монах, плут, шаман</li>
+              <li><strong>d10 (среднее 6):</strong> воин, паладин, следопыт, наемник, рыцарь</li>
+              <li><strong>d12 (среднее 7):</strong> варвар, берсерк</li>
+              <li><strong>Звери/монстры:</strong> d8, боссы: d10</li>
+            </ul>
+            
+            <h5 style="margin-top: 0.75rem;">❤️ Расчёт HP (D&D система)</h5>
+            <ul>
+              <li><strong>Уровень 1:</strong> макс кости + CON mod + 10</li>
+              <li><strong>Каждый следующий:</strong> среднее кости + CON mod</li>
+              <li><strong>Пример:</strong> Воин (d10), CON 18 (+4), уровень 5 = 10+4+10 + 4×(6+4) = 24 + 40 = 64 HP</li>
             </ul>
             
             <h5 style="margin-top: 0.75rem;">⚔️ Типы урона (D&D)</h5>

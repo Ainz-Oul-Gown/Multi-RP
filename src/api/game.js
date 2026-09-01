@@ -447,6 +447,7 @@ export async function exportWorld(worldId) {
         is_pack: n.is_pack_instance,
         pack_size: n.pack_size,
         is_unique: n.is_unique || false,
+        hit_dice: n.hit_dice || 8,
       })) || [],
     },
   };
@@ -741,6 +742,7 @@ export async function importWorld(jsonData, ownerId) {
         base_attacks: Array.isArray(n.base_attacks) ? n.base_attacks : [],
         is_pack_instance: n.is_pack === true,
         pack_size: n.is_pack ? (n.pack_size || 2) : 1,
+        hit_dice: [6, 8, 10, 12].includes(n.hit_dice) ? n.hit_dice : 8,
       };
     });
     

@@ -142,7 +142,8 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 
 -- =====================================================
 -- Function to calculate HP from CON and level
--- Creatures: CON * level * multiplier (weaker than player CON*2+10)
+-- Unified formula for players AND creatures:
+-- HP = (CON * 2 + 10) + level * CON * 0.5
 -- =====================================================
 CREATE OR REPLACE FUNCTION calculate_creature_hp(
   con_stat INT,
@@ -152,17 +153,13 @@ CREATE OR REPLACE FUNCTION calculate_creature_hp(
 ) RETURNS INT AS $$
 DECLARE
   base_hp INT;
-  level_hp INT;
-  tier_bonus INT;
+  level_bonus INT;
 BEGIN
-  -- Base HP at level 1: CON * multiplier (weaker than player)
-  base_hp := GREATEST(1, (con_stat * hp_mult)::INT);
-  -- Each level adds: CON * multiplier
-  level_hp := GREATEST(1, ((con_stat * hp_mult)::INT * (current_level - 1)));
-  -- Tier bonus: tier * 5
-  tier_bonus := creature_tier * 5;
+  -- Unified formula: (CON * 2 + 10) + level * CON * 0.5
+  base_hp := GREATEST(1, con_stat * 2 + 10);
+  level_bonus := GREATEST(0, (current_level * con_stat * 5 / 10)::INT);
   
-  RETURN base_hp + level_hp + tier_bonus;
+  RETURN base_hp + level_bonus;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 

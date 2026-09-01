@@ -100,6 +100,8 @@ function cleanNPC(npc: any, world_id: string) {
     armor_class: Number(npc.armor_class) || 10,
     initiative: Number(npc.initiative) || 0,
     saving_throws: npc.saving_throws && typeof npc.saving_throws === 'object' ? npc.saving_throws : {},
+    // Hit dice (D&D system)
+    hit_dice: [6, 8, 10, 12].includes(Number(npc.hit_dice)) ? Number(npc.hit_dice) : 8,
     // Attacks
     special_attacks: specialAttacks,
     base_attacks: baseAttacks,

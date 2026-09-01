@@ -2,6 +2,7 @@
 import { OPENROUTER_API_KEY, AI_MODEL, CARD_GENERATION_MODELS, calculateDerivedStats, getRaceAcBonus } from '../config.js';
 import { DAMAGE_TYPES, getDamageType, canBeDot, canHalfOnSave, getSaveAbility } from '../config/damageTypes.js';
 import { generateDamageDice, rollDice, getAverageDamage } from '../utils/dice.js';
+import { getHitDice, calculateHpDnd, getDieAverage } from '../config/hitDice.js';
 import { supabase, invokeFunction } from './supabase.js';
 import { saveGenerationProgress, loadGenerationProgress, clearGenerationProgress } from '../utils/generationStore.js';
 import { saveProgress, loadProgress, deleteProgress } from '../utils/indexedDB.js';
@@ -73,14 +74,12 @@ export function getExpectedStatSum(level = 1, tier = 1) {
 }
 
 /**
- * Calculate creature HP: CON * level * multiplier (default 1.5)
- * Weaker than player (CON * 2 + 10), creatures start weaker
+ * Calculate HP using D&D hit dice system
+ * Level 1: max die + CON mod + 10
+ * Each next: average die + CON mod
  */
-export function calculateCreatureHp(con = 10, level = 1, tier = 1, multiplier = 1.5) {
-  const baseHp = Math.max(1, Math.round(con * multiplier));
-  const levelHp = Math.max(1, Math.round(con * multiplier * (level - 1)));
-  const tierBonus = tier * 5;
-  return baseHp + levelHp + tierBonus;
+export function calculateCreatureHp(con = 10, level = 1, tier = 1, hitDie = 8) {
+  return calculateHpDnd(con, level, hitDie);
 }
 
 /**
@@ -466,6 +465,14 @@ LEVEL (1-100) = ТЕКУЩАЯ СИЛА (насколько раскрыт по�
 Спецатаки: 1 на каждый Tier (Tier 1 = 1 спецатака, Tier 5 = 5 спецатак)
 Базовые атаки: 2-3 на каждые 10 уровней (level 1-10 = 2, level 11-20 = 3, и т.д.)
 
+## КОСТЬ ХИТОВ (HIT DICE) — D&D система
+Определяет HP: Уровень 1 = макс кости + CON mod + 10, каждый следующий = среднее + CON mod
+- d6 (4 среднее): волшебник, чародей, маг
+- d8 (5 среднее): бард, жрец, друид, монах, плут, шаман
+- d10 (6 среднее): воин, паладин, следопыт, наемник, рыцарь
+- d12 (7 среднее): варвар, берсерк
+Для зверей/монстров: d8 по умолчанию, d10 для боссов
+
 ## ТИПЫ ПЕРСОНАЖЕЙ (ROLE)
 - 'main' — главные персонажи (протагонисты, антагонисты, ключевые фигуры)
 - 'secondary' — второстепенные (спутники, торговцы, стражники)
@@ -513,7 +520,7 @@ ${geographyContext}
 
 ВАЖНО: ВСЕ тексты (имя/вид, раса, описание внешности, предыстория, привычки, фразы) на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Имя или вид', role: 'main'|'secondary'|'tertiary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Имя или вид', class: 'Класс (воин/маг/жрец/etc)', role: 'main'|'secondary'|'tertiary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), hit_dice: INT (6|8|10|12), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
 
   const existingNpcsText = existingNames.length > 0
     ? `\n\nУже сгенерированные NPC (НЕ ДУБЛИРОВАТЬ): ${existingNames.join(', ')}`
@@ -599,6 +606,9 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
         baseAttacks.push(...generated.base_attacks);
       }
       
+      // Calculate hit dice based on class (if provided)
+      const hitDie = npc.hit_dice || getHitDice(npc.class) || 8;
+      
       return {
         world_id: worldId,
         role,
@@ -611,8 +621,8 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
         habits: Array.isArray(npc.habits) ? npc.habits.slice(0, 10).map(String) : [],
         catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases.slice(0, 10).map(String) : [],
         stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-        hp: Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
-        max_hp: Number(npc.max_hp) || Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
+        hp: Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier, hitDie),
+        max_hp: Number(npc.max_hp) || Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier, hitDie),
         location_id,
         state_id,
         // Combat stats
@@ -620,6 +630,7 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
         armor_class: combatStats.armor_class,
         initiative: combatStats.initiative,
         saving_throws: combatStats.saving_throws,
+        hit_dice: hitDie,
         // Attacks
         special_attacks: specialAttacks,
         base_attacks: baseAttacks,
@@ -799,6 +810,9 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
         baseAttacks.push(...generated.base_attacks);
       }
       
+      // Calculate hit dice based on class
+      const hitDie = npc.hit_dice || getHitDice(npc.class) || 8;
+      
       return {
         world_id: worldId,
         role: npc.role === 'main' ? 'main' : 'secondary',
@@ -811,8 +825,8 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
         habits: Array.isArray(npc.habits) ? npc.habits.slice(0, 10).map(String) : [],
         catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases.slice(0, 10).map(String) : [],
         stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-        hp: Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
-        max_hp: Number(npc.max_hp) || Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
+        hp: Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier, hitDie),
+        max_hp: Number(npc.max_hp) || Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier, hitDie),
         location_id,
         state_id,
         // Combat stats
@@ -820,6 +834,7 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
         armor_class: combatStats.armor_class,
         initiative: combatStats.initiative,
         saving_throws: combatStats.saving_throws,
+        hit_dice: hitDie,
         // Attacks
         special_attacks: specialAttacks,
         base_attacks: baseAttacks,
@@ -996,6 +1011,11 @@ LEVEL (1-100) = ТЕКУЩАЯ СИЛА (насколько раскрыт по�
 Спецатаки: 1 на каждый Tier (Tier 1 = 1, Tier 5 = 5)
 Базовые атаки: 2 на уровни 1-10, +1 за каждые 10 уровней
 
+## КОСТЬ ХИТОВ (HIT DICE)
+HP: Уровень 1 = макс кости + CON mod + 10, каждый следующий = среднее + CON mod
+- d8 (5 среднее): звери, монстры (по умолчанию)
+- d10 (6 среднее): боссы, сильные существа
+
 ## КАТЕГОРИИ
 - 'beast' — животные/звери (волки, медведи, драконы, крысы)
 - 'monster' — монстры (гоблины, тролли, скелеты, демоны)
@@ -1037,7 +1057,7 @@ ${geography ? `Доступные государства:\n${geography.states.ma
 
 ВАЖНО: ВСЕ тексты (вид, раса, описание внешности, предыстория) на русском языке!
 
-Верни ТОЛЬКО JSON массив: [{name: 'Название вида', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
+Верни ТОЛЬКО JSON массив: [{name: 'Название вида', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT (1-5), level: INT (1-100), hit_dice: INT (8|10), stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT, special_attacks: [{name: 'Название', description: 'Описание для ДМ', damage_type: 'fire|poison|slashing|etc', damage_dice: '1d6', is_dot: BOOLEAN, dot_duration: INT}], base_attacks: [{name: 'Название', description: 'Описание', damage_type: 'slashing|piercing|etc', damage_dice: '1d6'}], is_pack: BOOLEAN, is_unique: BOOLEAN}]`;
   
   // Save helper
   const saveNPCs = async (npcs) => {
@@ -1064,6 +1084,9 @@ ${geography ? `Доступные государства:\n${geography.states.ma
         baseAttacks.push(...generated.base_attacks);
       }
       
+      // Creatures use d8 by default (or d10 for bosses)
+      const hitDie = npc.hit_dice || (category === 'boss' ? 10 : 8);
+      
       return {
         world_id: worldId,
         role: 'tertiary',
@@ -1076,8 +1099,8 @@ ${geography ? `Доступные государства:\n${geography.states.ma
         habits: [],
         catchphrases: [],
         stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-        hp: Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
-        max_hp: Number(npc.max_hp) || Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier),
+        hp: Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier, hitDie),
+        max_hp: Number(npc.max_hp) || Number(npc.hp) || calculateCreatureHp(Number(npc.stats?.CON) || 10, level, tier, hitDie),
         location_id: null, // Creatures don't have locations
         state_id,
         // Combat stats
@@ -1085,6 +1108,7 @@ ${geography ? `Доступные государства:\n${geography.states.ma
         armor_class: combatStats.armor_class,
         initiative: combatStats.initiative,
         saving_throws: combatStats.saving_throws,
+        hit_dice: hitDie,
         // Attacks
         special_attacks: specialAttacks,
         base_attacks: baseAttacks,

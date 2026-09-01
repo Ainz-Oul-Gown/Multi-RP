@@ -14,27 +14,6 @@ CREATE INDEX IF NOT EXISTS idx_npcs_category ON npcs(category);
 -- Комментарий к колонке
 COMMENT ON COLUMN npcs.category IS 'Категория NPC: npc (разумное существо), beast (зверь), monster (монстр), boss (босс)';
 
--- Обновляем существующих NPC: если имя содержит ключевые слова монстров/зверей, ставим соответствующую категорию
-UPDATE npcs SET category = 'beast'
-WHERE category = 'npc' AND (
-  lower(name) LIKE '%волк%' OR lower(name) LIKE '%медведь%' OR lower(name) LIKE '%дракон%' OR
-  lower(name) LIKE '%крыса%' OR lower(name) LIKE '%паук%' OR lower(name) LIKE '%змея%' OR
-  lower(race) LIKE '%зверь%' OR lower(race) LIKE '%волк%' OR lower(race) LIKE '%дракон%'
-);
-
-UPDATE npcs SET category = 'monster'
-WHERE category = 'npc' AND (
-  lower(name) LIKE '%гоблин%' OR lower(name) LIKE '%орк%' OR lower(name) LIKE '%тролль%' OR
-  lower(name) LIKE '%скелет%' OR lower(name) LIKE '%зомби%' OR lower(name) LIKE '%демон%' OR
-  lower(race) LIKE '%гоблин%' OR lower(race) LIKE '%орк%' OR lower(race) LIKE '%тролль%' OR lower(race) LIKE '%демон%'
-);
-
-UPDATE npcs SET category = 'boss'
-WHERE category = 'npc' AND (
-  lower(name) LIKE '%король%' OR lower(name) LIKE '%лорд%' OR lower(name) LIKE '%архидемон%' OR
-  lower(name) LIKE '%древний%' OR lower(name) LIKE '%титан%' OR lower(name) LIKE '%владыка%'
-);
-
 -- RPC функция для получения списка государств и локаций мира
 CREATE OR REPLACE FUNCTION get_world_geography(p_world_id UUID)
 RETURNS TABLE (

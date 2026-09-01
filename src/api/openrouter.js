@@ -134,6 +134,7 @@ export async function generateWorldGeography(loreText, worldId, onProgress = () 
 - Для каждого государства создай минимум 6 локаций: 1 столица (type: capital) + 5 городов/деревень/руин/достопримечательностей (type: city, village, ruins, landmark)
 - Названия должны быть уникальными и соответствовать сеттингу мира
 - Описания краткие, но атмосферные (1-2 предложения)
+- ВСЕ названия и описания должны быть на русском языке
 
 Верни ТОЛЬКО JSON объект:
 {
@@ -253,6 +254,8 @@ ${geographyContext}
 - 'beast' — животные и звери (волки, медведи, драконы, крысы и т.д.)
 - 'monster' — монстры (гоблины, тролли, скелеты, демоны и т.д.)
 - 'boss' — могущественные существа (короли демонов, древние драконы, лорды и т.д.)
+
+ВАЖНО: ВСЕ тексты (имя, раса, описание внешности, предыстория, привычки, фразы) должны быть на русском языке!
 
 Верни ТОЛЬКО JSON массив: [{name: 'Имя', role: 'main' или 'secondary', race: 'Раса', category: 'npc'|'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', habits: ['привычка'], catchphrases: ['фраза'], location_name: 'Город или пусто', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
 
@@ -631,9 +634,11 @@ export async function generateCreatures(loreText, worldId, geography = null, onP
 Определи категорию на основе имени, расы и описания:
 - 'beast' — животные и звери (волки, медведи, драконы, крысы)
 - 'monster' — монстры (гоблины, тролли, скелеты, демон)
-- 'boss' — могущественные существа (короли демонов, древние драконы, лорды)
+- 'boss' — могущественные существа (короли демонов, древние драконы, лордов)
 
 ${geography ? `Доступные государства:\n${geography.states.map(s => `- ${s.name}`).join('\n')}` : ''}
+
+ВАЖНО: ВСЕ тексты (имя, раса, описание внешности, предыстория) должны быть на русском языке!
 
 Верни ТОЛЬКО JSON массив: [{name: 'Имя', race: 'Раса', category: 'beast'|'monster'|'boss', appearance: 'Описание внешности', background: 'Предыстория', state_name: 'Государство', tier: INT, stats: {STR: INT, DEX: INT, CON: INT, INT: INT, WIS: INT, CHA: INT}, hp: INT, max_hp: INT}]`;
   

@@ -1,5 +1,6 @@
 // src/api/openrouter.js — Прямые запросы к OpenRouter (без лимитов Supabase)
 import { OPENROUTER_API_KEY, AI_MODEL } from '../config.js';
+import { supabase, invokeFunction } from './supabase.js';
 
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -16,8 +17,6 @@ async function getApiKey() {
   }
   return OPENROUTER_API_KEY;
 }
-
-import { supabase } from './supabase.js';
 
 // Call OpenRouter directly from frontend (no Edge Function limits)
 export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
@@ -138,10 +137,44 @@ export async function generateNPCBatch(loreText, startIdx, endIdx, totalCount, e
   }
 }
 
-// Generate all NPCs in batches
-export async function generateAllNPCs(loreText, onProgress = () => {}) {
+// Generate all NPCs in batches and save to DB after each batch
+export async function generateAllNPCs(loreText, worldId, onProgress = () => {}) {
   const BATCH_SIZE = 5;
-  console.log('[generateAllNPCs] Starting, loreText length:', loreText.length);
+  console.log('[generateAllNPCs] Starting, loreText length:', loreText.length, 'worldId:', worldId);
+  
+  // Helper to clean and save NPCs
+  const saveNPCs = async (npcs) => {
+    if (!npcs || npcs.length === 0) return 0;
+    
+    const cleanedNpcs = npcs.map(npc => ({
+      world_id: worldId,
+      role: npc.role === 'main' ? 'main' : 'secondary',
+      name: (npc.name || 'Безымянный').slice(0, 100),
+      race: (npc.race || 'Человек').slice(0, 50),
+      appearance: (npc.appearance || '').slice(0, 500),
+      background: (npc.background || '').slice(0, 1000),
+      status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10).map(String) : [],
+      habits: Array.isArray(npc.habits) ? npc.habits.slice(0, 10).map(String) : [],
+      catchphrases: Array.isArray(npc.catchphrases) ? npc.catchphrases.slice(0, 10).map(String) : [],
+      stats: npc.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+      hp: Number(npc.hp) || 30,
+      max_hp: Number(npc.max_hp) || 30,
+    }));
+
+    console.log(`[saveNPCs] Saving ${cleanedNpcs.length} NPCs to DB...`);
+    
+    try {
+      const result = await invokeFunction('generate-world-npcs', {
+        world_id: worldId,
+        npcs: cleanedNpcs,
+      });
+      console.log(`[saveNPCs] Saved ${result.count} NPCs`);
+      return result.count || 0;
+    } catch (err) {
+      console.error('[saveNPCs] Failed:', err);
+      throw err;
+    }
+  };
   
   // Step 1: Count NPCs
   onProgress({ step: 'counting', message: 'Подсчёт NPC в тексте...' });
@@ -149,16 +182,16 @@ export async function generateAllNPCs(loreText, onProgress = () => {}) {
   console.log('[generateAllNPCs] Count result:', totalCount);
   
   if (totalCount === 0) {
-    // Fallback
     totalCount = 10;
     console.log('[generateAllNPCs] Using fallback count:', totalCount);
   }
   onProgress({ step: 'counting', total: totalCount, message: `Найдено ${totalCount} NPC` });
 
-  // Step 2: Generate in batches
+  // Step 2: Generate in batches and save after each
   const totalBatches = Math.ceil(totalCount / BATCH_SIZE);
   const allNpcs = [];
   const generatedNames = new Set();
+  let totalSaved = 0;
 
   console.log('[generateAllNPCs] Will generate in', totalBatches, 'batches');
 
@@ -188,13 +221,33 @@ export async function generateAllNPCs(loreText, onProgress = () => {}) {
 
       console.log(`[generateAllNPCs] Batch ${batchNum + 1} result:`, Array.isArray(batchNpcs) ? batchNpcs.length : 'not array', 'NPCs');
 
-      if (Array.isArray(batchNpcs)) {
+      if (Array.isArray(batchNpcs) && batchNpcs.length > 0) {
+        // Add to local list for deduplication tracking
+        const newNpcs = [];
         for (const npc of batchNpcs) {
           const name = (npc.name || '').toLowerCase().trim();
           if (name && !generatedNames.has(name)) {
             generatedNames.add(name);
             allNpcs.push(npc);
+            newNpcs.push(npc);
           }
+        }
+
+        // Save this batch to DB immediately
+        if (newNpcs.length > 0) {
+          onProgress({
+            step: 'saving',
+            message: `Сохранение ${newNpcs.length} NPC в БД...`,
+          });
+          const saved = await saveNPCs(newNpcs);
+          totalSaved += saved;
+          console.log(`[generateAllNPCs] Total saved so far: ${totalSaved}`);
+        }
+
+        // If model returned more NPCs than expected (generated all at once), adjust
+        if (batchNpcs.length >= totalCount) {
+          console.log('[generateAllNPCs] Model returned all NPCs at once, stopping batches');
+          break;
         }
       }
     } catch (batchErr) {
@@ -207,7 +260,7 @@ export async function generateAllNPCs(loreText, onProgress = () => {}) {
     }
   }
 
-  console.log('[generateAllNPCs] Done. Total unique NPCs:', allNpcs.length);
-  onProgress({ step: 'done', count: allNpcs.length, message: `Сгенерировано ${allNpcs.length} NPC` });
-  return allNpcs;
+  console.log('[generateAllNPCs] Done. Total unique NPCs:', allNpcs.length, 'saved to DB:', totalSaved);
+  onProgress({ step: 'done', count: allNpcs.length, saved: totalSaved, message: `Сгенерировано ${allNpcs.length}, сохранено ${totalSaved} NPC` });
+  return { npcs: allNpcs, saved: totalSaved };
 }

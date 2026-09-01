@@ -1477,25 +1477,20 @@ export function renderLobby(container, user) {
           createBtn.textContent = '⏳ Подсчёт NPC...';
           toast.info('Начинаем генерацию бестиария...');
 
-          const npcs = await generateAllNPCs(combinedLoreText, (progress) => {
+          const result = await generateAllNPCs(combinedLoreText, world.id, (progress) => {
             if (progress.step === 'counting') {
               createBtn.textContent = `⏳ Найдено ${progress.total || '?'} NPC...`;
             } else if (progress.step === 'generating') {
               createBtn.textContent = `⏳ NPC ${progress.current}/${progress.total}...`;
+            } else if (progress.step === 'saving') {
+              createBtn.textContent = `⏳ Сохранение...`;
             }
           });
 
-          console.log(`[create-world] Generated ${npcs.length} NPCs`);
+          console.log(`[create-world] Generated ${result.npcs.length} NPCs, saved ${result.saved} to DB`);
 
-          if (npcs.length > 0) {
-            createBtn.textContent = '⏳ Сохранение в БД...';
-            // Save generated NPCs to DB via Edge Function
-            await invokeFunction('generate-world-npcs', {
-              world_id: world.id,
-              npcs: npcs,
-            });
-            console.log(`[create-world] Saved ${npcs.length} NPCs to DB`);
-            toast.success(`Бестиарий создан: ${npcs.length} NPC!`);
+          if (result.npcs.length > 0) {
+            toast.success(`Бестиарий создан: ${result.npcs.length} NPC (сохранено ${result.saved})`);
           } else {
             toast.warning('NPC не сгенерированы');
           }

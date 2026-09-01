@@ -431,8 +431,20 @@ export function renderLobby(container, user) {
           <div style="display: flex; gap: 0.5rem;">
             <button class="btn btn-secondary btn-sm" id="openGeoBtn">🗺️ География</button>
             <button class="btn btn-warning btn-sm" id="resumeGenBtn" style="display: none;">⏳ Продолжить</button>
+            <button class="btn btn-success btn-sm" id="finishGenBtn" style="display: none;">✨ Дополнить мир</button>
             <button class="btn btn-primary btn-sm" id="createNpcBtn">+ Создать NPC</button>
             <button class="btn btn-ghost btn-sm" id="closeBestiaryBtn">✕</button>
+          </div>
+        </div>
+        
+        <!-- Статус генерации -->
+        <div id="genStatus" class="gen-status" style="display: none; margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px;">
+          <div class="gen-status-header">
+            <span class="gen-status-text" id="genStatusText">Статус генерации</span>
+            <span class="gen-status-progress" id="genStatusProgress">0%</span>
+          </div>
+          <div class="gen-progress-bar">
+            <div class="gen-progress-fill" id="genProgressFill" style="width: 0%"></div>
           </div>
         </div>
         
@@ -1538,17 +1550,168 @@ export function renderLobby(container, user) {
         // Hide create form when opening bestiary for a new world
         document.getElementById('createNpcForm').style.display = 'none';
         
-        // Check if generation can be resumed
-        const status = canResumeGeneration(worldId);
-        const resumeBtn = document.getElementById('resumeGenBtn');
-        if (status.intelligent || status.creatures) {
-          resumeBtn.style.display = '';
-        } else {
-          resumeBtn.style.display = 'none';
-        }
+        // Check generation status
+        await checkGenerationStatus(worldId);
         
         await loadBestiary(worldId);
       });
+    });
+
+    // Check generation status and update UI
+    async function checkGenerationStatus(worldId) {
+      const status = canResumeGeneration(worldId);
+      const resumeBtn = document.getElementById('resumeGenBtn');
+      const finishBtn = document.getElementById('finishGenBtn');
+      const genStatus = document.getElementById('genStatus');
+      
+      // Get world data to check completeness
+      const { data: states } = await supabase
+        .from('states')
+        .select('id')
+        .eq('world_id', worldId);
+      
+      const { data: npcs } = await supabase
+        .from('npcs')
+        .select('id, category')
+        .eq('world_id', worldId);
+      
+      const hasLocations = states && states.length > 0;
+      const hasNpcs = npcs && npcs.length > 0;
+      const intelligentNpcs = npcs?.filter(n => n.category === 'npc').length || 0;
+      const creatures = npcs?.filter(n => ['beast', 'monster', 'boss'].includes(n.category)).length || 0;
+      
+      // Calculate progress
+      let progress = 0;
+      if (hasLocations) progress += 30;
+      if (intelligentNpcs > 0) progress += Math.min(35, intelligentNpcs * 3);
+      if (creatures > 0) progress += Math.min(35, creatures * 3);
+      progress = Math.min(100, progress);
+      
+      // Show status bar if generation is incomplete
+      if (progress < 100 || status.intelligent || status.creatures) {
+        genStatus.style.display = '';
+        document.getElementById('genStatusText').textContent = 
+          `Локации: ${states?.length || 0} | 🧠 ${intelligentNpcs} | 🐾👹💀 ${creatures}`;
+        document.getElementById('genStatusProgress').textContent = `${progress}%`;
+        document.getElementById('genProgressFill').style.width = `${progress}%`;
+      } else {
+        genStatus.style.display = 'none';
+      }
+      
+      // Show resume button if generation was interrupted
+      if (status.intelligent || status.creatures) {
+        resumeBtn.style.display = '';
+      } else {
+        resumeBtn.style.display = 'none';
+      }
+      
+      // Show finish button if world is incomplete
+      if (progress < 100 || !hasLocations || !hasNpcs) {
+        finishBtn.style.display = '';
+      } else {
+        finishBtn.style.display = 'none';
+      }
+    }
+
+    // Finish generation button
+    document.getElementById('finishGenBtn')?.addEventListener('click', async () => {
+      const worldId = currentBestiaryWorldId;
+      if (!worldId) return;
+      
+      if (!confirm('Дополнить мир? Будут сгенерированы недостающие локации и NPC.')) return;
+      
+      // Get world lore text
+      const world = worlds.find(w => w.id === worldId);
+      let combinedLoreText = world?.description || world?.settings?.description || '';
+      
+      if (!combinedLoreText.trim()) {
+        const { data: loreFiles } = await supabase
+          .from('lore_files')
+          .select('content')
+          .eq('world_id', worldId);
+        if (loreFiles?.length) {
+          combinedLoreText = loreFiles.map(f => f.content).join('\n\n');
+        }
+      }
+      
+      if (!combinedLoreText.trim()) {
+        toast.error('Нет текста для генерации. Добавьте описание мира.');
+        return;
+      }
+      
+      const finishBtn = document.getElementById('finishGenBtn');
+      finishBtn.disabled = true;
+      finishBtn.textContent = '⏳ Генерация...';
+      
+      try {
+        // Check what's missing
+        const { data: states } = await supabase
+          .from('states')
+          .select('*, locations(*)')
+          .eq('world_id', worldId);
+        
+        const hasLocations = states && states.length > 0 && 
+          states.some(s => s.locations && s.locations.length >= 6);
+        
+        // Generate geography if missing
+        if (!hasLocations) {
+          toast.info('Генерация географии...');
+          const geography = await generateWorldGeography(combinedLoreText, worldId);
+          const savedGeo = await saveWorldGeography(worldId, geography);
+          
+          // Update geography for NPC generation
+          var geographyWithIds = {
+            states: savedGeo.states.map(s => ({ id: s.id, name: s.name })),
+            locations: savedGeo.locations.map(l => ({
+              id: l.id,
+              name: l.name,
+              state_name: savedGeo.states.find(s => s.id === l.state_id)?.name || '',
+              state_id: l.state_id,
+            })),
+          };
+        } else {
+          var geographyWithIds = {
+            states: states.map(s => ({ id: s.id, name: s.name })),
+            locations: states.flatMap(s => s.locations?.map(l => ({
+              id: l.id,
+              name: l.name,
+              state_name: s.name,
+              state_id: s.id,
+            })) || []),
+          };
+        }
+        
+        // Check what NPCs are missing
+        const { data: existingNpcs } = await supabase
+          .from('npcs')
+          .select('category')
+          .eq('world_id', worldId);
+        
+        const intelligentCount = existingNpcs?.filter(n => n.category === 'npc').length || 0;
+        const creatureCount = existingNpcs?.filter(n => ['beast', 'monster', 'boss'].includes(n.category)).length || 0;
+        
+        // Generate intelligent NPCs if missing
+        if (intelligentCount < 5) {
+          toast.info('Генерация разумных NPC...');
+          await generateIntelligentNPCs(combinedLoreText, worldId, geographyWithIds);
+        }
+        
+        // Generate creatures if missing
+        if (creatureCount < 3) {
+          toast.info('Генерация существ...');
+          await generateCreatures(combinedLoreText, worldId, geographyWithIds);
+        }
+        
+        toast.success('Мир дополнен!');
+        await checkGenerationStatus(worldId);
+        await loadBestiary(worldId);
+      } catch (err) {
+        console.error('[finish-gen] Error:', err);
+        toast.error('Ошибка: ' + err.message);
+      } finally {
+        finishBtn.disabled = false;
+        finishBtn.textContent = '✨ Дополнить мир';
+      }
     });
 
     // Resume generation button (in bestiary modal)

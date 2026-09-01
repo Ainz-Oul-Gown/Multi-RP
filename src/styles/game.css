@@ -932,6 +932,45 @@
   transform: rotate(180deg);
 }
 
+/* ===================== Generation Status ===================== */
+.gen-status {
+  border: 1px solid var(--border-color);
+}
+
+.gen-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.gen-status-text {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.gen-status-progress {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.gen-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.gen-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-gold));
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
 .npc-edit-form {
   padding: var(--space-md);
   padding-top: 0;

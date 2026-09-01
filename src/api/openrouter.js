@@ -2,6 +2,7 @@
 import { OPENROUTER_API_KEY, AI_MODEL, CARD_GENERATION_MODELS } from '../config.js';
 import { supabase, invokeFunction } from './supabase.js';
 import { saveGenerationProgress, loadGenerationProgress, clearGenerationProgress } from '../utils/generationStore.js';
+import { saveProgress, loadProgress, deleteProgress } from '../utils/indexedDB.js';
 
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -556,14 +557,16 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
           const saved = await saveNPCs(newNpcs);
           totalSaved += saved;
           
-          // Save progress after each batch
-          saveGenerationProgress(worldId, {
+          // Save progress after each batch (localStorage + IndexedDB)
+          const progressData = {
             [STORAGE_KEY]: {
               generatedNames: Array.from(generatedNames),
               totalSaved,
               completed: false,
             }
-          });
+          };
+          saveGenerationProgress(worldId, progressData);
+          await saveProgress(worldId, { type: 'intelligent', ...progressData[STORAGE_KEY] });
         }
         
         if (batchNpcs.length >= intelligentCount) break;
@@ -571,26 +574,30 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
     } catch (batchErr) {
       console.error(`[generateIntelligentNPCs] Batch ${batchNum + 1} failed:`, batchErr);
       // Save progress before throwing
-      saveGenerationProgress(worldId, {
+      const progressData = {
         [STORAGE_KEY]: {
           generatedNames: Array.from(generatedNames),
           totalSaved,
           completed: false,
         }
-      });
+      };
+      saveGenerationProgress(worldId, progressData);
+      await saveProgress(worldId, { type: 'intelligent', ...progressData[STORAGE_KEY] });
       if (allNpcs.length > 0) break;
       throw batchErr;
     }
   }
   
   // Mark as completed
-  saveGenerationProgress(worldId, {
+  const finalData = {
     [STORAGE_KEY]: {
       generatedNames: Array.from(generatedNames),
       totalSaved,
       completed: true,
     }
-  });
+  };
+  saveGenerationProgress(worldId, finalData);
+  await saveProgress(worldId, { type: 'intelligent', ...finalData[STORAGE_KEY] });
   
   onProgress({ step: 'done', count: allNpcs.length, saved: totalSaved, message: `Разумные NPC сгенерировано: ${allNpcs.length}` });
   return { npcs: allNpcs, saved: totalSaved };
@@ -728,14 +735,16 @@ ${geography ? `Доступные государства:\n${geography.states.ma
           const saved = await saveNPCs(newNpcs);
           totalSaved += saved;
           
-          // Save progress after each batch
-          saveGenerationProgress(worldId, {
+          // Save progress after each batch (localStorage + IndexedDB)
+          const progressData = {
             [STORAGE_KEY]: {
               generatedNames: Array.from(generatedNames),
               totalSaved,
               completed: false,
             }
-          });
+          };
+          saveGenerationProgress(worldId, progressData);
+          await saveProgress(worldId, { type: 'creatures', ...progressData[STORAGE_KEY] });
         }
         
         if (batchNpcs.length >= creatureCount) break;
@@ -743,35 +752,49 @@ ${geography ? `Доступные государства:\n${geography.states.ma
     } catch (batchErr) {
       console.error(`[generateCreatures] Batch ${batchNum + 1} failed:`, batchErr);
       // Save progress before throwing
-      saveGenerationProgress(worldId, {
+      const progressData = {
         [STORAGE_KEY]: {
           generatedNames: Array.from(generatedNames),
           totalSaved,
           completed: false,
         }
-      });
+      };
+      saveGenerationProgress(worldId, progressData);
+      await saveProgress(worldId, { type: 'creatures', ...progressData[STORAGE_KEY] });
       if (allNpcs.length > 0) break;
       throw batchErr;
     }
   }
   
   // Mark as completed
-  saveGenerationProgress(worldId, {
+  const finalData = {
     [STORAGE_KEY]: {
       generatedNames: Array.from(generatedNames),
       totalSaved,
       completed: true,
     }
-  });
+  };
+  saveGenerationProgress(worldId, finalData);
+  await saveProgress(worldId, { type: 'creatures', ...finalData[STORAGE_KEY] });
   
   onProgress({ step: 'done', count: allNpcs.length, saved: totalSaved, message: `Существа сгенерированы: ${allNpcs.length}` });
   return { npcs: allNpcs, saved: totalSaved };
 }
 
-// Check if generation can be resumed
-export function canResumeGeneration(worldId) {
+// Check if generation can be resumed (checks both localStorage and IndexedDB)
+export async function canResumeGeneration(worldId) {
   const progress = loadGenerationProgress(worldId);
-  if (!progress) return { intelligent: false, creatures: false };
+  if (!progress) {
+    // Try IndexedDB
+    const dbProgress = await loadProgress(worldId);
+    if (dbProgress) {
+      return {
+        intelligent: dbProgress.type === 'intelligent' && !dbProgress.completed,
+        creatures: dbProgress.type === 'creatures' && !dbProgress.completed,
+      };
+    }
+    return { intelligent: false, creatures: false };
+  }
   
   return {
     intelligent: progress.intelligent_npcs && !progress.intelligent_npcs.completed,
@@ -780,6 +803,7 @@ export function canResumeGeneration(worldId) {
 }
 
 // Clear all generation progress for a world
-export function clearWorldGenerationProgress(worldId) {
+export async function clearWorldGenerationProgress(worldId) {
   clearGenerationProgress(worldId);
+  await deleteProgress(worldId);
 }

@@ -162,6 +162,20 @@ img {
   cursor: not-allowed;
 }
 
+.btn-success {
+  background: var(--accent-success);
+  color: #fff;
+}
+
+.btn-success:hover {
+  background: #27ae60;
+}
+
+.btn-success:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

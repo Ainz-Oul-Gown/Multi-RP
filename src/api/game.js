@@ -441,6 +441,12 @@ export async function exportWorld(worldId) {
         catchphrases: n.catchphrases,
         location_id: n.location_id,
         state_id: n.state_id,
+        // New fields
+        special_attacks: n.special_attacks,
+        base_attacks: n.base_attacks,
+        is_pack: n.is_pack_instance,
+        pack_size: n.pack_size,
+        is_unique: n.is_unique || false,
       })) || [],
     },
   };
@@ -660,27 +666,83 @@ export async function importWorld(jsonData, ownerId) {
   // Import NPCs
   let npcCount = 0;
   if (worldData.bestiary?.npcs?.length) {
-    const npcs = worldData.bestiary.npcs.map(n => ({
-      world_id: world.id,
-      name: n.name,
-      race: n.race || 'Человек',
-      category: n.category || 'npc',
-      role: ['main', 'secondary', 'tertiary'].includes(n.role) ? n.role : 'secondary',
-      appearance: n.appearance || '',
-      background: n.background || '',
-      stats: n.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-      hp: n.hp || 30,
-      max_hp: n.max_hp || 30,
-      level: n.level || 1,
-      armor_class: n.armor_class || 10,
-      initiative: n.initiative || 0,
-      saving_throws: n.saving_throws && typeof n.saving_throws === 'object' ? n.saving_throws : {},
-      status_tags: n.status_tags || [],
-      habits: n.habits || [],
-      catchphrases: n.catchphrases || [],
-      location_id: n.location_id ? locationIdMap[n.location_id] : null,
-      state_id: n.state_id ? stateIdMap[n.state_id] : null,
-    }));
+    // Build name-based lookups for locations and states
+    const locationNameToId = {};
+    const stateNameToId = {};
+    
+    // Fetch all locations and states for this world to build name lookup
+    const { data: allLocations } = await supabase
+      .from('locations')
+      .select('id, name, states!inner(name)')
+      .eq('world_id', world.id);
+    
+    if (allLocations) {
+      allLocations.forEach(l => {
+        locationNameToId[l.name.toLowerCase().trim()] = l.id;
+      });
+    }
+    
+    const { data: allStates } = await supabase
+      .from('states')
+      .select('id, name')
+      .eq('world_id', world.id);
+    
+    if (allStates) {
+      allStates.forEach(s => {
+        stateNameToId[s.name.toLowerCase().trim()] = s.id;
+      });
+    }
+    
+    const npcs = worldData.bestiary.npcs.map(n => {
+      // Resolve location_id: can be UUID (from export) or name (manual JSON)
+      let locationId = null;
+      if (n.location_id) {
+        // Try UUID mapping first (from export)
+        locationId = locationIdMap[n.location_id] || null;
+        // If not found, try name lookup
+        if (!locationId && typeof n.location_id === 'string') {
+          locationId = locationNameToId[n.location_id.toLowerCase().trim()] || null;
+        }
+      }
+      
+      // Resolve state_id: can be UUID (from export) or name (manual JSON)
+      let stateId = null;
+      if (n.state_id) {
+        // Try UUID mapping first (from export)
+        stateId = stateIdMap[n.state_id] || null;
+        // If not found, try name lookup
+        if (!stateId && typeof n.state_id === 'string') {
+          stateId = stateNameToId[n.state_id.toLowerCase().trim()] || null;
+        }
+      }
+      
+      return {
+        world_id: world.id,
+        name: n.name,
+        race: n.race || 'Человек',
+        category: n.category || 'npc',
+        role: ['main', 'secondary', 'tertiary'].includes(n.role) ? n.role : 'secondary',
+        appearance: n.appearance || '',
+        background: n.background || '',
+        stats: n.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        hp: n.hp || 30,
+        max_hp: n.max_hp || 30,
+        level: n.level || 1,
+        armor_class: n.armor_class || 10,
+        initiative: n.initiative || 0,
+        saving_throws: n.saving_throws && typeof n.saving_throws === 'object' ? n.saving_throws : {},
+        status_tags: n.status_tags || [],
+        habits: n.habits || [],
+        catchphrases: n.catchphrases || [],
+        location_id: locationId,
+        state_id: stateId,
+        // Combat fields
+        special_attacks: Array.isArray(n.special_attacks) ? n.special_attacks : [],
+        base_attacks: Array.isArray(n.base_attacks) ? n.base_attacks : [],
+        is_pack_instance: n.is_pack === true,
+        pack_size: n.is_pack ? (n.pack_size || 2) : 1,
+      };
+    });
     
     const { error: npcError } = await supabase.from('npcs').insert(npcs);
     if (npcError) throw npcError;

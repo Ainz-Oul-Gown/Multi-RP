@@ -44,9 +44,9 @@ async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: st
         { role: "user", content: userMessage },
       ],
       temperature: 0.7,
-      max_tokens: 16000,
+      max_tokens: 8000,
     }),
-    signal: AbortSignal.timeout(300000),
+    signal: AbortSignal.timeout(180000),
   });
 
   if (!response.ok) {
@@ -59,7 +59,7 @@ async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: st
 }
 
 // Split text into chunks by paragraphs, respecting max chunk size
-function splitTextIntoChunks(text: string, maxChunkSize: number = 50000): string[] {
+function splitTextIntoChunks(text: string, maxChunkSize: number = 20000): string[] {
   if (text.length <= maxChunkSize) return [text];
 
   const chunks: string[] = [];
@@ -153,11 +153,17 @@ serve(async (req) => {
     let npcs: any[];
     try {
       // Split large text into chunks to avoid timeouts
-      const chunks = splitTextIntoChunks(lore_text, 50000);
+      const chunks = splitTextIntoChunks(lore_text, 20000);
       console.log(`[generate-world-npcs] 📄 Text split into ${chunks.length} chunk(s)`);
 
+      // Limit to 3 chunks max to avoid resource limits
+      const chunksToProcess = chunks.slice(0, 3);
+      if (chunks.length > 3) {
+        console.warn(`[generate-world-npcs] ⚠️ Text too large, processing first 3 chunks only (${chunks.length} total)`);
+      }
+
       const allNpcs: any[] = [];
-      for (let i = 0; i < chunks.length; i++) {
+      for (let i = 0; i < chunksToProcess.length; i++) {
         console.log(`[generate-world-npcs] 🤖 Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)...`);
         const chunkPrompt = chunks.length > 1
           ? `${SYSTEM_PROMPT}\n\nЭто часть ${i + 1} из ${chunks.length} текста. Извлеки NPC из этой части.`

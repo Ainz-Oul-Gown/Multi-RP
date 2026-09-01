@@ -25,11 +25,30 @@ function sanitizeAIText(raw) {
 }
 
 // Persist active tab across re-renders (e.g., when returning from file picker on mobile)
-const lobbyState = {
-  activeTab: 'sessions',
-  currentBestiaryWorldId: null,
-  openModal: null, // Track which modal should be open after re-render
-};
+// Persist lobby state across page reloads (mobile file picker causes page reload)
+const LOBBY_STATE_KEY = 'lobbyState';
+
+function loadLobbyState() {
+  try {
+    const saved = sessionStorage.getItem(LOBBY_STATE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return { activeTab: 'sessions', currentBestiaryWorldId: null, openModal: null };
+}
+
+function saveLobbyState(state) {
+  try {
+    sessionStorage.setItem(LOBBY_STATE_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+// Helper to update lobbyState and persist
+function updateLobbyState(key, value) {
+  lobbyState[key] = value;
+  saveLobbyState(lobbyState);
+}
+
+const lobbyState = loadLobbyState();
 
 export function renderLobby(container, user) {
   let { activeTab, openModal } = lobbyState;
@@ -827,7 +846,7 @@ export function renderLobby(container, user) {
     // Tab switching
     container.querySelectorAll('.lobby-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
-        lobbyState.activeTab = tab.dataset.tab;
+        updateLobbyState('activeTab', tab.dataset.tab);
         activeTab = tab.dataset.tab;
         render();
       });
@@ -876,7 +895,7 @@ export function renderLobby(container, user) {
     // New session button (both empty state and grid card)
     const openNewSession = () => {
       document.getElementById('newSessionModal').classList.add('open');
-      lobbyState.openModal = 'newSessionModal';
+      updateLobbyState('openModal', 'newSessionModal');
     };
     document.getElementById('newSessionBtn')?.addEventListener('click', openNewSession);
     document.getElementById('newSessionBtn2')?.addEventListener('click', openNewSession);
@@ -884,11 +903,11 @@ export function renderLobby(container, user) {
     // Join session button
     document.getElementById('joinSessionBtn')?.addEventListener('click', () => {
       document.getElementById('joinSessionModal').classList.add('open');
-      lobbyState.openModal = 'joinSessionModal';
+      updateLobbyState('openModal', 'joinSessionModal');
     });
     document.getElementById('newSessionBtn2')?.addEventListener('click', () => {
       document.getElementById('newSessionModal').classList.add('open');
-      lobbyState.openModal = 'newSessionModal';
+      updateLobbyState('openModal', 'newSessionModal');
     });
 
     // Join session form
@@ -912,7 +931,7 @@ export function renderLobby(container, user) {
     // New world button (both empty state and grid card)
     const openNewWorld = () => {
       document.getElementById('newWorldModal').classList.add('open');
-      lobbyState.openModal = 'newWorldModal';
+      updateLobbyState('openModal', 'newWorldModal');
     };
     document.getElementById('newWorldBtn')?.addEventListener('click', openNewWorld);
     document.getElementById('newWorldBtn2')?.addEventListener('click', openNewWorld);
@@ -923,14 +942,14 @@ export function renderLobby(container, user) {
     // Character card buttons
     const openNewChar = () => {
       document.getElementById('newCharModal').classList.add('open');
-      lobbyState.openModal = 'newCharModal';
+      updateLobbyState('openModal', 'newCharModal');
     };
     document.getElementById('newCharBtn')?.addEventListener('click', openNewChar);
     document.getElementById('newCharBtn2')?.addEventListener('click', openNewChar);
 
     document.getElementById('closeCharModal')?.addEventListener('click', () => {
       document.getElementById('newCharModal').classList.remove('open');
-      lobbyState.openModal = null;
+      updateLobbyState('openModal', null);
     });
 
     // Import character buttons
@@ -1022,13 +1041,13 @@ export function renderLobby(container, user) {
           if (el) el.value = stats[s] || 10;
         });
         document.getElementById('editCharModal').classList.add('open');
-        lobbyState.openModal = 'editCharModal';
+        updateLobbyState('openModal', 'editCharModal');
       });
     });
 
     document.getElementById('closeEditCharModal')?.addEventListener('click', () => {
       document.getElementById('editCharModal').classList.remove('open');
-      lobbyState.openModal = null;
+      updateLobbyState('openModal', null);
     });
 
     document.getElementById('editCharForm')?.addEventListener('submit', async (e) => {
@@ -1134,7 +1153,7 @@ export function renderLobby(container, user) {
         document.getElementById('editWorldName').value = world.name || '';
         document.getElementById('editWorldSettings').value = JSON.stringify(world.settings || {}, null, 2);
         document.getElementById('editWorldModal').classList.add('open');
-        lobbyState.openModal = 'editWorldModal';
+        updateLobbyState('openModal', 'editWorldModal');
       });
     });
 
@@ -1144,7 +1163,7 @@ export function renderLobby(container, user) {
         const worldId = btn.dataset.id;
         const worldName = btn.dataset.name;
         currentBestiaryWorldId = worldId;
-        lobbyState.currentBestiaryWorldId = worldId;
+        updateLobbyState('currentBestiaryWorldId', worldId);
         document.getElementById('bestiaryWorldName').textContent = worldName;
         document.getElementById('bestiaryModal').classList.add('open');
         // Hide create form when opening bestiary for a new world
@@ -1156,12 +1175,12 @@ export function renderLobby(container, user) {
     // Close bestiary modal
     document.getElementById('closeBestiaryBtn')?.addEventListener('click', () => {
       document.getElementById('bestiaryModal').classList.remove('open');
-      lobbyState.openModal = null;
+      updateLobbyState('openModal', null);
     });
 
     document.getElementById('closeEditWorldModal')?.addEventListener('click', () => {
       document.getElementById('editWorldModal').classList.remove('open');
-      lobbyState.openModal = null;
+      updateLobbyState('openModal', null);
     });
 
     document.getElementById('editWorldForm')?.addEventListener('submit', async (e) => {
@@ -1272,11 +1291,11 @@ export function renderLobby(container, user) {
     // Close modals
     document.getElementById('closeModal')?.addEventListener('click', () => {
       document.getElementById('newSessionModal').classList.remove('open');
-      lobbyState.openModal = null;
+      updateLobbyState('openModal', null);
     });
     document.getElementById('closeWorldModal')?.addEventListener('click', () => {
       document.getElementById('newWorldModal').classList.remove('open');
-      lobbyState.openModal = null;
+      updateLobbyState('openModal', null);
     });
 
     // PVP toggle
@@ -1585,7 +1604,7 @@ export function renderLobby(container, user) {
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
           overlay.classList.remove('open');
-          lobbyState.openModal = null;
+          updateLobbyState('openModal', null);
         }
       });
     });

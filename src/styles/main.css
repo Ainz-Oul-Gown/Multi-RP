@@ -399,6 +399,89 @@ textarea.input {
 .hp-bar.low { background: var(--accent-gold); }
 .hp-bar.critical { background: var(--accent-danger); }
 
+/* ===================== Character Stats Grid ===================== */
+.stats-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
+}
+
+.stats-grid-6 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
+}
+
+.stat-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  text-align: center;
+  transition: border-color var(--transition-fast);
+}
+
+.stat-card:hover {
+  border-color: var(--accent-primary);
+}
+
+.stat-card-label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-card-value {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.stat-card-modifier {
+  font-size: var(--fs-xs);
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.stat-card-input {
+  width: 100%;
+  padding: var(--space-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  text-align: center;
+  font-family: var(--font-mono);
+  transition: border-color var(--transition-fast);
+}
+
+.stat-card-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
+}
+
+/* Stats sum badge */
+.stats-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.stats-sum strong {
+  color: var(--accent-gold);
+}
+
 /* ===================== Responsive ===================== */
 @media (max-width: 768px) {
   :root {
@@ -411,5 +494,75 @@ textarea.input {
 
   .card {
     padding: var(--space-md);
+  }
+
+  /* Modal full-screen on mobile */
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    padding: var(--space-md);
+  }
+
+  .modal-overlay {
+    align-items: flex-end;
+  }
+
+  .modal-overlay.open .modal {
+    transform: translateY(0);
+  }
+
+  /* Toast mobile */
+  .toast-container {
+    top: var(--space-sm);
+    right: var(--space-sm);
+    left: var(--space-sm);
+  }
+
+  .toast {
+    min-width: auto;
+    width: 100%;
+  }
+
+  /* Better touch targets */
+  .btn {
+    min-height: 44px;
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .btn-sm {
+    min-height: 36px;
+  }
+
+  /* Form elements */
+  .input {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  textarea.input {
+    min-height: 100px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --fs-base: 0.875rem;
+  }
+
+  .btn {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--fs-sm);
+  }
+
+  .card {
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+  }
+
+  .card-title {
+    font-size: var(--fs-lg);
   }
 }

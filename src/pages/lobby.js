@@ -237,7 +237,7 @@ export function renderLobby(container, user) {
 
       <!-- Модальное окно: Новый персонаж -->
       <div class="modal-overlay" id="newCharModal">
-        <div class="modal" style="max-width: 500px;">
+        <div class="modal" style="max-width: 520px;">
           <h2 class="card-title" style="margin-bottom: 0.5rem;">⚔️ Новый персонаж</h2>
           <p class="form-hint" style="margin-bottom: 1rem;">Создайте героя — он останется у вас и сможет участвовать в любых сессиях</p>
            <form id="newCharForm">
@@ -265,15 +265,15 @@ export function renderLobby(container, user) {
               <textarea class="input" id="charBio" rows="3" placeholder="Родился в деревне на краю мира..."></textarea>
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
                 <label class="form-label" style="margin: 0;">Характеристики</label>
                 <button type="button" class="btn btn-secondary btn-sm" id="generateStatsBtn">✨ AI</button>
               </div>
-              <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr); gap: 0.5rem;" id="statsGrid">
+              <div class="stats-grid-6" id="statsGrid">
                 ${STATS.map((stat) => `
-                  <div class="form-group">
-                    <label class="form-hint">${stat}</label>
-                     <input class="input" type="number" id="stat_${stat}" value="10" style="text-align: center;" />
+                  <div class="stat-card">
+                    <div class="stat-card-label">${stat}</div>
+                    <input class="stat-card-input" type="number" id="stat_${stat}" value="10" min="1" max="30" />
                   </div>
                 `).join('')}
               </div>
@@ -288,7 +288,7 @@ export function renderLobby(container, user) {
 
       <!-- Модальное окно: Редактирование персонажа -->
       <div class="modal-overlay" id="editCharModal">
-        <div class="modal" style="max-width: 500px;">
+        <div class="modal" style="max-width: 520px;">
           <h2 class="card-title" style="margin-bottom: 0.5rem;">✏️ Редактирование персонажа</h2>
            <form id="editCharForm">
             <input type="hidden" id="editCharRaceAcBonus" value="0" />
@@ -316,20 +316,20 @@ export function renderLobby(container, user) {
               <textarea class="input" id="editCharBio" rows="3"></textarea>
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
                 <label class="form-label" style="margin: 0;">Характеристики</label>
                 <button type="button" class="btn btn-secondary btn-sm" id="editGenerateStatsBtn">✨ AI</button>
               </div>
-              <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr); gap: 0.5rem;">
+              <div class="stats-grid-6">
                 ${STATS.map((stat) => `
-                  <div class="form-group">
-                    <label class="form-hint">${stat}</label>
-                     <input class="input" type="number" id="edit_stat_${stat}" style="text-align: center;" />
+                  <div class="stat-card">
+                    <div class="stat-card-label">${stat}</div>
+                    <input class="stat-card-input" type="number" id="edit_stat_${stat}" min="1" max="30" />
                   </div>
                 `).join('')}
               </div>
-              <div style="text-align: center; margin-top: 0.5rem;">
-                <span class="form-hint" id="editStatsSum"></span>
+              <div style="text-align: center; margin-top: 0.75rem;">
+                <span class="stats-sum" id="editStatsSum">Сумма: <strong>0</strong></span>
               </div>
             </div>
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
@@ -447,30 +447,30 @@ export function renderLobby(container, user) {
             <label class="form-label">Предыстория</label>
             <textarea class="input" id="new-npc-background" rows="2" placeholder="Предыстория NPC..."></textarea>
           </div>
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
-            <div class="form-group">
-              <label class="form-label">STR</label>
-              <input class="input" type="number" id="new-npc-str" value="10" />
+          <div class="stats-grid-3" style="margin-bottom: 0.75rem;">
+            <div class="stat-card">
+              <div class="stat-card-label">STR</div>
+              <input class="stat-card-input" type="number" id="new-npc-str" value="10" min="1" max="30" />
             </div>
-            <div class="form-group">
-              <label class="form-label">DEX</label>
-              <input class="input" type="number" id="new-npc-dex" value="10" />
+            <div class="stat-card">
+              <div class="stat-card-label">DEX</div>
+              <input class="stat-card-input" type="number" id="new-npc-dex" value="10" min="1" max="30" />
             </div>
-            <div class="form-group">
-              <label class="form-label">CON</label>
-              <input class="input" type="number" id="new-npc-con" value="10" />
+            <div class="stat-card">
+              <div class="stat-card-label">CON</div>
+              <input class="stat-card-input" type="number" id="new-npc-con" value="10" min="1" max="30" />
             </div>
-            <div class="form-group">
-              <label class="form-label">INT</label>
-              <input class="input" type="number" id="new-npc-int" value="10" />
+            <div class="stat-card">
+              <div class="stat-card-label">INT</div>
+              <input class="stat-card-input" type="number" id="new-npc-int" value="10" min="1" max="30" />
             </div>
-            <div class="form-group">
-              <label class="form-label">WIS</label>
-              <input class="input" type="number" id="new-npc-wis" value="10" />
+            <div class="stat-card">
+              <div class="stat-card-label">WIS</div>
+              <input class="stat-card-input" type="number" id="new-npc-wis" value="10" min="1" max="30" />
             </div>
-            <div class="form-group">
-              <label class="form-label">CHA</label>
-              <input class="input" type="number" id="new-npc-cha" value="10" />
+            <div class="stat-card">
+              <div class="stat-card-label">CHA</div>
+              <input class="stat-card-input" type="number" id="new-npc-cha" value="10" min="1" max="30" />
             </div>
           </div>
           <div class="form-group">
@@ -486,8 +486,8 @@ export function renderLobby(container, user) {
             <input class="input" id="new-npc-status-tags" placeholder="друг, наставник" />
           </div>
           <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-            <button class="btn btn-primary btn-sm" id="saveNewNpcBtn">💾 Создать</button>
-            <button class="btn btn-ghost btn-sm" id="cancelNewNpcBtn">Отмена</button>
+            <button class="btn btn-primary" id="saveNewNpcBtn">💾 Создать</button>
+            <button class="btn btn-ghost" id="cancelNewNpcBtn">Отмена</button>
           </div>
         </div>
         <div id="bestiaryContent">
@@ -625,18 +625,20 @@ export function renderLobby(container, user) {
               <h3 class="card-title">⚔️ ${c.name}</h3>
             </div>
             <p class="text-muted" style="font-size: var(--fs-sm);">${c.race} / ${c.class}</p>
-            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 0.5rem;">
+            <div class="stats-grid-3" style="margin-top: 0.75rem;">
               ${STATS.map((s) => `
-                <div class="stat-item" style="padding: 4px; text-align: center;">
-                  <div class="stat-label" style="font-size: 0.6rem;">${s}</div>
-                  <div class="stat-value" style="font-size: var(--fs-sm);">${stats[s] || 10}</div>
+                <div class="stat-card">
+                  <div class="stat-card-label">${s}</div>
+                  <div class="stat-card-value">${stats[s] || 10}</div>
                 </div>
               `).join('')}
             </div>
-            <p class="form-hint" style="text-align: center; margin-top: 0.5rem;">HP: ${c.hp}/${c.max_hp} | 💰 ${c.money} | Сумма: ${total}</p>
-            ${c.bio ? `<p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${c.bio}</p>` : ''}
-            <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
-              <button class="btn btn-secondary btn-sm" data-action="edit-char" data-id="${c.id}">✏️</button>
+            <p class="form-hint" style="text-align: center; margin-top: 0.75rem; font-size: var(--fs-sm);">
+              ❤️ ${c.hp}/${c.max_hp} &nbsp;•&nbsp; 💰 ${c.money} &nbsp;•&nbsp; 📊 ${total}
+            </p>
+            ${c.bio ? `<p class="char-select-bio" style="margin-top: 0.5rem;">${c.bio}</p>` : ''}
+            <div style="margin-top: auto; padding-top: 0.75rem; display: flex; gap: 0.5rem;">
+              <button class="btn btn-secondary btn-sm" data-action="edit-char" data-id="${c.id}">✏️ Изменить</button>
               <button class="btn btn-ghost btn-sm" data-action="export-char" data-id="${c.id}">📤</button>
               <button class="btn btn-ghost btn-sm" data-action="delete-char" data-id="${c.id}">🗑️</button>
             </div>

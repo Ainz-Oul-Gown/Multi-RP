@@ -182,7 +182,7 @@ export async function renderGame(container, sessionId, user) {
           <button class="btn btn-ghost btn-icon" id="backBtn" title="Лобби">←</button>
           <div class="game-header-center">
             <span class="game-header-name">${currentPlayer?.name || 'Герой'}</span>
-            <div class="hp-bar-container" style="width: 120px;">
+            <div class="hp-bar-container">
               <div class="hp-bar ${hpClass}" style="width: ${hpPercent}%"></div>
             </div>
             <span class="game-header-hp">${currentPlayer?.hp || 0}/${currentPlayer?.max_hp || 0}</span>
@@ -321,10 +321,10 @@ export async function renderGame(container, sessionId, user) {
         .reduce((sum, i) => sum + (Number(i.stat_penalties[stat]) || 0), 0);
       const displayValue = baseValue + injuryPenalty;
       return `
-        <div class="stat-item">
-          <div class="stat-label">${stat}</div>
-          <div class="stat-value">${displayValue}</div>
-          <div class="stat-modifier">${Math.floor((displayValue - 10) / 2) >= 0 ? '+' : ''}${Math.floor((displayValue - 10) / 2)}</div>
+        <div class="stat-card">
+          <div class="stat-card-label">${stat}</div>
+          <div class="stat-card-value">${displayValue}</div>
+          <div class="stat-card-modifier">${Math.floor((displayValue - 10) / 2) >= 0 ? '+' : ''}${Math.floor((displayValue - 10) / 2)}</div>
         </div>
       `;
     }).join('');
@@ -340,32 +340,30 @@ export async function renderGame(container, sessionId, user) {
         .reduce((sum, i) => sum + (Number(i.stat_penalties[stat]) || 0), 0);
       const totalMod = baseMod + 2 + injuryPenalty;
       return `
-        <div class="stat-item">
-          <div class="stat-label">${stat}</div>
-          <div class="stat-value">${totalMod >= 0 ? '+' : ''}${totalMod}</div>
+        <div class="stat-card">
+          <div class="stat-card-label">${stat}</div>
+          <div class="stat-card-value">${totalMod >= 0 ? '+' : ''}${totalMod}</div>
         </div>
       `;
     }).join('');
 
     const activeInjuries = (player.injuries || []).filter(i => !i.cured_at);
     const injuriesHtml = activeInjuries.length ? `
-      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
-        <h4 class="form-label" style="color: var(--accent-danger);">Травмы</h4>
-        <div style="margin-top: 0.5rem;">
-          ${activeInjuries.map(injury => `
-            <div style="margin-bottom: 0.5rem; padding: 0.5rem; background: rgba(255,0,0,0.1); border-radius: 4px;">
-              <div style="font-weight: 600; color: var(--accent-danger);">${escapeHtml(injury.injury_type)}</div>
-              <div style="font-size: var(--fs-xs); color: var(--text-muted);">${escapeHtml(injury.description || '')}</div>
-              ${injury.stat_penalties && Object.keys(injury.stat_penalties).length > 0 ? `
-                <div style="font-size: var(--fs-xs); margin-top: 0.25rem;">
-                  Штрафы: ${Object.entries(injury.stat_penalties).map(([k, v]) => `${k} ${Number(v) >= 0 ? '+' : ''}${Number(v)}`).join(', ')}
-                </div>
-              ` : ''}
-              ${injury.duration_hours ? `<div style="font-size: var(--fs-xs);">Длительность: ${injury.duration_hours}ч</div>` : ''}
-              ${injury.is_permanent ? '<div style="font-size: var(--fs-xs); color: var(--accent-danger);">Постоянная</div>' : ''}
-            </div>
-          `).join('')}
-        </div>
+      <div class="profile-section">
+        <h4 class="profile-section-title">⚠️ Травмы</h4>
+        ${activeInjuries.map(injury => `
+          <div class="profile-injuries" style="margin-bottom: 0.5rem;">
+            <div style="font-weight: 600;">${escapeHtml(injury.injury_type)}</div>
+            <div style="font-size: var(--fs-sm); margin-top: 0.25rem;">${escapeHtml(injury.description || '')}</div>
+            ${injury.stat_penalties && Object.keys(injury.stat_penalties).length > 0 ? `
+              <div style="font-size: var(--fs-xs); margin-top: 0.25rem; color: var(--text-muted);">
+                Штрафы: ${Object.entries(injury.stat_penalties).map(([k, v]) => `${k} ${Number(v) >= 0 ? '+' : ''}${Number(v)}`).join(', ')}
+              </div>
+            ` : ''}
+            ${injury.duration_hours ? `<div style="font-size: var(--fs-xs); color: var(--text-muted);">Длительность: ${injury.duration_hours}ч</div>` : ''}
+            ${injury.is_permanent ? '<div style="font-size: var(--fs-xs); font-weight: 600;">Постоянная</div>' : ''}
+          </div>
+        `).join('')}
       </div>
     ` : '';
 
@@ -375,38 +373,42 @@ export async function renderGame(container, sessionId, user) {
         <h3 class="profile-name">${escapeHtml(player.name)}</h3>
         <p class="profile-meta">${escapeHtml(player.race || '')} / ${escapeHtml(player.class || '')}</p>
 
-        <div class="profile-hp" style="margin-top: 1rem;">
-          <div class="hp-bar-container">
+        <div class="profile-section" style="width: 100%;">
+          <div class="hp-bar-container" style="height: 16px;">
             <div class="hp-bar ${(player.hp / player.max_hp) > 0.5 ? '' : (player.hp / player.max_hp) > 0.25 ? 'low' : 'critical'}"
                  style="width: ${(player.hp / player.max_hp) * 100}%"></div>
           </div>
-          <p style="text-align: center; margin-top: 0.25rem; font-size: var(--fs-sm);">
-            HP: <strong>${player.hp}</strong> / ${player.max_hp}
+          <p style="text-align: center; margin-top: 0.5rem; font-size: var(--fs-base); font-weight: 600;">
+            ❤️ ${player.hp} / ${player.max_hp}
+          </p>
+          <p style="text-align: center; margin-top: 0.25rem; font-size: var(--fs-sm); color: var(--accent-gold);">
+            💰 ${player.money || 0} золота
           </p>
         </div>
 
-        <p style="text-align: center; margin-top: 0.5rem;">
-          💰 <strong>${player.money || 0}</strong> золота
-        </p>
-
-        <div class="stats-grid" style="margin-top: 1.5rem;">
-          ${statsHtml}
-        </div>
-
-        <div class="stats-grid" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
-          <div class="stat-item">
-            <div class="stat-label">Инициатива</div>
-            <div class="stat-value">${initiative >= 0 ? '+' : ''}${initiative}</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">AC</div>
-            <div class="stat-value">${armorClass}</div>
+        <div class="profile-section" style="width: 100%;">
+          <h4 class="profile-section-title">Характеристики</h4>
+          <div class="stats-grid-3">
+            ${statsHtml}
           </div>
         </div>
 
-        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
-          <h4 class="form-label">Спасброски</h4>
-          <div class="stats-grid" style="margin-top: 0.5rem;">
+        <div class="profile-section" style="width: 100%;">
+          <div class="stats-grid-3">
+            <div class="stat-card">
+              <div class="stat-card-label">Инициатива</div>
+              <div class="stat-card-value">${initiative >= 0 ? '+' : ''}${initiative}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-label">AC</div>
+              <div class="stat-card-value">${armorClass}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="profile-section" style="width: 100%;">
+          <h4 class="profile-section-title">Спасброски</h4>
+          <div class="stats-grid-3">
             ${savingThrowsHtml}
           </div>
         </div>
@@ -414,16 +416,16 @@ export async function renderGame(container, sessionId, user) {
         ${injuriesHtml}
 
         ${player.appearance ? `
-          <div style="margin-top: 1.5rem;">
-            <h4 class="form-label">Внешность</h4>
-            <p class="text-muted" style="font-size: var(--fs-sm);">${escapeHtml(player.appearance)}</p>
+          <div class="profile-section" style="width: 100%;">
+            <h4 class="profile-section-title">Внешность</h4>
+            <p class="profile-bio">${escapeHtml(player.appearance)}</p>
           </div>
         ` : ''}
 
         ${player.bio ? `
-          <div style="margin-top: 1rem;">
-            <h4 class="form-label">Биография</h4>
-            <p class="text-muted" style="font-size: var(--fs-sm);">${escapeHtml(player.bio)}</p>
+          <div class="profile-section" style="width: 100%;">
+            <h4 class="profile-section-title">Биография</h4>
+            <p class="profile-bio">${escapeHtml(player.bio)}</p>
           </div>
         ` : ''}
       </div>
@@ -660,7 +662,7 @@ export async function renderGame(container, sessionId, user) {
     return div.innerHTML;
   }
 
-  // Character creation / selection screen
+    // Character creation / selection screen
   function renderCharacterCreation() {
     // Try to load existing cards
     getCharacterCards(user.id).then((cards) => {
@@ -668,15 +670,18 @@ export async function renderGame(container, sessionId, user) {
       if (cardsEl && cards.length) {
         cardsEl.innerHTML = cards.map((c) => {
           const stats = c.stats || {};
+          const total = Object.values(stats).reduce((s, v) => s + (v || 0), 0);
           return `
             <div class="card char-select-card" data-card-id="${c.id}">
               <div class="card-header">
                 <h3 style="font-weight: 700;">⚔️ ${c.name}</h3>
                 <span class="badge badge-info">${c.race} / ${c.class}</span>
               </div>
-              <p class="text-muted" style="font-size: var(--fs-xs);">HP: ${c.hp}/${c.max_hp} | 💰 ${c.money}</p>
-              <p class="text-muted" style="font-size: var(--fs-xs); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${c.bio || 'Без биографии'}</p>
-              <button class="btn btn-primary btn-sm char-select-btn" data-card-id="${c.id}" style="margin-top: 0.5rem; width: 100%;">Выбрать этого героя</button>
+              <p class="form-hint">❤️ ${c.hp}/${c.max_hp} &nbsp;•&nbsp; 💰 ${c.money} &nbsp;•&nbsp; 📊 ${total}</p>
+              <p class="char-select-bio">${c.bio || 'Без биографии'}</p>
+              <div class="char-select-actions">
+                <button class="btn btn-primary char-select-btn" data-card-id="${c.id}">Выбрать этого героя</button>
+              </div>
             </div>
           `;
         }).join('');
@@ -763,23 +768,23 @@ export async function renderGame(container, sessionId, user) {
               <textarea class="input" id="charBio" rows="3" placeholder="Родился в деревне на краю мира..."></textarea>
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
                 <label class="form-label" style="margin: 0;">Характеристики</label>
                 <button type="button" class="btn btn-secondary btn-sm" id="generateStatsBtn">✨ AI</button>
               </div>
-              <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr); gap: 0.5rem;" id="statsGrid">
+              <div class="stats-grid-6" id="statsGrid">
                 ${STATS.map((stat) => `
-                  <div class="form-group">
-                    <label class="form-hint">${stat}</label>
-                     <input class="input" type="number" id="stat_${stat}" value="10" style="text-align: center;" />
+                  <div class="stat-card">
+                    <div class="stat-card-label">${stat}</div>
+                    <input class="stat-card-input" type="number" id="stat_${stat}" value="10" min="1" max="30" />
                   </div>
                 `).join('')}
               </div>
               <div id="statsLoading" style="display: none; text-align: center; margin-top: 0.5rem;">
                 <span class="form-hint">⏳ Генерация...</span>
               </div>
-              <div style="text-align: center; margin-top: 0.5rem;">
-                <span class="form-hint" id="statsSum">Сумма: 60 / 72</span>
+              <div style="text-align: center; margin-top: 0.75rem;">
+                <span class="stats-sum" id="statsSum">Сумма: <strong>60</strong> / 72</span>
               </div>
             </div>
             <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">Начать приключение</button>

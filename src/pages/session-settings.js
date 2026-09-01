@@ -129,10 +129,10 @@ export async function renderSessionSettings(container, sessionId, user) {
                 <div class="player-row">
                   <div class="player-info">
                     <strong>${p.name}</strong>
-                    <span class="text-muted">${p.race} / ${p.class}</span>
+                    <span class="text-muted" style="font-size: var(--fs-sm);">${p.race} / ${p.class}</span>
                   </div>
                   <div class="player-stats">
-                    <span class="badge badge-success">HP: ${p.hp}/${p.max_hp}</span>
+                    <span class="badge badge-success">❤️ ${p.hp}/${p.max_hp}</span>
                     <span class="badge badge-gold">💰 ${p.money}</span>
                   </div>
                 </div>

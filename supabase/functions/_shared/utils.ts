@@ -5,7 +5,7 @@ export function sanitizeKey(raw: string): string {
   return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
 }
 
-export function cleanTextForAI(raw: string | null | undefined): string {
+export function cleanTextForAI(raw: string | null | undefined, maxLength: number = 4000): string {
   if (!raw) return "";
   let text = String(raw);
   text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
@@ -16,6 +16,7 @@ export function cleanTextForAI(raw: string | null | undefined): string {
   text = text.replace(/https?:\/\/[^\s]+/g, "");
   text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
   text = text.replace(/\s+/g, " ").trim();
+  if (text.length > maxLength) text = text.slice(0, maxLength);
   return text;
 }
 

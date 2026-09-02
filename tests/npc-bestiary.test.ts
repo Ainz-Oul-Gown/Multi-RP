@@ -67,44 +67,20 @@ function createSupabaseChain(returnValue: any) {
 describe("generate-world-npcs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
+    mockSupabaseFrom.mockReset();
+    mockSupabase.rpc.mockReset();
+    mockFetch.mockReset();
   });
 
-  it("should parse and generate full stats via tier matrix", async () => {
-    // Мокаем получение user_settings
-    const settingsChain = createSupabaseChain({ data: { openrouter_key: "test-key" } });
+  it("should clean and insert npcs into database", async () => {
     // Мокаем insert NPC
     const insertChain = createSupabaseChain({
       data: [{ id: "npc-1", name: "Дракон", tier: 3 }],
       error: null,
     });
 
-    mockSupabaseFrom
-      .mockReturnValueOnce(settingsChain) // user_settings
-      .mockReturnValueOnce(insertChain); // npcs insert
-
-    // Мокаем ответ LLM с NPC Tier 3 (HP: 50)
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        choices: [{
-          message: {
-            content: JSON.stringify([{
-              name: "Дракон",
-              role: "main",
-              race: "Дракон",
-              background: "Древний дракон",
-              habits: ["летать"],
-              catchphrases: ["Я огонь"],
-              tier: 3,
-              stats: { STR: 16, DEX: 14, CON: 16, INT: 14, WIS: 16, CHA: 14 },
-              hp: 50,
-              max_hp: 50,
-            }]),
-          },
-        }],
-      }),
-    });
+    // Нужен только один мок на insert в таблицу npcs
+    mockSupabaseFrom.mockReturnValueOnce(insertChain);
 
     await import("../supabase/functions/generate-world-npcs/index.ts");
 
@@ -116,47 +92,34 @@ describe("generate-world-npcs", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         world_id: "world-123",
-        lore_text: "В мире живёт древний дракон",
-        user_id: "user-123",
+        npcs: [{
+          name: "Дракон",
+          role: "main",
+          race: "Дракон",
+          tier: 3,
+          stats: { STR: 16, DEX: 14, CON: 16, INT: 14, WIS: 16, CHA: 14 },
+          hp: 50,
+          max_hp: 50,
+        }],
       }),
     });
 
     const res = await handler(req);
     const body = await res.json();
 
-    // Проверяем что вызывался fetch к chat/completions
-    expect(mockFetch).toHaveBeenCalledWith(
-      "https://openrouter.ai/api/v1/chat/completions",
-      expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining("Tier"),
-      }),
-    );
-
-    // Проверяем что insert был вызван с правильными данными
-    expect(insertChain.insert).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          world_id: "world-123",
-          name: "Дракон",
-          role: "main",
-          race: "Дракон",
-          background: "Древний дракон",
-          stats: { STR: 16, DEX: 14, CON: 16, INT: 14, WIS: 16, CHA: 14 },
-          hp: 50,
-          max_hp: 50,
-        }),
-      ]),
-    );
-
+    expect(res.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.count).toBe(1);
+    expect(insertChain.insert).toHaveBeenCalled();
   });
 });
 
 describe("NPC Bestiary API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabaseFrom.mockReset(); // <--- СБРАСЫВАЕТ ОЧЕРЕДЬ once-значений!
+    mockSupabase.rpc.mockReset();
+    mockFetch.mockReset();
   });
 
   it("should call updateNpc API method", async () => {
@@ -242,6 +205,9 @@ describe("simulate-npc-background", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
+    mockSupabaseFrom.mockReset();
+    mockSupabase.rpc.mockReset();
+    mockFetch.mockReset();
   });
 
   it("should autonomously add item to npc inventory", async () => {

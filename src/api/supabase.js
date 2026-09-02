@@ -70,8 +70,11 @@ export function onAuthStateChange(callback) {
 
 // Realtime subscription helper
 export function subscribeToTable(table, filter, callback) {
-  let channel = supabase
-    .channel(`realtime:${table}`)
+  const cleanFilter = filter ? filter.replace(/[^a-zA-Z0-9_-]/g, '_') : 'all';
+  const channelId = `realtime:${table}:${cleanFilter}:${Math.random().toString(36).slice(2, 7)}`;
+
+  const channel = supabase
+    .channel(channelId)
     .on('postgres_changes', { event: '*', schema: 'public', table, filter }, callback)
     .subscribe();
 

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "input": {
+    "maxFileSize": 52428800
+  },
+  "output": {
+    "filePath": "repomix-output.txt",
+    "style": "plain",
+    "compress": false,
+    "topFilesLength": 50,
+    "showLineNumbers": true,
+    "copyToClipboard": false,
+    "tokenCountTree": true
+  },
+  "include": [
+    "src/**/*",
+    "supabase/**/*",
+    "tests/**/*",
+    "index.html",
+    "package.json",
+    "vite.config.js",
+    "README.md",
+    ".env.example"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "node_modules/**",
+      "dist/**",
+      "logs/**",
+      "log.zip",
+      "*.log",
+      ".git/**",
+      ".playwright-mcp/**",
+      "repomix-output.txt",
+      "Полный код проекта.txt",
+      "код 01.09.2026.txt",
+      "Карточка Мира.txt",
+      "01_Лор.txt",
+      "03_Политика.txt",
+      "04_Религия.txt",
+      "05_Магия и заклинания.txt",
+      "06_Экономика.txt",
+      "Этерия.json",
+      "test_input.json",
+      "temp_json.json",
+      "fix-json.js"
+    ]
+  }
+}

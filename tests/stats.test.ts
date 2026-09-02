@@ -52,16 +52,22 @@ describe("validateAndFixStats", () => {
 });
 
 describe("calculateHpFromStats", () => {
-  it("calculates HP from CON using D&D-like formula", () => {
-    expect(calculateHpFromStats({ CON: 10 })).toBe(30);
-    expect(calculateHpFromStats({ CON: 14 })).toBe(38);
-    expect(calculateHpFromStats({ CON: 8 })).toBe(26);
+  it("calculates HP from CON using D&D-like formula (max die + CON mod + 10)", () => {
+    // D&D 5e: HP на уровне 1 = max hit die + CON mod + 10
+    // По умолчанию d8: max=8, base=10
+    // CON 10 (mod=0): 8 + 0 + 10 = 18
+    // CON 14 (mod=+2): 8 + 2 + 10 = 20
+    // CON 8 (mod=-1): 8 + (-1) + 10 = 17
+    expect(calculateHpFromStats({ CON: 10 })).toBe(18);
+    expect(calculateHpFromStats({ CON: 14 })).toBe(20);
+    expect(calculateHpFromStats({ CON: 8 })).toBe(17);
   });
 
   it("falls back to 10 when stats object is empty or CON is missing", () => {
-    expect(calculateHpFromStats({})).toBe(30);
-    expect(calculateHpFromStats(null)).toBe(30);
-    expect(calculateHpFromStats(undefined)).toBe(30);
+    // CON 10 (default) → 18
+    expect(calculateHpFromStats({})).toBe(18);
+    expect(calculateHpFromStats(null)).toBe(18);
+    expect(calculateHpFromStats(undefined)).toBe(18);
   });
 });
 

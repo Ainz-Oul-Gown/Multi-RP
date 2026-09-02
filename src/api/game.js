@@ -1,5 +1,5 @@
 // src/api/game.js — API-методы для игровой логики
-import { supabase } from './supabase.js';
+import { supabase, invokeFunction } from './supabase.js';
 import { calculateHpDnd, getHitDice, getDieAverage } from '../config/hitDice.js';
 import { getRaceAcBonus } from '../config.js';
 
@@ -110,24 +110,31 @@ export async function getSessions() {
     .select('*')
     .order('created_at', { ascending: false });
   if (sessErr) throw sessErr;
+  if (!sessions || sessions.length === 0) return [];
 
-  // Загружаем мира и игроков отдельно (RLS запрещает join)
-  const worldIds = [...new Set(sessions.map((s) => s.world_id))];
-  const { data: worlds } = await supabase.from('worlds').select('id, name').in('id', worldIds.length ? worldIds : ['00000000-0000-0000-0000-000000000000']);
+  const worldIds = [...new Set(sessions.map((s) => s.world_id).filter(Boolean))];
+  const sessionIds = sessions.map((s) => s.id);
+
+  // Параллельно забираем миры и всех участников всех сессий за 2 запроса
+  const [{ data: worlds }, { data: allPlayers }] = await Promise.all([
+    supabase.from('worlds').select('id, name').in('id', worldIds.length ? worldIds : ['00000000-0000-0000-0000-000000000000']),
+    supabase.from('players').select('id, session_id, name, user_id, hp, max_hp, is_active').in('session_id', sessionIds),
+  ]);
+
   const worldMap = {};
   (worlds || []).forEach((w) => { worldMap[w.id] = w; });
 
-  const result = await Promise.all(
-    sessions.map(async (s) => {
-      const { data: players } = await supabase
-        .from('players')
-        .select('id, name, user_id, hp, max_hp, is_active')
-        .eq('session_id', s.id);
-      return { ...s, worlds: worldMap[s.world_id] || null, players: players || [] };
-    })
-  );
+  const playersBySession = {};
+  (allPlayers || []).forEach((p) => {
+    if (!playersBySession[p.session_id]) playersBySession[p.session_id] = [];
+    playersBySession[p.session_id].push(p);
+  });
 
-  return result;
+  return sessions.map((s) => ({
+    ...s,
+    worlds: worldMap[s.world_id] || null,
+    players: playersBySession[s.id] || [],
+  }));
 }
 
 export async function getSession(id) {
@@ -291,19 +298,18 @@ export async function getCurrentTurn(sessionId) {
 }
 
 export async function submitAction(sessionId, playerId, actionText) {
-  const { data, error } = await supabase.functions.invoke('process-turn', {
-    body: { session_id: sessionId, player_id: playerId, action_text: actionText },
-  });
-  if (error) {
-    // Supabase оборачивает ошибку — извлекаем сообщение
-    const msg = error.message || error.context?.message || 'Неизвестная ошибка';
-    // Проверяем на 402 (отсутствие API ключа)
-    if (error.context?.status === 402 || data?.code === 'MISSING_API_KEY') {
+  try {
+    return await invokeFunction('process-turn', {
+      session_id: sessionId,
+      player_id: playerId,
+      action_text: actionText,
+    });
+  } catch (err) {
+    if (err?.data?.code === 'MISSING_API_KEY' || err?.status === 402) {
       throw new Error('MISSING_API_KEY');
     }
-    throw new Error(msg);
+    throw new Error(err.message || 'Неизвестная ошибка');
   }
-  return data;
 }
 
 // ===================== CHARACTER CARDS =====================
@@ -863,9 +869,25 @@ export async function getNpc(id) {
 }
 
 export async function createNpc(npc) {
+  const payload = { ...npc };
+  if (payload.location_name !== undefined) {
+    const locationName = payload.location_name;
+    delete payload.location_name;
+    if (locationName) {
+      const { data: location } = await supabase
+        .from('locations')
+        .select('id')
+        .ilike('name', locationName)
+        .maybeSingle();
+      payload.location_id = location?.id || null;
+    } else {
+      payload.location_id = null;
+    }
+  }
+
   const { data, error } = await supabase
     .from('npcs')
-    .insert(npc)
+    .insert(payload)
     .select()
     .single();
   if (error) throw error;

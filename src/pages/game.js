@@ -36,6 +36,37 @@ export async function renderGame(container, sessionId, user) {
   let unsubPlayers = null;
   let unsubTurnQueue = null;
 
+  // ============================================
+  // ТУМАН ВОЙНЫ: фильтр видимости сообщений
+  // Персональные сообщения Мастера (с metadata.target_player_id)
+  // видны ТОЛЬКО указанному игроку. Глобальный нарратив (без target)
+  // и системные сообщения видят все.
+  // ============================================
+  function isMessageVisibleToCurrentPlayer(msg) {
+    if (!msg) return false;
+
+    // Системные сообщения — все
+    if (msg.sender_type === 'system') return true;
+
+    // Свои действия видит только автор
+    if (msg.sender_type === 'player') {
+      return msg.sender_id === user.id;
+    }
+
+    // Сообщения Мастера: проверяем target_player_id
+    if (msg.sender_type === 'master') {
+      const targetPlayerId = msg.metadata?.target_player_id;
+      // Глобальный лог (нет таргета, или явный флаг is_global)
+      if (!targetPlayerId || msg.metadata?.is_global === true) {
+        return true;
+      }
+      // Персональный нарратив — только адресату
+      return currentPlayer && targetPlayerId === currentPlayer.id;
+    }
+
+    return false;
+  }
+
   async function load() {
     try {
       session = await getSession(sessionId);
@@ -89,13 +120,9 @@ export async function renderGame(container, sessionId, user) {
     unsubMessages = subscribeToSessionMessages(sessionId, (payload) => {
       if (payload.eventType === 'INSERT') {
         const msg = payload.new;
+        // Добавляем в массив (для истории), но рисуем только то, что видно
         messages.push(msg);
-        // Полуслепой чат: Мастер, системные, и СОБСТВЕННЫЕ сообщения
-        if (
-          msg.sender_type === 'master' ||
-          msg.sender_type === 'system' ||
-          (msg.sender_type === 'player' && msg.sender_id === user.id)
-        ) {
+        if (isMessageVisibleToCurrentPlayer(msg)) {
           appendMessage(msg);
         }
       }
@@ -172,7 +199,10 @@ export async function renderGame(container, sessionId, user) {
   }
 
   function render() {
-    const hpPercent = currentPlayer ? (currentPlayer.hp / currentPlayer.max_hp) * 100 : 100;
+    const safeMaxHp = Math.max(1, currentPlayer?.max_hp || 1);
+    const hpPercent = currentPlayer
+      ? Math.max(0, Math.min(100, (currentPlayer.hp / safeMaxHp) * 100))
+      : 100;
     const hpClass = hpPercent > 50 ? '' : hpPercent > 25 ? 'low' : 'critical';
     
     // Format game time
@@ -208,11 +238,7 @@ export async function renderGame(container, sessionId, user) {
           <div class="chat-messages" id="chatMessages">
             ${messages.length
               ? messages
-                  .filter((m) =>
-                    m.sender_type === 'master' ||
-                    m.sender_type === 'system' ||
-                    (m.sender_type === 'player' && m.sender_id === user.id)
-                  )
+                  .filter(isMessageVisibleToCurrentPlayer)
                   .map(renderMessage)
                   .join('')
               : `
@@ -323,6 +349,10 @@ export async function renderGame(container, sessionId, user) {
   function renderProfile(player) {
     if (!player) return '';
     const stats = player.stats || {};
+    const safeMaxHp = Math.max(1, player.max_hp || 1);
+    const hpRatio = Math.max(0, Math.min(1, (player.hp || 0) / safeMaxHp));
+    const hpClass = hpRatio > 0.5 ? '' : hpRatio > 0.25 ? 'low' : 'critical';
+    const hpPct = hpRatio * 100;
     const statsHtml = STATS.map((stat) => {
       const baseValue = stats[stat] || 10;
       const injuryPenalty = (player.injuries || [])
@@ -384,8 +414,8 @@ export async function renderGame(container, sessionId, user) {
 
         <div class="profile-section" style="width: 100%;">
           <div class="hp-bar-container" style="height: 16px;">
-            <div class="hp-bar ${(player.hp / player.max_hp) > 0.5 ? '' : (player.hp / player.max_hp) > 0.25 ? 'low' : 'critical'}"
-                 style="width: ${(player.hp / player.max_hp) * 100}%"></div>
+            <div class="hp-bar ${hpClass}"
+                 style="width: ${hpPct}%"></div>
           </div>
           <p style="text-align: center; margin-top: 0.5rem; font-size: var(--fs-base); font-weight: 600;">
             ❤️ ${player.hp} / ${player.max_hp}
@@ -577,6 +607,11 @@ export async function renderGame(container, sessionId, user) {
     try {
       const result = await submitAction(sessionId, currentPlayer.id, sanitizeAIText(text));
 
+      if (result.status === 'clarification_needed' && result.clarification_msg) {
+        toast.warning(result.clarification_msg);
+        return;
+      }
+
       if (result.error) {
         toast.error(result.error);
         return;
@@ -622,8 +657,8 @@ export async function renderGame(container, sessionId, user) {
   }
 
   function appendMessage(msg) {
-    // Слепой чат: игнорируем чужие сообщения, свои — показываем
-    if (msg.sender_type === 'player' && msg.sender_id !== user.id) return;
+    // ТУМАН ВОЙНЫ: единая функция проверки видимости
+    if (!isMessageVisibleToCurrentPlayer(msg)) return;
 
     const chatMessages = document.getElementById('chatMessages');
     if (!chatMessages) return;
@@ -646,7 +681,8 @@ export async function renderGame(container, sessionId, user) {
     const hpBar = document.querySelector('.hp-bar');
     const hpText = document.querySelector('.game-header-hp');
     if (hpBar && currentPlayer) {
-      const pct = (currentPlayer.hp / currentPlayer.max_hp) * 100;
+      const safeMaxHp = Math.max(1, currentPlayer.max_hp || 1);
+      const pct = Math.max(0, Math.min(100, ((currentPlayer.hp || 0) / safeMaxHp) * 100));
       hpBar.style.width = pct + '%';
       hpBar.className = 'hp-bar ' + (pct > 50 ? '' : pct > 25 ? 'low' : 'critical');
     }

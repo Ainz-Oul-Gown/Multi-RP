@@ -1172,6 +1172,8 @@ export function renderLobby(container, user) {
       const role = document.getElementById('new-npc-role').value;
       const race = document.getElementById('new-npc-race').value.trim() || 'Человек';
       const hp = Number(document.getElementById('new-npc-hp').value) || 30;
+      const category = document.getElementById('new-npc-category')?.value || 'npc';
+      const locationName = document.getElementById('new-npc-location')?.value?.trim() || '';
       const appearance = document.getElementById('new-npc-appearance').value.trim();
       const background = document.getElementById('new-npc-background').value.trim();
       const stats = {
@@ -1199,6 +1201,8 @@ export function renderLobby(container, user) {
           name,
           role,
           race,
+          category,
+          location_name: locationName || null,
           hp,
           max_hp: hp,
           appearance,

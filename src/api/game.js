@@ -624,7 +624,9 @@ export async function importWorld(jsonData, ownerId) {
 
   // Import geography (states + locations)
   const locationIdMap = {}; // old ID -> new ID
+  const locationNameMap = {}; // name -> new ID (for JSON without IDs)
   const stateIdMap = {}; // old ID -> new ID
+  const stateNameMap = {}; // name -> new ID (for JSON without IDs)
   let stateCount = 0;
   let locationCount = 0;
   
@@ -642,6 +644,7 @@ export async function importWorld(jsonData, ownerId) {
       
       if (stateError) throw stateError;
       stateIdMap[state.id] = newState.id;
+      stateNameMap[state.name.toLowerCase().trim()] = newState.id;
       stateCount++;
       
       // Import locations for this state
@@ -665,6 +668,7 @@ export async function importWorld(jsonData, ownerId) {
         state.locations.forEach((oldLoc, idx) => {
           if (newLocations[idx]) {
             locationIdMap[oldLoc.id] = newLocations[idx].id;
+            locationNameMap[oldLoc.name.toLowerCase().trim()] = newLocations[idx].id;
           }
         });
       }
@@ -674,22 +678,11 @@ export async function importWorld(jsonData, ownerId) {
   // Import NPCs
   let npcCount = 0;
   if (worldData.bestiary?.npcs?.length) {
-    // Build name-based lookups for locations and states
+    // Build name-based lookups for locations and states from DB
     const locationNameToId = {};
     const stateNameToId = {};
     
-    // Fetch all locations and states for this world to build name lookup
-    const { data: allLocations } = await supabase
-      .from('locations')
-      .select('id, name, states!inner(name)')
-      .eq('world_id', world.id);
-    
-    if (allLocations) {
-      allLocations.forEach(l => {
-        locationNameToId[l.name.toLowerCase().trim()] = l.id;
-      });
-    }
-    
+    // Fetch all states for this world to build name lookup
     const { data: allStates } = await supabase
       .from('states')
       .select('id, name')
@@ -701,13 +694,32 @@ export async function importWorld(jsonData, ownerId) {
       });
     }
     
+    // Fetch all locations for this world (via states)
+    if (allStates?.length) {
+      const stateIds = allStates.map(s => s.id);
+      const { data: allLocations } = await supabase
+        .from('locations')
+        .select('id, name')
+        .in('state_id', stateIds);
+      
+      if (allLocations) {
+        allLocations.forEach(l => {
+          locationNameToId[l.name.toLowerCase().trim()] = l.id;
+        });
+      }
+    }
+    
     const npcs = worldData.bestiary.npcs.map(n => {
       // Resolve location_id: can be UUID (from export) or name (manual JSON)
       let locationId = null;
       if (n.location_id) {
         // Try UUID mapping first (from export)
         locationId = locationIdMap[n.location_id] || null;
-        // If not found, try name lookup
+        // Try name mapping from imported locations
+        if (!locationId && typeof n.location_id === 'string') {
+          locationId = locationNameMap[n.location_id.toLowerCase().trim()] || null;
+        }
+        // Fallback: search all locations in DB by name
         if (!locationId && typeof n.location_id === 'string') {
           locationId = locationNameToId[n.location_id.toLowerCase().trim()] || null;
         }
@@ -718,7 +730,11 @@ export async function importWorld(jsonData, ownerId) {
       if (n.state_id) {
         // Try UUID mapping first (from export)
         stateId = stateIdMap[n.state_id] || null;
-        // If not found, try name lookup
+        // Try name mapping from imported states
+        if (!stateId && typeof n.state_id === 'string') {
+          stateId = stateNameMap[n.state_id.toLowerCase().trim()] || null;
+        }
+        // Fallback: search all states in DB by name
         if (!stateId && typeof n.state_id === 'string') {
           stateId = stateNameToId[n.state_id.toLowerCase().trim()] || null;
         }

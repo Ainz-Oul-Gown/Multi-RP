@@ -32,6 +32,26 @@ export const DM_MODELS = [
   { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B (free)', provider: 'Meta' },
 ];
 
+// Model options for GPS (время и локация)
+export const GPS_MODELS = [
+  { id: 'xiaomi/mimo-v2.5', name: 'MiMo v2.5 (наша)', provider: 'Xiaomi' },
+  { id: 'z-ai/glm-5.2:free', name: 'GLM 5.2 (free)', provider: 'Z-AI' },
+  { id: 'thinkingmachines/inkling-small:free', name: 'Inkling Small (free)', provider: 'Thinking Machines' },
+  { id: 'minimax/minimax-m3:free', name: 'MiniMax M3 (free)', provider: 'MiniMax' },
+  { id: 'openrouter/free', name: 'Auto (free)', provider: 'OpenRouter' },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B (free)', provider: 'Meta' },
+];
+
+// Model options for Satellite (намерения игрока)
+export const SATELLITE_MODELS = [
+  { id: 'xiaomi/mimo-v2.5', name: 'MiMo v2.5 (наша)', provider: 'Xiaomi' },
+  { id: 'z-ai/glm-5.2:free', name: 'GLM 5.2 (free)', provider: 'Z-AI' },
+  { id: 'thinkingmachines/inkling-small:free', name: 'Inkling Small (free)', provider: 'Thinking Machines' },
+  { id: 'minimax/minimax-m3:free', name: 'MiniMax M3 (free)', provider: 'MiniMax' },
+  { id: 'openrouter/free', name: 'Auto (free)', provider: 'OpenRouter' },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B (free)', provider: 'Meta' },
+];
+
 // Game Constants
 export const STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 

@@ -15,46 +15,135 @@ const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
 const AI_MODEL = "xiaomi/mimo-v2.5";
 
 // ============================================
-// AI Parser System Prompt
+// Сателит: AI Parser System Prompt Builder
 // ============================================
-const PARSER_SYSTEM_PROMPT = `Ты — системный анализатор действий в текстовой RPG. Твоя цель: перевести художественный текст действия игрока в строгий JSON-объект.
+function buildSatellitePrompt(params: {
+  playerName: string;
+  playerRace: string;
+  playerClass: string;
+  currentLocation: string | null;
+  currentState: string | null;
+  currentYear: number;
+  currentMonth: number;
+  currentDay: number;
+  currentHour: number;
+  currentMinute: number;
+  recentMessages: string[];
+}): string {
+  const timeStr = `${params.currentDay}.${params.currentMonth}.${params.currentYear} ${params.currentHour}:${params.currentMinute.toString().padStart(2, '0')}`;
+  const locationStr = params.currentLocation 
+    ? `${params.currentLocation}` + (params.currentState ? `, ${params.currentState}` : '')
+    : 'неизвестно';
+
+  return `Ты — анализатор намерений в текстовой RPG (Сателит). Твоя цель: перевести действие игрока в строгий JSON.
+
+Текущее время в мире: ${timeStr}
+Текущая локация: ${locationStr}
 
 Доступные навыки (статы): STR, DEX, CON, INT, WIS, CHA.
 Сложность (difficulty): от 5 до 25. По умолчанию 12 (средняя).
 
-Ты НЕ решаешь, преуспел ли игрок. Ты лишь формируешь намерение и определяешь, какой бросок нужен.
+Ты НЕ решаешь, преуспел ли игрок. Ты лишь формируешь намерение.
 
 Возможные intent_type:
 - "skill_check" — проверка навыка (бросок кубика)
 - "combat" — атака или защита в бою
-- "use_item" — использование предмета из инвентаря
+- "use_item" — использование предмета
 - "explore" — исследование, поиск
-- "social" — разговор, убеждение, запугивание
-- "movement" — перемещение, побег, преследование
-- "free_form" — описание без механической проверки
+- "social" — разговор, убеждение
+- "movement" — перемещение, побег
+- "rest" — отдых, сон, лечение
+- "free_form" — описание без проверки
 
 ОБЯЗАТЕЛЬНО верни ТОЛЬКО валидный JSON без markdown-обёрток:
 
 {
   "intent_type": "skill_check",
-  "target": "описание цели (напр. 'гоблин-часовой')",
-  "required_check": {
-    "skill": "DEX",
-    "difficulty": 15
-  },
-  "items_used": ["название предмета из инвентаря"],
+  "target": "описание цели",
+  "required_check": { "skill": "DEX", "difficulty": 15 },
+  "items_used": ["название предмета"],
   "damage_dealt": 0,
   "damage_received": 0,
-  "description": "Краткое описание намерения игрока"
+  "description": "Краткое описание намерения",
+  "wants_location_change": false,
+  "location_change_description": ""
 }
 
-Если предмет не указан в items_used — оставь пустой массив.
-Если действие не требует проверки — required_check может быть null.
-Сложность оценивай по контексту:
-- Лёгкое действие: 5-8
-- Среднее: 10-15
-- Сложное: 16-20
-- Эпическое: 21-25`;
+ВАЖНО:
+- wants_location_change: true если игрок явно хочет переместиться (например "иду в таверну", "отправляюсь в лес")
+- location_change_description: описание куда именно (название локации или направление)
+- Если действие не требует проверки — required_check может быть null
+- Сложность: Лёгкое 5-8, Среднее 10-15, Сложное 16-20, Эпическое 21-25`;
+}
+
+// ============================================
+// GPS: время и локация
+// ============================================
+function buildGpsPrompt(params: {
+  playerName: string;
+  actionText: string;
+  intentType: string;
+  intentDescription: string;
+  currentYear: number;
+  currentMonth: number;
+  currentDay: number;
+  currentHour: number;
+  currentMinute: number;
+  currentLocation: string | null;
+  currentState: string | null;
+  wantsLocationChange: boolean;
+  locationChangeDescription: string;
+  availableLocations: { name: string; type: string; state_name: string }[];
+}): string {
+  const timeStr = `${params.currentDay}.${params.currentMonth}.${params.currentYear} ${params.currentHour}:${params.currentMinute.toString().padStart(2, '0')}`;
+  const locationStr = params.currentLocation 
+    ? `${params.currentLocation}` + (params.currentState ? `, ${params.currentState}` : '')
+    : 'неизвестно';
+
+  const locationsList = params.availableLocations?.length
+    ? params.availableLocations.map(l => `- ${l.name} (${l.type}, ${l.state_name})`).join('\n')
+    : 'локации не найдены';
+
+  return `Ты — система GPS в текстовой RPG. Определи сколько времени занимает действие и как изменится локация.
+
+Текущее время: ${timeStr}
+Текущая локация: ${locationStr}
+
+Действие игрока: "${params.actionText}"
+Тип намерения: ${params.intentType}
+Описание: ${params.intentDescription}
+
+${params.wantsLocationChange ? `Игрок хочет переместиться: ${params.locationChangeDescription}` : 'Игрок не меняет локацию'}
+
+${params.wantsLocationChange ? `Доступные локации:
+${locationsList}` : ''}
+
+Верни ТОЛЬКО валидный JSON без markdown:
+
+{
+  "time_minutes": 30,
+  "new_location_id": null,
+  "new_location_name": null,
+  "location_changed": false,
+  "travel_description": ""
+}
+
+ПРАВИЛА ВРЕМЕНИ:
+- Разговор/торговля: 5-15 минут
+- Поиск/исследование: 15-60 минут
+- Бой: 5-30 минут
+- Отдых короткий (передышка): 15-30 минут
+- Отдых долгий (сон): 6-10 часов (360-600 минут)
+- Перемещение по городу: 10-30 минут
+- Перемещение между локациями: 1-12 часов
+- Обучение/тренировка: 1-4 часа
+
+ПРАВИЛА ЛОКАЦИИ:
+- Если игрок не меняет локацию: location_changed = false, new_location_id = null
+- Если игрок меняет локацию: location_changed = true, new_location_id = ID из списка
+- Если локация не найдена в списке: new_location_name = описание, new_location_id = null
+- travel_description: краткое описание перемещения (1 предложение)`;
+}
 
 // ============================================
 // AI Narrator System Prompt Builder
@@ -143,7 +232,8 @@ const CORS = {
 // ============================================
 // AI API Call
 // ============================================
-async function callAI(systemPrompt: string, userMessage: string, apiKey: string, retries = 3): Promise<string> {
+async function callAI(systemPrompt: string, userMessage: string, apiKey: string, retries = 3, model?: string): Promise<string> {
+  const useModel = model || AI_MODEL;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -153,7 +243,7 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: AI_MODEL,
+          model: useModel,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage },
@@ -163,7 +253,7 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
         }),
       });
 
-      console.log('process-turn OpenRouter status:', response.status, 'attempt:', attempt + 1);
+      console.log(`process-turn OpenRouter status: ${response.status}, model: ${useModel}, attempt: ${attempt + 1}`);
 
       if (!response.ok) {
         const errText = await response.text();
@@ -253,16 +343,19 @@ serve(async (req) => {
     console.log(`[${requestId}]    • Inventory: ${player.inventory?.length || 0} items`);
 
     // ============================================
-    // STEP 0.1: Resolve user's OpenRouter API key
+    // STEP 0.1: Resolve user's OpenRouter API key and models
     // ============================================
     let openrouterApiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    let satelliteModel = AI_MODEL;
+    let gpsModel = AI_MODEL;
+    let dmModel = AI_MODEL;
     console.log(`\n[${requestId}] 🔑 API Key resolution:`);
     console.log(`[${requestId}]    • Fallback key available: ${openrouterApiKey ? 'YES' : 'NO'}`);
 
     if (player.user_id) {
       const { data: userSettings } = await supabase
         .from("user_settings")
-        .select("openrouter_key")
+        .select("openrouter_key, satellite_model, gps_model, dm_model")
         .eq("id", player.user_id)
         .maybeSingle();
 
@@ -271,6 +364,19 @@ serve(async (req) => {
         console.log(`[${requestId}]    • Using user's key from settings ✓`);
       } else {
         console.log(`[${requestId}]    • No user key found, using fallback`);
+      }
+
+      if (userSettings?.satellite_model) {
+        satelliteModel = userSettings.satellite_model;
+        console.log(`[${requestId}]    • Satellite model: ${satelliteModel}`);
+      }
+      if (userSettings?.gps_model) {
+        gpsModel = userSettings.gps_model;
+        console.log(`[${requestId}]    • GPS model: ${gpsModel}`);
+      }
+      if (userSettings?.dm_model) {
+        dmModel = userSettings.dm_model;
+        console.log(`[${requestId}]    • DM model: ${dmModel}`);
       }
     }
 
@@ -303,6 +409,39 @@ serve(async (req) => {
     console.log(`[${requestId}]    • World ID: ${session.world_id}`);
     console.log(`[${requestId}]    • Difficulty: ${session.difficulty}`);
     console.log(`[${requestId}]    • Plot stage: ${session.current_plot_stage || 'sandbox'}`);
+    console.log(`[${requestId}]    • Game time: ${session.game_day}.${session.game_month}.${session.game_year} ${session.game_hour}:${session.game_minute.toString().padStart(2, '0')}`);
+
+    // Load current location info
+    let currentLocationName: string | null = null;
+    let currentStateName: string | null = null;
+    if (session.current_location_id) {
+      const { data: locData } = await supabase
+        .from("locations")
+        .select("name, states(name)")
+        .eq("id", session.current_location_id)
+        .maybeSingle();
+      if (locData) {
+        currentLocationName = locData.name;
+        currentStateName = locData.states?.name || null;
+        console.log(`[${requestId}]    • Current location: ${currentLocationName}, ${currentStateName}`);
+      }
+    }
+
+    // Load available locations for GPS (if location changed or not set)
+    let availableLocations: { id: string; name: string; type: string; state_name: string }[] = [];
+    if (session.world_id) {
+      const { data: locsData } = await supabase
+        .from("locations")
+        .select("id, name, type, states(name)")
+        .eq("world_id", session.world_id)
+        .order("name");
+      availableLocations = (locsData || []).map((l: any) => ({
+        id: l.id,
+        name: l.name,
+        type: l.type,
+        state_name: l.states?.name || '',
+      }));
+    }
 
     // Load lore context
     let loreContext = "";
@@ -394,15 +533,29 @@ serve(async (req) => {
     console.log(`[${requestId}] 💬 Loaded ${recentMessages.length} recent messages`);
 
     // ============================================
-    // STEP 1: AI-Парсер → JSON
+    // STEP 1: Сателит — AI-Парсер → JSON
     // ============================================
-    console.log(`\n[${requestId}] 🤖 STEP 1: Calling AI Parser...`);
+    console.log(`\n[${requestId}] 🤖 STEP 1: Calling Сателит (intent parser)...`);
+    const satelliteSystemPrompt = buildSatellitePrompt({
+      playerName: cleanTextForAI(player.name),
+      playerRace: cleanTextForAI(player.race),
+      playerClass: cleanTextForAI(player.class),
+      currentLocation: currentLocationName,
+      currentState: currentStateName,
+      currentYear: session.game_year || 1,
+      currentMonth: session.game_month || 1,
+      currentDay: session.game_day || 1,
+      currentHour: session.game_hour || 8,
+      currentMinute: session.game_minute || 0,
+      recentMessages,
+    });
+
     const parserUserMessage = `Игрок "${cleanTextForAI(player.name)}" (${cleanTextForAI(player.race)}, ${cleanTextForAI(player.class)}) пишет:
 "${safeActionText}"
 
 Инвентарь игрока: ${player.inventory?.map((i: any) => i.item_name).join(", ") || "пусто"}`;
 
-    let rawParserResponse = await callAI(PARSER_SYSTEM_PROMPT, parserUserMessage, openrouterApiKey, 3);
+    let rawParserResponse = await callAI(satelliteSystemPrompt, parserUserMessage, openrouterApiKey, 3, satelliteModel);
     console.log(`[${requestId}] 🤖 Parser response: ${rawParserResponse.slice(0, 150)}...`);
 
     let parsedAction = parseAIJson(rawParserResponse);
@@ -412,10 +565,11 @@ serve(async (req) => {
       console.warn(`[${requestId}] ⚠️ Failed to parse, retrying...`);
       for (let retry = 0; retry < 2; retry++) {
         rawParserResponse = await callAI(
-          PARSER_SYSTEM_PROMPT + "\n\nВАЖНО: Ответ должен строго начинаться с { и заканчиваться }. Только JSON, без текста.",
+          satelliteSystemPrompt + "\n\nВАЖНО: Ответ должен строго начинаться с { и заканчиваться }. Только JSON, без текста.",
           parserUserMessage,
           openrouterApiKey,
-          1
+          1,
+          satelliteModel
         );
         parsedAction = parseAIJson(rawParserResponse);
         if (parsedAction) break;
@@ -437,6 +591,105 @@ serve(async (req) => {
     console.log(`[${requestId}]    • intent_type: ${parsedAction.intent_type}`);
     console.log(`[${requestId}]    • target: ${parsedAction.target}`);
     console.log(`[${requestId}]    • items_used: ${parsedAction.items_used?.join(', ') || 'none'}`);
+    console.log(`[${requestId}]    • wants_location_change: ${parsedAction.wants_location_change}`);
+
+    // ============================================
+    // STEP 1.6: GPS — Определение времени и локации
+    // ============================================
+    console.log(`\n[${requestId}] 📍 STEP 1.6: Calling GPS (time & location)...`);
+    
+    let gpsResult = {
+      time_minutes: 0,
+      new_location_id: null as string | null,
+      new_location_name: null as string | null,
+      location_changed: false,
+      travel_description: '',
+    };
+
+    // Only call GPS if we have a valid action
+    if (parsedAction && !parsedAction.is_phantom_item) {
+      const gpsSystemPrompt = buildGpsPrompt({
+        playerName: cleanTextForAI(player.name),
+        actionText: safeActionText,
+        intentType: parsedAction.intent_type,
+        intentDescription: parsedAction.description || '',
+        currentYear: session.game_year || 1,
+        currentMonth: session.game_month || 1,
+        currentDay: session.game_day || 1,
+        currentHour: session.game_hour || 8,
+        currentMinute: session.game_minute || 0,
+        currentLocation: currentLocationName,
+        currentState: currentStateName,
+        wantsLocationChange: parsedAction.wants_location_change === true,
+        locationChangeDescription: parsedAction.location_change_description || '',
+        availableLocations: parsedAction.wants_location_change ? availableLocations : [],
+      });
+
+      try {
+        const gpsResponse = await callAI(gpsSystemPrompt, 'Определи время и локацию.', openrouterApiKey, 2, gpsModel);
+        const gpsParsed = parseAIJson(gpsResponse);
+        if (gpsParsed) {
+          gpsResult = {
+            time_minutes: Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0)),
+            new_location_id: gpsParsed.new_location_id || null,
+            new_location_name: gpsParsed.new_location_name || null,
+            location_changed: gpsParsed.location_changed === true,
+            travel_description: gpsParsed.travel_description || '',
+          };
+          console.log(`[${requestId}] 📍 GPS result: +${gpsResult.time_minutes}min, location_changed: ${gpsResult.location_changed}`);
+        }
+      } catch (gpsErr) {
+        console.warn(`[${requestId}] ⚠️ GPS call failed, using defaults:`, gpsErr);
+      }
+    }
+
+    // Update game time
+    if (gpsResult.time_minutes > 0) {
+      let totalMinutes = (session.game_hour || 0) * 60 + (session.game_minute || 0) + gpsResult.time_minutes;
+      let newDay = session.game_day || 1;
+      let newMonth = session.game_month || 1;
+      let newYear = session.game_year || 1;
+
+      // Advance time
+      const minutesInDay = 24 * 60;
+      while (totalMinutes >= minutesInDay) {
+        totalMinutes -= minutesInDay;
+        newDay++;
+        if (newDay > 30) {
+          newDay = 1;
+          newMonth++;
+          if (newMonth > 12) {
+            newMonth = 1;
+            newYear++;
+          }
+        }
+      }
+      const newHour = Math.floor(totalMinutes / 60);
+      const newMinute = totalMinutes % 60;
+
+      // Update session time
+      await supabase.from('sessions').update({
+        game_year: newYear,
+        game_month: newMonth,
+        game_day: newDay,
+        game_hour: newHour,
+        game_minute: newMinute,
+      }).eq('id', session_id);
+
+      console.log(`[${requestId}] 🕐 Time updated: ${newDay}.${newMonth}.${newYear} ${newHour}:${newMinute.toString().padStart(2, '0')}`);
+    }
+
+    // Update location if changed
+    if (gpsResult.location_changed && gpsResult.new_location_id) {
+      await supabase.from('sessions').update({
+        current_location_id: gpsResult.new_location_id,
+        current_state_id: gpsResult.new_location_id ? (
+          availableLocations.find(l => l.id === gpsResult.new_location_id)?.state_name ? 
+          (await supabase.from('locations').select('state_id').eq('id', gpsResult.new_location_id).single())?.data?.state_id : null
+        ) : null,
+      }).eq('id', session_id);
+      console.log(`[${requestId}] 📍 Location updated to: ${gpsResult.new_location_name || gpsResult.new_location_id}`);
+    }
 
     // ============================================
     // STEP 1.5: Валидация предметов (Фантомные предметы)
@@ -647,7 +900,7 @@ serve(async (req) => {
       recentMessages,
     });
 
-    const narrative = await callAI(narratorSystemPrompt, "Сгенерируй нарратив для этого действия.", openrouterApiKey, 2);
+    const narrative = await callAI(narratorSystemPrompt, "Сгенерируй нарратив для этого действия.", openrouterApiKey, 2, dmModel);
     console.log(`[${requestId}] 📖 Narrative generated (${narrative.length} chars)`);
     console.log(`[${requestId}]    • Preview: "${narrative.slice(0, 100)}..."`);
 
@@ -771,6 +1024,19 @@ serve(async (req) => {
       items_used: parsedAction.items_used || [],
       parsed_action: parsedAction,
       rest_result: restResult,
+      // GPS results
+      time_minutes: gpsResult.time_minutes,
+      location_changed: gpsResult.location_changed,
+      travel_description: gpsResult.travel_description,
+      new_location: gpsResult.new_location_name || (gpsResult.new_location_id ? availableLocations.find(l => l.id === gpsResult.new_location_id)?.name : null),
+      // Current game time after update
+      game_time: {
+        year: session.game_year,
+        month: session.game_month,
+        day: session.game_day,
+        hour: session.game_hour,
+        minute: session.game_minute,
+      },
     }), {
       status: 200,
       headers: { ...CORS, "Content-Type": "application/json" },

@@ -133,10 +133,17 @@ export async function getSessions() {
 export async function getSession(id) {
   const { data, error } = await supabase
     .from('sessions')
-    .select('*, worlds(name, settings)')
+    .select('*, worlds(settings), current_locations:locations(name), current_states:states(name)')
     .eq('id', id)
     .single();
   if (error) throw error;
+  // Flatten location and state names
+  if (data) {
+    data.current_location_name = data.current_locations?.name || null;
+    data.current_state_name = data.current_states?.name || null;
+    data.current_locations = undefined;
+    data.current_states = undefined;
+  }
   return data;
 }
 
@@ -365,6 +372,8 @@ export async function upsertUserSettings(userId, openrouterKey, models = {}) {
     p_openrouter_key: openrouterKey || null,
     p_card_model: models.card_model || null,
     p_dm_model: models.dm_model || null,
+    p_gps_model: models.gps_model || null,
+    p_satellite_model: models.satellite_model || null,
   });
   if (error) throw error;
   return data;

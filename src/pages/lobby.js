@@ -10,7 +10,7 @@ import {
 import { generateAllNPCs, generateWorldGeography, saveWorldGeography, generateIntelligentNPCs, generateCreatures, canResumeGeneration, clearWorldGenerationProgress } from '../api/openrouter.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
-import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, CARD_GENERATION_MODELS, DM_MODELS } from '../config.js';
+import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, CARD_GENERATION_MODELS, DM_MODELS, GPS_MODELS, SATELLITE_MODELS } from '../config.js';
 import { savePageState, loadPageState } from '../utils/generationStore.js';
 
 function sanitizeAIText(raw) {
@@ -404,13 +404,29 @@ export function renderLobby(container, user) {
              <span class="form-hint">Модель для генерации NPC, географии и бестиария</span>
            </div>
 
-           <div class="form-group" style="margin-bottom: 1.5rem;">
-             <label class="form-label">Модель для ДМа (рассказчик)</label>
-             <select class="input" id="dmModelInput">
-               ${DM_MODELS.map(m => `<option value="${m.id}" ${userSettings?.dm_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
-             </select>
-             <span class="form-hint">Модель для  narration и ответов в игре</span>
-           </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Модель для ДМа (рассказчик)</label>
+              <select class="input" id="dmModelInput">
+                ${DM_MODELS.map(m => `<option value="${m.id}" ${userSettings?.dm_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+              </select>
+              <span class="form-hint">Модель для narration и ответов в игре</span>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Модель для GPS (время и локация)</label>
+              <select class="input" id="gpsModelInput">
+                ${GPS_MODELS.map(m => `<option value="${m.id}" ${userSettings?.gps_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+              </select>
+              <span class="form-hint">Модель для определения времени действия и локации</span>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+              <label class="form-label">Модель для Сателит (намерения)</label>
+              <select class="input" id="satelliteModelInput">
+                ${SATELLITE_MODELS.map(m => `<option value="${m.id}" ${userSettings?.satellite_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+              </select>
+              <span class="form-hint">Модель для анализа намерений игрока</span>
+            </div>
 
            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
              <button type="button" class="btn btn-secondary" id="closeAccountModal">Отмена</button>
@@ -1471,21 +1487,39 @@ export function renderLobby(container, user) {
     });
 
     // Save account settings
-    document.getElementById('saveAccountSettingsBtn')?.addEventListener('click', async () => {
-      const key = document.getElementById('openrouterKeyInput').value.trim();
-      const cardModel = document.getElementById('cardModelInput').value;
-      const dmModel = document.getElementById('dmModelInput').value;
+    document.getElementById('saveAccountSettingsBtn')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const keyInput = document.getElementById('openrouterKeyInput');
+      const cardModelSelect = document.getElementById('cardModelInput');
+      const dmModelSelect = document.getElementById('dmModelInput');
+      const gpsModelSelect = document.getElementById('gpsModelInput');
+      const satelliteModelSelect = document.getElementById('satelliteModelInput');
       const saveBtn = document.getElementById('saveAccountSettingsBtn');
-
+      
+      const key = keyInput?.value?.trim() || '';
+      const cardModel = cardModelSelect?.value || 'xiaomi/mimo-v2.5';
+      const dmModel = dmModelSelect?.value || 'xiaomi/mimo-v2.5';
+      const gpsModel = gpsModelSelect?.value || 'xiaomi/mimo-v2.5';
+      const satelliteModel = satelliteModelSelect?.value || 'xiaomi/mimo-v2.5';
+      
+      console.log('Saving settings:', { cardModel, dmModel, gpsModel, satelliteModel });
+      
       saveBtn.disabled = true;
       saveBtn.textContent = 'Сохранение...';
 
       try {
-        await upsertUserSettings(user.id, key, { card_model: cardModel, dm_model: dmModel });
+        await upsertUserSettings(user.id, key, { card_model: cardModel, dm_model: dmModel, gps_model: gpsModel, satellite_model: satelliteModel });
         toast.success('Настройки сохранены!');
+        userSettings.card_model = cardModel;
+        userSettings.dm_model = dmModel;
+        userSettings.gps_model = gpsModel;
+        userSettings.satellite_model = satelliteModel;
         document.getElementById('accountSettingsModal').classList.remove('open');
         loadData();
       } catch (err) {
+        console.error('Save settings error:', err);
         toast.error('Ошибка сохранения: ' + err.message);
       } finally {
         saveBtn.disabled = false;

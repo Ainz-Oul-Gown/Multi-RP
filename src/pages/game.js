@@ -174,6 +174,13 @@ export async function renderGame(container, sessionId, user) {
   function render() {
     const hpPercent = currentPlayer ? (currentPlayer.hp / currentPlayer.max_hp) * 100 : 100;
     const hpClass = hpPercent > 50 ? '' : hpPercent > 25 ? 'low' : 'critical';
+    
+    // Format game time
+    const gameTime = session.game_time || {};
+    const timeStr = gameTime.day && gameTime.month && gameTime.year 
+      ? `${gameTime.day}.${gameTime.month}.${gameTime.year} ${gameTime.hour || 0}:${(gameTime.minute || 0).toString().padStart(2, '0')}`
+      : '';
+    const locationStr = session.current_location_name || '';
 
     container.innerHTML = `
       <div class="game-page">
@@ -186,6 +193,8 @@ export async function renderGame(container, sessionId, user) {
               <div class="hp-bar ${hpClass}" style="width: ${hpPercent}%"></div>
             </div>
             <span class="game-header-hp">${currentPlayer?.hp || 0}/${currentPlayer?.max_hp || 0}</span>
+            ${timeStr ? `<span class="game-header-time">🕐 ${timeStr}</span>` : ''}
+            ${locationStr ? `<span class="game-header-location">📍 ${locationStr}</span>` : ''}
           </div>
           <div class="game-header-actions">
             <button class="btn btn-ghost btn-icon" id="profileBtn" title="Профиль">👤</button>

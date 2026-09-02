@@ -196,6 +196,46 @@ describe("NPC Bestiary API", () => {
     expect(selectChain.eq).toHaveBeenCalledWith("world_id", "world-123");
     expect(result.length).toBe(2);
   });
+
+  it("should preserve new NPC fields on update (class, tier, is_unique, level_min, level_max)", async () => {
+    const updateChain = createSupabaseChain({
+      data: {
+        id: "npc-1",
+        name: "Дракон",
+        class: "Воин",
+        tier: 4,
+        is_unique: true,
+        level_min: 50,
+        level_max: 100,
+      },
+      error: null,
+    });
+    mockSupabaseFrom.mockReturnValue(updateChain);
+
+    const { updateNpc } = await import("../src/api/game.js");
+
+    const result = await updateNpc("npc-1", {
+      name: "Дракон",
+      class: "Воин",
+      tier: 4,
+      is_unique: true,
+      level_min: 50,
+      level_max: 100,
+    });
+
+    expect(mockSupabaseFrom).toHaveBeenCalledWith("npcs");
+    expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Дракон",
+      class: "Воин",
+      tier: 4,
+      is_unique: true,
+      level_min: 50,
+      level_max: 100,
+    }));
+    expect(result.class).toBe("Воин");
+    expect(result.tier).toBe(4);
+    expect(result.is_unique).toBe(true);
+  });
 });
 
 describe("simulate-npc-background", () => {
@@ -348,5 +388,71 @@ describe("simulate-npc-background", () => {
     expect(body.success).toBe(true);
     expect(body.actions.length).toBe(1);
     expect(body.actions[0].obtained_item_name).toBeNull();
+  });
+});
+
+describe("NPC Export/Import", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should include new fields in export (class, tier, is_unique, level_min, level_max)", async () => {
+    // Мокаем получение мира
+    const worldChain = createSupabaseChain({
+      data: { id: "world-123", name: "Тестовый мир", settings: {}, description: "" },
+    });
+    // Мокаем получение lore_files
+    const loreChain = createSupabaseChain({ data: [] });
+    // Мокаем получение folders
+    const foldersChain = createSupabaseChain({ data: [] });
+    // Мокаем получение states
+    const statesChain = createSupabaseChain({ data: [] });
+    // Мокаем получение npcs
+    const npcsChain = createSupabaseChain({
+      data: [{
+        id: "npc-1",
+        name: "Дракон",
+        race: "Дракон",
+        class: "Воин",
+        category: "boss",
+        role: "main",
+        appearance: "Огненный дракон",
+        background: "Древний",
+        stats: { STR: 20, DEX: 14, CON: 18, INT: 16, WIS: 14, CHA: 12 },
+        level: 80,
+        tier: 5,
+        hit_dice: 12,
+        level_min: 50,
+        level_max: 100,
+        status_tags: ["уникальный"],
+        habits: ["летать"],
+        catchphrases: ["Я огонь"],
+        location_id: null,
+        state_id: "state-1",
+        special_attacks: [{ name: "Огненное дыхание", damage_type: "fire", damage_dice: "4d6" }],
+        base_attacks: [{ name: "Удар хвостом", damage_type: "bludgeoning", damage_dice: "2d8" }],
+        is_pack_instance: false,
+        pack_size: 1,
+        is_unique: true,
+      }],
+      error: null,
+    });
+
+    mockSupabaseFrom
+      .mockReturnValueOnce(worldChain) // worlds
+      .mockReturnValueOnce(loreChain) // lore_files
+      .mockReturnValueOnce(foldersChain) // lore_files folders
+      .mockReturnValueOnce(statesChain) // states
+      .mockReturnValueOnce(npcsChain); // npcs
+
+    const { exportWorld } = await import("../src/api/game.js");
+
+    const result = await exportWorld("world-123");
+
+    expect(result.bestiary.npcs[0].class).toBe("Воин");
+    expect(result.bestiary.npcs[0].tier).toBe(5);
+    expect(result.bestiary.npcs[0].is_unique).toBe(true);
+    expect(result.bestiary.npcs[0].level_min).toBe(50);
+    expect(result.bestiary.npcs[0].level_max).toBe(100);
   });
 });

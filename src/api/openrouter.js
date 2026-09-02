@@ -626,12 +626,17 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
       // Calculate hit dice based on class (if provided)
       const hitDie = npc.hit_dice || getHitDice(npc.class) || 8;
       
+      // Validate level range
+      const levelMin = Math.max(1, Math.min(100, Number(npc.level_min) || level));
+      const levelMax = Math.max(levelMin, Math.min(100, Number(npc.level_max) || level));
+      
       return {
         world_id: worldId,
         role,
         name: (npc.name || 'Безымянный').slice(0, 100),
         race: (npc.race || 'Человек').slice(0, 50),
         category,
+        class: (npc.class || '').slice(0, 50),
         appearance: (npc.appearance || '').slice(0, 500),
         background: (npc.background || '').slice(0, 1000),
         status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10).map(String) : [],
@@ -648,12 +653,17 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
         initiative: combatStats.initiative,
         saving_throws: combatStats.saving_throws,
         hit_dice: hitDie,
+        // Tier & level range
+        tier,
+        level_min: levelMin,
+        level_max: levelMax,
         // Attacks
         special_attacks: specialAttacks,
         base_attacks: baseAttacks,
         // Pack/unique flags
         is_pack_instance: npc.is_pack === true,
         pack_size: npc.is_pack ? (npc.pack_size || 2 + Math.floor(Math.random() * 5)) : 1,
+        is_unique: npc.is_unique === true,
       };
     });
 
@@ -830,12 +840,17 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
       // Calculate hit dice based on class
       const hitDie = npc.hit_dice || getHitDice(npc.class) || 8;
       
+      // Validate level range
+      const levelMin = Math.max(1, Math.min(100, Number(npc.level_min) || level));
+      const levelMax = Math.max(levelMin, Math.min(100, Number(npc.level_max) || level));
+      
       return {
         world_id: worldId,
         role: npc.role === 'main' ? 'main' : 'secondary',
         name: (npc.name || 'Безымянный').slice(0, 100),
         race: (npc.race || 'Человек').slice(0, 50),
         category: 'npc',
+        class: (npc.class || '').slice(0, 50),
         appearance: (npc.appearance || '').slice(0, 500),
         background: (npc.background || '').slice(0, 1000),
         status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10).map(String) : [],
@@ -852,12 +867,17 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
         initiative: combatStats.initiative,
         saving_throws: combatStats.saving_throws,
         hit_dice: hitDie,
+        // Tier & level range
+        tier,
+        level_min: levelMin,
+        level_max: levelMax,
         // Attacks
         special_attacks: specialAttacks,
         base_attacks: baseAttacks,
         // Pack/unique flags
         is_pack_instance: false,
         pack_size: 1,
+        is_unique: npc.is_unique === true,
       };
     });
     
@@ -1106,12 +1126,17 @@ ${geography ? `Доступные государства:\n${geography.states.ma
       // Creatures use d8 by default (or d10 for bosses)
       const hitDie = npc.hit_dice || (category === 'boss' ? 10 : 8);
       
+      // Validate level range
+      const levelMin = Math.max(1, Math.min(100, Number(npc.level_min) || level));
+      const levelMax = Math.max(levelMin, Math.min(100, Number(npc.level_max) || level));
+      
       return {
         world_id: worldId,
         role: 'tertiary',
         name: (npc.name || 'Безымянный').slice(0, 100),
         race: (npc.race || 'Человек').slice(0, 50),
         category,
+        class: (npc.class || '').slice(0, 50),
         appearance: (npc.appearance || '').slice(0, 500),
         background: (npc.background || '').slice(0, 1000),
         status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10).map(String) : [],
@@ -1128,12 +1153,17 @@ ${geography ? `Доступные государства:\n${geography.states.ma
         initiative: combatStats.initiative,
         saving_throws: combatStats.saving_throws,
         hit_dice: hitDie,
+        // Tier & level range
+        tier,
+        level_min: levelMin,
+        level_max: levelMax,
         // Attacks
         special_attacks: specialAttacks,
         base_attacks: baseAttacks,
         // Pack/unique flags
         is_pack_instance: npc.is_pack === true,
         pack_size: npc.is_pack ? (npc.pack_size || 2 + Math.floor(Math.random() * 5)) : 1,
+        is_unique: npc.is_unique === true,
       };
     });
     

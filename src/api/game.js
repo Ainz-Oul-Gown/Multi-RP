@@ -427,6 +427,7 @@ export async function exportWorld(worldId) {
         id: n.id,
         name: n.name,
         race: n.race,
+        class: n.class || '',
         category: n.category,
         role: n.role,
         appearance: n.appearance,
@@ -760,6 +761,7 @@ export async function importWorld(jsonData, ownerId) {
         name: n.name,
         race: nRace,
         category: n.category || 'npc',
+        class: n.class || '',
         role: ['main', 'secondary', 'tertiary'].includes(n.role) ? n.role : 'secondary',
         appearance: n.appearance || '',
         background: n.background || '',
@@ -785,6 +787,7 @@ export async function importWorld(jsonData, ownerId) {
         base_attacks: Array.isArray(n.base_attacks) ? n.base_attacks : [],
         is_pack_instance: n.is_pack === true,
         pack_size: n.is_pack ? (n.pack_size || 2) : 1,
+        is_unique: n.is_unique === true,
       };
     });
     

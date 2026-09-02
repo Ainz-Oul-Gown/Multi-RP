@@ -79,12 +79,17 @@ function cleanNPC(npc: any, world_id: string) {
     ? npc.base_attacks.slice(0, baseAttacksCount).map(cleanAttack)
     : [];
   
+  // Validate level range
+  const levelMin = Math.max(1, Math.min(100, Number(npc.level_min) || level));
+  const levelMax = Math.max(levelMin, Math.min(100, Number(npc.level_max) || level));
+  
   return {
     world_id,
     role,
     name: cleanTextForAI(npc.name) || "Безымянный",
     race: cleanTextForAI(npc.race) || "Человек",
     category: ["npc", "beast", "monster", "boss"].includes(npc.category) ? npc.category : "npc",
+    class: cleanTextForAI(npc.class) || "",
     appearance: cleanTextForAI(npc.appearance) || "",
     background: cleanTextForAI(npc.background) || "",
     status_tags: Array.isArray(npc.status_tags) ? npc.status_tags.slice(0, 10) : [],
@@ -102,12 +107,17 @@ function cleanNPC(npc: any, world_id: string) {
     saving_throws: npc.saving_throws && typeof npc.saving_throws === 'object' ? npc.saving_throws : {},
     // Hit dice (D&D system)
     hit_dice: [6, 8, 10, 12].includes(Number(npc.hit_dice)) ? Number(npc.hit_dice) : 8,
+    // Tier & level range
+    tier,
+    level_min: levelMin,
+    level_max: levelMax,
     // Attacks
     special_attacks: specialAttacks,
     base_attacks: baseAttacks,
     // Pack/unique
     is_pack_instance: npc.is_pack_instance === true,
     pack_size: Math.max(1, Math.min(50, Number(npc.pack_size) || 1)),
+    is_unique: npc.is_unique === true,
     // Template reference
     template_id: npc.template_id || null,
   };

@@ -207,6 +207,8 @@ describe("AttackHandler", () => {
   });
 
   it("атака с промахом — нет мутации HP", () => {
+    // Мокаем Math.random так, чтобы d20 = 11 (Math.floor(0.5 * 20) + 1 = 11), но DC=100 → промах гарантирован
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
     const ctx = makeContext({
       router_output: makeRouterOutput([
         {
@@ -216,13 +218,14 @@ describe("AttackHandler", () => {
           used_item_id: "item-sword",
           consumed_materials: null,
           stat_to_check: "strength",
-          ai_custom_dc: 100, // невозможно попасть
+          ai_custom_dc: 100, // невозможно попасть (11+мод < 100)
           improper_tool_usage: null,
         },
       ]),
     });
 
     const result = executeEngine(ctx);
+    randomSpy.mockRestore();
     expect(result.action_results[0].dice_roll?.success).toBe(false);
     expect(result.action_results[0].damage_dealt).toBeUndefined();
     expect(result.mutations.find((m) => m.type === "UPDATE_HP")).toBeUndefined();

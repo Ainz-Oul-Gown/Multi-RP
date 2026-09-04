@@ -1248,7 +1248,39 @@ export async function renderGame(container, sessionId, user) {
     if (hpText && currentPlayer) {
       hpText.textContent = `${currentPlayer.hp}/${currentPlayer.max_hp}`;
     }
+
+    // Update location and time in header without full re-render
+    const locEl = document.querySelector('.game-header-location');
+    const locStr = session?.current_location_name || '';
+    if (locStr) {
+      if (locEl) {
+        locEl.textContent = `📍 ${locStr}`;
+      } else {
+        // Span doesn't exist yet — inject it after time span or after hp span
+        const center = document.querySelector('.game-header-center');
+        if (center) {
+          const span = document.createElement('span');
+          span.className = 'game-header-location';
+          span.textContent = `📍 ${locStr}`;
+          center.appendChild(span);
+        }
+      }
+    } else if (locEl) {
+      locEl.remove();
+    }
+
+    const timeEl = document.querySelector('.game-header-time');
+    const day = session?.game_day ?? session?.game_time?.day;
+    const month = session?.game_month ?? session?.game_time?.month;
+    const year = session?.game_year ?? session?.game_time?.year;
+    const hour = session?.game_hour ?? session?.game_time?.hour ?? 10;
+    const minute = session?.game_minute ?? session?.game_time?.minute ?? 0;
+    const timeStr = formatGameCalendarDate(day, month, year, hour, minute);
+    if (timeStr && timeEl) {
+      timeEl.textContent = `🕐 ${timeStr}`;
+    }
   }
+
 
   function scrollToBottom() {
     const chat = document.getElementById('gameChat');

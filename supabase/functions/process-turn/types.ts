@@ -96,6 +96,7 @@ export type ActionType =
   | "craft_recipe"
   | "craft_custom"
   | "transfer"
+  | "drop"
   | "talk"
   | "search"
   | "harvest_ambient";

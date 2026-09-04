@@ -10,6 +10,7 @@ import { TransferHandler } from "./transfer_handler.ts";
 import { TalkHandler } from "./talk_handler.ts";
 import { LootSearchHandler, SearchHandler } from "./loot_search_handler.ts";
 import { MoveHandler } from "./move_handler.ts";
+import { DropHandler } from "./drop_handler.ts";
 
 /**
  * Маппинг action_type → хендлер
@@ -27,6 +28,7 @@ register(new CraftHandler());
 register(new CraftCustomHandler());
 register(new BuildHandler());
 register(new TransferHandler());
+register(new DropHandler());
 register(new TalkHandler());
 register(new LootSearchHandler());
 register(new SearchHandler());

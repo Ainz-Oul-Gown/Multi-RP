@@ -82,6 +82,11 @@ export async function renderGame(container, sessionId, user) {
       return currentPlayer && targetPlayerId === currentPlayer.id;
     }
 
+    // Сообщения NPC (диалоги, спутники, реплики в сцене) — видны всем игрокам
+    if (msg.sender_type === 'npc') {
+      return true;
+    }
+
     return false;
   }
 

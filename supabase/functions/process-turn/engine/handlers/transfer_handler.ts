@@ -10,20 +10,73 @@ export class TransferHandler extends BaseActionHandler {
 
   handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     const player = context.acting_player;
-    const itemId = action.used_item_id;
-    const targetId = action.target_entity_id;
-    const quantity = 1; // По умолчанию 1, можно расширить через атрибуты
+    let itemId = action.used_item_id;
+    let targetId = action.target_entity_id;
+    const rawTargetName = (action.target_item_name || "").trim().toLowerCase();
+    const qtyFromAction = (action as any).quantity ?? action.consumed_materials?.[0]?.quantity;
+    const quantity = typeof qtyFromAction === "number" && qtyFromAction > 0 ? qtyFromAction : 1;
 
-    if (!itemId) {
+    // Резолв предмета по ID или названию
+    let item: any = null;
+    if (itemId) {
+      item = this.findItemById(player, itemId);
+    }
+    if (!item && rawTargetName) {
+      item = (player.inventory || []).find((i: any) => {
+        const name = (i.item_name || i.name || "").toLowerCase();
+        return name.includes(rawTargetName) || rawTargetName.includes(name);
+      });
+    }
+    if (!item && rawTargetName) {
+      const rootMatch = rawTargetName.replace(/(?:а|ов|ев|и|ы|у|е|ом|ам|ами|ях)$/i, "");
+      if (rootMatch.length >= 3) {
+        item = (player.inventory || []).find((i: any) => {
+          const name = (i.item_name || i.name || "").toLowerCase();
+          return name.includes(rootMatch);
+        });
+      }
+    }
+
+    if (!item) {
       return {
         result: {
           action_type: this.action_type,
           success: false,
-          details: "Не указан предмет для передачи",
+          details: `Предмет "${action.target_item_name || itemId || "не указан"}" не найден в вашем инвентаре`,
         },
         mutations: [],
-        system_facts: [`${player.name} попытался передать предмет, не указав ID.`],
+        system_facts: [`${player.name} попытался передать предмет, которого у него нет.`],
       };
+    }
+    itemId = item.id;
+
+    // Резолв получателя по ID или имени
+    if (!targetId) {
+      const targetHint = ((action as any).target_entity_name || (action as any).target_name || "").toLowerCase();
+      if (targetHint) {
+        for (const [id, npc] of context.targets.npcs.entries()) {
+          if (npc.name?.toLowerCase().includes(targetHint) || targetHint.includes(npc.name?.toLowerCase() || "")) {
+            targetId = id;
+            break;
+          }
+        }
+        if (!targetId) {
+          for (const [id, p] of context.targets.players.entries()) {
+            if (p.name?.toLowerCase().includes(targetHint) || targetHint.includes(p.name?.toLowerCase() || "")) {
+              targetId = id;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Если всё ещё нет targetId, но рядом есть ровно один мирный NPC — передаём ему
+    if (!targetId && context.targets.npcs.size === 1) {
+      const onlyNpc = Array.from(context.targets.npcs.values())[0];
+      if (!onlyNpc.is_hostile) {
+        targetId = onlyNpc.id;
+      }
     }
 
     if (!targetId) {
@@ -31,40 +84,14 @@ export class TransferHandler extends BaseActionHandler {
         result: {
           action_type: this.action_type,
           success: false,
-          details: "Не указан получатель",
+          details: "Не указан получатель (кому передать)",
         },
         mutations: [],
-        system_facts: [`${player.name} попытался передать предмет, не указав получателя.`],
+        system_facts: [`${player.name} попытался передать ${item.item_name}, не указав получателя.`],
       };
     }
 
-    // ============================================
-    // Проверка: предмет принадлежит инициатору
-    // ============================================
-    const item = this.findItemById(player, itemId);
-    if (!item) {
-      return {
-        result: {
-          action_type: this.action_type,
-          success: false,
-          details: `Предмет ${itemId} не найден в инвентаре`,
-        },
-        mutations: [],
-        system_facts: [`${player.name} попытался передать несуществующий предмет.`],
-      };
-    }
-
-    if (item.quantity < quantity) {
-      return {
-        result: {
-          action_type: this.action_type,
-          success: false,
-          details: `Недостаточно предметов: есть ${item.quantity}, нужно ${quantity}`,
-        },
-        mutations: [],
-        system_facts: [`${player.name} не смог передать ${item.item_name}: недостаточно.`],
-      };
-    }
+    const transferQty = Math.min(item.quantity, quantity);
 
     // ============================================
     // Определяем тип получателя (player/npc/location)
@@ -97,7 +124,7 @@ export class TransferHandler extends BaseActionHandler {
       to_id: targetId,
       from_type: "player",
       to_type: toType,
-      quantity,
+      quantity: transferQty,
     };
 
     const targetName = isNpc 

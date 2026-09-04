@@ -67,6 +67,25 @@ function buildRouterSystemPrompt(): string {
    - Если игрок распределяет свободные очки характеристик (например: "Вкладываю 2 очка в силу", "Качаю ловкость +1", "распредели очки"):
    - Это валидное действие! Ставь status: "success", time_estimate_minutes: 5, actions: [] (движок игры автоматически применит улучшение характеристик персонажа).
 
+11. **Выбрасывание предметов (drop)**:
+   - Если игрок выбрасывает, бросает на землю или избавляется от предмета ("выкидываю 2 гриба", "бросаю сухие ветки"):
+   - action_type: "drop"
+   - target_item_name: точное название предмета на русском языке
+   - used_item_id: точный ID предмета из списка инвентаря
+   - consumed_materials: [{"quantity": N}] (где N — сколько штук выбросить)
+   - stat_to_check: "none"
+   - ai_custom_dc: null
+
+12. **Передача предмета NPC или другому игроку (transfer)**:
+   - Если игрок дарит, отдаёт или передаёт предмет ("отдаю 1 гриб Гордону", "передаю факел спутнику"):
+   - action_type: "transfer"
+   - target_entity_id: точный UUID получателя из списка "NPC рядом"
+   - target_item_name: название предмета
+   - used_item_id: точный ID предмета из списка инвентаря
+   - consumed_materials: [{"quantity": N}]
+   - stat_to_check: "none"
+   - ai_custom_dc: null
+
 ## ФОРМАТ ОТВЕТА
 
 Отвечай ТОЛЬКО валидным JSON без markdown-разметки (без \`\`\`json).
@@ -77,7 +96,7 @@ function buildRouterSystemPrompt(): string {
   "skill_hint": "swordsmanship" | "gathering" | "stealth" | "crafting" | "persuasion" | null,
   "actions": [
     {
-      "action_type": "attack" | "stealth_attack" | "move" | "loot" | "craft_recipe" | "craft_custom" | "transfer" | "talk" | "search" | "harvest_ambient",
+      "action_type": "attack" | "stealth_attack" | "move" | "loot" | "craft_recipe" | "craft_custom" | "transfer" | "drop" | "talk" | "search" | "harvest_ambient",
       "target_entity_id": "uuid или null",
       "target_item_name": "string или null",
       "item_type": "string или null",
@@ -209,7 +228,7 @@ function validateRouterOutput(parsed: any): asserts parsed is RouterOutputPayloa
 
   const validActionTypes = [
     "attack", "stealth_attack", "move", "loot",
-    "craft_recipe", "craft_custom", "transfer",
+    "craft_recipe", "craft_custom", "transfer", "drop",
     "talk", "search", "harvest_ambient"
   ];
   const validStats = [
@@ -419,7 +438,75 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
   let skillHint: string | null = null;
   let timeEstimate = 15;
 
-  if (lower.includes("палк") || lower.includes("ветк")) {
+  const inv = Array.isArray(input?.inventory) ? input.inventory : Array.isArray((input as any)?.player_inventory) ? (input as any).player_inventory : [];
+  const npcs = Array.isArray(input?.nearby_npcs) ? input.nearby_npcs : [];
+
+  // 1. Выбрасывание предметов (drop) — выполняется гарантированно и без бросков кубиков
+  if (/(?:выкид|выброс|броса|выкину|избавл|избавь)/i.test(lower)) {
+    const qtyMatch = lower.match(/\b(\d+)\b/);
+    const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+
+    const cleanStem = (w: string) => w.replace(/(?:а|ов|ев|и|ы|у|е|ом|ам|ами|ях|ых|их|ого|его|ому|ему|ым|им|ую|ею|ей|я)$/i, "");
+    const actionStems = lower.split(/[\s,.-]+/).map(cleanStem).filter((w) => w.length >= 3);
+
+    let matchedItem = inv.find((i: any) => {
+      const itemStems = (i.item_name || i.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+      return itemStems.some((is: string) => actionStems.some((as: string) => as.includes(is) || is.includes(as)));
+    });
+
+    let targetName = matchedItem?.item_name || "предмет";
+    if (!matchedItem) {
+      if (lower.includes("гриб")) targetName = "Лесные грибы";
+      else if (lower.includes("ветк") || lower.includes("палк")) targetName = "Сухие ветки";
+    }
+
+    actions.push({
+      action_type: "drop",
+      target_entity_id: null,
+      target_item_name: targetName,
+      used_item_id: matchedItem?.id || null,
+      consumed_materials: [{ id: matchedItem?.id || "drop", quantity: qty }],
+      stat_to_check: "none",
+      ai_custom_dc: null,
+      improper_tool_usage: null,
+    });
+    timeEstimate = 1;
+  }
+  // 2. Передача предмета другому персонажу / NPC (transfer)
+  else if (/(?:переда|отда|дар|вруч)/i.test(lower)) {
+    const qtyMatch = lower.match(/\b(\d+)\b/);
+    const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+
+    const cleanStem = (w: string) => w.replace(/(?:а|ов|ев|и|ы|у|е|ом|ам|ами|ях|ых|их|ого|его|ому|ему|ым|им|ую|ею|ей|я)$/i, "");
+    const actionStems = lower.split(/[\s,.-]+/).map(cleanStem).filter((w) => w.length >= 3);
+
+    let matchedItem = inv.find((i: any) => {
+      const itemStems = (i.item_name || i.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+      return itemStems.some((is: string) => actionStems.some((as: string) => as.includes(is) || is.includes(as)));
+    });
+
+    let matchedNpc = npcs.find((n: any) => {
+      const npcStems = (n.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+      return npcStems.some((ns: string) => actionStems.some((as: string) => as.includes(ns) || ns.includes(as)));
+    });
+
+    if (!matchedNpc && npcs.length === 1 && !npcs[0].is_hostile) {
+      matchedNpc = npcs[0];
+    }
+
+    actions.push({
+      action_type: "transfer",
+      target_entity_id: matchedNpc?.id || null,
+      target_item_name: matchedItem?.item_name || null,
+      used_item_id: matchedItem?.id || null,
+      consumed_materials: [{ id: matchedItem?.id || "transfer", quantity: qty }],
+      stat_to_check: "none",
+      ai_custom_dc: null,
+      improper_tool_usage: null,
+    });
+    timeEstimate = 2;
+  }
+  else if (lower.includes("палк") || lower.includes("ветк")) {
     actions.push({
       action_type: "harvest_ambient",
       target_entity_id: null,

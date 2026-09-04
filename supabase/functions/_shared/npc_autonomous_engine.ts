@@ -57,8 +57,14 @@ export async function handleCompanionInSceneAction(params: {
 
   if (!isPeacefulWork) return null;
 
-  // Ищем дружелюбного или живого разумного спутника/NPC
-  const companion = location_npcs.find((n) => !n.is_hostile && n.is_alive !== false && n.role !== "hostile");
+  // Спутником может быть ТОЛЬКО персонаж, который явно состоит в отряде игрока!
+  const companion = location_npcs.find((n) => {
+    if (n.is_hostile || n.is_alive === false || n.role === "hostile") return false;
+    const role = (n.role || "").toLowerCase();
+    const tags = Array.isArray(n.status_tags) ? n.status_tags.map((t: string) => t.toLowerCase()) : [];
+    const isPartyMember = role === "companion" || tags.includes("спутник") || tags.includes("в_отряде") || tags.includes("спутница") || tags.includes("компаньон");
+    return isPartyMember;
+  });
   if (!companion) return null;
 
   let itemToFind = "Фляга родниковой воды";

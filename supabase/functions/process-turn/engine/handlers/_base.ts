@@ -94,6 +94,8 @@ export abstract class BaseActionHandler implements ActionHandler {
       advantage,
       disadvantage,
     });
+    // В D&D 5e натуральная 1 на проверке характеристик/навыков НЕ является автопровалом: проверяется total >= target_dc
+    const isCheckSuccess = roll.is_crit ? true : (roll.total >= targetDc);
     return {
       d20: roll.chosen,
       chosen: roll.chosen,
@@ -103,7 +105,7 @@ export abstract class BaseActionHandler implements ActionHandler {
       target_dc: roll.target_dc,
       is_crit: roll.is_crit,
       is_fumble: roll.is_fumble,
-      success: roll.success,
+      success: isCheckSuccess,
     };
   }
 

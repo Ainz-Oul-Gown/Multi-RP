@@ -318,6 +318,9 @@ serve(async (req) => {
       }
     }
 
+    console.log(`[${requestId}] [START] 🎯 Turn for player "${player.name}" (${player.id}) in session "${session_id}". Action: "${safeActionText}"`);
+    console.log(`[${requestId}] [LOCATION] 📍 LocationID=${session.current_location_id}, Name="${currentLocationName}", WildZone="${session.current_wild_zone || 'none'}", NPCs present=${allNpcs.length} (${allNpcs.map((n: any) => n.name).join(', ') || 'none'})`);
+
     // Проверяем, первый ли это ход в сессии (нет сообщений игрока или локация не задана)
     const isFirstTurn = !session.current_location_id || !(recentMsgs || []).some((m: any) => m.sender_type === "player");
     let startingLocationGenerated = false;
@@ -483,7 +486,7 @@ serve(async (req) => {
       }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
-    console.log(`[${requestId}] [STEP 1] OK: ${routerResult.actions.length} actions`);
+    console.log(`[${requestId}] [STEP 1] 🧭 Router: status="${routerResult.status}", actions=${JSON.stringify(routerResult.actions.map((a: any) => ({ type: a.action_type, target: a.target_item_name || a.target_entity_id, stat: a.stat_to_check })))}`);
 
     // Apply GPS time/location (still here, as it's pre-engine)
     let time_passed_minutes = 0;
@@ -597,7 +600,7 @@ serve(async (req) => {
     if (statAllocatedFact) {
       engineResult.system_facts.push(statAllocatedFact);
     }
-    console.log(`[${requestId}] [STEP 2] OK: ${engineResult.mutations.length} mutations`);
+    console.log(`[${requestId}] [STEP 2] ⚙️ Engine: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${JSON.stringify(engineResult.system_facts)}`);
 
     // ============================================
     // ШАГ 3: DB Persistence
@@ -699,6 +702,7 @@ serve(async (req) => {
         location_npcs: allNpcs,
         session_id,
       });
+      console.log(`[${requestId}] [COMPANION] 🤝 Checked:`, companionAction ? `${companionAction.npc_name} did: ${companionAction.action_description}` : "none (no party companions in scene)");
     } catch (compErr) {
       console.warn(`[${requestId}] Companion action failed:`, compErr);
     }

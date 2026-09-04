@@ -74,6 +74,15 @@ export interface SystemTruthDto {
   };
   global_events: string[];
   player_truths: Record<string, PlayerKnowledge>;
+  present_npcs?: Array<{
+    id: string;
+    name: string;
+    race?: string;
+    role?: string;
+    category?: string;
+    status_tags?: string[];
+    is_hostile?: boolean;
+  }>;
   npc_context: Record<string, NpcContextSummary>;
   encounter_alert: {
     spawned: boolean;
@@ -178,6 +187,27 @@ function getDamageFromHpUpdate(m: any): number {
 
 function getActionDisplayName(action: any): string {
   return action.target_item_name || action.action_type || "действие";
+}
+
+function getActionSkillLabel(actionType: string, statToCheck?: string): string {
+  switch (actionType) {
+    case "harvest_ambient": return "Выживание";
+    case "search":
+    case "loot": return "Внимательность";
+    case "attack": return "Атака";
+    case "stealth_attack": return "Скрытность";
+    case "craft_recipe":
+    case "craft_custom": return "Ремесло";
+    case "talk": return "Убеждение";
+    default:
+      if (statToCheck === "stealth") return "Скрытность";
+      if (statToCheck === "survival") return "Выживание";
+      if (statToCheck === "investigation") return "Внимательность";
+      if (statToCheck === "insight") return "Проницательность";
+      if (statToCheck === "strength") return "Атлетика";
+      if (statToCheck === "dexterity") return "Ловкость";
+      return "Проверка";
+  }
 }
 
 // ============================================
@@ -349,12 +379,9 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         }
         // Успех
         if (ar.dice_roll) {
-          const rollVal = (ar.dice_roll as any).d20 ?? (ar.dice_roll as any).roll ?? (ar.dice_roll as any).total ?? 10;
-          const modVal = ar.dice_roll.modifier ?? 0;
-          const dcVal = (ar.dice_roll as any).target_dc ?? (ar.dice_roll as any).dc ?? 12;
-          const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
+          const skillLabel = getActionSkillLabel(ar.action_type, (ar as any).stat_to_check);
           const isSuccess = ar.success;
-          knowledge.push(`Бросок d20 (${rollVal}${modStr} = ${rollVal + modVal}) vs DC ${dcVal} → ${isSuccess ? "успех" : "провал"}.`);
+          knowledge.push(`[${skillLabel}: ${isSuccess ? "Успех" : "Провал"}]`);
         }
         if (ar.damage_dealt !== undefined && ar.damage_dealt > 0) {
           knowledge.push(`Нанесено ${ar.damage_dealt} урона.`);
@@ -587,6 +614,18 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
   // ============================================
   // 6. Финальный DTO
   // ============================================
+  const present_npcs = (npcs || [])
+    .filter((n) => n.is_alive !== false)
+    .map((n) => ({
+      id: n.id,
+      name: n.name || "NPC",
+      race: n.race || "Человек",
+      role: n.role || "Обыватель",
+      category: n.category || "npc",
+      status_tags: n.status_tags || [],
+      is_hostile: n.is_hostile || false,
+    }));
+
   return {
     session_id,
     turn_status,
@@ -599,6 +638,7 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
     },
     global_events,
     player_truths,
+    present_npcs,
     npc_context,
     encounter_alert,
   };

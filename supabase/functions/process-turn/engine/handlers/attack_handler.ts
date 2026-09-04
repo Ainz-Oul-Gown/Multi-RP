@@ -73,7 +73,16 @@ export class AttackHandler extends BaseActionHandler {
     const targetAc = target.armor_class;
     const targetDc = action.ai_custom_dc || targetAc;
 
-    const roll = this.performCheck(statMod, targetDc, proficiency, advantage, disadvantage);
+    // Определение оружия и соответствующего боевого навыка игрока
+    const weapon = action.used_item_id ? this.findItemById(player, action.used_item_id) : null;
+    const isRanged = weapon && (weapon.type === "ranged" || weapon.item_name.toLowerCase().includes("лук") || weapon.item_name.toLowerCase().includes("арбалет"));
+    const skillKey = isRanged ? "archery" : "swordsmanship";
+    const skillInfo = player.skills?.[skillKey];
+    const skillEffects = skillInfo?.effects || {};
+    const skillAttackBonus = skillEffects.attack_bonus || skillEffects.accuracy_bonus || 0;
+    const skillDmgBonusPct = skillEffects.damage_bonus_pct || skillEffects.ranged_damage_pct || 0;
+
+    const roll = this.performCheck(statMod + skillAttackBonus, targetDc, proficiency, advantage, disadvantage);
 
     const mutations: EngineMutation[] = [];
     const systemFacts: string[] = [];
@@ -91,7 +100,7 @@ export class AttackHandler extends BaseActionHandler {
     }
 
     if (!roll.success) {
-      systemFacts.push(`${player.name} промахнулся по ${target.name} (d20=${roll.d20}, total=${roll.total} vs DC=${targetDc}).`);
+      systemFacts.push(`${player.name} промахнулся по ${target.name} (d20=${roll.d20}, total=${roll.total} vs DC=${targetDc}${skillAttackBonus > 0 ? ` [бонус навыка +${skillAttackBonus}]` : ""}).`);
       return {
         result: {
           action_type: this.action_type,
@@ -107,7 +116,6 @@ export class AttackHandler extends BaseActionHandler {
     // ============================================
     // Попадание: расчёт урона
     // ============================================
-    const weapon = action.used_item_id ? this.findItemById(player, action.used_item_id) : null;
     const damageDice = this.getWeaponDamage(weapon, "1d4");
     const damageRoll = rollDamage(damageDice);
 
@@ -116,6 +124,11 @@ export class AttackHandler extends BaseActionHandler {
     if (roll.is_crit) {
       const critRoll = rollDamage(damageDice);
       totalDamage = (damageRoll.total + critRoll.total) + statMod;
+    }
+
+    // Применяем растущий бонус навыка к урону (1..100)
+    if (skillDmgBonusPct > 0) {
+      totalDamage = Math.max(1, Math.floor(totalDamage * (1 + skillDmgBonusPct / 100)));
     }
 
     if (totalDamage < 0) totalDamage = 0;
@@ -130,7 +143,7 @@ export class AttackHandler extends BaseActionHandler {
     });
 
     systemFacts.push(
-      `${player.name} попал по ${target.name} (d20=${roll.d20}, total=${roll.total} vs DC=${targetDc}, урон ${totalDamage}${roll.is_crit ? " — КРИТ" : ""}).`
+      `${player.name} попал по ${target.name} (d20=${roll.d20}, total=${roll.total} vs DC=${targetDc}, урон ${totalDamage}${roll.is_crit ? " — КРИТ" : ""}${skillDmgBonusPct > 0 ? ` [+${skillDmgBonusPct}% урона от навыка]` : ""}).`
     );
 
     return {

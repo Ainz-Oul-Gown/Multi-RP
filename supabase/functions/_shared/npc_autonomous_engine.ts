@@ -97,6 +97,95 @@ export async function handleCompanionInSceneAction(params: {
 }
 
 /**
+ * Обработка приглашения NPC в спутники / путешествие / отряд.
+ * Срабатывает при высоком уровне отношений (friendly, trusted, devoted или score >= 20).
+ */
+export async function handleCompanionInvitation(params: {
+  supabase: any;
+  player_action_text: string;
+  acting_player_name: string;
+  acting_player_id: string;
+  location_npcs: any[];
+}): Promise<{
+  npc_id: string;
+  npc_name: string;
+  dialogue: string;
+  joined_party: boolean;
+} | null> {
+  const { supabase, player_action_text, acting_player_name, acting_player_id, location_npcs } = params;
+  if (!location_npcs || location_npcs.length === 0) return null;
+
+  const lowerText = (player_action_text || "").toLowerCase();
+  const isInvite =
+    lowerText.includes("пойд") ||
+    lowerText.includes("следуй") ||
+    lowerText.includes("вместе") ||
+    lowerText.includes("в отряд") ||
+    lowerText.includes("в путешеств") ||
+    lowerText.includes("на охоту");
+
+  if (!isInvite) return null;
+
+  // Ищем дружелюбного живого NPC
+  const candidate = location_npcs.find((n) => {
+    if (n.is_hostile || n.is_alive === false) return false;
+    if (n.name && lowerText.includes(n.name.toLowerCase())) return true;
+    return true;
+  });
+
+  if (!candidate) return null;
+
+  // Проверяем отношения с игроком в npc_relationships
+  const { data: rel } = await supabase
+    .from("npc_relationships")
+    .select("score, tier, status_tags")
+    .eq("npc_id", candidate.id)
+    .eq("player_id", acting_player_id)
+    .maybeSingle();
+
+  const score = rel?.score ?? 0;
+  const tier = rel?.tier ?? "neutral";
+  const isGoodRelationship = score >= 20 || ["friendly", "trusted", "devoted"].includes(tier);
+
+  if (!isGoodRelationship) {
+    return {
+      npc_id: candidate.id,
+      npc_name: candidate.name,
+      dialogue: `«${acting_player_name}, мы пока ещё недостаточно близки, чтобы я отправлялась с тобой в опасный путь. Нам стоит получше узнать друг друга.»`,
+      joined_party: false,
+    };
+  }
+
+  // NPC соглашается стать спутником и присоединиться к отряду!
+  const currentTags = Array.isArray(candidate.status_tags) ? candidate.status_tags : [];
+  const updatedTags = Array.from(new Set([...currentTags, "спутник", "в_отряде"]));
+
+  await supabase
+    .from("npcs")
+    .update({
+      role: "companion",
+      status_tags: updatedTags,
+    })
+    .eq("id", candidate.id);
+
+  if (rel) {
+    const relTags = Array.from(new Set([...(rel.status_tags || []), "спутник", "в_отряде"]));
+    await supabase
+      .from("npc_relationships")
+      .update({ status_tags: relTags })
+      .eq("npc_id", candidate.id)
+      .eq("player_id", acting_player_id);
+  }
+
+  return {
+    npc_id: candidate.id,
+    npc_name: candidate.name,
+    dialogue: `«С удовольствием пойду с тобой, ${acting_player_name}! Вместе мы преодолеем любые опасности и одолеем любую тварь на нашем пути.»`,
+    joined_party: true,
+  };
+}
+
+/**
  * Разрешает долгосрочные экспедиции NPC за кадром (Lazy Resolution по календарю).
  * Срабатывает, когда игровое время дошло до activity_ends_game_time.
  * Тратит 0 токенов во время обычных ходов!

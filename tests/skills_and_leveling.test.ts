@@ -6,6 +6,8 @@ import {
   calculateSkillBonuses,
   CANONICAL_SKILLS,
 } from "../supabase/functions/_shared/skill_engine.ts";
+import { AttackHandler } from "../supabase/functions/process-turn/engine/handlers/attack_handler.ts";
+import { HarvestAmbientHandler } from "../supabase/functions/process-turn/engine/handlers/harvest_ambient_handler.ts";
 
 describe("Система навыков (Track 2: Action-based 1..100)", () => {
   it("нормализует синонимы кожевничества к каноническому ключу leatherworking", () => {
@@ -99,3 +101,76 @@ describe("Система уровней и характеристик (Track 1: 
     expect(highMaxMp).toBe(98);
   });
 });
+
+describe("Влияние навыков на игровой процесс в Game Engine", () => {
+  const attackHandler = new AttackHandler();
+
+  it("учитывает бонус к меткости и бонус к урону (+50%) от высокого уровня владения оружием", () => {
+    const contextWithSkill = {
+      session: { id: "s1", difficulty: "normal", is_pvp_enabled: false },
+      acting_player: {
+        id: "p1",
+        name: "Влад",
+        stats: { STR: 14, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        hp: 30,
+        max_hp: 30,
+        armor_class: 15,
+        skills: {
+          swordsmanship: {
+            level: 100,
+            effects: { damage_bonus_pct: 50, attack_bonus: 10 },
+          },
+        },
+      },
+      targets: {
+        npcs: new Map([
+          ["wolf-1", { id: "wolf-1", name: "Волк", hp: 40, max_hp: 40, armor_class: 10, is_hostile: true }],
+        ]),
+        players: new Map(),
+      },
+    } as any;
+
+    const action = {
+      type: "attack",
+      target_entity_id: "wolf-1",
+      stat_to_check: "strength",
+    } as any;
+
+    const res = attackHandler.handle(action, contextWithSkill);
+    expect(res.result.success).toBe(true);
+    // Проверяем факт применения бонуса навыка в логах системы (+50% урона)
+    expect(res.system_facts.some((f: string) => f.includes("[+50% урона от навыка]"))).toBe(true);
+    // Проверяем факт нанесения урона
+    expect(res.mutations.some((m: any) => m.type === "UPDATE_HP" && m.delta < 0)).toBe(true);
+  });
+
+  it("учитывает бонусы собирательства в harvest_ambient", () => {
+    const harvestHandler = new HarvestAmbientHandler();
+    const harvestContext = {
+      session: { id: "s1", difficulty: "normal" },
+      acting_player: {
+        id: "p1",
+        name: "Влад",
+        stats: { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 14, CHA: 10 },
+        skills: {
+          gathering: {
+            level: 100,
+            effects: { find_chance_bonus_pct: 60, time_reduction_pct: 50 },
+          },
+        },
+      },
+    } as any;
+
+    const action = {
+      type: "harvest_ambient",
+      target_item_name: "Лекарственные травы",
+      ai_custom_dc: 5, // лёгкий DC для гарантированного успеха
+    } as any;
+
+    const res = harvestHandler.handle(action, harvestContext);
+    expect(res.result.success).toBe(true);
+    expect(res.mutations.length).toBeGreaterThan(0);
+    expect(res.system_facts[0]).toContain("навык Собирательство ур. 100: +60% к находкам");
+  });
+});
+

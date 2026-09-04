@@ -275,3 +275,97 @@ export function executeNpcAttack(params: {
     },
   };
 }
+
+export interface CompanionAttackResult {
+  companion_id: string;
+  companion_name: string;
+  target_mob_id: string;
+  target_mob_name: string;
+  attack_name: string;
+  d20: number;
+  total_attack: number;
+  target_ac: number;
+  is_hit: boolean;
+  is_crit: boolean;
+  damage: number;
+  remaining_mob_hp: number;
+  is_mob_defeated: boolean;
+  log_message: string;
+}
+
+/**
+ * Исполняет атаку спутника по враждебному мобу (например, волку) по правилам D&D:
+ * бросок d20 + мод характеристики + бонус мастерства vs КД моба, расчёт урона и победы над врагом.
+ */
+export function executeCompanionAttack(params: {
+  companion: any;
+  targetMob: { id: string; name: string; hp: number; max_hp?: number; armor_class?: number };
+  attackName?: string;
+  damageDice?: string;
+}): CompanionAttackResult {
+  const { companion, targetMob } = params;
+
+  const strMod = getStatMod(companion.stats?.STR || 12);
+  const dexMod = getStatMod(companion.stats?.DEX || 14);
+  const statMod = Math.max(strMod, dexMod);
+  const prof = getProficiencyBonus(companion.level || 1);
+
+  const specialAttacks = Array.isArray(companion.special_attacks) ? companion.special_attacks : [];
+  const baseAttacks = Array.isArray(companion.base_attacks) ? companion.base_attacks : [];
+  let chosenAttack = baseAttacks[0];
+  if (specialAttacks.length > 0 && Math.random() < 0.5) {
+    chosenAttack = specialAttacks[0];
+  }
+  const attackName = params.attackName || chosenAttack?.name || "Точный удар клинком";
+  const damageDice = params.damageDice || chosenAttack?.damage_dice || "1d8";
+
+  const d20 = rollD20();
+  const isCrit = d20 === 20;
+  const isCritMiss = d20 === 1;
+  const totalAttack = d20 + statMod + prof;
+  const mobAc = targetMob.armor_class ?? 12;
+
+  const isHit = !isCritMiss && (isCrit || totalAttack >= mobAc);
+
+  let damage = 0;
+  if (isHit) {
+    const baseDamage = rollDice(damageDice);
+    damage = Math.max(1, baseDamage + statMod);
+    if (isCrit) {
+      const critDamage = rollDice(damageDice);
+      damage = Math.max(2, baseDamage + critDamage + statMod);
+    }
+  }
+
+  const remainingHp = Math.max(0, (targetMob.hp ?? 10) - damage);
+  const isMobDefeated = isHit && remainingHp <= 0;
+
+  let outcomeText = isHit
+    ? `${isCrit ? "КРИТИЧЕСКИЙ УДАР! 💥" : "Попадание! 🎯"} Нанесено ${damage} урона.`
+    : "Промах! 💨";
+  if (isMobDefeated) {
+    outcomeText += ` 💀 Враг (${targetMob.name}) повержен(а) в бою!`;
+  } else if (isHit) {
+    outcomeText += ` У врага осталось ${remainingHp} HP.`;
+  }
+
+  const logMessage = `⚔️ [Ход спутника: ${companion.name}] атакует врага (${targetMob.name}) приёмом «${attackName}»! (d20: ${d20}, всего: ${totalAttack} vs КД: ${mobAc} — ${outcomeText})`;
+
+  return {
+    companion_id: companion.id,
+    companion_name: companion.name,
+    target_mob_id: targetMob.id,
+    target_mob_name: targetMob.name,
+    attack_name: attackName,
+    d20,
+    total_attack: totalAttack,
+    target_ac: mobAc,
+    is_hit: isHit,
+    is_crit: isCrit,
+    damage,
+    remaining_mob_hp: remainingHp,
+    is_mob_defeated: isMobDefeated,
+    log_message: logMessage,
+  };
+}
+

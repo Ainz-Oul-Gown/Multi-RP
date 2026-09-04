@@ -17,6 +17,7 @@ export interface EnginePlayer {
   level: number;
   inventory: EngineInventoryItem[];
   injuries: EngineInjury[];
+  skills?: Record<string, { level: number; effects: Record<string, number> }>;
 }
 
 export interface EngineInventoryItem {

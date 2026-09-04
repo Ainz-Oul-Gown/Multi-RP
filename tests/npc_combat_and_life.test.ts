@@ -4,12 +4,14 @@ import { describe, it, expect, vi } from "vitest";
 import {
   buildFallbackNpcDecision,
   executeNpcAttack,
+  executeCompanionAttack,
   BattlefieldPlayer,
 } from "../supabase/functions/_shared/npc_combat_ai.ts";
 import {
   gameTimeToMinutes,
   handleCompanionInSceneAction,
   resolveNpcBackgroundActivities,
+  handleCompanionInvitation,
 } from "../supabase/functions/_shared/npc_autonomous_engine.ts";
 
 describe("D&D Боевой ИИ для NPC", () => {
@@ -220,3 +222,117 @@ describe("Ленивая календарная симуляция долгос�
     expect(mockSupabase.rpc).toHaveBeenCalledWith("add_item_to_inventory", expect.any(Object));
   });
 });
+
+describe("Приглашение спутников в путешествие и боевая помощь", () => {
+  const mockCompanion = {
+    id: "npc-shiro",
+    name: "Широ",
+    is_hostile: false,
+    is_alive: true,
+    role: "companion",
+    level: 3,
+    stats: { STR: 12, DEX: 16, CON: 12, INT: 10, WIS: 14, CHA: 12 },
+    special_attacks: [
+      { name: "Стрела сквозь ветер", damage_dice: "1d10", damage_type: "piercing", is_special: true },
+    ],
+    base_attacks: [
+      { name: "Выстрел из короткого лука", damage_dice: "1d6", damage_type: "piercing" },
+    ],
+  };
+
+  const mockWolfMob = {
+    id: "npc-wolf-1",
+    name: "Свирепый лесной волк",
+    hp: 11,
+    max_hp: 15,
+    armor_class: 12,
+  };
+
+  it("спутник соглашается пойти в путешествие при высоких отношениях (score >= 20)", async () => {
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => ({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { score: 35, tier: "friendly", status_tags: [] },
+              }),
+            }),
+          }),
+        }),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: true, error: null }),
+          }),
+        }),
+      })),
+    };
+
+    const result = await handleCompanionInvitation({
+      supabase: mockSupabase,
+      player_action_text: "Широ, пойдём со мной в путешествие исследовать окрестные земли!",
+      acting_player_name: "Влад",
+      acting_player_id: "player-1",
+      location_npcs: [mockCompanion],
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.joined_party).toBe(true);
+    expect(result?.dialogue).toContain("С удовольствием пойду с тобой, Влад");
+  });
+
+  it("спутник отказывается от путешествия при нейтральных/низких отношениях", async () => {
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => ({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { score: 5, tier: "neutral", status_tags: [] },
+              }),
+            }),
+          }),
+        }),
+      })),
+    };
+
+    const result = await handleCompanionInvitation({
+      supabase: mockSupabase,
+      player_action_text: "Пойдём со мной в дальний поход",
+      acting_player_name: "Влад",
+      acting_player_id: "player-1",
+      location_npcs: [mockCompanion],
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.joined_party).toBe(false);
+    expect(result?.dialogue).toContain("мы пока ещё недостаточно близки");
+  });
+
+  it("спутник атакует враждебного волка по D&D правилам (d20 vs AC, урон, победа)", () => {
+    const attackResult = executeCompanionAttack({
+      companion: mockCompanion,
+      targetMob: { ...mockWolfMob, hp: 5 }, // низкое HP, чтобы проверить уничтожение
+    });
+
+    expect(attackResult.companion_name).toBe("Широ");
+    expect(attackResult.target_mob_name).toBe("Свирепый лесной волк");
+    expect(attackResult.d20).toBeGreaterThanOrEqual(1);
+    expect(attackResult.d20).toBeLessThanOrEqual(20);
+    expect(attackResult.target_ac).toBe(12);
+    expect(attackResult.log_message).toContain("Ход спутника: Широ");
+
+    if (attackResult.is_hit) {
+      expect(attackResult.damage).toBeGreaterThan(0);
+      if (attackResult.damage >= 5) {
+        expect(attackResult.is_mob_defeated).toBe(true);
+        expect(attackResult.remaining_mob_hp).toBe(0);
+        expect(attackResult.log_message).toContain("повержен(а) в бою");
+      }
+    } else {
+      expect(attackResult.damage).toBe(0);
+      expect(attackResult.log_message).toContain("Промах");
+    }
+  });
+});
+

@@ -14,15 +14,19 @@ export class HarvestAmbientHandler extends BaseActionHandler {
     const targetItem = action.target_item_name || "ресурс";
 
     // ============================================
-    // Модификатор (survival = WIS)
+    // Модификатор (survival = WIS) + бонус навыка собирательства
     // ============================================
     const statMod = this.getStatToCheckMod(player, "survival");
     const proficiency = this.getProficiency(player);
+    const gatheringSkill = player.skills?.gathering;
+    const gatheringEffects = gatheringSkill?.effects || {};
+    const skillCheckBonus = Math.floor((gatheringSkill?.level || 0) / 10);
+    const findChanceBonusPct = gatheringEffects.find_chance_bonus_pct || 0;
 
     // DC: из AI (обычно 10-15 для лёгкого сбора, 25-40 для сложного)
     const targetDc = action.ai_custom_dc || 12;
 
-    const roll = this.performCheck(statMod, targetDc, proficiency);
+    const roll = this.performCheck(statMod + skillCheckBonus, targetDc, proficiency);
 
     const mutations: EngineMutation[] = [];
     const systemFacts: string[] = [];
@@ -40,7 +44,7 @@ export class HarvestAmbientHandler extends BaseActionHandler {
     }
 
     if (!roll.success) {
-      systemFacts.push(`${player.name} не смог собрать ${targetItem} (${roll.total} vs DC=${targetDc}).`);
+      systemFacts.push(`${player.name} не смог собрать ${targetItem} (${roll.total} vs DC=${targetDc}${skillCheckBonus > 0 ? ` [бонус навыка +${skillCheckBonus}]` : ""}).`);
       return {
         result: {
           action_type: this.action_type,
@@ -56,8 +60,13 @@ export class HarvestAmbientHandler extends BaseActionHandler {
     // ============================================
     // Успех: INSERT_ITEM
     // ============================================
-    // Бросок d100 для количества (1-3 единиц)
-    const quantity = Math.min(3, Math.max(1, Math.ceil(rollD100() / 33.33))); // 1, 2 или 3
+    // Бросок d100 для базового количества (1-3 единиц)
+    let quantity = Math.min(3, Math.max(1, Math.ceil(rollD100() / 33.33))); // 1, 2 или 3
+
+    // Бонус шанса находок от навыка Собирательства (до +60% на 100 ур.)
+    if (findChanceBonusPct > 0 && Math.random() * 100 < findChanceBonusPct) {
+      quantity += 1;
+    }
 
     const newItem = {
       item_name: targetItem,
@@ -73,7 +82,7 @@ export class HarvestAmbientHandler extends BaseActionHandler {
       item: newItem,
     });
 
-    systemFacts.push(`${player.name} успешно собрал ${quantity} ед. "${targetItem}".`);
+    systemFacts.push(`${player.name} успешно собрал ${quantity} ед. "${targetItem}"${gatheringSkill ? ` (навык Собирательство ур. ${gatheringSkill.level}: +${findChanceBonusPct}% к находкам)` : ""}.`);
 
     return {
       result: {

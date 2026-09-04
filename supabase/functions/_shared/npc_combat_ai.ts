@@ -271,7 +271,7 @@ export function executeNpcAttack(params: {
       type: "UPDATE_HP",
       target_type: "player",
       id: targetPlayer.id,
-      delta: -damage,
+      delta: damage === 0 ? 0 : -damage,
     },
   };
 }

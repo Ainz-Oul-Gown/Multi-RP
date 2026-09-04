@@ -14,14 +14,16 @@ export class HarvestAmbientHandler extends BaseActionHandler {
     const targetItem = action.target_item_name || "ресурс";
 
     // ============================================
-    // Модификатор (survival = WIS) + бонус навыка собирательства
+    // Модификатор (survival = WIS) + бонус навыка собирательства/шахтёрства
     // ============================================
     const statMod = this.getStatToCheckMod(player, "survival");
     const proficiency = this.getProficiency(player);
-    const gatheringSkill = player.skills?.gathering;
-    const gatheringEffects = gatheringSkill?.effects || {};
-    const skillCheckBonus = Math.floor((gatheringSkill?.level || 0) / 10);
-    const findChanceBonusPct = gatheringEffects.find_chance_bonus_pct || 0;
+    const isMining = /руд|жил|кам|минер|самоцвет|желез|мед|золот|уголь|серебр/i.test(targetItem);
+    const applicableSkill = isMining ? (player.skills?.mining || player.skills?.gathering) : (player.skills?.gathering || player.skills?.mining);
+    const skillName = isMining && player.skills?.mining ? "Шахтёрское дело" : "Собирательство";
+    const skillEffects = applicableSkill?.effects || {};
+    const skillCheckBonus = Math.floor((applicableSkill?.level || 0) / 10);
+    const findChanceBonusPct = skillEffects.find_chance_bonus_pct || skillEffects.ore_yield_bonus_pct || 0;
 
     // DC: из AI (обычно 10-15 для лёгкого сбора, 25-40 для сложного)
     const targetDc = action.ai_custom_dc || 12;
@@ -82,7 +84,7 @@ export class HarvestAmbientHandler extends BaseActionHandler {
       item: newItem,
     });
 
-    systemFacts.push(`${player.name} успешно собрал ${quantity} ед. "${targetItem}"${gatheringSkill ? ` (навык Собирательство ур. ${gatheringSkill.level}: +${findChanceBonusPct}% к находкам)` : ""}.`);
+    systemFacts.push(`${player.name} успешно собрал ${quantity} ед. "${targetItem}"${applicableSkill ? ` (навык ${skillName} ур. ${applicableSkill.level}: +${findChanceBonusPct}% к находкам)` : ""}.`);
 
     return {
       result: {

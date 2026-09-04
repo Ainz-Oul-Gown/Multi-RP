@@ -186,6 +186,68 @@ export async function handleCompanionInvitation(params: {
 }
 
 /**
+ * Проактивная инициатива NPC: NPC САМ предлагает отправиться в путешествие с игроком,
+ * если уровень доверия и симпатии высок (score >= 25 или friendly/trusted/devoted),
+ * а NPC ещё не состоит в отряде.
+ */
+export async function checkNpcProactiveCompanionOffer(params: {
+  supabase: any;
+  acting_player_name: string;
+  acting_player_id: string;
+  location_npcs: any[];
+}): Promise<{
+  npc_id: string;
+  npc_name: string;
+  dialogue: string;
+  proactive_offer: boolean;
+} | null> {
+  const { supabase, acting_player_name, acting_player_id, location_npcs } = params;
+  if (!location_npcs || location_npcs.length === 0) return null;
+
+  // Ищем дружелюбного живого NPC, который ещё не спутник
+  const candidate = location_npcs.find((n) => {
+    if (n.is_hostile || n.is_alive === false) return false;
+    const tags = Array.isArray(n.status_tags) ? n.status_tags : [];
+    if (tags.includes("спутник") || tags.includes("в_отряде") || tags.includes("предложил_спутничество")) return false;
+    return true;
+  });
+
+  if (!candidate) return null;
+
+  // Проверяем отношения
+  const { data: rel } = await supabase
+    .from("npc_relationships")
+    .select("score, tier, status_tags")
+    .eq("npc_id", candidate.id)
+    .eq("player_id", acting_player_id)
+    .maybeSingle();
+
+  const score = rel?.score ?? 0;
+  const tier = rel?.tier ?? "neutral";
+  const isHighAffinity = score >= 25 || ["friendly", "trusted", "devoted"].includes(tier);
+
+  if (!isHighAffinity) return null;
+
+  // Фиксируем флаг, чтобы не спамить предложением каждый ход
+  const currentTags = Array.isArray(candidate.status_tags) ? candidate.status_tags : [];
+  const updatedTags = Array.from(new Set([...currentTags, "предложил_спутничество", "готов_в_путь"]));
+
+  await supabase
+    .from("npcs")
+    .update({ status_tags: updatedTags })
+    .eq("id", candidate.id);
+
+  const dialogue = `«${acting_player_name}, мы уже немало пережили вместе, и я вижу, что ты собираешься в путь дальше. Позволишь мне пойти с тобой? Одному на опасных трактах и в глуши нелегко, а вдвоём мы станем отличной командой и прикроем друг другу спину!»`;
+
+  return {
+    npc_id: candidate.id,
+    npc_name: candidate.name,
+    dialogue,
+    proactive_offer: true,
+  };
+}
+
+/**
  * Разрешает долгосрочные экспедиции NPC за кадром (Lazy Resolution по календарю).
  * Срабатывает, когда игровое время дошло до activity_ends_game_time.
  * Тратит 0 токенов во время обычных ходов!

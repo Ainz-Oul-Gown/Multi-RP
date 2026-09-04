@@ -12,6 +12,7 @@ import {
   handleCompanionInSceneAction,
   resolveNpcBackgroundActivities,
   handleCompanionInvitation,
+  checkNpcProactiveCompanionOffer,
 } from "../supabase/functions/_shared/npc_autonomous_engine.ts";
 
 describe("D&D Боевой ИИ для NPC", () => {
@@ -334,5 +335,37 @@ describe("Приглашение спутников в путешествие и
       expect(attackResult.log_message).toContain("Промах");
     }
   });
+
+  it("NPC сам проявляет интерес и предлагает пойти в путешествие при высоком доверии", async () => {
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => ({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { score: 30, tier: "trusted", status_tags: [] },
+              }),
+            }),
+          }),
+        }),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: true, error: null }),
+        }),
+      })),
+    };
+
+    const offer = await checkNpcProactiveCompanionOffer({
+      supabase: mockSupabase,
+      acting_player_name: "Влад",
+      acting_player_id: "player-1",
+      location_npcs: [mockCompanion],
+    });
+
+    expect(offer).not.toBeNull();
+    expect(offer?.proactive_offer).toBe(true);
+    expect(offer?.npc_name).toBe("Широ");
+    expect(offer?.dialogue).toContain("Позволишь мне пойти с тобой?");
+  });
 });
+
 

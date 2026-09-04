@@ -19,8 +19,9 @@ import { generateNarrative, buildFallbackNarrative } from "./steps/step5_narrato
 import { processNpcInteractions } from "./steps/npc_memory_updater.ts";
 import { ensureStartingLocation } from "../_shared/starting_location_generator.ts";
 import { detectSkillFromAction, calculateSkillBonuses } from "../_shared/skill_engine.ts";
-import { handleCompanionInSceneAction, resolveNpcBackgroundActivities, handleCompanionInvitation } from "../_shared/npc_autonomous_engine.ts";
+import { handleCompanionInSceneAction, resolveNpcBackgroundActivities, handleCompanionInvitation, checkNpcProactiveCompanionOffer } from "../_shared/npc_autonomous_engine.ts";
 import { decideNpcCombatAction, executeNpcAttack, executeCompanionAttack } from "../_shared/npc_combat_ai.ts";
+import { evaluatePetTamingAttempt, evaluatePetLoyaltyCheck, awardPetCombatXp } from "../_shared/pet_taming_engine.ts";
 import { buildSatellitePrompt, buildGpsPrompt } from "./steps/_shared_prompts.ts";
 import { RouterInputContext } from "./types.ts";
 
@@ -472,7 +473,7 @@ serve(async (req) => {
         const companionIds = (compNpcs || [])
           .filter((n: any) =>
             n.role === "companion" ||
-            (Array.isArray(n.status_tags) && (n.status_tags.includes("спутник") || n.status_tags.includes("в_отряде")))
+            (Array.isArray(n.status_tags) && (n.status_tags.includes("спутник") || n.status_tags.includes("в_отряде") || n.status_tags.includes("питомец") || n.status_tags.includes("приручен")))
           )
           .map((n: any) => n.id);
 
@@ -752,7 +753,8 @@ serve(async (req) => {
       console.warn(`[${requestId}] [NPC] processNpcInteractions failed:`, npcErr);
     }
 
-    // 9) Companion Invitation check (приглашение в путь / в отряд при высоком уровне отношений)
+    // 9) Companion Invitation & Pet Taming interactions
+    let companionInviteHandled = false;
     try {
       const companionInviteResult = await handleCompanionInvitation({
         supabase,
@@ -762,6 +764,7 @@ serve(async (req) => {
         location_npcs: allNpcs,
       });
       if (companionInviteResult) {
+        companionInviteHandled = true;
         await supabase.from("messages").insert({
           session_id,
           sender_type: "master",
@@ -778,8 +781,72 @@ serve(async (req) => {
       console.warn(`[${requestId}] [COMPANION] handleCompanionInvitation failed:`, inviteErr);
     }
 
+    // 10) Pet Taming interaction (интеллектуальное приручение зверя/монстра)
+    try {
+      const targetCreature = allNpcs.find((n: any) =>
+        n.category === "beast" || n.category === "monster" ||
+        (n.race && ["зверь", "волк", "животное", "монстр"].some(r => n.race.toLowerCase().includes(r)))
+      );
+      if (targetCreature) {
+        const tamingResult = await evaluatePetTamingAttempt({
+          supabase,
+          acting_player: {
+            id: player.id,
+            name: player.name || "Герой",
+            stats: player.stats,
+            skills: skillsMap,
+          },
+          target_creature: targetCreature,
+          action_text: safeActionText,
+        });
+
+        if (tamingResult && tamingResult.is_taming_action) {
+          companionInviteHandled = true;
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "master",
+            sender_name: "Приручение",
+            content: tamingResult.narrative_feedback,
+            metadata: {
+              type: "pet_taming",
+              creature_id: targetCreature.id,
+              result: tamingResult,
+            },
+          });
+        }
+      }
+    } catch (tameErr) {
+      console.warn(`[${requestId}] [PET] evaluatePetTamingAttempt failed:`, tameErr);
+    }
+
+    // 11) Proactive Companion Offer (NPC сам предлагает пойти в путь при высоком доверии)
+    try {
+      if (!companionInviteHandled) {
+        const proactiveOffer = await checkNpcProactiveCompanionOffer({
+          supabase,
+          acting_player_name: player.name || "Герой",
+          acting_player_id: player.id,
+          location_npcs: allNpcs,
+        });
+        if (proactiveOffer) {
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "master",
+            sender_name: proactiveOffer.npc_name,
+            content: proactiveOffer.dialogue,
+            metadata: {
+              type: "proactive_companion_offer",
+              npc_id: proactiveOffer.npc_id,
+            },
+          });
+        }
+      }
+    } catch (proErr) {
+      console.warn(`[${requestId}] [COMPANION] checkNpcProactiveCompanionOffer failed:`, proErr);
+    }
+
     // ============================================
-    // D&D БОЕВАЯ ОЧЕРЕДЬ ХОДОВ (TURN QUEUE С ИНИЦИАТИВОЙ NPC И СПУТНИКОВ)
+    // D&D БОЕВАЯ ОЧЕРЕДЬ ХОДОВ (TURN QUEUE С ИНИЦИАТИВОЙ NPC, СПУТНИКОВ И ПИТОМЦЕВ)
     // ============================================
     let npcCombatTurns: any[] = [];
     try {
@@ -812,12 +879,12 @@ serve(async (req) => {
           }
         }
 
-        // Подключаем к бою спутников игрока (роль 'companion' или теги 'спутник' / 'в_отряде')
+        // Подключаем к бою спутников и прирученных питомцев игрока
         const activeCompanions = allNpcs.filter((n: any) =>
           !n.is_hostile &&
           n.is_alive !== false &&
           (n.hp ?? 10) > 0 &&
-          (n.role === "companion" || (Array.isArray(n.status_tags) && (n.status_tags.includes("спутник") || n.status_tags.includes("в_отряде"))))
+          (n.role === "companion" || (Array.isArray(n.status_tags) && (n.status_tags.includes("спутник") || n.status_tags.includes("в_отряде") || n.status_tags.includes("питомец") || n.status_tags.includes("приручен"))))
         );
         for (const compNpc of activeCompanions) {
           const alreadyInQueue = existingTurns?.some((t: any) => t.npc_id === compNpc.id);
@@ -897,10 +964,10 @@ serve(async (req) => {
           const turnNpc = allNpcs.find((n: any) => n.id === nextTurn.npc_id);
           if (turnNpc && turnNpc.is_alive !== false && (turnNpc.hp ?? 10) > 0) {
             const isCompanion = !turnNpc.is_hostile &&
-              (turnNpc.role === "companion" || (Array.isArray(turnNpc.status_tags) && (turnNpc.status_tags.includes("спутник") || turnNpc.status_tags.includes("в_отряде"))));
+              (turnNpc.role === "companion" || (Array.isArray(turnNpc.status_tags) && (turnNpc.status_tags.includes("спутник") || turnNpc.status_tags.includes("в_отряде") || turnNpc.status_tags.includes("питомец") || turnNpc.status_tags.includes("приручен"))));
 
             if (isCompanion) {
-              // ХОД СПУТНИКА: атакует враждебного моба (например, волка) в помощь игроку!
+              // ХОД СПУТНИКА / ПИТОМЦА: атакует враждебного моба (например, волка) в помощь игроку!
               const hostileMobs = allNpcs.filter((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
               if (hostileMobs.length > 0) {
                 const targetMob = hostileMobs[0];
@@ -932,6 +999,38 @@ serve(async (req) => {
                       await supabase.from("npc_relationships").update({ score: rel.score + 1 }).eq("npc_id", turnNpc.id).eq("player_id", player.id);
                     }
                   } catch (e) { /* ignore */ }
+
+                  // Прокачка уровня питомца за участие в бою (1..100)
+                  const isPet = Array.isArray(turnNpc.status_tags) && turnNpc.status_tags.includes("питомец");
+                  if (isPet) {
+                    try {
+                      const xpAward = attackResult.is_mob_defeated ? 50 : 20;
+                      const petXpRes = awardPetCombatXp(turnNpc, xpAward);
+                      turnNpc.level = petXpRes.new_level;
+                      turnNpc.max_hp = petXpRes.new_max_hp;
+                      turnNpc.hp = petXpRes.new_hp;
+                      turnNpc.xp = petXpRes.xp;
+
+                      await supabase.from("npcs").update({
+                        level: turnNpc.level,
+                        max_hp: turnNpc.max_hp,
+                        hp: turnNpc.hp,
+                        xp: turnNpc.xp,
+                      }).eq("id", turnNpc.id);
+
+                      if (petXpRes.leveled_up) {
+                        await supabase.from("messages").insert({
+                          session_id,
+                          sender_type: "system",
+                          sender_name: "Система",
+                          content: `🎉 **[Питомец повысил уровень!]** ${turnNpc.name} достиг ${turnNpc.level} уровня! Макс. здоровье: ${turnNpc.max_hp} HP.`,
+                          metadata: { type: "pet_level_up", pet_id: turnNpc.id, new_level: turnNpc.level },
+                        });
+                      }
+                    } catch (petXpErr) {
+                      console.warn(`[${requestId}] [PET_XP] Failed to award pet XP:`, petXpErr);
+                    }
+                  }
                 }
 
                 await supabase.from("messages").insert({

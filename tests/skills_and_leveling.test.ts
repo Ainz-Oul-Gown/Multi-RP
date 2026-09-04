@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import {
   detectSkillFromAction,
   calculateSkillBonuses,
+  resolveWeaponSkill,
   CANONICAL_SKILLS,
 } from "../supabase/functions/_shared/skill_engine.ts";
 import { AttackHandler } from "../supabase/functions/process-turn/engine/handlers/attack_handler.ts";
@@ -24,7 +25,7 @@ describe("Система навыков (Track 2: Action-based 1..100)", () => {
   it("нормализует собирательство и лесные промыслы к gathering", () => {
     const s1 = detectSkillFromAction({ action_text: "Иду в лес на рубку дров и сбор хвороста" });
     const s2 = detectSkillFromAction({ action_text: "Собираю лесные травы и ягоды у ручья" });
-    const s3 = detectSkillFromAction({ action_text: "Поиск руды в пещере" });
+    const s3 = detectSkillFromAction({ action_text: "Собираю грибы на поляне" });
 
     expect(s1?.key).toBe("gathering");
     expect(s2?.key).toBe("gathering");
@@ -32,16 +33,30 @@ describe("Система навыков (Track 2: Action-based 1..100)", () => {
     expect(s1?.name).toBe("Собирательство");
   });
 
-  it("распознает владение мечом, стрельбу, скрытность и медицину", () => {
-    const sword = detectSkillFromAction({ action_text: "Атакую разбойника взмахом меча" });
-    const bow = detectSkillFromAction({ action_text: "Натягиваю тетиву лука и стреляю" });
-    const stealth = detectSkillFromAction({ action_text: "Крадусь бесшумно в тенях" });
-    const med = detectSkillFromAction({ action_text: "Перевязываю раны напарнику" });
+  it("распознает различные виды оружия (кинжал, топор, копье, лук, меч, кулаки)", () => {
+    const dagger = resolveWeaponSkill({ item_name: "Охотничий кинжал" }, "Колющий удар");
+    const axe = resolveWeaponSkill({ item_name: "Боевой топор" }, "Рубящий взмах");
+    const spear = resolveWeaponSkill({ item_name: "Длинное копье" }, "Выпад острием");
+    const bow = resolveWeaponSkill({ item_name: "Композитный лук" }, "Выстрел стрелой");
+    const fists = resolveWeaponSkill(null, "Удар кулаком в челюсть");
 
-    expect(sword?.key).toBe("swordsmanship");
-    expect(bow?.key).toBe("archery");
-    expect(stealth?.key).toBe("stealth");
-    expect(med?.key).toBe("medicine");
+    expect(dagger.key).toBe("daggers");
+    expect(axe.key).toBe("axes");
+    expect(spear.key).toBe("polearms");
+    expect(bow.key).toBe("archery");
+    expect(fists.key).toBe("unarmed");
+  });
+
+  it("распознает строительство, шахтерское дело, приручение и алхимию", () => {
+    const mining = detectSkillFromAction({ action_text: "Бью киркой по богатой рудной жиле в шахте" });
+    const building = detectSkillFromAction({ action_text: "Начинаю возводить шалаш и защитное укрытие" });
+    const taming = detectSkillFromAction({ action_text: "Пытаюсь задобрить и приручить дикого волка мясом" });
+    const alchemy = detectSkillFromAction({ action_text: "Варю целебное зелье из трав в котелке" });
+
+    expect(mining?.key).toBe("mining");
+    expect(building?.key).toBe("construction");
+    expect(taming?.key).toBe("taming");
+    expect(alchemy?.key).toBe("alchemy");
   });
 
   it("рассчитывает возрастающие бонусы от уровня навыка (1..100)", () => {
@@ -171,6 +186,74 @@ describe("Влияние навыков на игровой процесс в Ga
     expect(res.result.success).toBe(true);
     expect(res.mutations.length).toBeGreaterThan(0);
     expect(res.system_facts[0]).toContain("навык Собирательство ур. 100: +60% к находкам");
+  });
+
+  it("распознает атаку кинжалом и применяет навык владения кинжалами (daggers)", () => {
+    const daggerContext = {
+      session: { id: "s1", difficulty: "normal", is_pvp_enabled: false },
+      acting_player: {
+        id: "p1",
+        name: "Влад",
+        stats: { STR: 10, DEX: 16, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        hp: 30,
+        max_hp: 30,
+        armor_class: 14,
+        inventory: [
+          { id: "item-dagger-1", item_name: "Острый стальной кинжал", type: "weapon" },
+        ],
+        skills: {
+          daggers: {
+            level: 80,
+            effects: { damage_bonus_pct: 32, attack_bonus: 10, crit_chance_bonus_pct: 20 },
+          },
+        },
+      },
+      targets: {
+        npcs: new Map([
+          ["goblin-1", { id: "goblin-1", name: "Гоблин", hp: 20, max_hp: 20, armor_class: 11, is_hostile: true }],
+        ]),
+        players: new Map(),
+      },
+    } as any;
+
+    const action = {
+      type: "attack",
+      target_entity_id: "goblin-1",
+      used_item_id: "item-dagger-1",
+      details: "Наношу быстрый удар кинжалом в шею",
+    } as any;
+
+    const res = attackHandler.handle(action, daggerContext);
+    expect(res.result.success).toBe(true);
+    expect(res.system_facts.some((f: string) => f.includes("Владение кинжалами") || f.includes("[+32% урона от навыка]"))).toBe(true);
+  });
+
+  it("распознает добычу железной руды и применяет навык шахтёрского дела (mining)", () => {
+    const miningHandler = new HarvestAmbientHandler();
+    const miningContext = {
+      session: { id: "s1", difficulty: "normal" },
+      acting_player: {
+        id: "p1",
+        name: "Влад",
+        stats: { STR: 14, DEX: 10, CON: 12, INT: 10, WIS: 12, CHA: 10 },
+        skills: {
+          mining: {
+            level: 70,
+            effects: { find_chance_bonus_pct: 42, time_reduction_pct: 35 },
+          },
+        },
+      },
+    } as any;
+
+    const action = {
+      type: "harvest_ambient",
+      target_item_name: "Богатая железная руда",
+      ai_custom_dc: 5,
+    } as any;
+
+    const res = miningHandler.handle(action, miningContext);
+    expect(res.result.success).toBe(true);
+    expect(res.system_facts[0]).toContain("Шахтёрское дело");
   });
 });
 

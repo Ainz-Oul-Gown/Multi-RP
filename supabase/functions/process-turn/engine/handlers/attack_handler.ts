@@ -5,6 +5,7 @@ import { BaseActionHandler } from "./_base.ts";
 import { ActionHandlerResult, EngineInputContext, EngineMutation } from "../types.ts";
 import { RouterAction } from "../../types.ts";
 import { rollDamage } from "../dice.ts";
+import { resolveWeaponSkill } from "../../../_shared/skill_engine.ts";
 
 export class AttackHandler extends BaseActionHandler {
   readonly action_type = "attack";
@@ -73,16 +74,19 @@ export class AttackHandler extends BaseActionHandler {
     const targetAc = target.armor_class;
     const targetDc = action.ai_custom_dc || targetAc;
 
-    // Определение оружия и соответствующего боевого навыка игрока
+    // Определение оружия и соответствующего боевого навыка игрока (мечи, кинжалы, топоры, копья, луки, кулаки, магия)
     const weapon = action.used_item_id ? this.findItemById(player, action.used_item_id) : null;
-    const isRanged = weapon && (weapon.type === "ranged" || weapon.item_name.toLowerCase().includes("лук") || weapon.item_name.toLowerCase().includes("арбалет"));
-    const skillKey = isRanged ? "archery" : "swordsmanship";
-    const skillInfo = player.skills?.[skillKey];
+    const weaponSkill = resolveWeaponSkill(weapon, action.details || "");
+    const skillInfo = player.skills?.[weaponSkill.key];
     const skillEffects = skillInfo?.effects || {};
     const skillAttackBonus = skillEffects.attack_bonus || skillEffects.accuracy_bonus || 0;
     const skillDmgBonusPct = skillEffects.damage_bonus_pct || skillEffects.ranged_damage_pct || 0;
+    const critBonusPct = skillEffects.crit_chance_bonus_pct || 0;
 
     const roll = this.performCheck(statMod + skillAttackBonus, targetDc, proficiency, advantage, disadvantage);
+
+    // Дополнительный шанс крита для кинжалов/высоких боевых навыков (крит при d20 >= 19)
+    const isCritHit = roll.is_crit || (critBonusPct > 0 && roll.d20 >= 19);
 
     const mutations: EngineMutation[] = [];
     const systemFacts: string[] = [];
@@ -100,7 +104,7 @@ export class AttackHandler extends BaseActionHandler {
     }
 
     if (!roll.success) {
-      systemFacts.push(`${player.name} промахнулся по ${target.name} (d20=${roll.d20}, total=${roll.total} vs DC=${targetDc}${skillAttackBonus > 0 ? ` [бонус навыка +${skillAttackBonus}]` : ""}).`);
+      systemFacts.push(`${player.name} промахнулся по ${target.name} (d20=${roll.d20}, total=${roll.total} vs DC=${targetDc}${skillAttackBonus > 0 ? ` [бонус навыка ${weaponSkill.name} +${skillAttackBonus}]` : ""}).`);
       return {
         result: {
           action_type: this.action_type,
@@ -121,7 +125,7 @@ export class AttackHandler extends BaseActionHandler {
 
     // Крит: удваиваем кубики урона
     let totalDamage = damageRoll.total + statMod;
-    if (roll.is_crit) {
+    if (isCritHit) {
       const critRoll = rollDamage(damageDice);
       totalDamage = (damageRoll.total + critRoll.total) + statMod;
     }

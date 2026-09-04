@@ -70,6 +70,54 @@ export const CANONICAL_SKILLS: Record<string, SkillDefinition> = {
     description: "Управление потоками маны, чтение свитков и сотворение заклинаний.",
     statAffinity: "INT",
   },
+  daggers: {
+    key: "daggers",
+    name: "Владение кинжалами",
+    description: "Быстрые точные удары кинжалами и ножами. Увеличивает шанс критического удара, меткость и урон.",
+    statAffinity: "DEX",
+  },
+  axes: {
+    key: "axes",
+    name: "Владение топорами",
+    description: "Сокрушительные рубящие удары топорами и секирами. Пробивает броню и увеличивает урон.",
+    statAffinity: "STR",
+  },
+  polearms: {
+    key: "polearms",
+    name: "Древковое оружие",
+    description: "Удары копьями, пиками и алебардами. Позволяет удерживать врагов на дистанции.",
+    statAffinity: "STR",
+  },
+  unarmed: {
+    key: "unarmed",
+    name: "Рукопашный бой",
+    description: "Удары кулаками, пинки, броски и захваты. Увеличивает урон без оружия и шанс оглушения.",
+    statAffinity: "STR",
+  },
+  mining: {
+    key: "mining",
+    name: "Шахтёрское дело",
+    description: "Добыча руды, драгоценных камней и минералов. Сокращает время раскопок и повышает выход ценных ископаемых.",
+    statAffinity: "STR",
+  },
+  construction: {
+    key: "construction",
+    name: "Строительство",
+    description: "Возведение укреплений, шалашей, ловушек и ремонт построек. Повышает прочность созданных конструкций.",
+    statAffinity: "STR",
+  },
+  taming: {
+    key: "taming",
+    name: "Приручение и дрессировка",
+    description: "Понимание повадок зверей и монстров, завоевание их доверия и обучение командам.",
+    statAffinity: "WIS",
+  },
+  alchemy: {
+    key: "alchemy",
+    name: "Алхимия",
+    description: "Приготовление целебных зелий, ядов и алхимических экстрактов из трав и реагентов.",
+    statAffinity: "INT",
+  },
 };
 
 // ============================================
@@ -89,19 +137,79 @@ const SKILL_ALIASES: Record<string, string> = {
   "сбор ягод": "gathering",
   "сбор грибов": "gathering",
   "сбор трав": "gathering",
-  "сбор руды": "gathering",
   "рубка дров": "gathering",
   "сбор хвороста": "gathering",
   "травы": "gathering",
   "поиск ресурсов": "gathering",
   "собирание": "gathering",
 
-  // Владение оружием
+  // Шахтёрское / горное дело
+  "сбор руды": "mining",
+  "шахтерское дело": "mining",
+  "горное дело": "mining",
+  "добыча руды": "mining",
+  "рудокоп": "mining",
+  "кирка": "mining",
+  "рудная жила": "mining",
+  "копать руду": "mining",
+  "шахта": "mining",
+
+  // Строительство
+  "строительство": "construction",
+  "постройка": "construction",
+  "строить": "construction",
+  "шалаш": "construction",
+  "укрытие": "construction",
+  "баррикада": "construction",
+  "возведение": "construction",
+
+  // Приручение и дрессировка
+  "приручение": "taming",
+  "дрессировка": "taming",
+  "приручить": "taming",
+  "задобрить": "taming",
+  "покормить зверя": "taming",
+  "успокоить зверя": "taming",
+  "питомец": "taming",
+
+  // Алхимия
+  "алхимия": "alchemy",
+  "зельеварение": "alchemy",
+  "зелье": "alchemy",
+  "отвар": "alchemy",
+  "приготовить зелье": "alchemy",
+
+  // Мечи
   "фехтование": "swordsmanship",
   "рубка": "swordsmanship",
   "клинок": "swordsmanship",
   "меч": "swordsmanship",
-  "нож": "swordsmanship",
+
+  // Кинжалы и ножи
+  "кинжал": "daggers",
+  "нож": "daggers",
+  "стилет": "daggers",
+  "кортик": "daggers",
+  "дага": "daggers",
+
+  // Топоры
+  "топор": "axes",
+  "секира": "axes",
+  "колун": "axes",
+
+  // Древковое оружие
+  "копье": "polearms",
+  "копьё": "polearms",
+  "пика": "polearms",
+  "алебарда": "polearms",
+
+  // Рукопашный бой
+  "рукопашный бой": "unarmed",
+  "кулачный бой": "unarmed",
+  "кулак": "unarmed",
+  "кулаки": "unarmed",
+  "пинок": "unarmed",
+  "борьба": "unarmed",
 
   // Стрельба
   "стрельба": "archery",
@@ -158,6 +266,34 @@ export function normalizeSkillKey(raw: string): string {
 }
 
 /**
+ * Определяет боевой навык по экипированному оружию и тексту действия
+ */
+export function resolveWeaponSkill(weapon: any, actionText = ""): { key: string; name: string } {
+  const itemName = (weapon?.item_name || weapon?.name || "").toLowerCase();
+  const text = `${actionText} ${itemName}`.toLowerCase();
+
+  if (text.includes("кинжал") || text.includes("нож") || text.includes("стилет") || text.includes("кортик") || text.includes("дага")) {
+    return { key: "daggers", name: CANONICAL_SKILLS.daggers.name };
+  }
+  if (text.includes("топор") || text.includes("секира") || text.includes("колун")) {
+    return { key: "axes", name: CANONICAL_SKILLS.axes.name };
+  }
+  if (text.includes("копь") || text.includes("пик") || text.includes("алебард") || text.includes("трезубец")) {
+    return { key: "polearms", name: CANONICAL_SKILLS.polearms.name };
+  }
+  if (text.includes("лук") || text.includes("арбалет") || text.includes("стрел")) {
+    return { key: "archery", name: CANONICAL_SKILLS.archery.name };
+  }
+  if (text.includes("кулак") || text.includes("рукопаш") || text.includes("пинок") || text.includes("борьб") || (!weapon && (text.includes("удар рукой") || text.includes("ногой")))) {
+    return { key: "unarmed", name: CANONICAL_SKILLS.unarmed.name };
+  }
+  if (text.includes("заклинани") || text.includes("маги") || text.includes("посох") || text.includes("свиток") || text.includes("фаербол")) {
+    return { key: "magic", name: CANONICAL_SKILLS.magic.name };
+  }
+  return { key: "swordsmanship", name: CANONICAL_SKILLS.swordsmanship.name };
+}
+
+/**
  * Автоматически определяет, какой навык развивает действие игрока
  */
 export function detectSkillFromAction(params: {
@@ -176,9 +312,27 @@ export function detectSkillFromAction(params: {
     }
   }
 
-  if (action_type === "attack" || action_type === "stealth_attack" || lowerText.includes("атак") || lowerText.includes("меч") || lowerText.includes("клинок") || lowerText.includes("фехтован") || lowerText.includes("удар")) {
+  // Приручение и взаимодействие с животными
+  if (lowerText.includes("прируч") || lowerText.includes("дрессир") || lowerText.includes("задобрить") || lowerText.includes("покормить зверя") || lowerText.includes("погладить зверя") || lowerText.includes("успокоить зверя") || lowerText.includes("питомец")) {
+    return { key: "taming", name: CANONICAL_SKILLS.taming.name };
+  }
+
+  // Боевые действия и оружие
+  if (action_type === "attack" || action_type === "stealth_attack" || lowerText.includes("атак") || lowerText.includes("удар") || lowerText.includes("рубить") || lowerText.includes("колоть") || lowerText.includes("стрелять")) {
+    if (lowerText.includes("кинжал") || lowerText.includes("нож") || lowerText.includes("стилет") || lowerText.includes("кортик")) {
+      return { key: "daggers", name: CANONICAL_SKILLS.daggers.name };
+    }
+    if (lowerText.includes("топор") || lowerText.includes("секира") || lowerText.includes("колун")) {
+      return { key: "axes", name: CANONICAL_SKILLS.axes.name };
+    }
+    if (lowerText.includes("копь") || lowerText.includes("пик") || lowerText.includes("алебард")) {
+      return { key: "polearms", name: CANONICAL_SKILLS.polearms.name };
+    }
     if (lowerText.includes("лук") || lowerText.includes("арбалет") || lowerText.includes("стрел")) {
       return { key: "archery", name: CANONICAL_SKILLS.archery.name };
+    }
+    if (lowerText.includes("кулак") || lowerText.includes("рукопаш") || lowerText.includes("пинок") || lowerText.includes("борьб")) {
+      return { key: "unarmed", name: CANONICAL_SKILLS.unarmed.name };
     }
     if (lowerText.includes("заклинани") || lowerText.includes("маги") || lowerText.includes("фаербол")) {
       return { key: "magic", name: CANONICAL_SKILLS.magic.name };
@@ -186,11 +340,23 @@ export function detectSkillFromAction(params: {
     return { key: "swordsmanship", name: CANONICAL_SKILLS.swordsmanship.name };
   }
 
-  if (lowerText.includes("лук") || lowerText.includes("арбалет") || lowerText.includes("стрел")) {
-    return { key: "archery", name: CANONICAL_SKILLS.archery.name };
+  // Шахтёрское дело (руда, жила, кирка, камень)
+  if (lowerText.includes("шахт") || lowerText.includes("руд") || lowerText.includes("жила") || lowerText.includes("кирка") || lowerText.includes("копать камень")) {
+    return { key: "mining", name: CANONICAL_SKILLS.mining.name };
   }
 
-  if (action_type === "harvest_ambient" || action_type === "search" || lowerText.includes("хворост") || lowerText.includes("дров") || lowerText.includes("ягод") || lowerText.includes("гриб") || lowerText.includes("трав") || lowerText.includes("руд")) {
+  // Строительство
+  if (lowerText.includes("строит") || lowerText.includes("постройк") || lowerText.includes("шалаш") || lowerText.includes("укрыти") || lowerText.includes("баррикад") || lowerText.includes("возвести")) {
+    return { key: "construction", name: CANONICAL_SKILLS.construction.name };
+  }
+
+  // Алхимия
+  if (lowerText.includes("алхим") || lowerText.includes("зель") || lowerText.includes("отвар") || lowerText.includes("дистилл")) {
+    return { key: "alchemy", name: CANONICAL_SKILLS.alchemy.name };
+  }
+
+  // Собирательство (природа, лес, ягоды, хворост)
+  if (action_type === "harvest_ambient" || action_type === "search" || lowerText.includes("хворост") || lowerText.includes("дров") || lowerText.includes("ягод") || lowerText.includes("гриб") || lowerText.includes("трав")) {
     return { key: "gathering", name: CANONICAL_SKILLS.gathering.name };
   }
 
@@ -229,6 +395,29 @@ export function calculateSkillBonuses(skillKey: string, level: number): Record<s
         damage_bonus_pct: Math.floor(safeLvl * 0.5), // До +50% урона на 100 уровне
         attack_bonus: Math.floor(safeLvl / 10),     // +1 к попаданию за каждые 10 уровней
       };
+    case "daggers":
+      return {
+        damage_bonus_pct: Math.floor(safeLvl * 0.4),
+        attack_bonus: Math.floor(safeLvl / 8),
+        crit_chance_bonus_pct: Math.min(25, Math.floor(safeLvl * 0.25)), // до +25% крита
+      };
+    case "axes":
+      return {
+        damage_bonus_pct: Math.floor(safeLvl * 0.6), // Мощный урон до +60%
+        attack_bonus: Math.floor(safeLvl / 12),
+        armor_pen_bonus: Math.floor(safeLvl / 10),
+      };
+    case "polearms":
+      return {
+        damage_bonus_pct: Math.floor(safeLvl * 0.5),
+        attack_bonus: Math.floor(safeLvl / 10),
+      };
+    case "unarmed":
+      return {
+        damage_bonus_pct: Math.floor(safeLvl * 0.5),
+        attack_bonus: Math.floor(safeLvl / 10),
+        stun_chance_pct: Math.min(30, Math.floor(safeLvl * 0.3)),
+      };
     case "archery":
       return {
         ranged_damage_pct: Math.floor(safeLvl * 0.5),
@@ -238,6 +427,29 @@ export function calculateSkillBonuses(skillKey: string, level: number): Record<s
       return {
         find_chance_bonus_pct: Math.min(60, Math.floor(safeLvl * 0.6)), // До +60% шанса
         time_reduction_pct: Math.min(50, Math.floor(safeLvl * 0.5)),    // До -50% времени поиска
+      };
+    case "mining":
+      return {
+        find_chance_bonus_pct: Math.min(60, Math.floor(safeLvl * 0.6)),
+        ore_yield_bonus_pct: Math.min(60, Math.floor(safeLvl * 0.6)),
+        time_reduction_pct: Math.min(50, Math.floor(safeLvl * 0.5)),
+      };
+    case "construction":
+      return {
+        structure_hp_bonus_pct: Math.floor(safeLvl * 0.8),
+        time_reduction_pct: Math.min(50, Math.floor(safeLvl * 0.4)),
+        craft_quality_bonus_pct: Math.floor(safeLvl * 0.5),
+      };
+    case "taming":
+      return {
+        taming_bonus_pct: Math.min(60, Math.floor(safeLvl * 0.6)), // До +60% к шансу приручения
+        taming_check_bonus: Math.floor(safeLvl / 10),
+        pet_stat_bonus: Math.floor(safeLvl / 20),
+      };
+    case "alchemy":
+      return {
+        potion_potency_pct: Math.floor(safeLvl * 0.5),
+        craft_quality_bonus_pct: Math.floor(safeLvl * 0.5),
       };
     case "leatherworking":
     case "crafting":
@@ -266,8 +478,13 @@ export function calculateSkillBonuses(skillKey: string, level: number): Record<s
         mana_cost_reduction_pct: Math.min(30, Math.floor(safeLvl * 0.3)),
       };
     default:
+      // Универсальный фоллбэк для любых динамически генерируемых навыков
       return {
         bonus_pct: safeLvl,
+        check_bonus: Math.floor(safeLvl / 10),
+        damage_bonus_pct: Math.floor(safeLvl * 0.5),
+        find_chance_bonus_pct: Math.min(50, Math.floor(safeLvl * 0.5)),
+        time_reduction_pct: Math.min(40, Math.floor(safeLvl * 0.4)),
       };
   }
 }

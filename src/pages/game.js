@@ -5,7 +5,8 @@ import {
   getSessionMessages, submitAction, updatePlayer, addInventoryItem,
   removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn,
   getTurnQueue, initTurnQueue, passTurn, createPlayer,
-  getCharacterCards, getNpcRelationships, getNpcMemories, getRelationshipTierLabelClient
+  getCharacterCards, getNpcRelationships, getNpcMemories, getRelationshipTierLabelClient,
+  getPlayerSkills, allocateStatPoints
 } from '../api/game.js';
 import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows } from '../config.js';
 import { toast } from '../utils/toast.js';
@@ -40,6 +41,7 @@ export async function renderGame(container, sessionId, user) {
   let isSubmitting = false;
   let isMyTurn = true; // По умолчанию разрешаем ввод
   let activePlayerName = '';
+  let playerSkills = [];
   let unsubMessages = null;
   let unsubPlayers = null;
   let unsubTurnQueue = null;
@@ -97,8 +99,13 @@ export async function renderGame(container, sessionId, user) {
       }
       messages = await getSessionMessages(sessionId);
 
-      // Если персонаж уже есть, проверяем очередь ходов
+      // Если персонаж уже есть, проверяем очередь ходов и загружаем навыки
       if (currentPlayer) {
+        try {
+          playerSkills = await getPlayerSkills(currentPlayer.id);
+        } catch (skErr) {
+          console.warn('Failed to load player skills:', skErr);
+        }
         await checkTurnQueue();
       }
     } catch (err) {
@@ -209,6 +216,8 @@ export async function renderGame(container, sessionId, user) {
       .subscribe();
   }
 
+  let activeTurnEntityType = 'player';
+
   function handleTurnUpdate(payload) {
     if (!currentPlayer) return;
 
@@ -216,9 +225,15 @@ export async function renderGame(container, sessionId, user) {
       const turn = payload.new;
       if (turn.status === 'active') {
         const wasMyTurn = isMyTurn;
-        isMyTurn = turn.player_id === currentPlayer.id;
-        const activeP = allPlayers.find((p) => p.id === turn.player_id);
-        activePlayerName = activeP ? (activeP.name || 'Герой') : 'Напарник';
+        activeTurnEntityType = turn.entity_type || (turn.npc_id ? 'npc' : 'player');
+        if (activeTurnEntityType === 'npc') {
+          isMyTurn = false;
+          activePlayerName = 'Враг / NPC';
+        } else {
+          isMyTurn = turn.player_id === currentPlayer.id;
+          const activeP = allPlayers.find((p) => p.id === turn.player_id);
+          activePlayerName = activeP ? (activeP.name || 'Герой') : 'Напарник';
+        }
 
         // Снимаем блокировку, когда наступает наш ход
         if (!wasMyTurn && isMyTurn) {
@@ -243,7 +258,9 @@ export async function renderGame(container, sessionId, user) {
     const hasMultiplePlayers = allPlayers.length > 1;
 
     if (turnIndicator) {
-      if (!hasMultiplePlayers) {
+      if (activeTurnEntityType === 'npc') {
+        turnIndicator.innerHTML = '<span class="badge badge-error" style="display: inline-flex; align-items: center; gap: 4px;">⚔️ Ход противника / NPC</span>';
+      } else if (!hasMultiplePlayers) {
         turnIndicator.innerHTML = '';
       } else if (isMyTurn) {
         turnIndicator.innerHTML = '<span class="badge badge-success" style="display: inline-flex; align-items: center; gap: 4px;">🟢 Ваш ход</span>';
@@ -262,7 +279,7 @@ export async function renderGame(container, sessionId, user) {
       input.disabled = true;
       input.placeholder = isSubmitting
         ? 'Обработка действия...'
-        : `Ожидание действий напарника (${activePlayerName || 'другой игрок'})...`;
+        : (activeTurnEntityType === 'npc' ? 'Ход противника / NPC...' : `Ожидание действий напарника (${activePlayerName || 'другой игрок'})...`);
       sendBtn.disabled = true;
     } else {
       input.disabled = false;
@@ -454,17 +471,33 @@ export async function renderGame(container, sessionId, user) {
     const hpRatio = Math.max(0, Math.min(1, (player.hp || 0) / safeMaxHp));
     const hpClass = hpRatio > 0.5 ? '' : hpRatio > 0.25 ? 'low' : 'critical';
     const hpPct = hpRatio * 100;
+
+    const safeMaxMp = Math.max(1, player.max_mp ?? 50);
+    const mpRatio = Math.max(0, Math.min(1, (player.mp ?? 50) / safeMaxMp));
+    const mpPct = mpRatio * 100;
+
+    const currentLvl = player.level || 1;
+    const currentXp = player.xp || 0;
+    const xpNeeded = currentLvl * 100;
+    const xpPct = Math.min(100, Math.floor((currentXp / xpNeeded) * 100));
+
+    const freeStatPoints = player.stat_points || 0;
+
     const statsHtml = STATS.map((stat) => {
       const baseValue = stats[stat] || 10;
       const injuryPenalty = (player.injuries || [])
         .filter(i => !i.cured_at && i.stat_penalties?.[stat])
         .reduce((sum, i) => sum + (Number(i.stat_penalties[stat]) || 0), 0);
       const displayValue = baseValue + injuryPenalty;
+      const mod = Math.floor((displayValue - 10) / 2);
       return `
-        <div class="stat-card">
+        <div class="stat-card" style="position: relative;">
           <div class="stat-card-label">${stat}</div>
           <div class="stat-card-value">${displayValue}</div>
-          <div class="stat-card-modifier">${Math.floor((displayValue - 10) / 2) >= 0 ? '+' : ''}${Math.floor((displayValue - 10) / 2)}</div>
+          <div class="stat-card-modifier">${mod >= 0 ? '+' : ''}${mod}</div>
+          ${freeStatPoints > 0 ? `
+            <button class="btn btn-xs btn-primary allocate-stat-btn" data-stat="${stat}" style="margin-top: 4px; padding: 1px 8px; font-size: 11px; width: 100%;" title="Повысить ${stat} на +1 (БЕЗ лимита в 20)">+1</button>
+          ` : ''}
         </div>
       `;
     }).join('');
@@ -513,18 +546,52 @@ export async function renderGame(container, sessionId, user) {
         <h3 class="profile-name">${escapeHtml(player?.name || 'Герой')}</h3>
         <p class="profile-meta">${escapeHtml(player?.race || '')} / ${escapeHtml(player?.class || '')}</p>
 
-        <div class="profile-section" style="width: 100%;">
-          <div class="hp-bar-container" style="height: 16px;">
-            <div class="hp-bar ${hpClass}"
-                 style="width: ${hpPct}%"></div>
+        <!-- Track 1: Уровень и Опыт -->
+        <div class="profile-section" style="width: 100%; background: var(--bg-card); border-radius: var(--radius-md); padding: 10px; border: 1px solid var(--border-color);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-weight: 700; color: var(--accent-gold); font-size: var(--fs-base);">🎖️ Уровень ${currentLvl}</span>
+            <span style="font-size: var(--fs-xs); color: var(--text-muted);">${currentXp} / ${xpNeeded} XP</span>
           </div>
-          <p style="text-align: center; margin-top: 0.5rem; font-size: var(--fs-base); font-weight: 600;">
-            ❤️ ${player.hp} / ${player.max_hp}
-          </p>
+          <div class="hp-bar-container" style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+            <div style="height: 100%; width: ${xpPct}%; background: linear-gradient(90deg, #f59e0b, #fbbf24); border-radius: 4px;"></div>
+          </div>
+        </div>
+
+        <!-- HP & MP -->
+        <div class="profile-section" style="width: 100%;">
+          <!-- HP Bar -->
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: 600; margin-bottom: 2px;">
+              <span>❤️ Здоровье (HP)</span>
+              <span>${player.hp} / ${player.max_hp}</span>
+            </div>
+            <div class="hp-bar-container" style="height: 12px;">
+              <div class="hp-bar ${hpClass}" style="width: ${hpPct}%"></div>
+            </div>
+          </div>
+
+          <!-- MP Bar -->
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: 600; margin-bottom: 2px;">
+              <span>💙 Мана (MP)</span>
+              <span>${player.mp ?? 50} / ${player.max_mp ?? 50}</span>
+            </div>
+            <div class="hp-bar-container" style="height: 12px; background: rgba(255,255,255,0.1);">
+              <div style="height: 100%; width: ${mpPct}%; background: #3b82f6; border-radius: var(--radius-sm); transition: width 0.3s ease;"></div>
+            </div>
+          </div>
+
           <p style="text-align: center; margin-top: 0.25rem; font-size: var(--fs-sm); color: var(--accent-gold);">
             💰 ${player.money || 0} золота
           </p>
         </div>
+
+        ${freeStatPoints > 0 ? `
+          <div style="width: 100%; background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-gold); border-radius: var(--radius-md); padding: 8px 12px; text-align: center;">
+            <div style="color: var(--accent-gold); font-weight: 700; font-size: var(--fs-sm);">⭐ Свободных очков характеристик (ОХ): ${freeStatPoints}</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Развитие БЕЗ ограничения в 20 (до 30, 40+). Нажмите [+1] у нужного параметра.</div>
+          </div>
+        ` : ''}
 
         <div class="profile-section" style="width: 100%;">
           <h4 class="profile-section-title">Характеристики</h4>
@@ -551,6 +618,40 @@ export async function renderGame(container, sessionId, user) {
           <div class="stats-grid-3">
             ${savingThrowsHtml}
           </div>
+        </div>
+
+        <!-- Track 2: Динамические навыки игрока (1..100) -->
+        <div class="profile-section" style="width: 100%;">
+          <h4 class="profile-section-title">🗡️ Навыки (1..100)</h4>
+          ${playerSkills && playerSkills.length > 0 ? `
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              ${playerSkills.map((s) => {
+                const sLvl = s.level || 1;
+                const sXp = s.xp || 0;
+                const sNext = s.xp_to_next_level || (sLvl * 100);
+                const sPct = Math.min(100, Math.floor((sXp / sNext) * 100));
+                return `
+                  <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                      <span style="font-weight: 600; font-size: var(--fs-sm);">${escapeHtml(s.name || s.skill_key)}</span>
+                      <span class="badge badge-primary" style="font-size: var(--fs-xs); font-weight: 700;">Ур. ${sLvl}</span>
+                    </div>
+                    <div class="hp-bar-container" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
+                      <div style="height: 100%; width: ${sPct}%; background: #3b82f6; border-radius: 3px;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted);">
+                      <span>Опыт: ${sXp} / ${sNext} XP</span>
+                      <span>+${sLvl}% к эффективности</span>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : `
+            <p style="font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.4;">
+              Навыки открываются и растут автоматически от ваших действий в мире (рубка дерева, сбор трав, стрельба из лука, фехтование, кожевничество, скрытность).
+            </p>
+          `}
         </div>
 
         ${injuriesHtml}
@@ -905,6 +1006,50 @@ export async function renderGame(container, sessionId, user) {
     });
 
     bindNpcCardEvents();
+    bindProfileEvents();
+  }
+
+  function bindProfileEvents() {
+    document.querySelectorAll('.allocate-stat-btn').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const statName = btn.getAttribute('data-stat');
+        if (!statName || !currentPlayer) return;
+        try {
+          toast.info(`Вкладываем 1 очко в ${statName}...`);
+          const res = await allocateStatPoints(currentPlayer.id, statName, 1);
+          if (res?.success) {
+            toast.success(`${statName} повышена до ${res.new_value}!`);
+            await refreshProfile();
+          } else {
+            toast.error(res?.error || 'Не удалось распределить очки');
+          }
+        } catch (err) {
+          toast.error('Ошибка: ' + err.message);
+        }
+      });
+    });
+  }
+
+  async function refreshProfile() {
+    if (!currentPlayer) return;
+    try {
+      const [freshPlayer, skills] = await Promise.all([
+        getPlayer(currentPlayer.id),
+        getPlayerSkills(currentPlayer.id),
+      ]);
+      if (freshPlayer) {
+        currentPlayer = { ...currentPlayer, ...freshPlayer };
+      }
+      playerSkills = skills || [];
+      const content = document.getElementById('profileContent');
+      if (content) {
+        content.innerHTML = renderProfile(currentPlayer);
+        bindProfileEvents();
+      }
+    } catch (e) {
+      console.warn('Failed to refresh profile:', e);
+    }
   }
 
   async function refreshInventory() {
@@ -926,6 +1071,9 @@ export async function renderGame(container, sessionId, user) {
     }
     if (activePanel === 'npc') {
       refreshNpcPanel();
+    }
+    if (activePanel === 'profile') {
+      refreshProfile();
     }
     render();
   }
@@ -1027,13 +1175,28 @@ export async function renderGame(container, sessionId, user) {
         }
       }
 
-      // Обновление данных игрока и инвентаря
+      // Уведомления о спутниках, навыках и уровнях
+      if (result.companion_action) {
+        toast.info(`🤝 ${result.companion_action.npc_name}: ${result.companion_action.dialogue}`);
+      }
+      if (result.skill_progress?.leveled_up) {
+        toast.success(`🔔 Навык повышен! ${result.skill_progress.name} ур. ${result.skill_progress.level}!`);
+      }
+      if (result.level_up) {
+        toast.success(`🎉 Новый уровень ${result.level_up.new_level}! Получено +2 свободных очка характеристик (ОХ)!`);
+      }
+
+      // Обновление данных игрока, навыков и инвентаря
       try {
-        const freshPlayer = await getPlayer(currentPlayer.id);
+        const [freshPlayer, freshSkills] = await Promise.all([
+          getPlayer(currentPlayer.id),
+          getPlayerSkills(currentPlayer.id),
+        ]);
         if (freshPlayer) {
           currentPlayer = freshPlayer;
-        } else {
-          await refreshInventory();
+        }
+        if (freshSkills) {
+          playerSkills = freshSkills;
         }
       } catch {
         await refreshInventory();

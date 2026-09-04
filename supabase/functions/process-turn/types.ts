@@ -147,6 +147,7 @@ export interface RouterOutputPayload {
   encounter_intent: EncounterIntent;
   time_estimate_minutes: number;
   atmosphere: Atmosphere;
+  skill_hint?: string | null;
 }
 
 // ============================================

@@ -18,6 +18,9 @@ import { compileSystemTruth } from "./steps/step4_system_truth.ts";
 import { generateNarrative, buildFallbackNarrative } from "./steps/step5_narrator.ts";
 import { processNpcInteractions } from "./steps/npc_memory_updater.ts";
 import { ensureStartingLocation } from "../_shared/starting_location_generator.ts";
+import { detectSkillFromAction, calculateSkillBonuses } from "../_shared/skill_engine.ts";
+import { handleCompanionInSceneAction, resolveNpcBackgroundActivities } from "../_shared/npc_autonomous_engine.ts";
+import { decideNpcCombatAction, executeNpcAttack } from "../_shared/npc_combat_ai.ts";
 import { buildSatellitePrompt, buildGpsPrompt } from "./steps/_shared_prompts.ts";
 import { RouterInputContext } from "./types.ts";
 
@@ -216,7 +219,7 @@ serve(async (req) => {
     let allNpcs: any[] = [];
     if (session.current_location_id) {
       const { data: npcData } = await supabase.from("npcs")
-        .select("id, name, race, role, hp, max_hp, armor_class, level, is_alive, is_hostile, status_tags, stats, background, appearance, habits, catchphrases")
+        .select("id, name, race, role, category, hp, max_hp, armor_class, level, is_alive, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time")
         .eq("location_id", session.current_location_id);
       allNpcs = npcData || [];
     }
@@ -434,6 +437,130 @@ serve(async (req) => {
     }
 
     // ============================================
+    // АВТОНОМНЫЕ ЭКСПЕДИЦИИ NPC (0 токенов, Lazy Calendar Simulation)
+    // ============================================
+    let expeditionEvents: any[] = [];
+    if (time_passed_minutes > 0 && session.world_id) {
+      try {
+        expeditionEvents = await resolveNpcBackgroundActivities({
+          supabase,
+          world_id: session.world_id,
+          current_game_time: {
+            year: session.game_year || 1248,
+            month: session.game_month || 5,
+            day: session.game_day || 14,
+            hour: session.game_hour || 10,
+            minute: session.game_minute || 0,
+          },
+        });
+      } catch (expErr) {
+        console.warn(`[${requestId}] resolveNpcBackgroundActivities failed:`, expErr);
+      }
+    }
+
+    // ============================================
+    // ИНИЦИАТИВА СПУТНИКОВ В ТЕКУЩЕЙ СЦЕНЕ (Мирные действия)
+    // ============================================
+    let companionAction: any = null;
+    try {
+      companionAction = await handleCompanionInSceneAction({
+        supabase,
+        player_action_text: safeActionText,
+        acting_player_name: player.name || "Герой",
+        location_npcs: allNpcs,
+        session_id,
+      });
+    } catch (compErr) {
+      console.warn(`[${requestId}] Companion action failed:`, compErr);
+    }
+
+    // ============================================
+    // ДИНАМИЧЕСКИЕ НАВЫКИ ИГРОКА (1..100)
+    // ============================================
+    let skillProgress: any = null;
+    try {
+      const detectedSkill = detectSkillFromAction({
+        action_text: safeActionText,
+        action_type: routerResult.actions[0]?.type,
+        skill_hint: routerResult.skill_hint,
+      });
+
+      if (detectedSkill) {
+        const xpAmount = routerResult.actions.length > 0 ? 35 : 20;
+        const { data: skillRes, error: skillErr } = await supabase.rpc("add_player_skill_xp", {
+          p_player_id: player.id,
+          p_skill_key: detectedSkill.key,
+          p_skill_name: detectedSkill.name,
+          p_xp_amount: xpAmount,
+        });
+
+        if (!skillErr && skillRes?.success) {
+          skillProgress = skillRes;
+          console.log(`[${requestId}] [SKILL] ${detectedSkill.name} +${xpAmount} XP (Lvl ${skillRes.level}${skillRes.leveled_up ? ' - LEVEL UP!' : ''})`);
+        }
+      }
+    } catch (skillExc) {
+      console.warn(`[${requestId}] Skill progression failed:`, skillExc);
+    }
+
+    // ============================================
+    // ПРОКАЧКА УРОВНЯ ПЕРСОНАЖА (1..100, +2 ОХ, HP/MP)
+    // ============================================
+    let playerLevelUp: any = null;
+    try {
+      const isCombatAction = routerResult.actions.some((a: any) => a.type === "attack");
+      const baseTurnXp = isCombatAction ? 50 : 25;
+      const currentLevel = player.level || 1;
+      const currentXp = (player.xp || 0) + baseTurnXp;
+      const xpNeeded = currentLevel * 100;
+
+      if (currentXp >= xpNeeded && currentLevel < 100) {
+        const newLevel = currentLevel + 1;
+        const leftoverXp = currentXp - xpNeeded;
+        const newStatPoints = (player.stat_points || 0) + 2;
+
+        const conVal = player.stats?.CON || 10;
+        const conMod = Math.floor((conVal - 10) / 2);
+        const hpGain = Math.max(1, 5 + conMod);
+        const newMaxHp = (player.max_hp || 10) + hpGain;
+        const newHp = Math.min(newMaxHp, (player.hp || 10) + hpGain);
+
+        const intVal = player.stats?.INT || 10;
+        const newMaxMp = Math.max(20, intVal * 2 + newLevel * 5);
+        const newMp = Math.min(newMaxMp, (player.mp || 50) + 15);
+
+        await supabase.from("players").update({
+          level: newLevel,
+          xp: leftoverXp,
+          stat_points: newStatPoints,
+          max_hp: newMaxHp,
+          hp: newHp,
+          max_mp: newMaxMp,
+          mp: newMp,
+          updated_at: new Date().toISOString(),
+        }).eq("id", player.id);
+
+        playerLevelUp = {
+          old_level: currentLevel,
+          new_level: newLevel,
+          stat_points_gained: 2,
+          total_stat_points: newStatPoints,
+          hp_gained: hpGain,
+          max_hp: newMaxHp,
+          max_mp: newMaxMp,
+        };
+        console.log(`[${requestId}] [LEVEL_UP] Player ${player.name} leveled up to ${newLevel}! (+2 stat points)`);
+      } else {
+        await supabase.from("players").update({
+          xp: currentXp,
+          updated_at: new Date().toISOString(),
+        }).eq("id", player.id);
+      }
+    } catch (lvlErr) {
+      console.warn(`[${requestId}] Leveling check failed:`, lvlErr);
+    }
+
+    // ============================================
     // ШАГ 4: System Truth Compiler
     // ============================================
     console.log(`[${requestId}] [STEP 4] System Truth...`);
@@ -510,7 +637,51 @@ serve(async (req) => {
       });
     }
 
-    // 4) NPC Relationships & Memories update
+    // 4) Companion action message
+    if (companionAction) {
+      await supabase.from("messages").insert({
+        session_id,
+        sender_type: "npc",
+        sender_name: companionAction.npc_name,
+        content: `${companionAction.dialogue}\n\n*${companionAction.action_description}*`,
+        metadata: { is_companion: true, item_obtained: companionAction.item_obtained },
+      });
+    }
+
+    // 5) Expedition events messages
+    for (const ev of expeditionEvents) {
+      await supabase.from("messages").insert({
+        session_id,
+        sender_type: "master",
+        sender_name: "Мир",
+        content: `📜 **Событие мира**: ${ev.summary}`,
+        metadata: { type: "npc_expedition", npc_id: ev.npc_id, loot: ev.loot, leveled_up: ev.leveled_up },
+      });
+    }
+
+    // 6) Skill level up notification
+    if (skillProgress?.leveled_up) {
+      await supabase.from("messages").insert({
+        session_id,
+        sender_type: "system",
+        sender_name: "Система",
+        content: `🔔 **[Навык повышен!]** ${skillProgress.name} достиг ур. ${skillProgress.level}! (+${skillProgress.level}% к эффективности)`,
+        metadata: { type: "skill_level_up", skill_key: skillProgress.skill_key, level: skillProgress.level },
+      });
+    }
+
+    // 7) Player level up notification
+    if (playerLevelUp) {
+      await supabase.from("messages").insert({
+        session_id,
+        sender_type: "system",
+        sender_name: "Система",
+        content: `🎉 **[Новый уровень!]** Поздравляем, вы достигли ${playerLevelUp.new_level} уровня!\nПолучено +2 свободных очка характеристик (ОХ). Макс. HP: ${playerLevelUp.max_hp}, Макс. MP: ${playerLevelUp.max_mp}.`,
+        metadata: { type: "player_level_up", ...playerLevelUp },
+      });
+    }
+
+    // 8) NPC Relationships & Memories update
     let npcUpdates: any[] = [];
     try {
       npcUpdates = await processNpcInteractions({
@@ -532,15 +703,43 @@ serve(async (req) => {
       console.warn(`[${requestId}] [NPC] processNpcInteractions failed:`, npcErr);
     }
 
-    // turn_queue: текущий ход completed → следующий active
+    // ============================================
+    // D&D БОЕВАЯ ОЧЕРЕДЬ ХОДОВ (TURN QUEUE С ИНИЦИАТИВОЙ NPC)
+    // ============================================
+    let npcCombatTurns: any[] = [];
     try {
+      const isCombat = routerResult.actions.some((a: any) => a.type === "attack") ||
+        allNpcs.some((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
+
       const { data: existingTurns } = await supabase.from("turn_queue")
-        .select("id, player_id, status")
+        .select("id, player_id, npc_id, entity_type, status, initiative")
         .eq("session_id", session_id)
         .order("created_at", { ascending: true });
 
+      if (isCombat) {
+        // Подключаем к бою враждебных NPC с броском инициативы
+        const activeHostileNpcs = allNpcs.filter((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
+        for (const hostNpc of activeHostileNpcs) {
+          const alreadyInQueue = existingTurns?.some((t: any) => t.npc_id === hostNpc.id);
+          if (!alreadyInQueue) {
+            const dexMod = Math.floor(((hostNpc.stats?.DEX || 10) - 10) / 2);
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const initRoll = d20 + dexMod;
+            await supabase.from("turn_queue").insert({
+              session_id,
+              npc_id: hostNpc.id,
+              player_id: null,
+              entity_type: "npc",
+              initiative: initRoll,
+              status: "waiting",
+              round_number: 1,
+            });
+          }
+        }
+      }
+
       if (!existingTurns || existingTurns.length === 0) {
-        // Очереди ещё нет — инициализируем для всех игроков сессии
+        // Очереди ещё нет — создаём для игроков сессии
         if (allPlayers && allPlayers.length > 1) {
           const nextPlayer = allPlayers.find((p: any) => p.id !== player.id) || allPlayers[0];
           for (const p of allPlayers) {
@@ -549,6 +748,8 @@ serve(async (req) => {
             await supabase.from("turn_queue").insert({
               session_id,
               player_id: p.id,
+              entity_type: "player",
+              initiative: p.initiative || 10,
               status: isActor ? "completed" : (isNext ? "active" : "waiting"),
               resolved_at: isActor ? new Date().toISOString() : null,
               parsed_action: isActor ? routerResult : null,
@@ -557,14 +758,16 @@ serve(async (req) => {
           }
         }
       } else {
-        // Добавляем игроков сессии, которых ещё нет в turn_queue
+        // Добавляем игроков, которых ещё нет в очереди
         if (allPlayers && allPlayers.length > 1) {
-          const existingPids = new Set(existingTurns.map((t: any) => t.player_id));
+          const existingPids = new Set(existingTurns.filter((t: any) => t.player_id).map((t: any) => t.player_id));
           for (const p of allPlayers) {
             if (!existingPids.has(p.id)) {
               await supabase.from("turn_queue").insert({
                 session_id,
                 player_id: p.id,
+                entity_type: "player",
+                initiative: p.initiative || 10,
                 status: "waiting",
               });
             }
@@ -573,27 +776,110 @@ serve(async (req) => {
 
         // Завершаем текущий ход игрока
         await supabase.from("turn_queue").update({
-          status: "completed", resolved_at: new Date().toISOString(),
-          parsed_action: routerResult, roll_result: engineResult,
+          status: "completed",
+          resolved_at: new Date().toISOString(),
+          parsed_action: routerResult,
+          roll_result: engineResult,
         }).eq("session_id", session_id).eq("player_id", player.id);
 
         // Ищем следующий ход со статусом 'waiting'
-        const { data: nextTurn } = await supabase.from("turn_queue")
-          .select("id, player_id")
-          .eq("session_id", session_id).eq("status", "waiting")
-          .order("created_at", { ascending: true }).limit(1).maybeSingle();
+        let { data: nextTurn } = await supabase.from("turn_queue")
+          .select("id, player_id, npc_id, entity_type, status, initiative")
+          .eq("session_id", session_id)
+          .eq("status", "waiting")
+          .order("initiative", { ascending: false })
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        // Если следующий ход принадлежит NPC — выполняем боевые ходы NPC
+        while (nextTurn && nextTurn.entity_type === "npc" && nextTurn.npc_id) {
+          const hostNpc = allNpcs.find((n: any) => n.id === nextTurn.npc_id);
+          if (hostNpc && hostNpc.is_alive !== false && (hostNpc.hp ?? 10) > 0) {
+            const battlefieldPlayers = (allPlayers || []).map((p: any) => ({
+              id: p.id,
+              name: p.name || "Герой",
+              hp: p.hp ?? 10,
+              max_hp: p.max_hp ?? 10,
+              armor_class: p.armor_class || 10,
+              class: p.class,
+            }));
+
+            const decision = await decideNpcCombatAction({
+              npc: hostNpc,
+              players: battlefieldPlayers,
+              openrouter_api_key: openrouterApiKey,
+              model: dmModel,
+            });
+
+            const targetPlayer = battlefieldPlayers.find((p: any) => p.id === decision.target_player_id) || battlefieldPlayers[0];
+
+            const attackResult = executeNpcAttack({
+              npc: hostNpc,
+              targetPlayer,
+              decision,
+            });
+
+            if (attackResult.is_hit && attackResult.damage > 0) {
+              const { data: curTarget } = await supabase.from("players").select("hp").eq("id", targetPlayer.id).single();
+              if (curTarget) {
+                const updatedHp = Math.max(0, (curTarget.hp ?? 10) - attackResult.damage);
+                await supabase.from("players").update({ hp: updatedHp }).eq("id", targetPlayer.id);
+              }
+            }
+
+            await supabase.from("messages").insert({
+              session_id,
+              sender_type: "master",
+              sender_name: "Бой",
+              content: attackResult.log_message,
+              metadata: {
+                type: "npc_combat_turn",
+                npc_id: hostNpc.id,
+                target_player_id: targetPlayer.id,
+                attack_result: attackResult,
+              },
+            });
+
+            npcCombatTurns.push(attackResult);
+          }
+
+          // Помечаем ход NPC как выполненный
+          await supabase.from("turn_queue").update({
+            status: "completed",
+            resolved_at: new Date().toISOString(),
+          }).eq("id", nextTurn.id);
+
+          // Проверяем следующий ход
+          const nextQuery = await supabase.from("turn_queue")
+            .select("id, player_id, npc_id, entity_type, status, initiative")
+            .eq("session_id", session_id)
+            .eq("status", "waiting")
+            .order("initiative", { ascending: false })
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          nextTurn = nextQuery.data;
+        }
 
         if (nextTurn) {
           await supabase.from("turn_queue").update({ status: "active" }).eq("id", nextTurn.id);
         } else {
-          // Раунд завершен! Все игроки сделали ход.
-          // Перезапускаем очередь: первый игрок становится 'active', остальные 'waiting'
-          const firstTurn = existingTurns[0];
-          const otherTurnIds = existingTurns.slice(1).map((t: any) => t.id);
-          if (otherTurnIds.length > 0) {
-            await supabase.from("turn_queue").update({ status: "waiting", resolved_at: null }).in("id", otherTurnIds);
+          // Раунд завершен! Перезапускаем очередь
+          const { data: allSessionTurns } = await supabase.from("turn_queue")
+            .select("id, entity_type, initiative")
+            .eq("session_id", session_id)
+            .order("initiative", { ascending: false });
+
+          if (allSessionTurns && allSessionTurns.length > 0) {
+            const firstTurn = allSessionTurns[0];
+            const otherTurnIds = allSessionTurns.slice(1).map((t: any) => t.id);
+            if (otherTurnIds.length > 0) {
+              await supabase.from("turn_queue").update({ status: "waiting", resolved_at: null }).in("id", otherTurnIds);
+            }
+            await supabase.from("turn_queue").update({ status: "active", resolved_at: null }).eq("id", firstTurn.id);
           }
-          await supabase.from("turn_queue").update({ status: "active", resolved_at: null }).eq("id", firstTurn.id);
         }
       }
     } catch (queueErr) { console.warn(`[${requestId}] [SAVE] turn_queue update failed:`, queueErr); }
@@ -610,6 +896,11 @@ serve(async (req) => {
       turn_status: systemTruth.turn_status,
       narratives: narratorOutput,
       npc_updates: npcUpdates,
+      companion_action: companionAction,
+      expedition_events: expeditionEvents,
+      skill_progress: skillProgress,
+      level_up: playerLevelUp,
+      npc_combat_turns: npcCombatTurns,
       game_time: systemTruth.environment.time,
       time_minutes: time_passed_minutes,
       location_changed,

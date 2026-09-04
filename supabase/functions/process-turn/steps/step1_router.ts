@@ -42,11 +42,16 @@ function buildRouterSystemPrompt(): string {
    - reason: объяснение
    - ai_custom_dc: 30-40 (высокая сложность)
 
-5. **clarification_needed**: Если действие неоднозначно и нужно уточнение (например: "помогаю городу" — каким образом?).
+5. **clarification_needed vs Свободный отыгрыш / Описание сцены**:
+   - КРИТИЧЕСКИ ВАЖНО: Описательные, созерцательные, ознакомительные и ролевые действия (например: "Опиши мое появление в каком-либо городе", "Осматриваюсь вокруг", "Вхожу в город", "Прислушиваюсь к шуму улицы", "Отдыхаю у костра", "Размышляю", "Любуюсь закатом") — это ПОЛНОСТЬЮ ВАЛИДНЫЕ действия! Для них ОБЯЗАТЕЛЬНО возвращай status: "success", пустой массив actions: [] (или действие "search"/"talk" если уместно), и время 10-30 минут. Ни в коем случае НЕ возвращай clarification_needed для таких действий! Нарратор (AI Dungeon Master) сам красочно опишет сцену.
+   - clarification_needed разрешено возвращать ИСКЛЮЧИТЕЛЬНО если ввод игрока является случайным мусором/набором букв (например: "asdfghjk", "???", "123"). Сообщение clarification_msg ДОЛЖНО БЫТЬ СТРОГО НА РУССКОМ ЯЗЫКЕ (например: "Уточните, какое действие вы хотите совершить").
 
-6. **Время**: оцени сколько минут займёт действие (1-1440).
+6. **Навыки игрока (skill_hint)**:
+   Определи, какой навык развивает это действие (если применимо): "swordsmanship", "archery", "gathering", "crafting", "leatherworking", "stealth", "survival", "persuasion", "medicine", "magic" или null.
 
-7. **Атмосфера**: 1-3 звука и 1-3 визуальных образа для сцены.
+7. **Время**: оцени сколько минут займёт действие (1-1440).
+
+8. **Атмосфера**: 1-3 звука и 1-3 визуальных образа для сцены.
 
 ## ФОРМАТ ОТВЕТА
 
@@ -55,6 +60,7 @@ function buildRouterSystemPrompt(): string {
 {
   "status": "success" | "clarification_needed" | "impossible",
   "clarification_msg": "string или null",
+  "skill_hint": "swordsmanship" | "gathering" | "stealth" | "crafting" | "persuasion" | null,
   "actions": [
     {
       "action_type": "attack" | "stealth_attack" | "move" | "loot" | "craft_recipe" | "craft_custom" | "transfer" | "talk" | "search" | "harvest_ambient",
@@ -242,6 +248,7 @@ function normalizeRouterOutput(parsed: any): RouterOutputPayload {
   return {
     status: parsed.status,
     clarification_msg: parsed.clarification_msg ?? null,
+    skill_hint: parsed.skill_hint ?? null,
     actions: (parsed.actions || []).map((a: any): RouterAction => ({
       action_type: a.action_type,
       target_entity_id: a.target_entity_id ?? null,
@@ -297,14 +304,15 @@ export async function parsePlayerIntent(
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage },
           ],
-          temperature: 0.3, // Низкая температура для стабильного JSON
-          max_tokens: 1500,
+          temperature: 0.2,
+          max_tokens: 1000,
         }),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`OpenRouter error: ${response.status} - ${errText}`);
+        const errorText = await response.text();
+        throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
       }
 
       const data = await response.json();
@@ -320,6 +328,34 @@ export async function parsePlayerIntent(
       const parsed = parseAIJson(rawContent);
       if (!parsed) {
         throw new Error("AI Router: не удалось распарсить JSON из ответа LLM");
+      }
+
+      // Защита от ложного clarification_needed:
+      // Если ввод игрока — это осмысленный ролевой запрос (описание появления, осмотр, путешествие),
+      // а нейросеть ошибочно вернула clarification_needed — автоматически конвертируем в success!
+      if (parsed.status === "clarification_needed") {
+        const rawAction = (input?.player_action_text || input?.action_text || "").trim().toLowerCase();
+        const msg = (parsed.clarification_msg || "").toLowerCase();
+
+        const isVagueBotMessage = msg.includes("too vague") || msg.includes("specify what you would like to do");
+        const isDescriptiveOrArrival = rawAction.includes("опиши") ||
+          rawAction.includes("появлен") ||
+          rawAction.includes("осмотр") ||
+          rawAction.includes("вокруг") ||
+          rawAction.includes("где я") ||
+          rawAction.includes("взглянуть") ||
+          rawAction.includes("посмотр") ||
+          rawAction.includes("прибыл");
+
+        if (isVagueBotMessage || isDescriptiveOrArrival) {
+          console.log(`[step1_router] Converting false clarification_needed to success for action: "${rawAction}"`);
+          parsed.status = "success";
+          parsed.clarification_msg = null;
+          if (!Array.isArray(parsed.actions)) parsed.actions = [];
+          if (!parsed.time_estimate_minutes) parsed.time_estimate_minutes = 15;
+          if (!parsed.atmosphere) parsed.atmosphere = { sounds: ["городской гул"], visuals: ["оживлённые улицы"] };
+          if (!parsed.encounter_intent) parsed.encounter_intent = { type: "none" };
+        }
       }
 
       // Валидация структуры

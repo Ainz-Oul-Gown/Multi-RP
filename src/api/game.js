@@ -1169,3 +1169,28 @@ export async function getNpcMemories(npcId, playerId) {
   if (error) throw error;
   return data || [];
 }
+
+// ===================== PLAYER SKILLS & STAT ALLOCATION =====================
+
+export async function getPlayerSkills(playerId) {
+  const { data, error } = await supabase
+    .from('player_skills')
+    .select('*')
+    .eq('player_id', playerId)
+    .order('level', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function allocateStatPoints(playerId, statName, points = 1) {
+  const { data, error } = await supabase.rpc('allocate_stat_points', {
+    p_player_id: playerId,
+    p_stat_name: statName,
+    p_points: points,
+  });
+
+  if (error) throw error;
+  return data;
+}
+

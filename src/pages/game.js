@@ -56,8 +56,14 @@ export async function renderGame(container, sessionId, user) {
     // Сообщения Мастера: проверяем target_player_id
     if (msg.sender_type === 'master') {
       const targetPlayerId = msg.metadata?.target_player_id;
-      // Глобальный лог (нет таргета, или явный флаг is_global)
-      if (!targetPlayerId || msg.metadata?.is_global === true) {
+      // Глобальный лог: виден всем, кроме автора действия (автор уже видит подробный личный нарратив)
+      if (msg.metadata?.is_global === true) {
+        if (msg.metadata?.initiator_player_id && currentPlayer && msg.metadata.initiator_player_id === currentPlayer.id) {
+          return false;
+        }
+        return true;
+      }
+      if (!targetPlayerId) {
         return true;
       }
       // Персональный нарратив — только адресату
@@ -314,10 +320,12 @@ export async function renderGame(container, sessionId, user) {
 
   function renderMessage(msg) {
     if (msg.sender_type === 'master') {
+      const isGlobalLog = msg.metadata?.is_global === true || msg.metadata?.type === 'global_log';
       return `
-        <div class="message message-master">
-          <div class="message-avatar">🎭</div>
+        <div class="message ${isGlobalLog ? 'message-system' : 'message-master'}">
+          <div class="message-avatar">${isGlobalLog ? '📜' : '🎭'}</div>
           <div class="message-body">
+            ${isGlobalLog ? '<div class="message-sender" style="font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: 2px;">Общий лог комнаты</div>' : ''}
             <div class="message-text">${escapeHtml(msg.content)}</div>
           </div>
         </div>

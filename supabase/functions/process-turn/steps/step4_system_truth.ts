@@ -349,6 +349,16 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         if (ar.action_type === "harvest_ambient" && added.length > 0) {
           knowledge.push(`Вы добыли: ${added.join(", ")}.`);
         }
+        // Действия без броска и урона (свободное перемещение, разговор, осмотр)
+        if (!ar.dice_roll && (ar.damage_dealt === undefined || ar.damage_dealt === 0) && ar.action_type !== "craft_recipe" && ar.action_type !== "harvest_ambient") {
+          if (ar.details) {
+            knowledge.push(ar.details);
+          }
+        }
+      }
+
+      if (knowledge.length === 0 && engine_output.system_facts?.length) {
+        knowledge.push(...engine_output.system_facts);
       }
     } else {
       // Этот игрок — НЕ инициатор. Нужно решить, видит ли он действие.

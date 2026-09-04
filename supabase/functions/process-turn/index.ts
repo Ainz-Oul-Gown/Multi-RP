@@ -390,12 +390,12 @@ serve(async (req) => {
         game_minute: session.game_minute || 0,
         current_location_id: session.current_location_id,
       },
-      location: { name: currentLocationName || "Неизвестно", weather: null },
+      location: { name: currentLocationName || "Неизвестно", weather: routerInput.weather?.description || null },
       players: (allPlayers || []).map((p: any) => ({
         id: p.id, name: p.name || "Герой", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
       })),
       npcs: allNpcs.map((n: any) => ({ id: n.id, name: n.name || "NPC", race: n.race || "Существо", role: n.role || "Обыватель", status_tags: n.status_tags || [] })),
-      atmosphere: { sounds: [], visuals: [] },
+      atmosphere: routerResult.atmosphere || { sounds: [], visuals: [] },
       time_passed_minutes,
       encounter_alert: null,
     });
@@ -443,12 +443,12 @@ serve(async (req) => {
         },
       });
     }
-    // 3) Global log
-    if (narratorOutput.global_narrative) {
+    // 3) Global log (только при наличии > 1 игрока, чтобы в соло не дублировать персональный нарратив)
+    if (narratorOutput.global_narrative && allPlayers.length > 1) {
       await supabase.from("messages").insert({
         session_id, sender_type: "master", sender_name: "Лог",
         content: narratorOutput.global_narrative,
-        metadata: { type: "global_log", is_global: true },
+        metadata: { type: "global_log", is_global: true, initiator_player_id: player.id },
       });
     }
 
@@ -457,12 +457,12 @@ serve(async (req) => {
       await supabase.from("turn_queue").update({
         status: "completed", resolved_at: new Date().toISOString(),
         parsed_action: routerResult, roll_result: engineResult,
-      }).eq("session_id", session_id).eq("player_id", player.id).in("status", ["active", "pending"]);
+      }).eq("session_id", session_id).eq("player_id", player.id).in("status", ["active", "waiting"]);
 
       const { data: nextTurn } = await supabase.from("turn_queue")
         .select("id, player_id")
-        .eq("session_id", session_id).eq("status", "pending")
-        .order("turn_number", { ascending: true }).limit(1).maybeSingle();
+        .eq("session_id", session_id).eq("status", "waiting")
+        .order("created_at", { ascending: true }).limit(1).maybeSingle();
       if (nextTurn) {
         await supabase.from("turn_queue").update({ status: "active" }).eq("id", nextTurn.id);
       }

@@ -195,10 +195,10 @@ export async function evaluatePetTamingAttempt(params: PetTamingAttemptParams): 
 
   const d20 = Math.floor(Math.random() * 20) + 1;
   const isCrit = d20 === 20;
-  const isCritFail = d20 === 1;
 
-  const totalRoll = d20 + statMod + tamingCheckBonus + foodEval.bonus;
-  const isSuccess = !isCritFail && (isCrit || totalRoll >= targetDc || (foodEval.is_suitable && Math.random() * 100 < tamingPctBonus));
+  const healingBonus = isHealing && (target_creature.hp ?? 10) < (target_creature.max_hp ?? 10) ? 6 : 0;
+  const totalRoll = d20 + statMod + tamingCheckBonus + foodEval.bonus + healingBonus;
+  const isSuccess = isCrit || totalRoll >= targetDc || (foodEval.is_suitable && Math.random() * 100 < tamingPctBonus);
 
   // 4. Загружаем или создаём запись отношений в npc_relationships
   let { data: rel } = await supabase

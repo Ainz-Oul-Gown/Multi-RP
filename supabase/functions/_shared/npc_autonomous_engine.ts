@@ -100,19 +100,280 @@ export async function handleCompanionInSceneAction(params: {
  * Обработка приглашения NPC в спутники / путешествие / отряд.
  * Срабатывает при высоком уровне отношений (friendly, trusted, devoted или score >= 20).
  */
+export type CompanionDialogueType = "invitation_accepted" | "invitation_rejected" | "proactive_offer";
+
+/**
+ * Процедурный генератор реплик спутников по архетипам, привычкам и коронным фразам (Offline / Fallback).
+ * Обеспечивает уникальный голос для каждого класса и характера без шаблонности.
+ */
+export function generateProceduralCompanionDialogue(params: {
+  npc: any;
+  player_name: string;
+  relationship: { score: number; tier: string };
+  type: CompanionDialogueType;
+}): string {
+  const { npc, player_name, relationship, type } = params;
+  const name = npc.name || "Спутник";
+  const npcClass = (npc.class || "").toLowerCase();
+  const race = (npc.race || "").toLowerCase();
+  const tags = Array.isArray(npc.status_tags) ? npc.status_tags.map((t: string) => t.toLowerCase()) : [];
+  const habits = Array.isArray(npc.habits) ? npc.habits : [];
+  const catchphrases = Array.isArray(npc.catchphrases) ? npc.catchphrases : [];
+  const tier = relationship.tier || "neutral";
+
+  // Префикс привычки/действия персонажа
+  let actionPrefix = "";
+  if (habits.length > 0) {
+    actionPrefix = `[${name} ${habits[0]}] `;
+  }
+
+  // Коронная фраза (если есть)
+  const catchphrase = catchphrases.length > 0 ? catchphrases[0] : null;
+
+  // Определение архетипа
+  const isBeast = npc.category === "beast" || tags.includes("питомец") || tags.includes("приручен") ||
+    ["зверь", "волк", "животное", "медведь", "пес", "кот", "грифон", "тигр"].some((w) => race.includes(w) || name.toLowerCase().includes(w));
+
+  const isWarrior = !isBeast && (
+    ["воин", "варвар", "рыцарь", "паладин", "наемник", "боец", "дворф"].some((w) => npcClass.includes(w) || race.includes(w) || tags.includes(w))
+  );
+
+  const isMage = !isBeast && !isWarrior && (
+    ["маг", "волшебник", "чародей", "колдун", "ученый", "эльф", "арканист"].some((w) => npcClass.includes(w) || race.includes(w) || tags.includes(w))
+  );
+
+  const isRogue = !isBeast && !isWarrior && !isMage && (
+    ["плут", "вор", "следопыт", "охотник", "разведчик", "убийца", "стрелок"].some((w) => npcClass.includes(w) || tags.includes(w))
+  );
+
+  const isCleric = !isBeast && !isWarrior && !isMage && !isRogue && (
+    ["жрец", "священник", "целитель", "монах", "друид"].some((w) => npcClass.includes(w) || tags.includes(w))
+  );
+
+  // 1) Питомец / Зверь
+  if (isBeast) {
+    if (type === "invitation_accepted") {
+      return `[${name} радостно взмахивает хвостом, издает дружелюбный рык и преданно трется о плечо ${player_name}, признавая своего вожака].`;
+    }
+    if (type === "proactive_offer") {
+      return `[${name} нетерпеливо переступает лапами, тихо урчит и тычется носом в ладонь ${player_name}, выразительно глядя на тропу и просясь бежать рядом].`;
+    }
+    return `[${name} настороженно прижимает уши, делает шаг назад и с недоверием следит за движениями ${player_name}].`;
+  }
+
+  // 2) Воин / Наёмник / Дворф
+  if (isWarrior) {
+    if (type === "invitation_accepted") {
+      if (tier === "devoted") {
+        return `${actionPrefix}«Пока бьётся моё сердце, ${player_name}, мой клинок и моя жизнь принадлежат нашему общему делу. Веди вперёд — я прикрою твою спину в любом пекле!»`;
+      }
+      if (tier === "trusted") {
+        return `${actionPrefix}«Отличный выбор, ${player_name}! Вдвоём мы сокрушим любую тварь, а звон нашей стали запомнят надолго. По рукам — я иду с тобой!»`;
+      }
+      return `${actionPrefix}«С удовольствием пойду с тобой, ${player_name}! Вместе мы преодолеем любые опасности и одолеем любого врага на нашем пути.»`;
+    }
+    if (type === "proactive_offer") {
+      if (tier === "devoted") {
+        return `${actionPrefix}«${player_name}, куда бы ты ни держал(а) путь, я не оставлю тебя без верного меча рядом. Позволишь мне пойти с тобой? Я клянусь прикрывать тебя до последнего вздоха!»`;
+      }
+      if (tier === "trusted") {
+        return `${actionPrefix}«Эй, ${player_name}! Моя секира заржавеет без настоящего боя, а на трактах сейчас неспокойно. Позволишь мне пойти с тобой? Вдвоём мы снесём любую преграду!»`;
+      }
+      return `${actionPrefix}«${player_name}, одному на опасных дорогах легко сложить голову, а вдвоём мы станем отличным боевым отрядом. Позволишь мне пойти с тобой? Спина к спине мы одолеем любые испытания!»`;
+    }
+    return `${actionPrefix}«${player_name}, клинок достают из ножен только за тех, кого хорошо знаешь. Пока я не вижу причин рисковать своей шкурой рядом с тобой.»`;
+  }
+
+  // 3) Маг / Эльф / Учёный
+  if (isMage) {
+    if (type === "invitation_accepted") {
+      if (tier === "devoted") {
+        return `${actionPrefix}«Плетения судьбы и магии неразрывно связали нас, ${player_name}. Мои тайные знания и мощь заклинаний всецело к твоим услугам — я пойду за тобой куда угодно.»`;
+      }
+      if (tier === "trusted") {
+        return `${actionPrefix}«Твои поиски ведут к истинному величию, ${player_name}. Мои чары дополнят твоё мастерство, и вместе мы раскроем любые тайны этого мира. Я с тобой.»`;
+      }
+      return `${actionPrefix}«Разумное решение, ${player_name}. В глуши и на трактах мало кто понимает суть древних знаков и тайных сил так, как я. Я пойду с тобой.»`;
+    }
+    if (type === "proactive_offer") {
+      if (tier === "devoted") {
+        return `${actionPrefix}«${player_name}, древние пророчества и звёзды шепчут мне, что твой путь полон великих свершений. Моё место — рядом с тобой. Позволишь мне пойти с тобой?»`;
+      }
+      if (tier === "trusted") {
+        return `${actionPrefix}«${player_name}, я чувствую, что впереди нас ждут неизведанные аномалии и древние артефакты. Путешествовать без знатока тайных искусств — безрассудство. Позволишь мне пойти с тобой?»`;
+      }
+      return `${actionPrefix}«${player_name}, впереди опасные тропы, где грубая сила бессильна перед чарами. Позволишь мне пойти с тобой? Мои заклинания и мудрость сберегут наши жизни.»`;
+    }
+    return `${actionPrefix}«${player_name}, древние тайны требуют осторожности, как и выбор попутчиков. Наше знакомство пока слишком поверхностно для столь опасного похода.»`;
+  }
+
+  // 4) Плут / Следопыт / Охотник
+  if (isRogue) {
+    if (type === "invitation_accepted") {
+      if (tier === "devoted") {
+        return `${actionPrefix}«Немногим я открываю свою спину, ${player_name}, но тебе я верю без оглядки. Я пойду впереди — ни одна стрела и ни одна скрытая ловушка не застанут нас врасплох.»`;
+      }
+      if (tier === "trusted") {
+        return `${actionPrefix}«Хех, отличная сделка, ${player_name}! Забытые руины, звонкая добыча и верный лук наготове... Сработаемся на славу, я с тобой в доле!»`;
+      }
+      return `${actionPrefix}«Договорились, ${player_name}. Кто-то же должен высматривать засады и снимать часовых из тени, пока ты прорываешься вперёд.»`;
+    }
+    if (type === "proactive_offer") {
+      if (tier === "devoted") {
+        return `${actionPrefix}«${player_name}, ты собираешься в путь, а я не привык(ла) оставлять тех, кто мне дорог, один на один с опасностью. Позволишь мне пойти с тобой? Пусть враги боятся каждого шороха в кустах.»`;
+      }
+      if (tier === "trusted") {
+        return `${actionPrefix}«Эй, ${player_name}, ты ведь не думаешь соваться в неизведанные дебри без того, кто чует ловушки за версту? Позволишь мне пойти с тобой? Добычу поделим честно, а спины прикроем надежно!»`;
+      }
+      return `${actionPrefix}«${player_name}, на этих дорогах полно разбойников и капканов. Позволишь мне пойти с тобой? В разведке мне нет равных, а вдвоём мы пройдём незамеченными там, где другие полягут.»`;
+    }
+    return `${actionPrefix}«Не так быстро, ${player_name}. В моём ремесле доверяют только проверенным соратникам. Покажи на деле, чего ты стоишь, тогда и поговорим о совместной добыче.»`;
+  }
+
+  // 5) Жрец / Целитель / Монах
+  if (isCleric) {
+    if (type === "invitation_accepted") {
+      if (tier === "devoted") {
+        return `${actionPrefix}«Да благословят высшие силы наш союз, ${player_name}. Моя вера, молитвы и исцеляющие руки будут щитом на твоём пути. Я пойду за тобой через любые испытания.»`;
+      }
+      if (tier === "trusted") {
+        return `${actionPrefix}«В твоих поступках горит свет надежды, ${player_name}. Я сочту за честь разделить с тобой тяготы странствий и оберегать твою жизнь от гибели. Я иду с тобой.»`;
+      }
+      return `${actionPrefix}«Да пребудет с нами благословение, ${player_name}. Путь долог и полон ран, но пока я рядом — твоё здоровье в надёжных руках. Я пойду с тобой.»`;
+    }
+    if (type === "proactive_offer") {
+      if (tier === "devoted") {
+        return `${actionPrefix}«${player_name}, моё сердце подсказывает, что твоя стезя благословенна. Я не могу оставаться здесь, зная, что могу защитить тебя от тьмы и исцелить любую рану. Позволишь мне пойти с тобой?»`;
+      }
+      if (tier === "trusted") {
+        return `${actionPrefix}«${player_name}, в этих землях сгущается мрак, и путешествовать без защиты веры и целительного дара опасно. Позволишь мне пойти с тобой? Вместе мы преодолеем любые испытания.»`;
+      }
+      return `${actionPrefix}«${player_name}, дорога впереди нелегка, и многим путникам не хватает доброй молитвы и целебных трав. Позволишь мне пойти с тобой? Я позабочусь о том, чтобы каждый из нас вернулся живым.»`;
+    }
+    return `${actionPrefix}«${player_name}, моё служение требует терпения и верности. Пока высшие силы не дают мне знака, что мне следует разделить твой путь.»`;
+  }
+
+  // 6) Общий странник / искатель приключений (Default)
+  if (type === "invitation_accepted") {
+    if (catchphrase) {
+      return `${actionPrefix}«"${catchphrase}" С удовольствием пойду с тобой, ${player_name}! Вместе мы преодолеем любые опасности и одолеем любую тварь на нашем пути.»`;
+    }
+    if (tier === "devoted") {
+      return `${actionPrefix}«Для меня великая честь быть твоим спутником, ${player_name}! Куда бы ни лежал наш путь — я пойду с тобой до самого конца.»`;
+    }
+    if (tier === "trusted") {
+      return `${actionPrefix}«С удовольствием пойду с тобой, ${player_name}! Мы уже доказали, чего стоим вместе. Вперёд, навстречу новым приключениям!»`;
+    }
+    return `${actionPrefix}«С удовольствием пойду с тобой, ${player_name}! Вместе мы преодолеем любые опасности и одолеем любую тварь на нашем пути.»`;
+  }
+
+  if (type === "proactive_offer") {
+    if (catchphrase) {
+      return `${actionPrefix}«"${catchphrase}" ${player_name}, мы отлично ладим, и я вижу, что ты собираешься в путь дальше. Позволишь мне пойти с тобой? Вдвоём мы станем отличной командой и прикроем друг другу спину!»`;
+    }
+    if (tier === "devoted") {
+      return `${actionPrefix}«${player_name}, мы прошли через столько испытаний, и я не представляю свой путь без тебя. Позволишь мне пойти с тобой? Я буду стоять за тебя горой до последнего вздоха!»`;
+    }
+    return `${actionPrefix}«${player_name}, мы отлично ладим, и я вижу, что ты собираешься в путь дальше. Позволишь мне пойти с тобой? Вдвоём мы станем отличной командой и прикроем друг другу спину!»`;
+  }
+
+  // invitation_rejected
+  return `${actionPrefix}«${player_name}, мы пока ещё недостаточно близки, чтобы я отправлялась с тобой в опасный путь. Нам стоит получше узнать друг друга.»`;
+}
+
+/**
+ * Генерирует диалог спутника: приоритетно через OpenRouter LLM, с откатом к процедурному движку.
+ */
+export async function generateCompanionDialogue(params: {
+  npc: any;
+  player_name: string;
+  relationship: { score: number; tier: string };
+  type: CompanionDialogueType;
+  openrouter_api_key?: string;
+  model?: string;
+}): Promise<string> {
+  const { npc, player_name, relationship, type, openrouter_api_key, model } = params;
+
+  if (openrouter_api_key) {
+    try {
+      const systemPrompt = `Ты — ролевой ИИ в ЛитРПГ/D&D игре. Твоя задача — сгенерировать ОДНУ прямую реплику персонажа (NPC), обращенную к конкретному игроку (${player_name}).
+Реплика должна СТРОГО отражать уникальный характер персонажа, его расу, класс, привычки, коронные фразы и текущие отношения.
+Отвечай ТОЛЬКО репликой персонажа от первого лица в русских кавычках «...». Без вводных слов, пояснений и метаданных.`;
+
+      const userPrompt = `NPC: ${npc.name || "Спутник"}
+Раса: ${npc.race || "Человек"}, Класс: ${npc.class || "Странник"}
+Предыстория / Характер: ${npc.background || "Искатель приключений"}
+Привычки: ${Array.isArray(npc.habits) && npc.habits.length > 0 ? npc.habits.join(", ") : "Нет"}
+Коронные фразы: ${Array.isArray(npc.catchphrases) && npc.catchphrases.length > 0 ? npc.catchphrases.join(", ") : "Нет"}
+Отношения с игроком (${player_name}): ${relationship.score} / 100 (${relationship.tier})
+
+Событие: ${
+        type === "proactive_offer"
+          ? `NPC САМ проявляет инициативу и просится в команду / отряд / совместное путешествие к ${player_name}.`
+          : type === "invitation_accepted"
+          ? `Игрок ${player_name} позвал NPC в отряд / путешествие, и NPC с радостью соглашается.`
+          : `Игрок ${player_name} зовет NPC с собой, но NPC отказывается из-за недоверия или нежелания рисковать.`
+      }
+
+Сгенерируй живую, выразительную реплику (1-2 предложения), обращаясь к игроку по имени (${player_name}).`;
+
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouter_api_key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: model || "google/gemini-2.0-flash-001",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.7,
+          max_tokens: 150,
+        }),
+        signal: AbortSignal.timeout(4000),
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const content = data.choices?.[0]?.message?.content?.trim();
+        if (content && content.length > 5) {
+          return content.startsWith("«") ? content : `«${content.replace(/^["'«]|["'»]$/g, "")}»`;
+        }
+      }
+    } catch (e) {
+      console.warn("[npc_autonomous_engine] OpenRouter dialogue generation failed, falling back to procedural:", e);
+    }
+  }
+
+  return generateProceduralCompanionDialogue({
+    npc,
+    player_name,
+    relationship,
+    type,
+  });
+}
+
+/**
+ * Обработка приглашения NPC в спутники / путешествие / отряд.
+ * Срабатывает при высоком уровне отношений (friendly, trusted, devoted или score >= 20).
+ */
 export async function handleCompanionInvitation(params: {
   supabase: any;
   player_action_text: string;
   acting_player_name: string;
   acting_player_id: string;
   location_npcs: any[];
+  openrouter_api_key?: string;
+  model?: string;
 }): Promise<{
   npc_id: string;
   npc_name: string;
   dialogue: string;
   joined_party: boolean;
 } | null> {
-  const { supabase, player_action_text, acting_player_name, acting_player_id, location_npcs } = params;
+  const { supabase, player_action_text, acting_player_name, acting_player_id, location_npcs, openrouter_api_key, model } = params;
   if (!location_npcs || location_npcs.length === 0) return null;
 
   const lowerText = (player_action_text || "").toLowerCase();
@@ -148,10 +409,19 @@ export async function handleCompanionInvitation(params: {
   const isGoodRelationship = score >= 20 || ["friendly", "trusted", "devoted"].includes(tier);
 
   if (!isGoodRelationship) {
+    const rejectDialogue = await generateCompanionDialogue({
+      npc: candidate,
+      player_name: acting_player_name,
+      relationship: { score, tier },
+      type: "invitation_rejected",
+      openrouter_api_key,
+      model,
+    });
+
     return {
       npc_id: candidate.id,
       npc_name: candidate.name,
-      dialogue: `«${acting_player_name}, мы пока ещё недостаточно близки, чтобы я отправлялась с тобой в опасный путь. Нам стоит получше узнать друг друга.»`,
+      dialogue: rejectDialogue,
       joined_party: false,
     };
   }
@@ -177,10 +447,19 @@ export async function handleCompanionInvitation(params: {
       .eq("player_id", acting_player_id);
   }
 
+  const acceptDialogue = await generateCompanionDialogue({
+    npc: candidate,
+    player_name: acting_player_name,
+    relationship: { score, tier },
+    type: "invitation_accepted",
+    openrouter_api_key,
+    model,
+  });
+
   return {
     npc_id: candidate.id,
     npc_name: candidate.name,
-    dialogue: `«С удовольствием пойду с тобой, ${acting_player_name}! Вместе мы преодолеем любые опасности и одолеем любую тварь на нашем пути.»`,
+    dialogue: acceptDialogue,
     joined_party: true,
   };
 }
@@ -195,13 +474,15 @@ export async function checkNpcProactiveCompanionOffer(params: {
   acting_player_name: string;
   acting_player_id: string;
   location_npcs: any[];
+  openrouter_api_key?: string;
+  model?: string;
 }): Promise<{
   npc_id: string;
   npc_name: string;
   dialogue: string;
   proactive_offer: boolean;
 } | null> {
-  const { supabase, acting_player_name, acting_player_id, location_npcs } = params;
+  const { supabase, acting_player_name, acting_player_id, location_npcs, openrouter_api_key, model } = params;
   if (!location_npcs || location_npcs.length === 0) return null;
 
   // Ищем дружелюбного живого NPC, который ещё не спутник
@@ -237,7 +518,14 @@ export async function checkNpcProactiveCompanionOffer(params: {
     .update({ status_tags: updatedTags })
     .eq("id", candidate.id);
 
-  const dialogue = `«${acting_player_name}, мы уже немало пережили вместе, и я вижу, что ты собираешься в путь дальше. Позволишь мне пойти с тобой? Одному на опасных трактах и в глуши нелегко, а вдвоём мы станем отличной командой и прикроем друг другу спину!»`;
+  const dialogue = await generateCompanionDialogue({
+    npc: candidate,
+    player_name: acting_player_name,
+    relationship: { score, tier },
+    type: "proactive_offer",
+    openrouter_api_key,
+    model,
+  });
 
   return {
     npc_id: candidate.id,

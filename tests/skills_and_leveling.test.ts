@@ -1,6 +1,6 @@
 // tests/skills_and_leveling.test.ts
 // Тесты для системы динамических навыков (1..100) и прокачки характеристик без ограничения в 20
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   detectSkillFromAction,
   calculateSkillBonuses,
@@ -223,7 +223,10 @@ describe("Влияние навыков на игровой процесс в Ga
       details: "Наношу быстрый удар кинжалом в шею",
     } as any;
 
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.7); // d20 = 15
     const res = attackHandler.handle(action, daggerContext);
+    randomSpy.mockRestore();
+
     expect(res.result.success).toBe(true);
     expect(res.system_facts.some((f: string) => f.includes("Владение кинжалами") || f.includes("[+32% урона от навыка]"))).toBe(true);
   });

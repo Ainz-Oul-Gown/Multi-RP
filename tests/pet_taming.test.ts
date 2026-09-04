@@ -179,12 +179,14 @@ describe("Интеллектуальная система приручения �
         })),
       };
 
+      const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.6); // d20 = 13
       const result = await evaluatePetTamingAttempt({
         supabase: mockSupabase,
         acting_player: mockPlayer,
         target_creature: woundedBeast,
         action_text: "Достаю бинты и целебную мазь, осторожно перевязываю лапу раненому зверю",
       });
+      randomSpy.mockRestore();
 
       expect(result).not.toBeNull();
       expect(result?.beast_memory).toContain("Человек бережно обработал рану");

@@ -220,7 +220,7 @@ serve(async (req) => {
     let allNpcs: any[] = [];
     if (session.current_location_id) {
       const { data: npcData } = await supabase.from("npcs")
-        .select("id, name, race, role, category, hp, max_hp, armor_class, level, is_alive, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time")
+        .select("id, name, race, class, role, category, hp, max_hp, armor_class, level, is_alive, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time")
         .eq("location_id", session.current_location_id);
       allNpcs = npcData || [];
     }
@@ -762,6 +762,8 @@ serve(async (req) => {
         acting_player_name: player.name || "Герой",
         acting_player_id: player.id,
         location_npcs: allNpcs,
+        openrouter_api_key: openrouterApiKey,
+        model: dmModel,
       });
       if (companionInviteResult) {
         companionInviteHandled = true;
@@ -827,6 +829,8 @@ serve(async (req) => {
           acting_player_name: player.name || "Герой",
           acting_player_id: player.id,
           location_npcs: allNpcs,
+          openrouter_api_key: openrouterApiKey,
+          model: dmModel,
         });
         if (proactiveOffer) {
           await supabase.from("messages").insert({

@@ -13,6 +13,8 @@ import {
   resolveNpcBackgroundActivities,
   handleCompanionInvitation,
   checkNpcProactiveCompanionOffer,
+  generateCompanionDialogue,
+  generateProceduralCompanionDialogue,
 } from "../supabase/functions/_shared/npc_autonomous_engine.ts";
 
 describe("D&D Боевой ИИ для NPC", () => {
@@ -367,5 +369,171 @@ describe("Приглашение спутников в путешествие и
     expect(offer?.dialogue).toContain("Позволишь мне пойти с тобой?");
   });
 });
+
+describe("Индивидуальность диалогов спутников и мультиплеерные имена", () => {
+  it("воин обращается к игроку Алиса суровым воинским тоном со звоном стали", () => {
+    const warriorNpc = {
+      id: "npc-torgrim",
+      name: "Торгрим",
+      race: "Дворф",
+      class: "Воин",
+      status_tags: ["ветеран", "наемник"],
+    };
+
+    const dialogue = generateProceduralCompanionDialogue({
+      npc: warriorNpc,
+      player_name: "Алиса",
+      relationship: { score: 60, tier: "trusted" },
+      type: "proactive_offer",
+    });
+
+    expect(dialogue).toContain("Алиса");
+    expect(dialogue).toContain("секира");
+    expect(dialogue).toContain("Позволишь мне пойти с тобой?");
+  });
+
+  it("маг обращается к игроку Борис возвышенным тоном с упоминанием чар и тайн", () => {
+    const mageNpc = {
+      id: "npc-elora",
+      name: "Элора",
+      race: "Эльф",
+      class: "Маг",
+      status_tags: ["ученый"],
+    };
+
+    const dialogue = generateProceduralCompanionDialogue({
+      npc: mageNpc,
+      player_name: "Борис",
+      relationship: { score: 70, tier: "trusted" },
+      type: "invitation_accepted",
+    });
+
+    expect(dialogue).toContain("Борис");
+    expect(dialogue).toContain("чары");
+    expect(dialogue).toContain("тайны");
+  });
+
+  it("плут/следопыт обращается к игроку Селена со знанием ловушек и засад", () => {
+    const rogueNpc = {
+      id: "npc-locke",
+      name: "Локк",
+      race: "Человек",
+      class: "Плут",
+      status_tags: ["вор", "следопыт"],
+    };
+
+    const dialogue = generateProceduralCompanionDialogue({
+      npc: rogueNpc,
+      player_name: "Селена",
+      relationship: { score: 55, tier: "trusted" },
+      type: "proactive_offer",
+    });
+
+    expect(dialogue).toContain("Селена");
+    expect(dialogue).toContain("ловушки");
+    expect(dialogue).toContain("Добычу поделим честно");
+  });
+
+  it("жрец обращается к игроку Эдгар с благословением и заботой об исцелении", () => {
+    const clericNpc = {
+      id: "npc-lydia",
+      name: "Лидия",
+      race: "Человек",
+      class: "Жрец",
+      status_tags: ["целитель"],
+    };
+
+    const dialogue = generateProceduralCompanionDialogue({
+      npc: clericNpc,
+      player_name: "Эдгар",
+      relationship: { score: 85, tier: "devoted" },
+      type: "proactive_offer",
+    });
+
+    expect(dialogue).toContain("Эдгар");
+    expect(dialogue).toContain("исцелить любую рану");
+  });
+
+  it("зверь/питомец выражает намерения через характерные повадки, урчание и хвост", () => {
+    const beastNpc = {
+      id: "npc-fang",
+      name: "Белый Клык",
+      category: "beast",
+      race: "Зверь",
+      status_tags: ["питомец", "приручен"],
+    };
+
+    const dialogue = generateProceduralCompanionDialogue({
+      npc: beastNpc,
+      player_name: "Влад",
+      relationship: { score: 70, tier: "trusted" },
+      type: "proactive_offer",
+    });
+
+    expect(dialogue).toContain("Белый Клык");
+    expect(dialogue).toContain("лапами");
+    expect(dialogue).toContain("урчит");
+    expect(dialogue).toContain("Влад");
+  });
+
+  it("органично вплетает привычки (habits) и коронные фразы (catchphrases)", () => {
+    const customNpc = {
+      id: "npc-garrick",
+      name: "Гаррик",
+      race: "Человек",
+      class: "Воин",
+      habits: ["точит боевой топор"],
+      catchphrases: ["Клянусь наковальней!"],
+      status_tags: ["наемник"],
+    };
+
+    const dialogue = generateProceduralCompanionDialogue({
+      npc: customNpc,
+      player_name: "Роланд",
+      relationship: { score: 40, tier: "friendly" },
+      type: "proactive_offer",
+    });
+
+    expect(dialogue).toContain("[Гаррик точит боевой топор]");
+    expect(dialogue).toContain("Роланд");
+  });
+
+  it("генерирует персонализированную реплику через OpenRouter LLM при наличии ключа", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: "«Послушай, Артур, на этих темных тропах тебе точно пригодится мой щит. Идем вместе!»",
+            },
+          },
+        ],
+      }),
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch;
+
+    try {
+      const dialogue = await generateCompanionDialogue({
+        npc: { name: "Бран", class: "Паладин" },
+        player_name: "Артур",
+        relationship: { score: 50, tier: "friendly" },
+        type: "proactive_offer",
+        openrouter_api_key: "test-openrouter-key",
+      });
+
+      expect(dialogue).toContain("Артур");
+      expect(dialogue).toContain("щит");
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://openrouter.ai/api/v1/chat/completions",
+        expect.any(Object)
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 
 

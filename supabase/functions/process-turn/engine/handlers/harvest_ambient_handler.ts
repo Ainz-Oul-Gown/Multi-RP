@@ -57,7 +57,7 @@ export class HarvestAmbientHandler extends BaseActionHandler {
     // Успех: INSERT_ITEM
     // ============================================
     // Бросок d100 для количества (1-3 единиц)
-    const quantity = Math.max(1, Math.floor(rollD100() / 34)); // 1, 2 или 3
+    const quantity = Math.min(3, Math.max(1, Math.ceil(rollD100() / 33.33))); // 1, 2 или 3
 
     const newItem = {
       item_name: targetItem,

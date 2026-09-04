@@ -186,24 +186,30 @@ serve(async (req) => {
 
     let inventoryItem = null;
     if (save_to_inventory && player_id) {
+      const allowedType = ['weapon', 'armor', 'consumable'].includes(normalizedItem.type) ? normalizedItem.type : 'misc';
+      const attributes = {
+        rarity: normalizedItem.rarity,
+        description: normalizedItem.description,
+        stats: normalizedItem.stats,
+        ac_bonus: normalizedItem.ac_bonus,
+        damage: normalizedItem.damage,
+        heal_amount: normalizedItem.heal_amount,
+        value: normalizedItem.value,
+        requirements: normalizedItem.requirements,
+        effects: normalizedItem.effects,
+        original_type: normalizedItem.type,
+      };
+
       const { data: inventoryData, error: inventoryError } = await supabase
         .from("inventory")
         .insert({
           player_id,
           item_name: normalizedItem.name,
-          type: normalizedItem.type,
-          rarity: normalizedItem.rarity,
-          description: normalizedItem.description,
-          stats: normalizedItem.stats,
-          ac_bonus: normalizedItem.ac_bonus,
-          damage: normalizedItem.damage,
-          heal_amount: normalizedItem.heal_amount,
-          value: normalizedItem.value,
-          condition: normalizedItem.condition,
-          durability: normalizedItem.durability,
-          requirements: normalizedItem.requirements,
-          effects: normalizedItem.effects,
+          type: allowedType,
           quantity: 1,
+          durability: normalizedItem.durability,
+          condition: normalizedItem.condition,
+          attributes,
         })
         .select()
         .single();

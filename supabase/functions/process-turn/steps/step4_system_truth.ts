@@ -287,13 +287,20 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
       }
       if (m.type === "DELETE_ITEM") {
         const dm = m as any;
-        if (dm.owner_type === "player" && dm.owner_id === player.id) {
+        const found = (player.inventory || []).find((i: any) => i.id === dm.item_id);
+        if (found) {
+          const qtyStr = dm.quantity > 1 ? ` x${dm.quantity}` : "";
+          removed.push(`${found.item_name || dm.item_id}${qtyStr}`);
+        } else if (dm.owner_type === "player" && dm.owner_id === player.id) {
           removed.push(dm.item_id);
         }
       }
       if (m.type === "UPDATE_DURABILITY") {
         const um = m as any;
-        if (um.owner_type === "player" && um.owner_id === player.id) {
+        const found = (player.inventory || []).find((i: any) => i.id === um.item_id);
+        if (found) {
+          damaged.push(`${found.item_name || um.item_id} (износ: ${Math.abs(um.delta)})`);
+        } else if (um.owner_type === "player" && um.owner_id === player.id) {
           damaged.push(um.item_id);
         }
       }

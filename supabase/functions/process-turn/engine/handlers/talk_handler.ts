@@ -27,7 +27,7 @@ export class TalkHandler extends BaseActionHandler {
     // ============================================
     // Модификатор: insight (WIS) или persuasion (CHA)
     // ============================================
-    const stat = action.stat_to_check === "insight" ? "insight" : "insight";
+    const stat = action.stat_to_check || "insight";
     const statMod = this.getStatToCheckMod(player, stat);
     const proficiency = this.getProficiency(player);
     const targetDc = action.ai_custom_dc || 12;

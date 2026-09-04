@@ -70,7 +70,7 @@ export class LootSearchHandler extends BaseActionHandler {
     // Успех: генерируем 1-3 предмета (упрощённо — 1 предмет из target_name)
     // ============================================
     const itemName = action.target_item_name || "добыча";
-    const quantity = Math.max(1, Math.floor(rollD100() / 34));
+    const quantity = Math.min(3, Math.max(1, Math.ceil(rollD100() / 33.33)));
 
     mutations.push({
       type: "INSERT_ITEM",

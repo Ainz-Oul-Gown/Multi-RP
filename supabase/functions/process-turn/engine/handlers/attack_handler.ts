@@ -161,12 +161,19 @@ export class StealthAttackHandler extends AttackHandler {
     if (result.result.success && result.result.dice_roll && result.result.dice_roll.is_crit !== true) {
       const bonusDmg = 6; // 1d6 = 6 в среднем
       result.result.damage_dealt = (result.result.damage_dealt || 0) + bonusDmg;
-      result.mutations.push({
-        type: "UPDATE_HP",
-        target_type: "npc",
-        id: action.target_entity_id || "",
-        delta: -bonusDmg,
-      });
+
+      const hpMutation = result.mutations.find((m) => m.type === "UPDATE_HP" && m.id === action.target_entity_id);
+      if (hpMutation && hpMutation.type === "UPDATE_HP") {
+        hpMutation.delta -= bonusDmg;
+      } else {
+        const isNpc = context.targets.npcs.has(action.target_entity_id || "");
+        result.mutations.push({
+          type: "UPDATE_HP",
+          target_type: isNpc ? "npc" : "player",
+          id: action.target_entity_id || "",
+          delta: -bonusDmg,
+        });
+      }
       result.system_facts.push(`Скрытая атака: +${bonusDmg} бонусного урона.`);
     }
 

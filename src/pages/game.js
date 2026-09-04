@@ -206,11 +206,15 @@ export async function renderGame(container, sessionId, user) {
     const hpClass = hpPercent > 50 ? '' : hpPercent > 25 ? 'low' : 'critical';
     
     // Format game time
-    const gameTime = session.game_time || {};
-    const timeStr = gameTime.day && gameTime.month && gameTime.year 
-      ? `${gameTime.day}.${gameTime.month}.${gameTime.year} ${gameTime.hour || 0}:${(gameTime.minute || 0).toString().padStart(2, '0')}`
+    const day = session?.game_day ?? session?.game_time?.day;
+    const month = session?.game_month ?? session?.game_time?.month;
+    const year = session?.game_year ?? session?.game_time?.year;
+    const hour = session?.game_hour ?? session?.game_time?.hour ?? 8;
+    const minute = session?.game_minute ?? session?.game_time?.minute ?? 0;
+    const timeStr = day && month && year
+      ? `${day}.${month}.${year} ${hour}:${String(minute).padStart(2, '0')}`
       : '';
-    const locationStr = session.current_location_name || '';
+    const locationStr = session?.current_location_name || '';
 
     container.innerHTML = `
       <div class="game-page">
@@ -587,8 +591,23 @@ export async function renderGame(container, sessionId, user) {
     });
   }
 
+  async function refreshInventory() {
+    if (!currentPlayer) return;
+    try {
+      const inv = await getPlayerInventory(currentPlayer.id);
+      currentPlayer = { ...currentPlayer, inventory: inv || [] };
+      const content = document.getElementById('inventoryContent');
+      if (content) content.innerHTML = renderInventory(currentPlayer);
+    } catch (e) {
+      console.warn('Failed to refresh inventory:', e);
+    }
+  }
+
   function togglePanel(panel) {
     activePanel = activePanel === panel ? null : panel;
+    if (activePanel === 'inventory') {
+      refreshInventory();
+    }
     render();
   }
 
@@ -637,13 +656,47 @@ export async function renderGame(container, sessionId, user) {
             injuries: [...(currentPlayer.injuries || []), ...restInfo.injuries],
           };
         }
-        render();
       }
 
       if (result.hp_change) {
         currentPlayer = { ...currentPlayer, hp: (currentPlayer.hp || 0) + result.hp_change };
-        render();
       }
+
+      // Обновление времени сессии при наличии
+      if (result.game_time) {
+        session = {
+          ...session,
+          game_year: result.game_time.year,
+          game_month: result.game_time.month,
+          game_day: result.game_time.day,
+          game_hour: result.game_time.hour,
+          game_minute: result.game_time.minute,
+        };
+      }
+
+      // Обновление локации при смене
+      if (result.location_changed) {
+        try {
+          const freshSession = await getSession(sessionId);
+          if (freshSession) session = freshSession;
+        } catch (e) {
+          console.warn('Failed to reload session after location change:', e);
+        }
+      }
+
+      // Обновление данных игрока и инвентаря
+      try {
+        const freshPlayer = await getPlayer(currentPlayer.id);
+        if (freshPlayer) {
+          currentPlayer = freshPlayer;
+        } else {
+          await refreshInventory();
+        }
+      } catch {
+        await refreshInventory();
+      }
+
+      render();
     } catch (err) {
       if (err.message === 'MISSING_API_KEY') {
         toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» в лобби и введите ключ.');

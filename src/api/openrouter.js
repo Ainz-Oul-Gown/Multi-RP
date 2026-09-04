@@ -368,7 +368,6 @@ export async function generateWorldGeography(loreText, worldId, onProgress = () 
 export async function saveWorldGeography(worldId, geography) {
   console.log('[saveWorldGeography] Saving geography for world:', worldId);
   
-  const { supabase } = await import('./supabase.js');
   
   // Insert states
   const statesToInsert = geography.states.map(s => ({

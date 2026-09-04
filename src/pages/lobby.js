@@ -1,10 +1,10 @@
 // src/pages/lobby.js — Глобальное Лобби (Dashboard)
 import { supabase, signOut, invokeFunction } from '../api/supabase.js';
 import {
-  getSessions, createSession, getWorlds, createWorld,
+  getSessions, createSession, getWorlds, createWorld, updateWorld, deleteWorld,
   importWorld, exportWorld, downloadJSON,
   getUserSettings, upsertUserSettings, updateSession,
-  getCharacterCards, createCharacterCard, deleteCharacterCard,
+  getCharacterCards, createCharacterCard, updateCharacterCard, deleteCharacterCard,
   exportPlayer, getNpcsByWorld, updateNpc, deleteNpc, createNpc
 } from '../api/game.js';
 import { generateAllNPCs, generateWorldGeography, saveWorldGeography, generateIntelligentNPCs, generateCreatures, canResumeGeneration, clearWorldGenerationProgress } from '../api/openrouter.js';
@@ -1709,7 +1709,6 @@ export function renderLobby(container, user) {
       console.log('[edit-character-card] request:', { id, ...requestPayload });
 
       try {
-        const { updateCharacterCard } = await import('../api/game.js');
         const updated = await updateCharacterCard(id, requestPayload);
         console.log('[edit-character-card] updated:', updated);
         toast.success('Персонаж обновлён!');
@@ -2109,7 +2108,6 @@ export function renderLobby(container, user) {
       } catch { toast.error('Некорректный JSON'); return; }
 
       try {
-        const { updateWorld } = await import('../api/game.js');
         await updateWorld(id, {
           name: document.getElementById('editWorldName').value,
           settings,
@@ -2536,7 +2534,8 @@ export function renderLobby(container, user) {
     });
     container.querySelectorAll('[data-action="invite"]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const url = `${window.location.origin}/Multi-RP/#/session/${btn.dataset.id}`;
+        const base = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+        const url = `${window.location.origin}${base}#/session/${btn.dataset.id}`;
         navigator.clipboard.writeText(url);
         toast.success('Инвайт-ссылка скопирована!');
       });
@@ -2613,7 +2612,6 @@ export function renderLobby(container, user) {
       btn.addEventListener('click', async () => {
         if (!confirm('Удалить мир и все связанные данные?')) return;
         try {
-          const { deleteWorld } = await import('../api/game.js');
           await deleteWorld(btn.dataset.id);
           toast.success('Мир удалён');
           loadData();

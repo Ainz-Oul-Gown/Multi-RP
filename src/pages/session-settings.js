@@ -131,8 +131,8 @@ export async function renderSessionSettings(container, sessionId, user) {
               ${players.length ? players.map((p) => `
                 <div class="player-row">
                   <div class="player-info">
-                    <strong>${p.name}</strong>
-                    <span class="text-muted" style="font-size: var(--fs-sm);">${p.race} / ${p.class}</span>
+                    <strong>${p?.name || 'Игрок'}</strong>
+                    <span class="text-muted" style="font-size: var(--fs-sm);">${p?.race || ''} / ${p?.class || ''}</span>
                   </div>
                   <div class="player-stats">
                     <span class="badge badge-success">❤️ ${p.hp}/${p.max_hp}</span>

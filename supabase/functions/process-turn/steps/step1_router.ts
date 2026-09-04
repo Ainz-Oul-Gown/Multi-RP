@@ -90,37 +90,56 @@ function buildRouterSystemPrompt(): string {
 // ============================================
 // Сборка userMessage из контекста
 // ============================================
-function buildUserMessage(input: RouterInputContext): string {
+function buildUserMessage(input: any): string {
   const lines: string[] = [];
 
+  const actionText = input?.player_action_text || input?.action_text || "";
   lines.push(`## Действие игрока`);
-  lines.push(`"${cleanTextForAI(input.player_action_text)}"`);
+  lines.push(`"${cleanTextForAI(actionText)}"`);
   lines.push("");
 
+  const p = input?.player || {};
+  const playerName = p.name || input?.player_name || "Герой";
+  const playerRace = p.race || input?.player_race || "Человек";
+  const playerClass = p.class || input?.player_class || "Воин";
+  const playerLevel = p.level || input?.player_level || 1;
+  const playerHp = p.hp ?? input?.player_hp ?? 100;
+  const playerMaxHp = p.max_hp ?? input?.player_max_hp ?? 100;
+  const stats = p.stats || input?.player_stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
+
   lines.push(`## Снимок игрока`);
-  lines.push(`Имя: ${input.player.name} (${input.player.race}, ${input.player.class}, ур.${input.player.level})`);
-  lines.push(`HP: ${input.player.hp}/${input.player.max_hp}`);
-  lines.push(`Характеристики: STR=${input.player.stats.STR} DEX=${input.player.stats.DEX} CON=${input.player.stats.CON} INT=${input.player.stats.INT} WIS=${input.player.stats.WIS} CHA=${input.player.stats.CHA}`);
-  if (input.player.location_name) {
-    lines.push(`Локация: ${input.player.location_name}${input.player.state_name ? `, ${input.player.state_name}` : ''}`);
+  lines.push(`Имя: ${playerName} (${playerRace}, ${playerClass}, ур.${playerLevel})`);
+  lines.push(`HP: ${playerHp}/${playerMaxHp}`);
+  lines.push(`Характеристики: STR=${stats.STR ?? 10} DEX=${stats.DEX ?? 10} CON=${stats.CON ?? 10} INT=${stats.INT ?? 10} WIS=${stats.WIS ?? 10} CHA=${stats.CHA ?? 10}`);
+
+  const locName = p.location_name || input?.current_location;
+  const stateName = p.state_name || input?.current_state;
+  if (locName) {
+    lines.push(`Локация: ${locName}${stateName ? `, ${stateName}` : ''}`);
   }
   lines.push("");
 
+  const t = input?.game_time || input?.current_time || { year: 1, month: 1, day: 1, hour: 8, minute: 0 };
   lines.push(`## Игровое время`);
-  const t = input.game_time;
-  lines.push(`${t.day}.${t.month}.${t.year} ${t.hour.toString().padStart(2, '0')}:${t.minute.toString().padStart(2, '0')}`);
+  lines.push(`${t.day ?? 1}.${t.month ?? 1}.${t.year ?? 1} ${(t.hour ?? 8).toString().padStart(2, '0')}:${(t.minute ?? 0).toString().padStart(2, '0')}`);
   lines.push("");
 
+  const w = input?.weather || { description: "Ясно", temperature: 20, is_raining: false, is_night: false, wind_speed: 2 };
   lines.push(`## Погода`);
-  lines.push(`${input.weather.description}, температура ${input.weather.temperature}°C${input.weather.is_raining ? ', дождь' : ''}${input.weather.is_night ? ', ночь' : ''}, ветер ${input.weather.wind_speed} м/с`);
+  lines.push(`${w.description || "Ясно"}, температура ${w.temperature ?? 20}°C${w.is_raining ? ', дождь' : ''}${w.is_night ? ', ночь' : ''}, ветер ${w.wind_speed ?? 0} м/с`);
   lines.push("");
 
-  if (input.inventory.length > 0) {
+  const inv = Array.isArray(input?.inventory) ? input.inventory : Array.isArray(input?.player_inventory) ? input.player_inventory : [];
+  if (inv.length > 0) {
     lines.push(`## Инвентарь игрока (строгие ID)`);
-    for (const item of input.inventory) {
-      const condStr = item.durability !== null ? `, прочность ${item.durability}` : '';
-      const condStr2 = item.condition !== null ? `, состояние ${item.condition}%` : '';
-      lines.push(`- [${item.id}] ${item.item_name} (${item.item_type}) x${item.quantity}${condStr}${condStr2}`);
+    for (const item of inv) {
+      if (typeof item === "string") {
+        lines.push(`- ${item}`);
+      } else {
+        const condStr = item.durability !== null && item.durability !== undefined ? `, прочность ${item.durability}` : '';
+        const condStr2 = item.condition !== null && item.condition !== undefined ? `, состояние ${item.condition}%` : '';
+        lines.push(`- [${item.id || 'item'}] ${item.item_name || item.name || 'предмет'} (${item.item_type || item.type || 'misc'}) x${item.quantity || 1}${condStr}${condStr2}`);
+      }
     }
     lines.push("");
   } else {
@@ -129,10 +148,11 @@ function buildUserMessage(input: RouterInputContext): string {
     lines.push("");
   }
 
-  if (input.nearby_npcs.length > 0) {
+  const npcs = Array.isArray(input?.nearby_npcs) ? input.nearby_npcs : [];
+  if (npcs.length > 0) {
     lines.push(`## NPC рядом`);
-    for (const npc of input.nearby_npcs) {
-      lines.push(`- [${npc.id}] ${npc.name} (${npc.race})${npc.is_hostile ? ' ⚔️ ВРАГ' : ''}, HP ${npc.hp}/${npc.max_hp}, дистанция ${npc.distance_meters}м`);
+    for (const npc of npcs) {
+      lines.push(`- [${npc.id || 'npc'}] ${npc.name || 'NPC'} (${npc.race || 'гуманоид'})${npc.is_hostile ? ' ⚔️ ВРАГ' : ''}, HP ${npc.hp ?? 10}/${npc.max_hp ?? 10}, дистанция ${npc.distance_meters ?? 5}м`);
     }
     lines.push("");
   } else {
@@ -249,11 +269,13 @@ function normalizeRouterOutput(parsed: any): RouterOutputPayload {
 // Главная функция Шага 1
 // ============================================
 export async function parsePlayerIntent(
-  input: RouterInputContext,
-  apiKey: string,
+  input: RouterInputContext | any,
+  apiKey?: string,
   model: string = DEFAULT_MODEL,
   retries: number = 3
 ): Promise<RouterOutputPayload> {
+  const resolvedApiKey = apiKey || input?.openrouter_api_key || "";
+  const resolvedModel = (model && model !== DEFAULT_MODEL) ? model : (input?.satellite_model || model || DEFAULT_MODEL);
   const systemPrompt = buildRouterSystemPrompt();
   const userMessage = buildUserMessage(input);
 
@@ -261,16 +283,16 @@ export async function parsePlayerIntent(
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      console.log(`[step1_router] Attempt ${attempt + 1}/${retries}, model: ${model}`);
+      console.log(`[step1_router] Attempt ${attempt + 1}/${retries}, model: ${resolvedModel}`);
 
       const response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${resolvedApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model,
+          model: resolvedModel,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage },

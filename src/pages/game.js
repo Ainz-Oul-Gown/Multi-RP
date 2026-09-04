@@ -413,8 +413,8 @@ export async function renderGame(container, sessionId, user) {
     return `
       <div class="profile-card">
         <div class="profile-avatar">⚔️</div>
-        <h3 class="profile-name">${escapeHtml(player.name)}</h3>
-        <p class="profile-meta">${escapeHtml(player.race || '')} / ${escapeHtml(player.class || '')}</p>
+        <h3 class="profile-name">${escapeHtml(player?.name || 'Герой')}</h3>
+        <p class="profile-meta">${escapeHtml(player?.race || '')} / ${escapeHtml(player?.class || '')}</p>
 
         <div class="profile-section" style="width: 100%;">
           <div class="hp-bar-container" style="height: 16px;">
@@ -537,8 +537,8 @@ export async function renderGame(container, sessionId, user) {
             ${allPlayers.map((p) => `
               <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-success);"></span>
-                <span style="font-size: var(--fs-sm);">${escapeHtml(p.name)}</span>
-                <span class="text-muted" style="font-size: var(--fs-xs);">${p.race}/${p.class}</span>
+                <span style="font-size: var(--fs-sm);">${escapeHtml(p?.name || 'Герой')}</span>
+                <span class="text-muted" style="font-size: var(--fs-xs);">${p?.race || ''}/${p?.class || ''}</span>
               </div>
             `).join('')}
           </div>
@@ -583,7 +583,7 @@ export async function renderGame(container, sessionId, user) {
       if (!currentPlayer) return;
       try {
         const data = await exportPlayer(currentPlayer.id);
-        downloadJSON(data, `${currentPlayer.name}_character.json`);
+        downloadJSON(data, `${currentPlayer?.name || 'hero'}_character.json`);
         toast.success('Персонаж экспортирован!');
       } catch (err) {
         toast.error('Ошибка экспорта: ' + err.message);

@@ -157,7 +157,14 @@ describe("Pipeline Integration: 5-step end-to-end", () => {
       },
     };
 
-    const engineResult = executeEngine(engineCtx);
+    const origRandom = Math.random;
+    Math.random = () => 0.99; // гарантируем попадание (d20 = 20)
+    let engineResult;
+    try {
+      engineResult = executeEngine(engineCtx);
+    } finally {
+      Math.random = origRandom;
+    }
 
     // Проверки Шага 2
     expect(engineResult.success).toBe(true);

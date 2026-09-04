@@ -17,6 +17,7 @@ import { applyTurnMutations } from "./steps/step3_persistence.ts";
 import { compileSystemTruth } from "./steps/step4_system_truth.ts";
 import { generateNarrative, buildFallbackNarrative } from "./steps/step5_narrator.ts";
 import { buildSatellitePrompt, buildGpsPrompt } from "./steps/_shared_prompts.ts";
+import { RouterInputContext } from "./types.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -154,14 +155,47 @@ serve(async (req) => {
     // Load location, available locations, lore
     let currentLocationName: string | null = null, currentStateName: string | null = null;
     if (session.current_location_id) {
-      const { data: locData } = await supabase.from("locations").select("name, states(name)").eq("id", session.current_location_id).maybeSingle();
-      if (locData) { currentLocationName = locData.name; currentStateName = locData.states?.name || null; }
+      try {
+        const { data: locData } = await supabase
+          .from("locations")
+          .select("name, states(name)")
+          .eq("id", session.current_location_id)
+          .maybeSingle();
+        if (locData) {
+          currentLocationName = locData.name;
+          const stateObj = Array.isArray(locData.states) ? locData.states[0] : locData.states;
+          currentStateName = stateObj?.name || null;
+        }
+      } catch (locErr) {
+        console.warn(`[${requestId}] Failed to load current location:`, locErr);
+      }
     }
+
     let availableLocations: { id: string; name: string; type: string; state_name: string }[] = [];
     if (session.world_id) {
-      const { data: locsData } = await supabase.from("locations").select("id, name, type, states(name)").eq("world_id", session.world_id).order("name");
-      availableLocations = (locsData || []).map((l: any) => ({ id: l.id, name: l.name, type: l.type, state_name: l.states?.name || '' }));
+      try {
+        const { data: statesWithLocs } = await supabase
+          .from("states")
+          .select("id, name, locations(id, name, type)")
+          .eq("world_id", session.world_id);
+        if (statesWithLocs) {
+          for (const s of statesWithLocs) {
+            const locs = Array.isArray(s.locations) ? s.locations : [];
+            for (const l of locs) {
+              availableLocations.push({
+                id: l.id,
+                name: l.name,
+                type: l.type,
+                state_name: s.name,
+              });
+            }
+          }
+        }
+      } catch (locsErr) {
+        console.warn(`[${requestId}] Failed to load available locations:`, locsErr);
+      }
     }
+
     let loreContext = "";
     if (session.world_id) {
       const { data: loreFiles } = await supabase.from("lore_files").select("title, content").eq("world_id", session.world_id).limit(5);
@@ -172,29 +206,78 @@ serve(async (req) => {
     const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type").eq("session_id", session_id).order("created_at", { ascending: false }).limit(10);
     const recentMessages = (recentMsgs || []).reverse().map((m) => `[${m.sender_type === "master" ? "Мастер" : "Игрок"}]: ${cleanTextForAI(m.content).slice(0, 200)}`);
 
+    // Load all players in session (for router, engine and system truth context)
+    const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*)").eq("session_id", session_id);
+    const allPlayers = allPlayersData || [];
+
+    // Load all NPCs in current location (for router, engine and system truth context)
+    let allNpcs: any[] = [];
+    if (session.current_location_id) {
+      const { data: npcData } = await supabase.from("npcs")
+        .select("id, name, race, role, hp, max_hp, armor_class, level, is_alive, is_hostile, status_tags, stats")
+        .eq("location_id", session.current_location_id);
+      allNpcs = npcData || [];
+    }
+
     // ============================================
     // ШАГ 1: AI Router (parsePlayerIntent)
     // ============================================
     console.log(`[${requestId}] [STEP 1] AI Router...`);
-    const routerResult = await parsePlayerIntent({
-      player_name: player.name,
-      player_race: player.race,
-      player_class: player.class,
-      player_id: player.id,
-      action_text: safeActionText,
-      player_inventory: (player.inventory || []).map((i: any) => i.item_name),
-      world_lore: loreContext,
-      recent_messages: recentMessages,
-      current_location: currentLocationName,
-      current_state: currentStateName,
-      current_time: {
-        year: session.game_year || 1, month: session.game_month || 1, day: session.game_day || 1,
-        hour: session.game_hour || 8, minute: session.game_minute || 0,
+    const routerInput: RouterInputContext = {
+      player_action_text: safeActionText,
+      player: {
+        id: player.id,
+        name: player.name || "Герой",
+        race: player.race || "Человек",
+        class: player.class || "Воин",
+        level: player.level || 1,
+        hp: player.hp ?? 100,
+        max_hp: player.max_hp ?? 100,
+        stats: player.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        location_name: currentLocationName,
+        state_name: currentStateName,
       },
-      available_locations: availableLocations,
-      openrouter_api_key: openrouterApiKey,
-      satellite_model: satelliteModel,
-    });
+      inventory: (player.inventory || []).map((i: any) => ({
+        id: i.id,
+        item_name: i.item_name || i.name || "Предмет",
+        item_type: i.type || i.item_type || "misc",
+        quantity: i.quantity || 1,
+        condition: i.condition ?? null,
+        durability: i.durability ?? null,
+        description: i.description || "",
+      })),
+      nearby_npcs: allNpcs.map((n: any) => ({
+        id: n.id,
+        name: n.name || "NPC",
+        race: n.race || "Гуманоид",
+        is_hostile: n.is_hostile || false,
+        hp: n.hp ?? 10,
+        max_hp: n.max_hp ?? 10,
+        distance_meters: 5,
+      })),
+      weather: {
+        description: "Ясно",
+        temperature: 20,
+        is_raining: false,
+        is_night: ((session.game_hour ?? 8) < 6 || (session.game_hour ?? 8) >= 22),
+        wind_speed: 2,
+      },
+      game_time: {
+        year: session.game_year || 1,
+        month: session.game_month || 1,
+        day: session.game_day || 1,
+        hour: session.game_hour || 8,
+        minute: session.game_minute || 0,
+      },
+      current_location_id: session.current_location_id || null,
+      current_location_name: currentLocationName,
+    };
+
+    const routerResult = await parsePlayerIntent(
+      routerInput,
+      openrouterApiKey,
+      satelliteModel
+    );
 
     if (routerResult.status === "clarification_needed") {
       return new Response(JSON.stringify({
@@ -212,7 +295,7 @@ serve(async (req) => {
     let location_changed = false, new_location_id: string | null = null, travel_description = "";
     try {
       const gpsSystemPrompt = buildGpsPrompt({
-        playerName: cleanTextForAI(player.name),
+        playerName: cleanTextForAI(player.name || "Герой"),
         actionText: safeActionText,
         intentType: "router",
         intentDescription: safeActionText,
@@ -237,16 +320,6 @@ serve(async (req) => {
     // ШАГ 2: Game Engine
     // ============================================
     console.log(`[${requestId}] [STEP 2] Game Engine...`);
-    // Load all players in session (for engine context)
-    const { data: allPlayers } = await supabase.from("players").select("*, inventory(*)").eq("session_id", session_id);
-    // Load all NPCs in current location
-    let allNpcs: any[] = [];
-    if (session.current_location_id) {
-      const { data: npcData } = await supabase.from("npcs")
-        .select("id, name, race, role, hp, max_hp, armor_class, level, is_alive, is_hostile, status_tags, stats")
-        .eq("location_id", session.current_location_id);
-      allNpcs = npcData || [];
-    }
 
     const engineResult = executeEngine({
       router_output: routerResult,
@@ -260,7 +333,7 @@ serve(async (req) => {
         current_location_id: session.current_location_id,
       },
       acting_player: {
-        id: player.id, name: player.name,
+        id: player.id, name: player.name || "Герой",
         stats: player.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
         hp: player.hp, max_hp: player.max_hp,
         armor_class: player.armor_class || 10,
@@ -319,9 +392,9 @@ serve(async (req) => {
       },
       location: { name: currentLocationName || "Неизвестно", weather: null },
       players: (allPlayers || []).map((p: any) => ({
-        id: p.id, name: p.name, hp: p.hp, max_hp: p.max_hp, inventory: p.inventory || [],
+        id: p.id, name: p.name || "Герой", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
       })),
-      npcs: allNpcs.map((n: any) => ({ id: n.id, name: n.name, race: n.race, role: n.role, status_tags: n.status_tags })),
+      npcs: allNpcs.map((n: any) => ({ id: n.id, name: n.name || "NPC", race: n.race || "Существо", role: n.role || "Обыватель", status_tags: n.status_tags || [] })),
       atmosphere: { sounds: [], visuals: [] },
       time_passed_minutes,
       encounter_alert: null,
@@ -337,9 +410,9 @@ serve(async (req) => {
       narratorOutput = await generateNarrative({
         system_truth: systemTruth,
         action_text: safeActionText,
-        player_name: player.name,
-        player_race: player.race,
-        player_class: player.class,
+        player_name: player.name || "Герой",
+        player_race: player.race || "Человек",
+        player_class: player.class || "Воин",
         lore_context: loreContext,
         openrouter_api_key: openrouterApiKey,
         dm_model: dmModel,
@@ -356,7 +429,7 @@ serve(async (req) => {
     console.log(`[${requestId}] [SAVE] Persisting messages...`);
     // 1) Player action
     await supabase.from("messages").insert({
-      session_id, sender_type: "player", sender_id: player.user_id, sender_name: player.name, content: safeActionText,
+      session_id, sender_type: "player", sender_id: player.user_id, sender_name: player.name || "Герой", content: safeActionText,
     });
     // 2) Master narratives — по одному сообщению на игрока
     for (const [targetPlayerId, narrative] of Object.entries(narratorOutput.players)) {

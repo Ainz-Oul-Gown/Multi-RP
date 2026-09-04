@@ -485,10 +485,10 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
 
       npc_context[npcId] = {
         npc_id: npcId,
-        name: npc.name,
-        race: npc.race,
-        role: npc.role,
-        status_tags: npc.status_tags,
+        name: npc?.name || "NPC",
+        race: npc?.race || "Гуманоид",
+        role: npc?.role || "Обыватель",
+        status_tags: npc?.status_tags || [],
         relevant_memories: memories,
       };
     }
@@ -501,8 +501,8 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
     session_id,
     turn_status,
     environment: {
-      location_name: location.name,
-      weather: location.weather,
+      location_name: location?.name || "Неизвестно",
+      weather: location?.weather || null,
       time: newTime,
       time_passed_minutes,
       atmosphere,

@@ -146,8 +146,10 @@ export async function getSession(id) {
   if (error) throw error;
   // Flatten location and state names
   if (data) {
-    data.current_location_name = data.current_locations?.name || null;
-    data.current_state_name = data.current_states?.name || null;
+    const locObj = Array.isArray(data.current_locations) ? data.current_locations[0] : data.current_locations;
+    const stateObj = Array.isArray(data.current_states) ? data.current_states[0] : data.current_states;
+    data.current_location_name = locObj?.name || null;
+    data.current_state_name = stateObj?.name || null;
     data.current_locations = undefined;
     data.current_states = undefined;
   }

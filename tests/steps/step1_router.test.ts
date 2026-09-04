@@ -271,4 +271,30 @@ describe("parsePlayerIntent (Шаг 1: AI Router)", () => {
     expect(result.status).toBe("success");
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
+
+  it("не падает с ошибкой Cannot read properties of undefined ('name') если player не передан", async () => {
+    mockFetch.mockResolvedValueOnce(mockOpenRouterResponse(JSON.stringify({
+      status: "success",
+      actions: [],
+      encounter_intent: { type: "none" },
+      time_estimate_minutes: 5,
+      atmosphere: { sounds: [], visuals: [] },
+    })));
+    (parseAIJson as any).mockReturnValueOnce({
+      status: "success", actions: [], encounter_intent: { type: "none" }, time_estimate_minutes: 5, atmosphere: { sounds: [], visuals: [] }
+    });
+
+    const { parsePlayerIntent } = await import("../../supabase/functions/process-turn/steps/step1_router.ts");
+    // Передаём плоский объект без input.player и с ключом внутри
+    const legacyInput = {
+      action_text: "Осматриваюсь вокруг",
+      player_name: "Бродяга",
+      openrouter_api_key: "test-api-key",
+      satellite_model: "test-model",
+    };
+
+    const result = await parsePlayerIntent(legacyInput);
+    expect(result.status).toBe("success");
+    expect(result.time_estimate_minutes).toBe(5);
+  });
 });

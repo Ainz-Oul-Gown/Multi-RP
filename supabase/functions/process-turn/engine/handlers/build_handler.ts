@@ -53,7 +53,10 @@ export class BuildHandler extends BaseActionHandler {
     // ============================================
     const statMod = this.getStatToCheckMod(player, action.stat_to_check || "strength");
     const proficiency = this.getProficiency(player);
-    const roll = this.performCheck(statMod, targetDc, proficiency);
+    const advantage = context.session.difficulty === "easy";
+    const disadvantage = context.session.difficulty === "hard";
+    const roll = this.performCheck(statMod, targetDc, proficiency, advantage, disadvantage);
+
 
     const mutations: EngineMutation[] = [];
     const systemFacts: string[] = [];

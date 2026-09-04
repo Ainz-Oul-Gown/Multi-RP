@@ -86,13 +86,25 @@ export abstract class BaseActionHandler implements ActionHandler {
     proficiency: number,
     advantage: boolean = false,
     disadvantage: boolean = false
-  ): { d20: number; modifier: number; total: number; target_dc: number; is_crit: boolean; is_fumble: boolean; success: boolean } {
-    return performAttackRoll({
+  ): { d20: number; chosen: number; rolls: number[]; modifier: number; total: number; target_dc: number; is_crit: boolean; is_fumble: boolean; success: boolean } {
+    const roll = performAttackRoll({
       target_dc: targetDc,
       stat_modifier: statMod,
       proficiency_bonus: proficiency,
       advantage,
       disadvantage,
     });
+    return {
+      d20: roll.chosen,
+      chosen: roll.chosen,
+      rolls: roll.rolls,
+      modifier: roll.modifier,
+      total: roll.total,
+      target_dc: roll.target_dc,
+      is_crit: roll.is_crit,
+      is_fumble: roll.is_fumble,
+      success: roll.success,
+    };
   }
+
 }

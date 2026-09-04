@@ -28,7 +28,10 @@ export class HarvestAmbientHandler extends BaseActionHandler {
     // DC: из AI (обычно 10-15 для лёгкого сбора, 25-40 для сложного)
     const targetDc = action.ai_custom_dc || 12;
 
-    const roll = this.performCheck(statMod + skillCheckBonus, targetDc, proficiency);
+    const advantage = context.session.difficulty === "easy";
+    const disadvantage = context.session.difficulty === "hard";
+    const roll = this.performCheck(statMod + skillCheckBonus, targetDc, proficiency, advantage, disadvantage);
+
 
     const mutations: EngineMutation[] = [];
     const systemFacts: string[] = [];

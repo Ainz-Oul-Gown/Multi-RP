@@ -103,6 +103,7 @@ describe("Интеллектуальная система приручения �
         })),
       };
 
+      const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.7);
       const result = await evaluatePetTamingAttempt({
         supabase: mockSupabase,
         acting_player: mockPlayer,
@@ -110,6 +111,7 @@ describe("Интеллектуальная система приручения �
         action_text: "Осторожно приседаю и протягиваю волку кусок сочного мяса",
         offered_item_name: "Кусок сочного мяса",
       });
+      randomSpy.mockRestore();
 
       expect(result).not.toBeNull();
       expect(result?.is_taming_action).toBe(true);
@@ -120,6 +122,7 @@ describe("Интеллектуальная система приручения �
       expect(result?.status_tags).toContain("приручаемый");
       expect(result?.beast_memory).toContain("Человек угостил вкусной пищей");
     });
+
 
     it("переводит зверя в ранг 'main' (полноценный питомец в отряде) при достижении высокого доверия (score >= 50)", async () => {
       const mockSupabase = {

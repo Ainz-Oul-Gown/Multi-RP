@@ -20,7 +20,11 @@ export class MoveHandler extends BaseActionHandler {
     if (action.ai_custom_dc && action.ai_custom_dc > 0) {
       const statMod = this.getStatToCheckMod(player, action.stat_to_check || "dexterity");
       const proficiency = this.getProficiency(player);
-      const roll = this.performCheck(statMod, action.ai_custom_dc, proficiency);
+      const advantage = context.session.difficulty === "easy";
+      const disadvantage = context.session.difficulty === "hard";
+      const roll = this.performCheck(statMod, action.ai_custom_dc, proficiency, advantage, disadvantage);
+
+
 
       if (!roll.success) {
         const result: ActionResult = {

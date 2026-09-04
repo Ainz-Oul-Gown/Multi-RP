@@ -713,4 +713,91 @@ describe("MoveHandler", () => {
       randomSpy.mockRestore();
     }
   });
+
+  describe("Сложность сессии (difficulty: easy / hard)", () => {
+    it("сложность easy делает броски сбора ресурсов (harvest_ambient) с преимуществом (2 броска, выбирается лучший)", () => {
+      // Мокаем 2 броска d20: первый 0.05 (d20=2), второй 0.95 (d20=20)
+      const randomSpy = vi.spyOn(Math, "random")
+        .mockReturnValueOnce(0.05) // d20=2
+        .mockReturnValueOnce(0.95) // d20=20 (преимущество выбирает 20)
+        .mockReturnValue(0.5);
+
+      try {
+        const ctx = makeContext({
+          session: {
+            id: "session-1",
+            difficulty: "easy",
+            is_pvp_enabled: false,
+            game_year: 1248,
+            game_month: 5,
+            game_day: 14,
+            game_hour: 10,
+            game_minute: 0,
+            current_location_id: "loc-1",
+          },
+          router_output: makeRouterOutput([
+            {
+              action_type: "harvest_ambient",
+              target_entity_id: null,
+              target_item_name: "палки",
+              used_item_id: null,
+              consumed_materials: null,
+              stat_to_check: "survival",
+              ai_custom_dc: 15,
+              improper_tool_usage: null,
+            },
+          ]),
+        });
+
+        const result = executeEngine(ctx);
+        expect(result.action_results[0].success).toBe(true);
+        expect(result.action_results[0].dice_roll?.d20).toBe(20);
+      } finally {
+        randomSpy.mockRestore();
+      }
+    });
+
+    it("сложность hard делает броски поиска (search) с помехой (2 броска, выбирается худший)", () => {
+      // Мокаем 2 броска: первый 0.95 (d20=20), второй 0.05 (d20=2)
+      const randomSpy = vi.spyOn(Math, "random")
+        .mockReturnValueOnce(0.95) // d20=20
+        .mockReturnValueOnce(0.05) // d20=2 (помеха выбирает 2)
+        .mockReturnValue(0.5);
+
+      try {
+        const ctx = makeContext({
+          session: {
+            id: "session-1",
+            difficulty: "hard",
+            is_pvp_enabled: false,
+            game_year: 1248,
+            game_month: 5,
+            game_day: 14,
+            game_hour: 10,
+            game_minute: 0,
+            current_location_id: "loc-1",
+          },
+          router_output: makeRouterOutput([
+            {
+              action_type: "search",
+              target_entity_id: null,
+              target_item_name: "тайник",
+              used_item_id: null,
+              consumed_materials: null,
+              stat_to_check: "investigation",
+              ai_custom_dc: 10,
+              improper_tool_usage: null,
+            },
+          ]),
+        });
+
+        const result = executeEngine(ctx);
+        expect(result.action_results[0].success).toBe(false);
+        expect(result.action_results[0].dice_roll?.d20).toBe(2);
+      } finally {
+        randomSpy.mockRestore();
+      }
+    });
+  });
 });
+

@@ -32,7 +32,10 @@ export class TalkHandler extends BaseActionHandler {
     const proficiency = this.getProficiency(player);
     const targetDc = action.ai_custom_dc || 12;
 
-    const roll = this.performCheck(statMod, targetDc, proficiency);
+    const advantage = context.session.difficulty === "easy";
+    const disadvantage = context.session.difficulty === "hard";
+    const roll = this.performCheck(statMod, targetDc, proficiency, advantage, disadvantage);
+
 
     const systemFacts: string[] = [
       `${player.name} попытался поговорить с ${target.name} (${roll.total} vs DC=${targetDc}).`,

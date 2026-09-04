@@ -72,7 +72,10 @@ export class LootSearchHandler extends BaseActionHandler {
     // ============================================
     // Успех: генерируем 1-3 предмета (упрощённо — 1 предмет из target_name)
     // ============================================
-    const itemName = action.target_item_name || "добыча";
+    const rawLootName = (action.target_item_name || "").trim();
+    const itemName = !rawLootName || /^(добыча|лут|loot|item|предмет|вещь|находка)$/i.test(rawLootName)
+      ? `Трофей (${target.name})`
+      : rawLootName;
     const quantity = Math.min(3, Math.max(1, Math.ceil(rollD100() / 33.33)));
 
     mutations.push({
@@ -81,7 +84,7 @@ export class LootSearchHandler extends BaseActionHandler {
       owner_type: "player",
       item: {
         item_name: itemName,
-        type: "misc",
+        type: (action as any).item_type || "misc",
         quantity,
         attributes: { looted_from: target.id },
       },
@@ -118,7 +121,6 @@ export class SearchHandler extends BaseActionHandler {
     const disadvantage = context.session.difficulty === "hard";
     const roll = this.performCheck(statMod, targetDc, proficiency, advantage, disadvantage);
 
-
     const mutations: EngineMutation[] = [];
     const systemFacts: string[] = [];
 
@@ -136,12 +138,31 @@ export class SearchHandler extends BaseActionHandler {
       };
     }
 
-    const itemName = action.target_item_name || "находка";
+    const rawItemName = (action.target_item_name || "").trim();
+    const isGeneric = !rawItemName || /^(находка|предмет|вещь|что-нибудь|что-то|лут|добыча|item|loot)$/i.test(rawItemName);
+
+    if (isGeneric) {
+      // Игрок внимательно осматривал/обыскивал местность без конкретного предмета —
+      // фиксируем успех внимательности как факт восприятия без захламления инвентаря пустышками
+      systemFacts.push(`${player.name} внимательно осмотрел округу и подметил важные детали обстановки.`);
+      return {
+        result: {
+          action_type: this.action_type,
+          success: true,
+          dice_roll: roll,
+          details: "Успешный осмотр местности: подмечены важные детали обстановки",
+        },
+        mutations,
+        system_facts: systemFacts,
+      };
+    }
+
+    const itemName = rawItemName;
     mutations.push({
       type: "INSERT_ITEM",
       owner_id: player.id,
       owner_type: "player",
-      item: { item_name: itemName, type: "misc", quantity: 1 },
+      item: { item_name: itemName, type: (action as any).item_type || "misc", quantity: 1 },
     });
 
     systemFacts.push(`${player.name} нашёл "${itemName}" при обыске.`);

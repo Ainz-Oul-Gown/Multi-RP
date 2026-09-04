@@ -318,6 +318,24 @@ serve(async (req) => {
       }
     }
 
+    const isCompanionNpc = (n: any) => {
+      const role = (n.role || "").toLowerCase();
+      const tags = Array.isArray(n.status_tags) ? n.status_tags.map((t: string) => String(t).toLowerCase()) : [];
+      return role === "companion" || role === "спутник" || tags.some((t: string) => ["companion", "спутник", "в_отряде", "питомец", "приручен"].includes(t));
+    };
+
+    // Если игрок находится в дикой зоне (лес, пещера, пустошь), городские NPC (торговцы, жители) остаются в городе!
+    // В сцене с игроком присутствуют ТОЛЬКО спутники/питомцы или дикие враги/существа.
+    if (currentWildZone) {
+      const totalLoaded = allNpcs.length;
+      allNpcs = allNpcs.filter((n: any) =>
+        isCompanionNpc(n) ||
+        n.is_hostile === true ||
+        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))
+      );
+      console.log(`[${requestId}] [WILD_ZONE] In wild zone "${currentWildZone}": filtered out town NPCs (${totalLoaded} -> ${allNpcs.length} present)`);
+    }
+
     console.log(`[${requestId}] [START] 🎯 Turn for player "${player.name}" (${player.id}) in session "${session_id}". Action: "${safeActionText}"`);
     console.log(`[${requestId}] [LOCATION] 📍 LocationID=${session.current_location_id}, Name="${currentLocationName}", WildZone="${session.current_wild_zone || 'none'}", NPCs present=${allNpcs.length} (${allNpcs.map((n: any) => n.name).join(', ') || 'none'})`);
 
@@ -664,6 +682,11 @@ serve(async (req) => {
       }).eq("id", session_id);
       currentLocationName = new_wild_zone;
       session.current_wild_zone = new_wild_zone;
+      allNpcs = allNpcs.filter((n: any) =>
+        isCompanionNpc(n) ||
+        n.is_hostile === true ||
+        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))
+      );
       console.log(`[${requestId}] [WILD_ZONE] Player entered wild zone: ${new_wild_zone}`);
     }
 
@@ -829,7 +852,7 @@ serve(async (req) => {
       players: (allPlayers || []).map((p: any) => ({
         id: p.id, name: p.name || "Герой", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
       })),
-      npcs: allNpcs.map((n: any) => ({ id: n.id, name: n.name || "NPC", race: n.race || "Существо", role: n.role || "Обыватель", status_tags: n.status_tags || [] })),
+      npcs: (session.current_wild_zone ? allNpcs.filter((n: any) => isCompanionNpc(n) || n.is_hostile === true || (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))) : allNpcs).map((n: any) => ({ id: n.id, name: n.name || "NPC", race: n.race || "Существо", role: n.role || "Обыватель", status_tags: n.status_tags || [] })),
       atmosphere: routerResult.atmosphere || { sounds: [], visuals: [] },
       time_passed_minutes,
       encounter_alert: null,

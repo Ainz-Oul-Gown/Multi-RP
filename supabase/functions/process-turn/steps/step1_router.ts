@@ -54,14 +54,15 @@ function buildRouterSystemPrompt(): string {
 8. **Атмосфера**: 1-3 звука и 1-3 визуальных образа для сцены.
 
 9. **Сбор ресурсов (harvest_ambient)**:
-   - Если игрок собирает природные или окружающие ресурсы (ягоды, травы, грибы, ветки, руду, камни, воду, или в sci-fi/киберпанке: металлолом, микросхемы, запчасти, проводку, картриджи стимуляторов, чипы памяти):
+   - Если игрок собирает или ищет природные или окружающие ресурсы (камни, палки, ветки, ягоды, травы, грибы, руду, воду, или в киберпанке: металлолом, микросхемы, запчасти, проводку, картриджи стимуляторов, чипы памяти):
    - action_type: "harvest_ambient"
-   - Обязательно указывай 'target_item_name' с конкретным названием на русском языке в именительном падеже (например: "Лесная черника", "Целебная трава", "Медный самородок", "Обломки электроники", "Химический стимулятор", "Сухие ветки"). НИКОГДА не оставляй target_item_name пустым или словом "ресурс"!
+   - Обязательно указывай 'target_item_name' с конкретным названием на русском языке в именительном падеже (например: "Камни", "Сухие ветки", "Лесные грибы", "Лесная черника", "Целебная трава", "Медный самородок", "Обломки электроники", "Химический стимулятор"). НИКОГДА не оставляй target_item_name пустым или словом "ресурс" или "находка"!
    - Указывай 'item_type':
      * Для еды/трав/лекарств: "consumable", "herb", "food", "potion", "stim"
-     * Для материалов/руды/дерева/металла: "material", "wood", "ore", "gem", "scrap", "electronics"
+     * Для материалов/руды/дерева/металла/камня: "material", "wood", "ore", "gem", "scrap", "electronics", "stone"
      * Для технологий/киберпанка: "cyberware", "implant", "software", "datashard", "ammo", "energy_cell"
      * По умолчанию: "material" или "consumable"
+   - КРИТИЧЕСКИ ВАЖНО: При поиске/сборе ресурсов возвращай СТРОГО ОДНО действие: "harvest_ambient"! КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО добавлять дублирующее действие "search" (обыск). Действие "search" предназначено ТОЛЬКО для обыска тел, сундуков, шкафов, тайников или поиска скрытых улик.
 
 10. **Прокачка характеристик / распределение очков**:
    - Если игрок распределяет свободные очки характеристик (например: "Вкладываю 2 очка в силу", "Качаю ловкость +1", "распредели очки"):
@@ -279,14 +280,30 @@ function validateRouterOutput(parsed: any): asserts parsed is RouterOutputPayloa
 // Нормализация: заполнение дефолтных значений
 // ============================================
 function normalizeRouterOutput(parsed: any): RouterOutputPayload {
+  const hasHarvest = (parsed.actions || []).some((a: any) => a.action_type === "harvest_ambient");
+  let rawActions: any[] = parsed.actions || [];
+
+  // Если есть harvest_ambient, убираем избыточный/ложный search (например, если модель выдала и сбор, и поиск)
+  if (hasHarvest) {
+    rawActions = rawActions.filter((a: any) => {
+      if (a.action_type === "search" && !a.target_entity_id) {
+        const target = (a.target_item_name || "").toLowerCase().trim();
+        if (!target || /^(находка|предмет|вещь|что-нибудь|что-то|лут|добыча|item|loot)$/i.test(target) || /камн|палк|ветк|гриб|ягод|трав|руд|кремен/i.test(target)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
   return {
     status: parsed.status,
     clarification_msg: parsed.clarification_msg ?? null,
     skill_hint: parsed.skill_hint ?? null,
-    actions: (parsed.actions || []).map((a: any): RouterAction => ({
+    actions: rawActions.map((a: any): RouterAction => ({
       action_type: a.action_type,
       target_entity_id: a.target_entity_id ?? null,
-      target_item_name: a.target_item_name ?? null,
+      target_item_name: (a.target_item_name && a.target_item_name.toLowerCase().trim() === "находка") ? null : (a.target_item_name ?? null),
       item_type: a.item_type ?? null,
       used_item_id: a.used_item_id ?? null,
       consumed_materials: a.consumed_materials ?? null,
@@ -297,13 +314,13 @@ function normalizeRouterOutput(parsed: any): RouterOutputPayload {
       raw_action_text: a.raw_action_text ?? parsed.raw_action_text ?? null,
     })),
     encounter_intent: {
-      type: parsed.encounter_intent.type,
-      target_name: parsed.encounter_intent.target_name ?? null,
+      type: parsed.encounter_intent?.type || "none",
+      target_name: parsed.encounter_intent?.target_name ?? null,
     },
     time_estimate_minutes: Math.max(0, Math.min(1440, Number(parsed.time_estimate_minutes) || 0)),
     atmosphere: {
-      sounds: Array.isArray(parsed.atmosphere.sounds) ? parsed.atmosphere.sounds : [],
-      visuals: Array.isArray(parsed.atmosphere.visuals) ? parsed.atmosphere.visuals : [],
+      sounds: Array.isArray(parsed.atmosphere?.sounds) ? parsed.atmosphere.sounds : [],
+      visuals: Array.isArray(parsed.atmosphere?.visuals) ? parsed.atmosphere.visuals : [],
     },
   };
 }
@@ -510,7 +527,8 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     actions.push({
       action_type: "harvest_ambient",
       target_entity_id: null,
-      target_item_name: "палки",
+      target_item_name: "Сухие ветки",
+      item_type: "material",
       used_item_id: null,
       consumed_materials: null,
       stat_to_check: "survival",
@@ -522,7 +540,8 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     actions.push({
       action_type: "harvest_ambient",
       target_entity_id: null,
-      target_item_name: "камни",
+      target_item_name: "Камни",
+      item_type: "material",
       used_item_id: null,
       consumed_materials: null,
       stat_to_check: "survival",
@@ -531,10 +550,22 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     });
     skillHint = "gathering";
   } else if (lower.includes("трав") || lower.includes("растен") || lower.includes("ягод") || lower.includes("съедобн") || lower.includes("гриб") || lower.includes("пищ") || lower.includes("еду")) {
+    const isMushroom = lower.includes("гриб");
+    const isBerry = lower.includes("ягод");
+    let targetName = "съедобные растения";
+    let itype = "herb";
+    if (isMushroom) {
+      targetName = "Лесные грибы";
+      itype = "food";
+    } else if (isBerry) {
+      targetName = "Спелые лесные ягоды";
+      itype = "food";
+    }
     actions.push({
       action_type: "harvest_ambient",
       target_entity_id: null,
-      target_item_name: "съедобные растения",
+      target_item_name: targetName,
+      item_type: itype,
       used_item_id: null,
       consumed_materials: null,
       stat_to_check: "survival",
@@ -547,6 +578,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
       action_type: "search",
       target_entity_id: null,
       target_item_name: "кружка",
+      item_type: "misc",
       used_item_id: null,
       consumed_materials: null,
       stat_to_check: "investigation",
@@ -557,7 +589,8 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     actions.push({
       action_type: "search",
       target_entity_id: null,
-      target_item_name: "находка",
+      target_item_name: null,
+      item_type: null,
       used_item_id: null,
       consumed_materials: null,
       stat_to_check: "investigation",

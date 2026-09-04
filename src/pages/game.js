@@ -25,6 +25,9 @@ function sanitizeAIText(raw) {
   return text;
 }
 
+import { formatGameCalendarDate } from '../utils/gameDate.js';
+export { formatGameCalendarDate };
+
 export async function renderGame(container, sessionId, user) {
   let session = null;
   let currentPlayer = null;
@@ -279,11 +282,9 @@ export async function renderGame(container, sessionId, user) {
     const day = session?.game_day ?? session?.game_time?.day;
     const month = session?.game_month ?? session?.game_time?.month;
     const year = session?.game_year ?? session?.game_time?.year;
-    const hour = session?.game_hour ?? session?.game_time?.hour ?? 8;
+    const hour = session?.game_hour ?? session?.game_time?.hour ?? 10;
     const minute = session?.game_minute ?? session?.game_time?.minute ?? 0;
-    const timeStr = day && month && year
-      ? `${day}.${month}.${year} ${hour}:${String(minute).padStart(2, '0')}`
-      : '';
+    const timeStr = formatGameCalendarDate(day, month, year, hour, minute);
     const locationStr = session?.current_location_name || '';
 
     container.innerHTML = `
@@ -989,6 +990,16 @@ export async function renderGame(container, sessionId, user) {
           game_day: result.game_time.day,
           game_hour: result.game_time.hour,
           game_minute: result.game_time.minute,
+        };
+      }
+
+      // Обновление локации при смене или генерации начальной локации
+      if (result.current_location_name) {
+        session = {
+          ...session,
+          current_location_name: result.current_location_name,
+          current_state_name: result.current_state_name || session?.current_state_name,
+          current_location_id: result.new_location_id || session?.current_location_id,
         };
       }
 

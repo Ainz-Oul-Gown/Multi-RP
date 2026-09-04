@@ -140,26 +140,45 @@ export async function getSessions() {
 export async function getSession(id) {
   const { data, error } = await supabase
     .from('sessions')
-    .select('*, worlds(settings), current_locations:locations(name), current_states:states(name)')
+    .select('*, worlds(settings)')
     .eq('id', id)
     .single();
   if (error) throw error;
-  // Flatten location and state names
   if (data) {
-    const locObj = Array.isArray(data.current_locations) ? data.current_locations[0] : data.current_locations;
-    const stateObj = Array.isArray(data.current_states) ? data.current_states[0] : data.current_states;
-    data.current_location_name = locObj?.name || null;
-    data.current_state_name = stateObj?.name || null;
-    data.current_locations = undefined;
-    data.current_states = undefined;
+    data.current_location_name = null;
+    data.current_state_name = null;
+    if (data.current_location_id) {
+      try {
+        const { data: locData } = await supabase
+          .from('locations')
+          .select('id, name, state_id, states(name)')
+          .eq('id', data.current_location_id)
+          .maybeSingle();
+        if (locData) {
+          data.current_location_name = locData.name || null;
+          const stateObj = Array.isArray(locData.states) ? locData.states[0] : locData.states;
+          data.current_state_name = stateObj?.name || null;
+        }
+      } catch (locErr) {
+        console.warn('Failed to load session location details:', locErr);
+      }
+    }
   }
   return data;
 }
 
 export async function createSession(session) {
+  const sessionData = {
+    game_year: 1248,
+    game_month: 5,
+    game_day: 14,
+    game_hour: 10,
+    game_minute: 0,
+    ...session,
+  };
   const { data, error } = await supabase
     .from('sessions')
-    .insert(session)
+    .insert(sessionData)
     .select()
     .single();
   if (error) throw error;

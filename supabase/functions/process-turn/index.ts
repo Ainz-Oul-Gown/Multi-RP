@@ -17,6 +17,7 @@ import { applyTurnMutations } from "./steps/step3_persistence.ts";
 import { compileSystemTruth } from "./steps/step4_system_truth.ts";
 import { generateNarrative, buildFallbackNarrative } from "./steps/step5_narrator.ts";
 import { processNpcInteractions } from "./steps/npc_memory_updater.ts";
+import { ensureStartingLocation } from "../_shared/starting_location_generator.ts";
 import { buildSatellitePrompt, buildGpsPrompt } from "./steps/_shared_prompts.ts";
 import { RouterInputContext } from "./types.ts";
 
@@ -220,6 +221,53 @@ serve(async (req) => {
       allNpcs = npcData || [];
     }
 
+    // Проверяем, первый ли это ход в сессии (нет сообщений игрока или локация не задана)
+    const isFirstTurn = !session.current_location_id || !(recentMsgs || []).some((m: any) => m.sender_type === "player");
+    let startingLocationGenerated = false;
+
+    if (isFirstTurn) {
+      console.log(`[${requestId}] [STARTING_LOCATION] Generating/ensuring starting location for first turn...`);
+      try {
+        const startLoc = await ensureStartingLocation({
+          supabase,
+          session,
+          player: {
+            id: player.id,
+            name: player.name || "Герой",
+            race: player.race,
+            class: player.class,
+            appearance: player.appearance,
+            personality: player.personality,
+            bio: player.bio,
+          },
+          action_text: safeActionText,
+          is_first_turn: true,
+          lore_context: loreContext,
+          openrouter_api_key: openrouterApiKey,
+          model: satelliteModel,
+        });
+
+        if (startLoc && startLoc.is_new_location) {
+          startingLocationGenerated = true;
+          session.current_location_id = startLoc.location_id;
+          currentLocationName = startLoc.location_name;
+          currentStateName = startLoc.state_name;
+          session.game_year = startLoc.game_time.year;
+          session.game_month = startLoc.game_time.month;
+          session.game_day = startLoc.game_time.day;
+          session.game_hour = startLoc.game_time.hour;
+          session.game_minute = startLoc.game_time.minute;
+
+          if (startLoc.initial_npcs?.length) {
+            allNpcs = startLoc.initial_npcs;
+          }
+          console.log(`[${requestId}] [STARTING_LOCATION] Created start location "${currentLocationName}" (${currentStateName}) for ${player.name}`);
+        }
+      } catch (locGenErr) {
+        console.warn(`[${requestId}] [STARTING_LOCATION] Generation error:`, locGenErr);
+      }
+    }
+
     // ============================================
     // ШАГ 1: AI Router (parsePlayerIntent)
     // ============================================
@@ -293,15 +341,17 @@ serve(async (req) => {
 
     // Apply GPS time/location (still here, as it's pre-engine)
     let time_passed_minutes = 0;
-    let location_changed = false, new_location_id: string | null = null, travel_description = "";
+    let location_changed = startingLocationGenerated,
+      new_location_id: string | null = startingLocationGenerated ? session.current_location_id : null,
+      travel_description = "";
     try {
       const gpsSystemPrompt = buildGpsPrompt({
         playerName: cleanTextForAI(player.name || "Герой"),
         actionText: safeActionText,
         intentType: "router",
         intentDescription: safeActionText,
-        currentYear: session.game_year || 1, currentMonth: session.game_month || 1,
-        currentDay: session.game_day || 1, currentHour: session.game_hour || 8,
+        currentYear: session.game_year || 1248, currentMonth: session.game_month || 5,
+        currentDay: session.game_day || 14, currentHour: session.game_hour || 10,
         currentMinute: session.game_minute || 0,
         currentLocation: currentLocationName, currentState: currentStateName,
         wantsLocationChange: false, locationChangeDescription: "",
@@ -311,9 +361,11 @@ serve(async (req) => {
       const gpsParsed = parseAIJson(gpsResp);
       if (gpsParsed) {
         time_passed_minutes = Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0));
-        location_changed = gpsParsed.location_changed === true;
-        new_location_id = gpsParsed.new_location_id || null;
-        travel_description = gpsParsed.travel_description || "";
+        if (gpsParsed.location_changed === true && gpsParsed.new_location_id) {
+          location_changed = true;
+          new_location_id = gpsParsed.new_location_id;
+          travel_description = gpsParsed.travel_description || "";
+        }
       }
     } catch (e) { /* ignore */ }
 
@@ -328,8 +380,8 @@ serve(async (req) => {
         id: session_id,
         difficulty: session.difficulty || "normal",
         is_pvp_enabled: session.is_pvp_enabled || false,
-        game_year: session.game_year || 1, game_month: session.game_month || 1,
-        game_day: session.game_day || 1, game_hour: session.game_hour || 8,
+        game_year: session.game_year || 1248, game_month: session.game_month || 5,
+        game_day: session.game_day || 14, game_hour: session.game_hour || 10,
         game_minute: session.game_minute || 0,
         current_location_id: session.current_location_id,
       },
@@ -364,13 +416,18 @@ serve(async (req) => {
     // Apply time advance to session
     if (time_passed_minutes > 0) {
       const nt = advanceTime({
-        year: session.game_year || 1, month: session.game_month || 1, day: session.game_day || 1,
-        hour: session.game_hour || 8, minute: session.game_minute || 0,
+        year: session.game_year || 1248, month: session.game_month || 5, day: session.game_day || 14,
+        hour: session.game_hour || 10, minute: session.game_minute || 0,
       }, time_passed_minutes);
       await supabase.from("sessions").update({
         game_year: nt.year, game_month: nt.month, game_day: nt.day,
         game_hour: nt.hour, game_minute: nt.minute,
       }).eq("id", session_id);
+      session.game_year = nt.year;
+      session.game_month = nt.month;
+      session.game_day = nt.day;
+      session.game_hour = nt.hour;
+      session.game_minute = nt.minute;
     }
     if (location_changed && new_location_id) {
       await supabase.from("sessions").update({ current_location_id: new_location_id }).eq("id", session_id);
@@ -386,8 +443,8 @@ serve(async (req) => {
       engine_output: engineResult,
       persistence_output: persistenceResult,
       session: {
-        game_year: session.game_year || 1, game_month: session.game_month || 1,
-        game_day: session.game_day || 1, game_hour: session.game_hour || 8,
+        game_year: session.game_year || 1248, game_month: session.game_month || 5,
+        game_day: session.game_day || 14, game_hour: session.game_hour || 10,
         game_minute: session.game_minute || 0,
         current_location_id: session.current_location_id,
       },
@@ -556,6 +613,9 @@ serve(async (req) => {
       game_time: systemTruth.environment.time,
       time_minutes: time_passed_minutes,
       location_changed,
+      new_location_id,
+      current_location_name: currentLocationName,
+      current_state_name: currentStateName,
     }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
 
   } catch (err) {

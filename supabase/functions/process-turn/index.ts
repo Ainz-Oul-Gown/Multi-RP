@@ -16,6 +16,7 @@ import { executeEngine } from "./engine/step2_engine.ts";
 import { applyTurnMutations } from "./steps/step3_persistence.ts";
 import { compileSystemTruth } from "./steps/step4_system_truth.ts";
 import { generateNarrative, buildFallbackNarrative } from "./steps/step5_narrator.ts";
+import { processNpcInteractions } from "./steps/npc_memory_updater.ts";
 import { buildSatellitePrompt, buildGpsPrompt } from "./steps/_shared_prompts.ts";
 import { RouterInputContext } from "./types.ts";
 
@@ -214,7 +215,7 @@ serve(async (req) => {
     let allNpcs: any[] = [];
     if (session.current_location_id) {
       const { data: npcData } = await supabase.from("npcs")
-        .select("id, name, race, role, hp, max_hp, armor_class, level, is_alive, is_hostile, status_tags, stats")
+        .select("id, name, race, role, hp, max_hp, armor_class, level, is_alive, is_hostile, status_tags, stats, background, appearance, habits, catchphrases")
         .eq("location_id", session.current_location_id);
       allNpcs = npcData || [];
     }
@@ -452,6 +453,28 @@ serve(async (req) => {
       });
     }
 
+    // 4) NPC Relationships & Memories update
+    let npcUpdates: any[] = [];
+    try {
+      npcUpdates = await processNpcInteractions({
+        supabase,
+        session_id,
+        acting_player: player,
+        action_text: safeActionText,
+        router_result: routerResult,
+        engine_result: engineResult,
+        narrator_output: narratorOutput,
+        all_npcs: allNpcs,
+        openrouter_api_key: openrouterApiKey,
+        chat_model: dmModel,
+      });
+      if (npcUpdates.length > 0) {
+        console.log(`[${requestId}] [NPC] Updated ${npcUpdates.length} NPC relationship(s):`, npcUpdates.map(u => `${u.npc_name}: ${u.delta > 0 ? '+' : ''}${u.delta} -> ${u.score} (${u.tier})`));
+      }
+    } catch (npcErr) {
+      console.warn(`[${requestId}] [NPC] processNpcInteractions failed:`, npcErr);
+    }
+
     // turn_queue: текущий ход completed → следующий active
     try {
       const { data: existingTurns } = await supabase.from("turn_queue")
@@ -529,6 +552,7 @@ serve(async (req) => {
       },
       turn_status: systemTruth.turn_status,
       narratives: narratorOutput,
+      npc_updates: npcUpdates,
       game_time: systemTruth.environment.time,
       time_minutes: time_passed_minutes,
       location_changed,

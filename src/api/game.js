@@ -1075,3 +1075,78 @@ export async function exportPlayer(playerId) {
 
   return exportData;
 }
+
+// ===================== NPC RELATIONSHIPS & MEMORIES =====================
+
+export function getRelationshipTierLabelClient(tier) {
+  switch (tier) {
+    case 'sworn_enemy': return 'Заклятый враг';
+    case 'hostile': return 'Враждебность';
+    case 'unfriendly': return 'Неприязнь';
+    case 'neutral': return 'Нейтралитет';
+    case 'friendly': return 'Симпатия';
+    case 'trusted': return 'Доверие';
+    case 'devoted': return 'Преданность';
+    default: return 'Нейтралитет';
+  }
+}
+
+export async function getNpcRelationships(sessionId, playerId) {
+  // Получаем сессию чтобы узнать current_location_id
+  const { data: session } = await supabase
+    .from('sessions')
+    .select('current_location_id')
+    .eq('id', sessionId)
+    .maybeSingle();
+
+  if (!session?.current_location_id) return [];
+
+  // Получаем NPC в локации
+  const { data: npcs, error: npcsError } = await supabase
+    .from('npcs')
+    .select('id, name, race, role, status_tags, appearance, background')
+    .eq('location_id', session.current_location_id);
+
+  if (npcsError) throw npcsError;
+  if (!npcs || npcs.length === 0) return [];
+
+  // Получаем сохраненные отношения для этих NPC и текущего игрока
+  const npcIds = npcs.map((n) => n.id);
+  const { data: rels } = await supabase
+    .from('npc_relationships')
+    .select('*')
+    .in('npc_id', npcIds)
+    .eq('player_id', playerId);
+
+  const relMap = new Map((rels || []).map((r) => [r.npc_id, r]));
+
+  return npcs.map((npc) => {
+    const rel = relMap.get(npc.id);
+    const score = rel?.score ?? 0;
+    const tier = rel?.tier ?? 'neutral';
+    const statusTags = Array.from(new Set([...(npc.status_tags || []), ...(rel?.status_tags || [])]));
+    return {
+      npc,
+      relationship: {
+        score,
+        tier,
+        tier_label: getRelationshipTierLabelClient(tier),
+        status_tags: statusTags,
+        interactions_count: rel?.interactions_count ?? 0,
+        last_interaction_at: rel?.last_interaction_at,
+      },
+    };
+  });
+}
+
+export async function getNpcMemories(npcId, playerId) {
+  const { data, error } = await supabase
+    .from('npc_memories')
+    .select('*')
+    .eq('npc_id', npcId)
+    .eq('player_id', playerId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}

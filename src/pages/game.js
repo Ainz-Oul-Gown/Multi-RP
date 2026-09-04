@@ -5,7 +5,7 @@ import {
   getSessionMessages, submitAction, updatePlayer, addInventoryItem,
   removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn,
   getTurnQueue, initTurnQueue, passTurn, createPlayer,
-  getCharacterCards
+  getCharacterCards, getNpcRelationships, getNpcMemories, getRelationshipTierLabelClient
 } from '../api/game.js';
 import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows } from '../config.js';
 import { toast } from '../utils/toast.js';
@@ -30,7 +30,10 @@ export async function renderGame(container, sessionId, user) {
   let currentPlayer = null;
   let allPlayers = [];
   let messages = [];
-  let activePanel = null; // 'profile' | 'inventory' | 'settings' | null
+  let activePanel = null; // 'profile' | 'inventory' | 'settings' | 'npc' | null
+  let cachedNpcData = [];
+  let expandedMemoryNpcId = null;
+  let cachedMemories = {};
   let isSubmitting = false;
   let isMyTurn = true; // По умолчанию разрешаем ввод
   let activePlayerName = '';
@@ -300,6 +303,7 @@ export async function renderGame(container, sessionId, user) {
           <div class="game-header-actions">
             <button class="btn btn-ghost btn-icon" id="profileBtn" title="Профиль">👤</button>
             <button class="btn btn-ghost btn-icon" id="inventoryBtn" title="Инвентарь">🎒</button>
+            <button class="btn btn-ghost btn-icon" id="npcBtn" title="Окружение и NPC">👥</button>
             <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Настройки">⚙️</button>
           </div>
         </header>
@@ -371,6 +375,17 @@ export async function renderGame(container, sessionId, user) {
           </div>
           <div class="side-panel-content" id="inventoryContent">
             ${currentPlayer ? renderInventory(currentPlayer) : ''}
+          </div>
+        </div>
+
+        <!-- NPC Relationships Panel -->
+        <div class="side-panel ${activePanel === 'npc' ? 'open' : ''}" id="npcPanel">
+          <div class="side-panel-header">
+            <h2>👥 Окружение и NPC</h2>
+            <button class="btn btn-ghost btn-icon" id="closeNpcBtn">✕</button>
+          </div>
+          <div class="side-panel-content" id="npcContent">
+            ${cachedNpcData.length ? renderNpcList(cachedNpcData) : '<div style="padding: 1rem; text-align: center; color: var(--text-muted);">Загрузка персонажей...</div>'}
           </div>
         </div>
 
@@ -651,6 +666,172 @@ export async function renderGame(container, sessionId, user) {
     `;
   }
 
+  function getTierColor(tier) {
+    switch (tier) {
+      case 'sworn_enemy': return '#ef4444';
+      case 'hostile': return '#f97316';
+      case 'unfriendly': return '#eab308';
+      case 'neutral': return '#94a3b8';
+      case 'friendly': return '#10b981';
+      case 'trusted': return '#06b6d4';
+      case 'devoted': return '#a855f7';
+      default: return '#94a3b8';
+    }
+  }
+
+  function renderNpcList(items) {
+    if (!items || items.length === 0) {
+      return `
+        <div class="empty-state" style="padding: 2rem 1rem; text-align: center;">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">👥</div>
+          <p class="text-muted">В этой локации нет известных NPC</p>
+        </div>
+      `;
+    }
+    return `
+      <div class="npc-relationships-list">
+        ${items.map(renderNpcCard).join('')}
+      </div>
+    `;
+  }
+
+  function renderNpcCard(item) {
+    const { npc, relationship } = item;
+    const score = relationship.score || 0;
+    const tier = relationship.tier || 'neutral';
+    const tierColor = getTierColor(tier);
+    const tierLabel = relationship.tier_label || getRelationshipTierLabelClient(tier);
+    const isExpanded = expandedMemoryNpcId === npc.id;
+    const memories = cachedMemories[npc.id] || [];
+
+    let barLeft = '50%';
+    let barWidth = '0%';
+    if (score >= 0) {
+      barLeft = '50%';
+      barWidth = `${Math.min(50, (score / 100) * 50)}%`;
+    } else {
+      const widthPct = Math.min(50, (Math.abs(score) / 100) * 50);
+      barLeft = `${50 - widthPct}%`;
+      barWidth = `${widthPct}%`;
+    }
+
+    return `
+      <div class="npc-rel-card" data-npc-id="${npc.id}">
+        <div class="npc-rel-header">
+          <div>
+            <div class="npc-rel-name">${escapeHtml(npc.name)}</div>
+            <div class="npc-rel-meta">${escapeHtml(npc.race || 'Гуманоид')} · ${escapeHtml(npc.role || 'Житель')}</div>
+          </div>
+          <span class="npc-tier-badge" style="background: ${tierColor}20; color: ${tierColor}; border: 1px solid ${tierColor}50;">
+            ${escapeHtml(tierLabel)}
+          </span>
+        </div>
+
+        <!-- Шкала отношений (-100..+100) -->
+        <div class="rel-bar-wrapper">
+          <div class="rel-bar-labels">
+            <span>Враг (-100)</span>
+            <span style="font-weight: 700; color: ${tierColor};">${score > 0 ? `+${score}` : score} / 100</span>
+            <span>Предан (+100)</span>
+          </div>
+          <div class="rel-bar-track">
+            <div class="rel-bar-center-marker"></div>
+            <div class="rel-bar-fill" style="left: ${barLeft}; width: ${barWidth}; background: ${tierColor};"></div>
+          </div>
+        </div>
+
+        ${relationship.status_tags?.length ? `
+          <div class="npc-status-tags">
+            ${relationship.status_tags.map((t) => `<span class="npc-tag">#${escapeHtml(t)}</span>`).join('')}
+          </div>
+        ` : ''}
+
+        <!-- Аккордеон воспоминаний -->
+        <div class="npc-memories-wrapper" style="margin-top: 4px;">
+          <button class="npc-memories-toggle" data-toggle-memories="${npc.id}">
+            <span>💭 Воспоминания NPC (${memories.length})</span>
+            <span>${isExpanded ? '▲' : '▼'}</span>
+          </button>
+          <div class="npc-memories-body" id="memories-body-${npc.id}" style="display: ${isExpanded ? 'flex' : 'none'};">
+            ${renderMemoriesBody(npc.id)}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMemoriesBody(npcId) {
+    const list = cachedMemories[npcId];
+    if (list === undefined) {
+      return '<div style="color: var(--text-muted); text-align: center;">Загрузка воспоминаний...</div>';
+    }
+    if (!list || list.length === 0) {
+      return '<div style="color: var(--text-muted); font-style: italic;">Пока нет воспоминаний об общении с этим героем.</div>';
+    }
+
+    return list.map((m) => {
+      const typeClass = m.memory_type || (m.vividness >= 8 ? 'vivid' : m.vividness <= 3 ? 'impression' : 'regular');
+      const icon = typeClass === 'vivid' ? '🌟' : typeClass === 'belief' ? '🔮' : typeClass === 'impression' ? '💭' : '📜';
+      const typeLabel = typeClass === 'vivid' ? 'Яркое' : typeClass === 'belief' ? 'Убеждение' : typeClass === 'impression' ? 'Впечатление' : 'Обычное';
+      return `
+        <div class="memory-item ${typeClass}">
+          <div class="memory-item-header">
+            <span>${icon} ${typeLabel}${m.vividness ? ` · Яркость ${m.vividness}/10` : ''}</span>
+            ${m.emotional_tone ? `<span>[${escapeHtml(m.emotional_tone)}]</span>` : ''}
+          </div>
+          <div class="memory-item-text">«${escapeHtml(m.memory_text || m.content || '')}»</div>
+          ${m.significance_reason ? `<div style="font-size: 0.68rem; color: var(--text-muted);">Причина: ${escapeHtml(m.significance_reason)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function refreshNpcPanel() {
+    if (!currentPlayer || !sessionId) return;
+    const content = document.getElementById('npcContent');
+    if (content && (!cachedNpcData || cachedNpcData.length === 0)) {
+      content.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-muted);">Загрузка персонажей...</div>';
+    }
+    try {
+      cachedNpcData = await getNpcRelationships(sessionId, currentPlayer.id);
+      if (content) {
+        content.innerHTML = renderNpcList(cachedNpcData);
+        bindNpcCardEvents();
+      }
+    } catch (err) {
+      console.warn('Failed to load NPC relationships:', err);
+      if (content) content.innerHTML = '<div style="padding: 1rem; color: var(--accent-danger);">Ошибка загрузки NPC</div>';
+    }
+  }
+
+  function bindNpcCardEvents() {
+    document.querySelectorAll('[data-toggle-memories]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const npcId = btn.getAttribute('data-toggle-memories');
+        if (expandedMemoryNpcId === npcId) {
+          expandedMemoryNpcId = null;
+        } else {
+          expandedMemoryNpcId = npcId;
+          if (cachedMemories[npcId] === undefined) {
+            try {
+              const mems = await getNpcMemories(npcId, currentPlayer.id);
+              cachedMemories[npcId] = mems || [];
+            } catch (memErr) {
+              console.warn('Failed to load NPC memories:', memErr);
+              cachedMemories[npcId] = [];
+            }
+          }
+        }
+        const content = document.getElementById('npcContent');
+        if (content) {
+          content.innerHTML = renderNpcList(cachedNpcData);
+          bindNpcCardEvents();
+        }
+      });
+    });
+  }
+
   function bindEvents() {
     // Back
     document.getElementById('backBtn')?.addEventListener('click', () => router.navigate('/'));
@@ -658,11 +839,13 @@ export async function renderGame(container, sessionId, user) {
     // Panel toggles
     document.getElementById('profileBtn')?.addEventListener('click', () => togglePanel('profile'));
     document.getElementById('inventoryBtn')?.addEventListener('click', () => togglePanel('inventory'));
+    document.getElementById('npcBtn')?.addEventListener('click', () => togglePanel('npc'));
     document.getElementById('settingsBtn')?.addEventListener('click', () => togglePanel('settings'));
 
     // Close panels
     document.getElementById('closeProfileBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeInventoryBtn')?.addEventListener('click', () => togglePanel(null));
+    document.getElementById('closeNpcBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeSettingsBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('panelOverlay')?.addEventListener('click', () => togglePanel(null));
 
@@ -719,6 +902,8 @@ export async function renderGame(container, sessionId, user) {
         toast.error('Ошибка экспорта: ' + err.message);
       }
     });
+
+    bindNpcCardEvents();
   }
 
   async function refreshInventory() {
@@ -737,6 +922,9 @@ export async function renderGame(container, sessionId, user) {
     activePanel = activePanel === panel ? null : panel;
     if (activePanel === 'inventory') {
       refreshInventory();
+    }
+    if (activePanel === 'npc') {
+      refreshNpcPanel();
     }
     render();
   }
@@ -809,8 +997,22 @@ export async function renderGame(container, sessionId, user) {
         try {
           const freshSession = await getSession(sessionId);
           if (freshSession) session = freshSession;
+          cachedNpcData = [];
+          cachedMemories = {};
         } catch (e) {
           console.warn('Failed to reload session after location change:', e);
+        }
+      }
+
+      // Оповещения об изменении отношений и памяти NPC
+      if (Array.isArray(result.npc_updates) && result.npc_updates.length > 0) {
+        for (const update of result.npc_updates) {
+          const deltaSign = update.delta > 0 ? `+${update.delta}` : `${update.delta}`;
+          const toneIcon = update.delta > 0 ? '💚' : update.delta < 0 ? '💔' : '💬';
+          toast.info(`${toneIcon} ${update.npc_name}: ${update.tier_label} (${update.score}/100, ${deltaSign})`);
+        }
+        if (activePanel === 'npc') {
+          refreshNpcPanel();
         }
       }
 

@@ -13,6 +13,11 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EngineOutputPayload, EngineMutation } from "../engine/types.ts";
+import {
+  calculateRelationshipTier,
+  getRelationshipTierLabel,
+  RelationshipTier,
+} from "../../_shared/npc_relationship_engine.ts";
 
 // ============================================
 // Типы
@@ -39,7 +44,13 @@ export interface NpcContextSummary {
   race?: string;
   role?: string;
   status_tags?: string[];
+  relationship_score?: number;
+  relationship_tier?: string;
+  relationship_tier_label?: string;
   relevant_memories: string[];
+  vivid_memories?: string[];
+  regular_memories?: string[];
+  impressions?: string[];
 }
 
 export interface SystemTruthDto {
@@ -450,13 +461,37 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
     }
   }
 
-  // Подтягиваем память только для активных NPC
+  // Подтягиваем память и отношения только для активных NPC
   if (interactedNpcIds.size > 0) {
     const supabase = getSupabase();
     for (const npcId of interactedNpcIds) {
       const npc = npcs.find((n) => n.id === npcId);
       if (!npc) continue;
 
+      let score = 0;
+      let tier = "neutral";
+      let statusTags: string[] = npc?.status_tags || [];
+
+      // 1) Отношения NPC с игроком
+      try {
+        const res = await supabase
+          .from("npc_relationships")
+          .select("score, tier, status_tags")
+          .eq("npc_id", npcId)
+          .eq("player_id", acting_player_id);
+        const relData = Array.isArray(res?.data) ? res.data[0] : (res?.data || null);
+        if (relData) {
+          score = typeof relData.score === "number" ? relData.score : 0;
+          tier = relData.tier || calculateRelationshipTier(score);
+          if (Array.isArray(relData.status_tags)) {
+            statusTags = Array.from(new Set([...statusTags, ...relData.status_tags]));
+          }
+        }
+      } catch {
+        // ignore if table not yet migrated or in test mocks
+      }
+
+      // 2) Векторный поиск воспоминаний (Lazy RAG)
       let memories: string[] = [];
       try {
         const { data, error } = await supabase.rpc("match_npc_memories", {
@@ -493,13 +528,50 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         }
       }
 
+      // 3) Разделение по уровням памяти (vivid, regular, impression)
+      let vivid_memories: string[] = [];
+      let regular_memories: string[] = [];
+      let impressions: string[] = [];
+
+      try {
+        const { data: tieredData } = await supabase
+          .from("npc_memories")
+          .select("memory_text, memory_type, vividness")
+          .eq("npc_id", npcId)
+          .eq("player_id", acting_player_id)
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        if (Array.isArray(tieredData)) {
+          for (const row of tieredData) {
+            const txt = row.memory_text || "";
+            if (!txt) continue;
+            if (row.memory_type === "vivid" || (row.vividness && row.vividness >= 8)) {
+              vivid_memories.push(txt);
+            } else if (row.memory_type === "impression" || (row.vividness && row.vividness <= 3)) {
+              impressions.push(txt);
+            } else {
+              regular_memories.push(txt);
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       npc_context[npcId] = {
         npc_id: npcId,
         name: npc?.name || "NPC",
         race: npc?.race || "Гуманоид",
         role: npc?.role || "Обыватель",
-        status_tags: npc?.status_tags || [],
+        status_tags: statusTags,
+        relationship_score: score,
+        relationship_tier: tier,
+        relationship_tier_label: getRelationshipTierLabel(tier as RelationshipTier),
         relevant_memories: memories,
+        vivid_memories,
+        regular_memories,
+        impressions,
       };
     }
   }

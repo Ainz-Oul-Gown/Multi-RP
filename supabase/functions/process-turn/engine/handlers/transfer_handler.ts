@@ -119,7 +119,7 @@ export class TransferHandler extends BaseActionHandler {
     // ============================================
     const mutation: EngineMutation = {
       type: "TRANSFER_ITEM",
-      item_id: itemId,
+      item_id: String(itemId || item.id),
       from_id: player.id,
       to_id: targetId,
       from_type: "player",

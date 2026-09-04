@@ -11,6 +11,13 @@ import {
 import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows, getItemMeta } from '../config.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
+import {
+  generateStorylineForSession,
+  rewriteStoryline,
+  updateStoryline,
+  deleteStoryline,
+  toggleGoalCompletion,
+} from '../api/storyline.js';
 
 function sanitizeAIText(raw) {
   if (!raw) return "";
@@ -332,6 +339,7 @@ export async function renderGame(container, sessionId, user) {
             ${locationStr ? `<span class="game-header-location">📍 ${locationStr}</span>` : ''}
           </div>
           <div class="game-header-actions">
+            <button class="btn btn-ghost btn-icon" id="storyBtn" title="Сюжет">📖</button>
             <button class="btn btn-ghost btn-icon" id="profileBtn" title="Профиль">👤</button>
             <button class="btn btn-ghost btn-icon" id="inventoryBtn" title="Инвентарь">🎒</button>
             <button class="btn btn-ghost btn-icon" id="npcBtn" title="Окружение и NPC">👥</button>
@@ -386,6 +394,17 @@ export async function renderGame(container, sessionId, user) {
 
         <!-- Side Panels -->
         <div class="side-panel-overlay ${activePanel ? 'open' : ''}" id="panelOverlay"></div>
+
+        <!-- Storyline Panel -->
+        <div class="side-panel ${activePanel === 'story' ? 'open' : ''}" id="storyPanel">
+          <div class="side-panel-header">
+            <h2>📖 Сюжетная линия</h2>
+            <button class="btn btn-ghost btn-icon" id="closeStoryBtn">✕</button>
+          </div>
+          <div class="side-panel-content" id="storyContent">
+            ${renderStoryPanel(session?.storyline)}
+          </div>
+        </div>
 
         <!-- Profile Panel -->
         <div class="side-panel ${activePanel === 'profile' ? 'open' : ''}" id="profilePanel">
@@ -950,22 +969,339 @@ export async function renderGame(container, sessionId, user) {
     });
   }
 
+  function renderStoryPanel(story) {
+    if (!story || !story.arcs || story.arcs.length === 0 || story.status === 'sandbox') {
+      return `
+        <div class="story-panel-empty" style="padding: 1.5rem 1rem; text-align: center;">
+          <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🗺️</div>
+          <h3 style="margin-bottom: 0.5rem; font-size: 1.1rem; color: #fff;">Режим свободной песочницы</h3>
+          <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.4; margin-bottom: 1.25rem;">
+            У этой сессии сейчас нет сюжетных ориентиров. Вы можете сгенерировать сюжетную кампанию на основе географии, лора и NPC этого мира («лыжи, но не правило»).
+          </p>
+          <div style="text-align: left; margin-bottom: 1rem;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Пожелания к сюжету (необязательно):</label>
+            <textarea id="storyWishesInput" class="input" style="width: 100%; min-height: 70px; resize: vertical; font-size: 0.85rem; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #fff;" placeholder="Например: тёмный культ, древние руины, кибер-импланты, детектив в Ривервуде..."></textarea>
+          </div>
+          <button class="btn btn-primary" id="generateStoryBtn" style="width: 100%;">
+            ✨ Сгенерировать сюжет по миру
+          </button>
+        </div>
+      `;
+    }
+
+    const currentArcIdx = Number(story.current_arc_index) || 0;
+    const currentArc = story.arcs[currentArcIdx] || story.arcs[0];
+    const completedGoals = currentArc.completed_goals || [];
+
+    return `
+      <div class="story-panel-container" style="display: flex; flex-direction: column; gap: 1rem; padding: 0.5rem 0;">
+        <!-- Заголовок и статус -->
+        <div class="card" style="padding: 1rem; border-left: 3px solid #6366f1; background: rgba(30, 30, 46, 0.9); border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+            <div>
+              <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Сюжетная кампания</div>
+              <h3 style="font-size: 1.15rem; margin: 4px 0 6px 0; font-weight: 700; color: #fff;">${escapeHtml(story.title || 'Безымянная кампания')}</h3>
+            </div>
+            <span class="badge ${story.status === 'completed' ? 'badge-success' : 'badge-primary'}" style="font-size: 0.7rem;">
+              ${story.status === 'completed' ? 'Завершено' : 'Активен'}
+            </span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-top: 6px;">
+            ${escapeHtml(story.summary || '')}
+          </p>
+        </div>
+
+        <!-- Пролог / Появление в мире -->
+        ${story.prologue ? `
+          <details class="story-prologue-details" style="border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.2);">
+            <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); outline: none;">
+              🎭 Появление в мире (Пролог)
+            </summary>
+            <div style="margin-top: 0.5rem; font-size: 0.82rem; line-height: 1.5; color: rgba(255,255,255,0.85); white-space: pre-line; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.5rem;">
+              ${escapeHtml(story.prologue)}
+            </div>
+          </details>
+        ` : ''}
+
+        <!-- Активная арка (Текущая) -->
+        <div class="card" style="padding: 1rem; border: 1px solid rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.05); border-radius: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 0.75rem; font-weight: 700; color: #818cf8; text-transform: uppercase;">
+              Текущая арка (Акт ${currentArc.act || (currentArcIdx + 1)})
+            </span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">
+              Цели: ${completedGoals.length} / ${(currentArc.goals || []).length}
+            </span>
+          </div>
+          <h4 style="font-size: 1.05rem; font-weight: 700; margin: 0 0 8px 0; color: #fff;">
+            ${escapeHtml(currentArc.title || `Акт ${currentArcIdx + 1}`)}
+          </h4>
+          <p style="font-size: 0.85rem; line-height: 1.4; color: rgba(255,255,255,0.8); margin-bottom: 12px;">
+            ${escapeHtml(currentArc.description || '')}
+          </p>
+
+          <!-- Цели арки (чеклист с кликом для переключения) -->
+          <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+            <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Ориентиры и цели (нажмите для отметки):</div>
+            ${(currentArc.goals || []).map((goal) => {
+              const isDone = completedGoals.includes(goal);
+              return `
+                <div class="story-goal-item" data-arc-index="${currentArcIdx}" data-goal-title="${escapeHtml(goal)}" style="display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 6px; background: ${isDone ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.04)'}; border: 1px solid ${isDone ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.06)'}; cursor: pointer; transition: all 0.2s ease;">
+                  <span style="font-size: 1rem; line-height: 1.2;">${isDone ? '✅' : '⬜'}</span>
+                  <span style="font-size: 0.82rem; line-height: 1.35; ${isDone ? 'text-decoration: line-through; color: var(--text-muted);' : 'color: #fff;'}">
+                    ${escapeHtml(goal)}
+                  </span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- Ключевые NPC и локации -->
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            ${(currentArc.key_npcs || []).map((npc) => `
+              <span class="badge" style="font-size: 0.7rem; background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">👤 ${escapeHtml(npc)}</span>
+            `).join('')}
+            ${(currentArc.key_locations || []).map((loc) => `
+              <span class="badge" style="font-size: 0.7rem; background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.3);">📍 ${escapeHtml(loc)}</span>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Все арки кампании (аккордеон) -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Все акты кампании:</div>
+          ${(story.arcs || []).map((arc, aIdx) => {
+            const isCurrent = aIdx === currentArcIdx;
+            const isPast = aIdx < currentArcIdx;
+            const arcDoneGoals = arc.completed_goals || [];
+            return `
+              <details style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 6px 10px; background: rgba(0,0,0,0.15);" ${isCurrent ? 'open' : ''}>
+                <summary style="cursor: pointer; font-size: 0.82rem; font-weight: 600; outline: none; display: flex; justify-content: space-between; align-items: center;">
+                  <span style="${isCurrent ? 'color: #818cf8;' : isPast ? 'color: #4ade80;' : 'color: var(--text-muted);'}">
+                    ${isPast ? '✓ ' : isCurrent ? '▶ ' : '🔒 '} Акт ${arc.act || (aIdx + 1)}: ${escapeHtml(arc.title)}
+                  </span>
+                  <span style="font-size: 0.7rem; color: var(--text-muted);">${arcDoneGoals.length}/${(arc.goals || []).length}</span>
+                </summary>
+                <div style="margin-top: 6px; font-size: 0.8rem; line-height: 1.4; color: var(--text-muted); border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 6px;">
+                  <p style="margin-bottom: 6px;">${escapeHtml(arc.description)}</p>
+                  <ul style="padding-left: 18px; margin: 0;">
+                    ${(arc.goals || []).map((g) => `
+                      <li style="${arcDoneGoals.includes(g) ? 'text-decoration: line-through;' : ''}">${escapeHtml(g)}</li>
+                    `).join('')}
+                  </ul>
+                </div>
+              </details>
+            `;
+          }).join('')}
+        </div>
+
+        <!-- Подсказка: Лыжи, но не правило -->
+        <div style="padding: 8px 10px; background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.2); border-radius: 8px; font-size: 0.75rem; color: #fde047; line-height: 1.35;">
+          💡 <strong>«Лыжи, но не правило»:</strong> ориентиры помогают миру жить вокруг вас. Вы можете исследовать любые места, крафтить, собирать ресурсы или просто отдыхать. ИИ адаптируется к вашему выбору!
+        </div>
+
+        <!-- Панель действий -->
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 0.5rem;">
+          <button class="btn btn-secondary" id="rewriteStoryBtn" style="width: 100%; font-size: 0.85rem;">
+            🔄 Переписать сюжет с ИИ
+          </button>
+          <div id="rewriteStoryPromptContainer" style="display: none; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.2);">
+            <textarea id="rewriteStoryWishes" class="input" style="width: 100%; min-height: 60px; font-size: 0.82rem; padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #fff;" placeholder="Пожелания к новому сюжету (например: добавить киберпанк, древний орден, расследование)..."></textarea>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-primary" id="confirmRewriteStoryBtn" style="flex: 1; font-size: 0.8rem;">Переписать</button>
+              <button class="btn btn-ghost" id="cancelRewriteStoryBtn" style="font-size: 0.8rem;">Отмена</button>
+            </div>
+          </div>
+
+          <button class="btn btn-ghost" id="editStoryJsonBtn" style="width: 100%; font-size: 0.85rem; color: var(--text-muted);">
+            ✏️ Редактировать вручную (JSON)
+          </button>
+          <div id="editStoryJsonContainer" style="display: none; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.2);">
+            <textarea id="editStoryJsonArea" class="input" style="width: 100%; min-height: 180px; font-family: monospace; font-size: 0.75rem; padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.4); color: #fff;"></textarea>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-primary" id="saveStoryJsonBtn" style="flex: 1; font-size: 0.8rem;">Сохранить изменения</button>
+              <button class="btn btn-ghost" id="cancelEditStoryJsonBtn" style="font-size: 0.8rem;">Отмена</button>
+            </div>
+          </div>
+
+          <button class="btn btn-ghost" id="deleteStoryBtn" style="width: 100%; font-size: 0.85rem; color: #f87171;">
+            🗑️ Удалить сюжет (в песочницу)
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function refreshStoryPanel() {
+    try {
+      const fresh = await getSession(sessionId);
+      if (fresh) session = fresh;
+      const content = document.getElementById('storyContent');
+      if (content) {
+        content.innerHTML = renderStoryPanel(session?.storyline);
+        bindStoryEvents();
+      }
+    } catch (e) {
+      console.warn('Failed to refresh story panel:', e);
+    }
+  }
+
+  function bindStoryEvents() {
+    // Generate Story
+    document.getElementById('generateStoryBtn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('generateStoryBtn');
+      const wishesInput = document.getElementById('storyWishesInput');
+      const wishes = wishesInput?.value?.trim() || '';
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = '⏳ Генерация сюжета...';
+        }
+        toast.info('ИИ создаёт сюжетную кампанию по миру...');
+        const newStory = await generateStorylineForSession({
+          sessionId,
+          worldId: session?.world_id,
+          customWishes: wishes,
+        });
+        session.storyline = newStory;
+        toast.success('Сюжетная линия успешно создана!');
+        await refreshStoryPanel();
+      } catch (err) {
+        toast.error('Ошибка генерации сюжета: ' + (err.message || err));
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '✨ Сгенерировать сюжет по миру';
+        }
+      }
+    });
+
+    // Toggle Rewrite Container
+    const rewriteBtn = document.getElementById('rewriteStoryBtn');
+    const rewriteContainer = document.getElementById('rewriteStoryPromptContainer');
+    rewriteBtn?.addEventListener('click', () => {
+      if (rewriteContainer) {
+        const isHidden = rewriteContainer.style.display === 'none';
+        rewriteContainer.style.display = isHidden ? 'flex' : 'none';
+      }
+    });
+    document.getElementById('cancelRewriteStoryBtn')?.addEventListener('click', () => {
+      if (rewriteContainer) rewriteContainer.style.display = 'none';
+    });
+
+    // Confirm Rewrite Story
+    document.getElementById('confirmRewriteStoryBtn')?.addEventListener('click', async () => {
+      const wishesInput = document.getElementById('rewriteStoryWishes');
+      const wishes = wishesInput?.value?.trim() || '';
+      const confirmBtn = document.getElementById('confirmRewriteStoryBtn');
+      try {
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = '⏳ Переписываю...';
+        }
+        toast.info('ИИ переписывает сюжет...');
+        const updated = await rewriteStoryline({
+          sessionId,
+          worldId: session?.world_id,
+          customWishes: wishes,
+          currentStoryline: session?.storyline,
+        });
+        session.storyline = updated;
+        toast.success('Сюжет обновлен!');
+        await refreshStoryPanel();
+      } catch (err) {
+        toast.error('Ошибка обновления сюжета: ' + (err.message || err));
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Переписать';
+        }
+      }
+    });
+
+    // Toggle Edit JSON Container
+    const editJsonBtn = document.getElementById('editStoryJsonBtn');
+    const editJsonContainer = document.getElementById('editStoryJsonContainer');
+    const editJsonArea = document.getElementById('editStoryJsonArea');
+    editJsonBtn?.addEventListener('click', () => {
+      if (editJsonContainer) {
+        const isHidden = editJsonContainer.style.display === 'none';
+        editJsonContainer.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden && editJsonArea && session?.storyline) {
+          editJsonArea.value = JSON.stringify(session.storyline, null, 2);
+        }
+      }
+    });
+    document.getElementById('cancelEditStoryJsonBtn')?.addEventListener('click', () => {
+      if (editJsonContainer) editJsonContainer.style.display = 'none';
+    });
+
+    // Save Edit JSON
+    document.getElementById('saveStoryJsonBtn')?.addEventListener('click', async () => {
+      if (!editJsonArea) return;
+      try {
+        const parsed = JSON.parse(editJsonArea.value);
+        await updateStoryline(sessionId, parsed);
+        session.storyline = parsed;
+        toast.success('Сюжет сохранён!');
+        await refreshStoryPanel();
+      } catch (err) {
+        toast.error('Ошибка сохранения JSON: ' + (err.message || err));
+      }
+    });
+
+    // Delete Story (Sandbox)
+    document.getElementById('deleteStoryBtn')?.addEventListener('click', async () => {
+      if (!confirm('Перейти в режим свободной песочницы и удалить текущий сюжет?')) return;
+      try {
+        await deleteStoryline(sessionId);
+        session.storyline = null;
+        toast.info('Сюжет удалён. Активен режим свободной песочницы.');
+        await refreshStoryPanel();
+      } catch (err) {
+        toast.error('Ошибка удаления: ' + (err.message || err));
+      }
+    });
+
+    // Interactive Goal Toggle Checkbox
+    document.querySelectorAll('.story-goal-item').forEach((itemEl) => {
+      itemEl.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const arcIdx = parseInt(itemEl.dataset.arcIndex, 10);
+        const goalTitle = itemEl.dataset.goalTitle;
+        if (isNaN(arcIdx) || !goalTitle || !session?.storyline) return;
+
+        try {
+          const updated = await toggleGoalCompletion(sessionId, session.storyline, arcIdx, goalTitle);
+          session.storyline = updated;
+          await refreshStoryPanel();
+        } catch (err) {
+          toast.error('Ошибка переключения цели: ' + (err.message || err));
+        }
+      });
+    });
+  }
+
   function bindEvents() {
     // Back
     document.getElementById('backBtn')?.addEventListener('click', () => router.navigate('/'));
 
     // Panel toggles
+    document.getElementById('storyBtn')?.addEventListener('click', () => togglePanel('story'));
     document.getElementById('profileBtn')?.addEventListener('click', () => togglePanel('profile'));
     document.getElementById('inventoryBtn')?.addEventListener('click', () => togglePanel('inventory'));
     document.getElementById('npcBtn')?.addEventListener('click', () => togglePanel('npc'));
     document.getElementById('settingsBtn')?.addEventListener('click', () => togglePanel('settings'));
 
     // Close panels
+    document.getElementById('closeStoryBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeProfileBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeInventoryBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeNpcBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeSettingsBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('panelOverlay')?.addEventListener('click', () => togglePanel(null));
+
+    if (activePanel === 'story') {
+      bindStoryEvents();
+    }
 
     // Multi-player: take turn button
     document.getElementById('takeTurnBtn')?.addEventListener('click', async () => {
@@ -1089,6 +1425,8 @@ export async function renderGame(container, sessionId, user) {
       await refreshNpcPanel();
     } else if (activePanel === 'profile') {
       await refreshProfile();
+    } else if (activePanel === 'story') {
+      await refreshStoryPanel();
     }
   }
 
@@ -1189,6 +1527,25 @@ export async function renderGame(container, sessionId, user) {
         }
         if (activePanel === 'npc') {
           refreshNpcPanel();
+        }
+      }
+
+      // Оповещения о сюжетном прогрессе (автоматическое отслеживание)
+      if (result.story_progress) {
+        try {
+          const freshSession = await getSession(sessionId);
+          if (freshSession) session = freshSession;
+          if (result.story_progress.completed_goals?.length > 0) {
+            toast.success(`🎯 Цель сюжета выполнена: ${result.story_progress.completed_goals.join(', ')}`);
+          }
+          if (result.story_progress.advanced_arc) {
+            toast.success(`📜 Сюжет продвинулся к следующему акту!`);
+          }
+          if (activePanel === 'story') {
+            await refreshStoryPanel();
+          }
+        } catch (e) {
+          console.warn('Failed to reload session after story progress:', e);
         }
       }
 

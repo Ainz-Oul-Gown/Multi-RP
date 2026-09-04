@@ -119,6 +119,7 @@ export interface ActionResult {
     target_dc: number;
     is_crit?: boolean;
     is_fumble?: boolean;
+    success?: boolean;
   };
   damage_dealt?: number;
   details: string;
@@ -142,6 +143,7 @@ export interface EngineOutputPayload {
   mutations: EngineMutation[];
   encounter_triggered: EncounterTriggered;
   raw_system_facts: string[];
+  system_facts?: string[];
 }
 
 // ============================================

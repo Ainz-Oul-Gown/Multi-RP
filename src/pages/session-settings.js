@@ -7,6 +7,12 @@ import {
 import { STATS, DIFFICULTY_PRESETS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
+import {
+  generateStorylineForSession,
+  rewriteStoryline,
+  updateStoryline,
+  deleteStoryline,
+} from '../api/storyline.js';
 
 export async function renderSessionSettings(container, sessionId, user) {
   let session = null;
@@ -80,20 +86,75 @@ export async function renderSessionSettings(container, sessionId, user) {
 
           <!-- Управление сюжетом -->
           <section class="card">
-            <h2 class="card-title">📖 Управление сюжетом</h2>
+            <h2 class="card-title">📖 Управление сюжетной линией</h2>
             <p class="form-hint" style="margin-top: 0.5rem;">
-              Если этап не выбран — активен режим «Песочница» (свободная игра без сюжетных зацепок)
+              «Лыжи, но не правило»: сюжет адаптируется к миру и действиям игроков, сохраняя свободу песочницы.
             </p>
-            <div class="form-group" style="margin-top: 1rem;">
-              <label class="form-label">Текущий Акт сюжета</label>
-              <select class="input select" id="plotStage">
-                <option value="">🎭 Песочница (без сюжета)</option>
-                <option value="act_1" ${session.current_plot_stage === 'act_1' ? 'selected' : ''}>Акт I — Завязка</option>
-                <option value="act_2" ${session.current_plot_stage === 'act_2' ? 'selected' : ''}>Акт II — Развитие</option>
-                <option value="act_3" ${session.current_plot_stage === 'act_3' ? 'selected' : ''}>Акт III — Кульминация</option>
-                <option value="act_4" ${session.current_plot_stage === 'act_4' ? 'selected' : ''}>Акт IV — Развязка</option>
-              </select>
-            </div>
+
+            ${session.storyline && session.storyline.arcs?.length ? `
+              <div style="margin-top: 1rem; padding: 0.75rem; border-radius: 8px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <strong style="color: #fff; font-size: 1rem;">${session.storyline.title || 'Сюжетная кампания'}</strong>
+                  <span class="badge ${session.storyline.status === 'completed' ? 'badge-success' : 'badge-primary'}">
+                    ${session.storyline.status === 'completed' ? 'Завершено' : 'Активен'}
+                  </span>
+                </div>
+                <p style="font-size: var(--fs-sm); color: var(--text-muted); margin-top: 4px;">
+                  ${session.storyline.summary || ''}
+                </p>
+                ${session.storyline.prologue ? `
+                  <div style="margin-top: 8px; font-size: var(--fs-xs); color: rgba(255,255,255,0.7); background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px;">
+                    <strong>Пролог:</strong> ${(session.storyline.prologue).slice(0, 160)}...
+                  </div>
+                ` : ''}
+              </div>
+
+              <div class="form-group" style="margin-top: 1rem;">
+                <label class="form-label">Текущая активная арка</label>
+                <select class="input select" id="plotStageSelect">
+                  ${session.storyline.arcs.map((arc, idx) => `
+                    <option value="${idx}" ${session.storyline.current_arc_index === idx ? 'selected' : ''}>
+                      Акт ${arc.act || (idx + 1)}: ${arc.title} (${(arc.completed_goals || []).length}/${(arc.goals || []).length} целей)
+                    </option>
+                  `).join('')}
+                </select>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 1rem; flex-wrap: wrap;">
+                <button class="btn btn-secondary btn-sm" id="rewriteStoryBtn">🔄 Переписать с ИИ</button>
+                <button class="btn btn-ghost btn-sm" id="editStoryJsonBtn">✏️ Редактировать JSON</button>
+                <button class="btn btn-ghost btn-sm" id="deleteStoryBtn" style="color: var(--accent-danger);">🗑️ Удалить (Песочница)</button>
+              </div>
+
+              <div id="rewriteStoryPromptContainer" style="display: none; flex-direction: column; gap: 6px; margin-top: 8px; padding: 8px; border-radius: 8px; background: rgba(0,0,0,0.25);">
+                <textarea id="rewriteStoryWishes" class="input" style="width: 100%; min-height: 60px; font-size: var(--fs-sm);" placeholder="Пожелания к сюжету (киберпанк, культ, детектив)..."></textarea>
+                <div style="display: flex; gap: 6px;">
+                  <button class="btn btn-primary btn-sm" id="confirmRewriteStoryBtn">Переписать</button>
+                  <button class="btn btn-ghost btn-sm" id="cancelRewriteStoryBtn">Отмена</button>
+                </div>
+              </div>
+
+              <div id="editStoryJsonContainer" style="display: none; flex-direction: column; gap: 6px; margin-top: 8px; padding: 8px; border-radius: 8px; background: rgba(0,0,0,0.25);">
+                <textarea id="editStoryJsonArea" class="input" style="width: 100%; min-height: 160px; font-family: monospace; font-size: var(--fs-xs);"></textarea>
+                <div style="display: flex; gap: 6px;">
+                  <button class="btn btn-primary btn-sm" id="saveStoryJsonBtn">Сохранить</button>
+                  <button class="btn btn-ghost btn-sm" id="cancelEditStoryJsonBtn">Отмена</button>
+                </div>
+              </div>
+            ` : `
+              <div style="margin-top: 1rem; padding: 1rem; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); text-align: center;">
+                <p style="color: var(--text-muted); font-size: var(--fs-sm); margin-bottom: 0.75rem;">
+                  Сюжет не сгенерирован. Сессия находится в режиме свободной песочницы.
+                </p>
+                <div style="text-align: left; margin-bottom: 0.75rem;">
+                  <label class="form-label" style="font-size: var(--fs-xs);">Пожелания к сюжетной линии (необязательно):</label>
+                  <textarea id="genStoryWishes" class="input" style="width: 100%; min-height: 60px; font-size: var(--fs-sm);" placeholder="Например: поиски древней реликвии, кибер-технологии, чума в Ривервуде..."></textarea>
+                </div>
+                <button class="btn btn-primary btn-sm" id="generateStoryBtn" style="width: 100%;">
+                  ✨ Сгенерировать сюжетную кампанию по миру
+                </button>
+              </div>
+            `}
             ${loreFiles.length ? `
               <div class="form-group" style="margin-top: 1rem;">
                 <label class="form-label">Доступные файлы лора (${loreFiles.length})</label>
@@ -197,15 +258,131 @@ export async function renderSessionSettings(container, sessionId, user) {
       }
     });
 
-    // Plot stage
-    document.getElementById('plotStage')?.addEventListener('change', async (e) => {
+    // Change active arc
+    document.getElementById('plotStageSelect')?.addEventListener('change', async (e) => {
       try {
-        const stage = e.target.value || null;
-        await updateSession(sessionId, { current_plot_stage: stage });
-        session.current_plot_stage = stage;
-        toast.success(stage ? `Акт: ${stage}` : 'Режим: Песочница');
+        const arcIdx = parseInt(e.target.value, 10);
+        if (!session.storyline || isNaN(arcIdx)) return;
+        session.storyline.current_arc_index = arcIdx;
+        const currentStageTitle = session.storyline.arcs?.[arcIdx]?.title || `Акт ${arcIdx + 1}`;
+        await updateStoryline(sessionId, session.storyline);
+        await updateSession(sessionId, { current_plot_stage: currentStageTitle });
+        session.current_plot_stage = currentStageTitle;
+        toast.success(`Активна арка: ${currentStageTitle}`);
+        render();
       } catch (err) {
-        toast.error('Ошибка: ' + err.message);
+        toast.error('Ошибка смены арки: ' + (err.message || err));
+      }
+    });
+
+    // Generate story button
+    document.getElementById('generateStoryBtn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('generateStoryBtn');
+      const wishes = document.getElementById('genStoryWishes')?.value?.trim() || '';
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = '⏳ Генерация сюжета...';
+        }
+        toast.info('ИИ создаёт сюжетную кампанию по миру...');
+        const newStory = await generateStorylineForSession({
+          sessionId,
+          worldId: session.world_id,
+          customWishes: wishes,
+        });
+        session.storyline = newStory;
+        toast.success('Сюжет создан!');
+        render();
+      } catch (err) {
+        toast.error('Ошибка генерации: ' + (err.message || err));
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '✨ Сгенерировать сюжетную кампанию по миру';
+        }
+      }
+    });
+
+    // Toggle rewrite container
+    const rewriteBtn = document.getElementById('rewriteStoryBtn');
+    const rewriteContainer = document.getElementById('rewriteStoryPromptContainer');
+    rewriteBtn?.addEventListener('click', () => {
+      if (rewriteContainer) {
+        rewriteContainer.style.display = rewriteContainer.style.display === 'none' ? 'flex' : 'none';
+      }
+    });
+    document.getElementById('cancelRewriteStoryBtn')?.addEventListener('click', () => {
+      if (rewriteContainer) rewriteContainer.style.display = 'none';
+    });
+
+    // Confirm rewrite
+    document.getElementById('confirmRewriteStoryBtn')?.addEventListener('click', async () => {
+      const wishes = document.getElementById('rewriteStoryWishes')?.value?.trim() || '';
+      const confirmBtn = document.getElementById('confirmRewriteStoryBtn');
+      try {
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = '⏳ Переписываю...';
+        }
+        toast.info('ИИ переписывает сюжет...');
+        const updated = await rewriteStoryline({
+          sessionId,
+          worldId: session.world_id,
+          customWishes: wishes,
+          currentStoryline: session.storyline,
+        });
+        session.storyline = updated;
+        toast.success('Сюжет обновлен!');
+        render();
+      } catch (err) {
+        toast.error('Ошибка обновления сюжета: ' + (err.message || err));
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Переписать';
+        }
+      }
+    });
+
+    // Toggle edit JSON container
+    const editJsonBtn = document.getElementById('editStoryJsonBtn');
+    const editJsonContainer = document.getElementById('editStoryJsonContainer');
+    const editJsonArea = document.getElementById('editStoryJsonArea');
+    editJsonBtn?.addEventListener('click', () => {
+      if (editJsonContainer) {
+        const isHidden = editJsonContainer.style.display === 'none';
+        editJsonContainer.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden && editJsonArea && session.storyline) {
+          editJsonArea.value = JSON.stringify(session.storyline, null, 2);
+        }
+      }
+    });
+    document.getElementById('cancelEditStoryJsonBtn')?.addEventListener('click', () => {
+      if (editJsonContainer) editJsonContainer.style.display = 'none';
+    });
+
+    // Save edit JSON
+    document.getElementById('saveStoryJsonBtn')?.addEventListener('click', async () => {
+      if (!editJsonArea) return;
+      try {
+        const parsed = JSON.parse(editJsonArea.value);
+        await updateStoryline(sessionId, parsed);
+        session.storyline = parsed;
+        toast.success('Сюжет сохранён!');
+        render();
+      } catch (err) {
+        toast.error('Ошибка сохранения JSON: ' + (err.message || err));
+      }
+    });
+
+    // Delete story (Sandbox)
+    document.getElementById('deleteStoryBtn')?.addEventListener('click', async () => {
+      if (!confirm('Перейти в режим свободной песочницы и удалить текущий сюжет?')) return;
+      try {
+        await deleteStoryline(sessionId);
+        session.storyline = null;
+        toast.info('Сюжет удалён. Активен режим свободной песочницы.');
+        render();
+      } catch (err) {
+        toast.error('Ошибка удаления: ' + (err.message || err));
       }
     });
 

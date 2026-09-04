@@ -6,9 +6,9 @@ import { ActionHandlerResult, EngineInputContext, EngineMutation, EngineInventor
 import { RouterAction } from "../../types.ts";
 
 export class CraftHandler extends BaseActionHandler {
-  readonly action_type = "craft_recipe";
+  override readonly action_type: string = "craft_recipe";
 
-  handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
+  override handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     return this.handleCraft(action, context);
   }
 
@@ -153,9 +153,9 @@ export class CraftHandler extends BaseActionHandler {
  * CraftCustomHandler — крафт по кастомному чертежу (dynamic_blueprint обязателен)
  */
 export class CraftCustomHandler extends CraftHandler {
-  readonly action_type = "craft_custom";
+  override readonly action_type: string = "craft_custom";
 
-  handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
+  override handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     if (!action.dynamic_blueprint || (!action.dynamic_blueprint.item_name && !action.dynamic_blueprint.name)) {
       return {
         result: {

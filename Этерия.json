@@ -25,7 +25,94 @@
         "Кузнец",
         "Шаман"
       ],
-      "max_level": 100
+      "max_level": 100,
+      "storyline": {
+        "title": "Песнь Двух Лун: Тайна Раскола",
+        "summary": "В небесах Этерии светят две луны: Фаэра — источник золотистой животворной маны, и Гримм — призрачное багровое око, несущее искажения и мутации. В последнее время баланс нарушился: культисты и тени поднимаются из древних катакомб, а древние артерии маны начинают источать скверну. Героям предстоит пройти путь от тихих окраин Ривервуда до древних развалин и предотвратить катаклизм Вечного Затмения.",
+        "prologue": "Солнце стоит в зените над королевством Эскорин. Вы прибываете к древним каменным воротам Ривервуда — пограничного городка на стыке цивилизованных долин и диких лесов. Вокруг шумит рыночная площадь, торговцы зазывают покупателей, но в воздухе витает тревога: стражники шепчутся о странных багровых огнях в ночных чащах, а торговцы жалуются на участившиеся нападения тварей из глубин леса. Ваш путь начинается здесь.",
+        "current_arc_index": 0,
+        "status": "active",
+        "arcs": [
+          {
+            "id": "arc_1",
+            "act": 1,
+            "title": "Акт I: Тени над Ривервудом",
+            "description": "Осмотритесь в Ривервуде, узнайте последние слухи о лунных аномалиях, поговорите с местными жителями и исследуйте подозрительную активность в близлежащих лесах.",
+            "goals": [
+              "Осмотреть Ривервуд и поговорить с торговцем Гордоном или старостой",
+              "Исследовать опушку Леса у Ривервуда и обнаружить следы лунного искажения",
+              "Отыскать источник порчи или логово диких тварей в лесной чаще"
+            ],
+            "completed_goals": [],
+            "key_npcs": [
+              "Гордон",
+              "Бран"
+            ],
+            "key_locations": [
+              "Ривервуд",
+              "Лес у Ривервуда"
+            ],
+            "status": "active"
+          },
+          {
+            "id": "arc_2",
+            "act": 2,
+            "title": "Акт II: Шепот древних руин",
+            "description": "Следы порчи ведут к заброшенным катакомбам и шахтам, где в глубине покоится древний осколок кристалла маны. Проникните в подземные уровни и разгадайте замысел культа.",
+            "goals": [
+              "Найти вход в Катакомбы Слез или старые шахты",
+              "Одолеть стража подземных глубин",
+              "Найти древнюю скрижаль с пророчеством о Луне Гримм"
+            ],
+            "completed_goals": [],
+            "key_npcs": [
+              "Оживший скелет-шахтер"
+            ],
+            "key_locations": [
+              "Катакомбы Слез"
+            ],
+            "status": "pending"
+          },
+          {
+            "id": "arc_3",
+            "act": 3,
+            "title": "Акт III: Схождение Лун",
+            "description": "Фаэра и Гримм вступают в опасное противостояние. Скверна проникает в сердца знати и правителей. Героям необходимо объединить фракции Этерии и найти способ стабилизировать артерию маны.",
+            "goals": [
+              "Заручиться поддержкой одной из влиятельных фракций Эскорина",
+              "Собрать компоненты ритуала очищения маны",
+              "Предотвратить диверсию культистов в сердце столицы"
+            ],
+            "completed_goals": [],
+            "key_npcs": [
+              "Игнис, Изначальное Пламя"
+            ],
+            "key_locations": [
+              "Эскорин"
+            ],
+            "status": "pending"
+          },
+          {
+            "id": "arc_4",
+            "act": 4,
+            "title": "Акт IV: Затмение Первородных",
+            "description": "Финальная схватка за судьбу мира на Астральном Рубеже. Только мужество, мудрость и сплочённость героев способны остановить пробуждение древнего разрушителя.",
+            "goals": [
+              "Пробиться к алтарю Сердца Этерии",
+              "Остановить ритуал Пробуждения Бездны",
+              "Сделать решающий выбор, который определит эпоху для всех народов Этерии"
+            ],
+            "completed_goals": [],
+            "key_npcs": [
+              "Астральный Пожиратель"
+            ],
+            "key_locations": [
+              "Астральный Рубеж"
+            ],
+            "status": "pending"
+          }
+        ]
+      }
     }
   },
   "lore_files": [
@@ -589,7 +676,8 @@
             "damage_dice": "2d10+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Широ",
@@ -666,7 +754,8 @@
             "damage_dice": "2d10+5",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Бронн Тесак",
@@ -774,7 +863,8 @@
             "damage_dice": "3d10+6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Зигфрид Искровик",
@@ -882,7 +972,8 @@
             "damage_dice": "3d10",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Мортис",
@@ -1009,7 +1100,8 @@
             "damage_dice": "6d12",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Леди Эвелин",
@@ -1111,7 +1203,8 @@
             "damage_dice": "2d10",
             "is_dot": true
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Урсула Глас Духов",
@@ -1232,7 +1325,8 @@
             "damage_dice": "4d6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Даин Бронник",
@@ -1340,7 +1434,8 @@
             "damage_dice": "2d10+6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Эйрин Светлая",
@@ -1423,7 +1518,8 @@
             "damage_dice": "3d10",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Лис",
@@ -1512,7 +1608,8 @@
             "damage_dice": "3d8+5",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Инквизитор Кроу",
@@ -1620,7 +1717,8 @@
             "damage_dice": "3d6+6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Каэлен Песчаная Буря",
@@ -1722,7 +1820,8 @@
             "damage_dice": "3d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Альфонс II",
@@ -1823,7 +1922,8 @@
             "damage_dice": "4d8+3",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Лорд Вариан",
@@ -1918,7 +2018,8 @@
             "damage_dice": "3d10+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Епископ Соларус",
@@ -2006,7 +2107,8 @@
             "damage_dice": "3d6+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Саймон Сквозняк",
@@ -2075,7 +2177,8 @@
             "damage_dice": "1d6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Мадам Роза",
@@ -2157,7 +2260,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Сэр Гарет",
@@ -2239,7 +2343,8 @@
             "damage_dice": "2d10+3",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Анна Пекарь",
@@ -2295,7 +2400,8 @@
             "damage_dice": "1d6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Люциус",
@@ -2377,7 +2483,8 @@
             "damage_dice": "2d4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Грифф",
@@ -2446,7 +2553,8 @@
             "damage_dice": "2d6+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Леди Елена",
@@ -2528,7 +2636,8 @@
             "damage_dice": "3d6+3",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Архидруид Финдал",
@@ -2654,7 +2763,8 @@
             "damage_dice": "3d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Тирион Лист",
@@ -2761,7 +2871,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Аэлин Ткачиха",
@@ -2843,7 +2954,8 @@
             "damage_dice": "2d8+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Сильван",
@@ -2912,7 +3024,8 @@
             "damage_dice": "2d6+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Иллумиан",
@@ -3013,7 +3126,8 @@
             "damage_dice": "2d10+5",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Ниэнор",
@@ -3082,7 +3196,8 @@
             "damage_dice": "2d6+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Фариль",
@@ -3164,7 +3279,8 @@
             "damage_dice": "3d8+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Орофер",
@@ -3265,7 +3381,8 @@
             "damage_dice": "3d6+5",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Лириэль",
@@ -3321,7 +3438,8 @@
             "damage_dice": "1d8+3",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Трандуил",
@@ -3409,7 +3527,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Вождь Громмаш",
@@ -3529,7 +3648,8 @@
             "damage_dice": "3d10",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Клык",
@@ -3617,7 +3737,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Хвост",
@@ -3686,7 +3807,8 @@
             "damage_dice": "2d6+3",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Рексар",
@@ -3787,7 +3909,8 @@
             "damage_dice": "2d10",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Шива",
@@ -3888,7 +4011,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Кровавый Рог",
@@ -3983,7 +4107,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Шрам",
@@ -4065,7 +4190,8 @@
             "damage_dice": "2d8+4",
             "is_dot": true
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Орел",
@@ -4166,7 +4292,8 @@
             "damage_dice": "3d10",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Кира",
@@ -4235,7 +4362,8 @@
             "damage_dice": "2d6+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Балур",
@@ -4323,7 +4451,8 @@
             "damage_dice": "3d10+6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Мастер Горн",
@@ -4442,7 +4571,8 @@
             "damage_dice": "3d10",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Бомбур Хмель",
@@ -4524,7 +4654,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Балин Камень",
@@ -4612,7 +4743,8 @@
             "damage_dice": "3d10+5",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Гроин Жаба",
@@ -4694,7 +4826,8 @@
             "damage_dice": "2d6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Тор Подземный",
@@ -4763,7 +4896,8 @@
             "damage_dice": "2d6+3",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Хельга",
@@ -4832,7 +4966,8 @@
             "damage_dice": "2d6",
             "is_dot": true
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Фили Сквалыга",
@@ -4914,7 +5049,8 @@
             "damage_dice": "2d6+3",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Кили Следопыт",
@@ -4996,7 +5132,8 @@
             "damage_dice": "3d10+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Дис Рунная",
@@ -5084,7 +5221,8 @@
             "damage_dice": "2d10+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Глоин",
@@ -5159,7 +5297,8 @@
             "damage_dice": "2d6",
             "is_dot": true
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Профессор Зильбер",
@@ -5278,7 +5417,8 @@
             "damage_dice": "3d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Фламел",
@@ -5360,7 +5500,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Гайка",
@@ -5429,7 +5570,8 @@
             "damage_dice": "2d6+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Стим",
@@ -5530,7 +5672,8 @@
             "damage_dice": "3d6+6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Поршень",
@@ -5618,7 +5761,8 @@
             "damage_dice": "2d10+5",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Клапан",
@@ -5687,7 +5831,8 @@
             "damage_dice": "2d6",
             "is_dot": true
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Искра",
@@ -5743,7 +5888,8 @@
             "damage_dice": "2d6+3",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Бром",
@@ -5825,7 +5971,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Аэро",
@@ -5894,7 +6041,8 @@
             "damage_dice": "2d8+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Шестеренка",
@@ -5963,7 +6111,8 @@
             "damage_dice": "1d6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Барон Кровь",
@@ -6070,7 +6219,8 @@
             "damage_dice": "3d8+5",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Брут",
@@ -6171,7 +6321,8 @@
             "damage_dice": "3d6+6",
             "is_dot": true
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Слизняк",
@@ -6240,7 +6391,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Финн",
@@ -6328,7 +6480,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Кинжал",
@@ -6414,7 +6567,8 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Мышь",
@@ -6470,7 +6624,8 @@
             "damage_dice": "1d8+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Кровавая Мэри",
@@ -6571,7 +6726,8 @@
             "damage_dice": "3d6+4",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Шепот",
@@ -6659,7 +6815,8 @@
             "damage_dice": "2d6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Ржавый",
@@ -6728,7 +6885,8 @@
             "damage_dice": "1d6",
             "is_dot": false
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Пепельный гоблин",
@@ -6786,7 +6944,9 @@
             "damage_dice": "1d6",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Гоблин",
+        "is_hostile": true
       },
       {
         "name": "Болотная слизь",
@@ -6838,7 +6998,9 @@
             "damage_dice": "2d4",
             "is_dot": true
           }
-        ]
+        ],
+        "race": "Слизь",
+        "is_hostile": true
       },
       {
         "name": "Искаженная крыса",
@@ -6890,7 +7052,9 @@
             "damage_dice": "1d6",
             "is_dot": true
           }
-        ]
+        ],
+        "race": "Зверь",
+        "is_hostile": true
       },
       {
         "name": "Грязевой бес",
@@ -6942,7 +7106,9 @@
             "damage_dice": "2d4",
             "is_dot": true
           }
-        ]
+        ],
+        "race": "Демон",
+        "is_hostile": true
       },
       {
         "name": "Кристальный жук",
@@ -6994,7 +7160,9 @@
             "damage_dice": "2d4",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Насекомое",
+        "is_hostile": true
       },
       {
         "name": "Корневой падальщик",
@@ -7052,7 +7220,9 @@
             "damage_dice": "2d6+1",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Растение-монстр",
+        "is_hostile": true
       },
       {
         "name": "Снежный клещ",
@@ -7104,7 +7274,9 @@
             "damage_dice": "2d4",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Арахнид",
+        "is_hostile": true
       },
       {
         "name": "Джунглевый кровосос",
@@ -7162,7 +7334,9 @@
             "damage_dice": "2d4+3",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Насекомое",
+        "is_hostile": true
       },
       {
         "name": "Каменный краб",
@@ -7227,7 +7401,9 @@
             "damage_dice": "1d10",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Ракообразное",
+        "is_hostile": true
       },
       {
         "name": "Оживший скелет-шахтер",
@@ -7285,7 +7461,9 @@
             "damage_dice": "2d6+1",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Нежить",
+        "is_hostile": true
       },
       {
         "name": "Дикий вепрь Фаэры",
@@ -7350,7 +7528,9 @@
             "damage_dice": "2d6+3",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Зверь",
+        "is_hostile": true
       },
       {
         "name": "Летучая мышь Гримма",
@@ -7408,7 +7588,9 @@
             "damage_dice": "2d4",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Зверь",
+        "is_hostile": true
       },
       {
         "name": "Ядовитая жаба",
@@ -7466,7 +7648,9 @@
             "damage_dice": "2d6",
             "is_dot": true
           }
-        ]
+        ],
+        "race": "Амфибия",
+        "is_hostile": true
       },
       {
         "name": "Гоблин-мародер",
@@ -7524,7 +7708,9 @@
             "damage_dice": "2d6+3",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Гоблин",
+        "is_hostile": true
       },
       {
         "name": "Пустошный койот",
@@ -7589,7 +7775,9 @@
             "damage_dice": "1d8",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Зверь",
+        "is_hostile": true
       },
       {
         "name": "Грибной споровик",
@@ -7654,7 +7842,9 @@
             "damage_dice": "2d6",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Микоид",
+        "is_hostile": true
       },
       {
         "name": "Малая гарпия",
@@ -7712,7 +7902,9 @@
             "damage_dice": "2d6",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Гарпия",
+        "is_hostile": true
       },
       {
         "name": "Личинка песчаного червя",
@@ -7777,7 +7969,9 @@
             "damage_dice": "2d6",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Червь",
+        "is_hostile": true
       },
       {
         "name": "Водяной паук",
@@ -7835,7 +8029,9 @@
             "damage_dice": "2d6",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Арахнид",
+        "is_hostile": true
       },
       {
         "name": "Ободранный упырь",
@@ -7900,7 +8096,9 @@
             "damage_dice": "2d8+2",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Нежить",
+        "is_hostile": true
       },
       {
         "name": "Орк-налетчик",
@@ -7971,7 +8169,9 @@
             "damage_dice": "2d6",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Орк",
+        "is_hostile": true
       },
       {
         "name": "Болотный тролль",
@@ -8055,7 +8255,9 @@
             "damage_dice": "2d8+6",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Тролль",
+        "is_hostile": true
       },
       {
         "name": "Ледяной волк",
@@ -8126,7 +8328,9 @@
             "damage_dice": "3d8+3",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Зверь",
+        "is_hostile": true
       },
       {
         "name": "Пантера теней",
@@ -8210,7 +8414,9 @@
             "damage_dice": "3d6+5",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Зверь",
+        "is_hostile": true
       },
       {
         "name": "Ядоплюющий раптор",
@@ -8281,7 +8487,9 @@
             "damage_dice": "3d8+4",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Рептилия",
+        "is_hostile": true
       },
       {
         "name": "Малый элементаль воды",
@@ -8359,7 +8567,9 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Элементаль",
+        "is_hostile": true
       },
       {
         "name": "Пепельный голем",
@@ -8443,7 +8653,9 @@
             "damage_dice": "2d10",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Конструкт",
+        "is_hostile": true
       },
       {
         "name": "Кровавый вурдалак",
@@ -8527,7 +8739,9 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Нежить",
+        "is_hostile": true
       },
       {
         "name": "Пустынный скорпион",
@@ -8611,7 +8825,9 @@
             "damage_dice": "3d6+4",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Арахнид",
+        "is_hostile": true
       },
       {
         "name": "Гарпия-охотница",
@@ -8695,7 +8911,9 @@
             "damage_dice": "4d6",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Гарпия",
+        "is_hostile": true
       },
       {
         "name": "Искаженный энт",
@@ -8779,7 +8997,9 @@
             "damage_dice": "2d10",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Энт",
+        "is_hostile": true
       },
       {
         "name": "Паук-шелкопряд",
@@ -8850,7 +9070,9 @@
             "damage_dice": "3d6+4",
             "is_dot": true
           }
-        ]
+        ],
+        "race": "Арахнид",
+        "is_hostile": true
       },
       {
         "name": "Ящер-берсерк",
@@ -8934,7 +9156,9 @@
             "damage_dice": "3d6+5",
             "is_dot": true
           }
-        ]
+        ],
+        "race": "Рептилия",
+        "is_hostile": true
       },
       {
         "name": "Мертвый рыцарь",
@@ -9018,7 +9242,9 @@
             "damage_dice": "2d8",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Нежить",
+        "is_hostile": true
       },
       {
         "name": "Василиск-подросток",
@@ -9102,7 +9328,9 @@
             "damage_dice": "2d8+3",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Рептилия",
+        "is_hostile": true
       },
       {
         "name": "Мантикора-одиночка",
@@ -9186,7 +9414,9 @@
             "damage_dice": "3d8",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Мантикора",
+        "is_hostile": true
       },
       {
         "name": "Огненная гончая",
@@ -9270,7 +9500,9 @@
             "damage_dice": "3d10",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Зверь",
+        "is_hostile": true
       },
       {
         "name": "Снежная виверна",
@@ -9354,7 +9586,9 @@
             "damage_dice": "3d8+5",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Драконид",
+        "is_hostile": true
       },
       {
         "name": "Пещерный медведь-мутант",
@@ -9438,7 +9672,9 @@
             "damage_dice": "2d10",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Зверь",
+        "is_hostile": true
       },
       {
         "name": "Минотавр-изгнанник",
@@ -9522,7 +9758,9 @@
             "damage_dice": "3d8+6",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Минотавр",
+        "is_hostile": true
       },
       {
         "name": "Лич",
@@ -9638,7 +9876,9 @@
             "damage_dice": "3d10",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Нежить",
+        "is_hostile": true
       },
       {
         "name": "Вендиго Стужи",
@@ -9748,7 +9988,9 @@
             "damage_dice": "3d8",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Нежить",
+        "is_hostile": true
       },
       {
         "name": "Морской змей",
@@ -9858,7 +10100,9 @@
             "damage_dice": "3d8",
             "is_dot": true
           }
-        ]
+        ],
+        "race": "Морской змей",
+        "is_hostile": true
       },
       {
         "name": "Изумрудный Василиск",
@@ -9974,7 +10218,9 @@
             "damage_dice": "3d10",
             "is_dot": false
           }
-        ]
+        ],
+        "race": "Рептилия",
+        "is_hostile": true
       },
       {
         "name": "Демон Пепла",
@@ -10084,7 +10330,9 @@
             "damage_dice": "4d8+7",
             "is_dot": true
           }
-        ]
+        ],
+        "race": "Демон",
+        "is_hostile": true
       },
       {
         "name": "Матриарх Арахнидов",
@@ -10189,7 +10437,8 @@
             "damage_type": "slashing",
             "damage_dice": "2d6+5"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Древний Энт-Хранитель",
@@ -10294,7 +10543,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "2d10+8"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Высший элементаль огня",
@@ -10400,7 +10650,8 @@
             "damage_type": "piercing",
             "damage_dice": "2d8+7"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Королевская Виверна",
@@ -10499,7 +10750,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "1d10+7"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Костяной Дракон",
@@ -10604,7 +10856,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "2d6+8"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Джаггернаут Орков",
@@ -10702,7 +10955,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "1d10+8"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Глубинный Ужас",
@@ -10807,7 +11061,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "2d6+8"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Ледяной Голем-Крушитель",
@@ -10905,7 +11160,8 @@
             "damage_type": "cold",
             "damage_dice": "1d12+8"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Шаман Болотных Троллей",
@@ -11004,7 +11260,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "1d10+5"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Вампир-Лорд",
@@ -11103,7 +11360,8 @@
             "damage_type": "force",
             "damage_dice": "1d8+7"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Пожиратель Магии",
@@ -11208,7 +11466,8 @@
             "damage_type": "slashing",
             "damage_dice": "2d6+5"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Старшая Химера",
@@ -11314,7 +11573,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "1d12+8"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Грифон-Альфа",
@@ -11406,7 +11666,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "1d10+6"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Титан Болот",
@@ -11517,7 +11778,8 @@
             "damage_type": "acid",
             "damage_dice": "2d8+9"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Песчаный Червь-Император",
@@ -11628,7 +11890,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "3d6+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Игнис, Изначальное Пламя",
@@ -11767,7 +12030,8 @@
             "damage_type": "fire",
             "damage_dice": "3d8+9"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Криос, Дыхание Бездны",
@@ -11905,7 +12169,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "3d8+9"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Йормунганд Аскарона",
@@ -12041,7 +12306,8 @@
             "damage_type": "force",
             "damage_dice": "2d10+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Древний Дракон Фаэры",
@@ -12178,7 +12444,8 @@
             "damage_type": "fire",
             "damage_dice": "3d6+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Фантом Гримма",
@@ -12316,7 +12583,8 @@
             "damage_type": "slashing",
             "damage_dice": "2d8+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Левиафан Пустоши",
@@ -12452,7 +12720,8 @@
             "damage_type": "thunder",
             "damage_dice": "2d8+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Матерь Леса",
@@ -12590,7 +12859,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "3d6+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Титан \"Омега\"",
@@ -12727,7 +12997,8 @@
             "damage_type": "force",
             "damage_dice": "2d8+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Праотец Вампиров",
@@ -12864,7 +13135,8 @@
             "damage_type": "piercing",
             "damage_dice": "2d8+9"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Аспект Смерти",
@@ -13001,7 +13273,8 @@
             "damage_type": "piercing",
             "damage_dice": "3d6+9"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Химера Раскола",
@@ -13132,7 +13405,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "2d10+9"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Король Глубин (Бог-Краб)",
@@ -13262,7 +13536,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "3d6+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Астральный Пожиратель",
@@ -13399,7 +13674,8 @@
             "damage_type": "slashing",
             "damage_dice": "2d8+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Архидемон Бездны",
@@ -13543,7 +13819,8 @@
             "damage_type": "psychic",
             "damage_dice": "2d8+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Хранитель Врат",
@@ -13680,7 +13957,8 @@
             "damage_type": "radiant",
             "damage_dice": "2d6+9"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Кровавый Шаман-Прародитель",
@@ -13811,7 +14089,8 @@
             "damage_type": "thunder",
             "damage_dice": "2d6+8"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Королева Роя",
@@ -13943,7 +14222,8 @@
             "damage_type": "bludgeoning",
             "damage_dice": "2d8+8"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Колосс Первоэпохи",
@@ -14072,7 +14352,8 @@
             "damage_type": "thunder",
             "damage_dice": "2d8+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Осколок Утраченного Божества",
@@ -14214,7 +14495,8 @@
             "damage_type": "radiant",
             "damage_dice": "2d10+10"
           }
-        ]
+        ],
+        "is_hostile": false
       },
       {
         "name": "Анти-Система (\"Вирус\")",
@@ -14358,7 +14640,8 @@
             "damage_type": "radiant",
             "damage_dice": "2d10+10"
           }
-        ]
+        ],
+        "is_hostile": false
       }
     ]
   }

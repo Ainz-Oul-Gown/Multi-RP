@@ -155,16 +155,16 @@ export function validateAndFixStats(raw: any, options: { forceSum72?: boolean } 
   return result;
 }
 
-export function calculateDerivedStats(stats = {}, race = 'Человек', equipment = [], raceAcBonus) {
+export function calculateDerivedStats(stats: any = {}, race: string = 'Человек', equipment: any[] = [], raceAcBonus?: number) {
   const safeStats = validateAndFixStats(stats);
   const initiative = Math.floor(((safeStats.DEX || 10) - 10) / 2);
   const dexMod = Math.floor(((safeStats.DEX || 10) - 10) / 2);
   const raceBonus = Number(raceAcBonus ?? 0);
   const equipmentBonus = Array.isArray(equipment)
-    ? equipment.reduce((sum, item) => sum + (Number(item.ac_bonus) || 0), 0)
+    ? equipment.reduce((sum: number, item: any) => sum + (Number(item?.ac_bonus) || 0), 0)
     : 0;
   const armorClass = 10 + dexMod + raceBonus + equipmentBonus;
-  const savingThrows = {};
+  const savingThrows: Record<string, number> = {};
   for (const s of VALID_STATS) {
     const mod = Math.floor(((safeStats[s] || 10) - 10) / 2);
     savingThrows[s] = mod + 2;

@@ -25,6 +25,7 @@ import { decideNpcCombatAction, executeNpcAttack, executeCompanionAttack } from 
 import { evaluatePetTamingAttempt, evaluatePetLoyaltyCheck, awardPetCombatXp } from "../_shared/pet_taming_engine.ts";
 import { buildSatellitePrompt, buildGpsPrompt } from "./steps/_shared_prompts.ts";
 import { RouterInputContext } from "./types.ts";
+import { evaluateStoryProgress } from "../_shared/storyProgressEvaluator.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -221,6 +222,8 @@ serve(async (req) => {
     if (!session) {
       return new Response(JSON.stringify({ error: "Session not found" }), { status: 404, headers: { ...CORS, "Content-Type": "application/json" } });
     }
+
+    const sessionStoryline = session.storyline || session.worlds?.settings?.storyline || null;
 
     // Resolve API key + models
     let openrouterApiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
@@ -480,6 +483,10 @@ serve(async (req) => {
       },
       current_location_id: session.current_location_id || null,
       current_location_name: currentLocationName,
+      storyline: sessionStoryline ? {
+        title: sessionStoryline.title,
+        current_arc: sessionStoryline.arcs?.[sessionStoryline.current_arc_index || 0] || null,
+      } : null,
     };
 
     let routerResult: any;
@@ -616,9 +623,12 @@ serve(async (req) => {
       },
     });
     if (statAllocatedFact) {
-      engineResult.system_facts.push(statAllocatedFact);
+      if (!engineResult.raw_system_facts) engineResult.raw_system_facts = [];
+      engineResult.raw_system_facts.push(statAllocatedFact);
+      if (!engineResult.system_facts) engineResult.system_facts = engineResult.raw_system_facts;
+      else engineResult.system_facts.push(statAllocatedFact);
     }
-    console.log(`[${requestId}] [STEP 2] ⚙️ Engine: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${JSON.stringify(engineResult.system_facts)}`);
+    console.log(`[${requestId}] [STEP 2] ⚙️ Engine: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${JSON.stringify(engineResult.raw_system_facts)}`);
 
     // ============================================
     // ШАГ 3: DB Persistence
@@ -856,6 +866,11 @@ serve(async (req) => {
       atmosphere: routerResult.atmosphere || { sounds: [], visuals: [] },
       time_passed_minutes,
       encounter_alert: null,
+      storyline: sessionStoryline ? {
+        title: sessionStoryline.title,
+        prologue: sessionStoryline.prologue,
+        current_arc: sessionStoryline.arcs?.[sessionStoryline.current_arc_index || 0] || null,
+      } : null,
     });
     console.log(`[${requestId}] [STEP 4] turn_status=${systemTruth.turn_status}, ${Object.keys(systemTruth.player_truths).length} player_truths`);
 
@@ -952,6 +967,49 @@ serve(async (req) => {
         content: `🎉 **[Новый уровень!]** Поздравляем, вы достигли ${playerLevelUp.new_level} уровня!\nПолучено +2 свободных очка характеристик (ОХ). Макс. HP: ${playerLevelUp.max_hp}, Макс. MP: ${playerLevelUp.max_mp}.`,
         metadata: { type: "player_level_up", ...playerLevelUp },
       });
+    }
+
+    // 7.1) Storyline Progress Evaluation (автоматическое отслеживание целей арки)
+    let storyProgressResult: any = null;
+    if (sessionStoryline && sessionStoryline.status !== "completed" && sessionStoryline.status !== "sandbox") {
+      try {
+        const actingPlayerTruth = systemTruth.player_truths[player.id];
+        const narrativeForPlayer = narratorOutput.players[player.id] || "";
+        storyProgressResult = evaluateStoryProgress({
+          storyline: sessionStoryline,
+          playerAction: safeActionText,
+          systemFacts: actingPlayerTruth?.knowledge || [],
+          narrativeText: narrativeForPlayer,
+          currentLocation: currentLocationName || "",
+          nearbyNpcs: allNpcs,
+        });
+
+        if (storyProgressResult.completedGoalTitles.length > 0 || storyProgressResult.advancedArc) {
+          console.log(`[${requestId}] [STORY] Progress evaluated: ${storyProgressResult.completedGoalTitles.length} goals completed, arcAdvanced=${storyProgressResult.advancedArc}`);
+          const currentPlotStage = storyProgressResult.updatedStoryline.arcs?.[storyProgressResult.updatedStoryline.current_arc_index]?.title || null;
+          await supabase.from("sessions").update({
+            storyline: storyProgressResult.updatedStoryline,
+            current_plot_stage: currentPlotStage,
+          }).eq("id", session_id);
+
+          for (const announcement of storyProgressResult.announcements) {
+            await supabase.from("messages").insert({
+              session_id,
+              sender_type: "system",
+              sender_name: "Сюжет",
+              content: announcement,
+              metadata: {
+                type: "story_progress",
+                completed_goals: storyProgressResult.completedGoalTitles,
+                advanced_arc: storyProgressResult.advancedArc,
+                arc_index: storyProgressResult.updatedStoryline.current_arc_index,
+              },
+            });
+          }
+        }
+      } catch (storyEvalErr) {
+        console.warn(`[${requestId}] Failed to evaluate story progress:`, storyEvalErr);
+      }
     }
 
     // 8) NPC Relationships & Memories update
@@ -1188,7 +1246,8 @@ serve(async (req) => {
 
         // Если следующий ход принадлежит NPC — выполняем боевые ходы NPC
         while (nextTurn && nextTurn.entity_type === "npc" && nextTurn.npc_id) {
-          const turnNpc = allNpcs.find((n: any) => n.id === nextTurn.npc_id);
+          const currentTurnNpcId = nextTurn.npc_id;
+          const turnNpc = allNpcs.find((n: any) => n.id === currentTurnNpcId);
           if (turnNpc && turnNpc.is_alive !== false && (turnNpc.hp ?? 10) > 0) {
             const isCompanion = !turnNpc.is_hostile &&
               (turnNpc.role === "companion" || (Array.isArray(turnNpc.status_tags) && (turnNpc.status_tags.includes("спутник") || turnNpc.status_tags.includes("в_отряде") || turnNpc.status_tags.includes("питомец") || turnNpc.status_tags.includes("приручен"))));
@@ -1390,12 +1449,17 @@ serve(async (req) => {
       current_location_name: currentLocationName,
       current_state_name: currentStateName,
       current_wild_zone: session.current_wild_zone || null,
+      story_progress: storyProgressResult ? {
+        completed_goals: storyProgressResult.completedGoalTitles,
+        advanced_arc: storyProgressResult.advancedArc,
+        current_arc_index: storyProgressResult.updatedStoryline.current_arc_index,
+      } : null,
     }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
 
 
-  } catch (err) {
+  } catch (err: any) {
     console.error(`[${requestId}] ❌ ERROR:`, err);
-    return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
+    return new Response(JSON.stringify({ error: err?.message || "Internal server error" }), {
       status: 500, headers: { ...CORS, "Content-Type": "application/json" },
     });
   }

@@ -83,6 +83,9 @@ export interface RouterInputContext {
   // Текущая локация
   current_location_id: string | null;
   current_location_name: string | null;
+
+  // Сюжетная линия (ориентиры)
+  storyline?: any;
 }
 
 // ============================================

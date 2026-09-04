@@ -202,6 +202,17 @@ function buildUserMessage(input: any): string {
     lines.push("");
   }
 
+  const story = input?.storyline;
+  if (story?.current_arc) {
+    lines.push(`## Сюжетный контекст (ориентиры)`);
+    lines.push(`Сюжет: ${story.title || "Основной сюжет"}`);
+    lines.push(`Активная арка: ${story.current_arc.title}`);
+    if (story.current_arc.goals?.length) {
+      lines.push(`Ориентиры: ${story.current_arc.goals.join("; ")}`);
+    }
+    lines.push("");
+  }
+
   lines.push(`## Инструкция`);
   lines.push(`Верни ТОЛЬКО валидный JSON по указанной схеме. Используй ТОЛЬКО ID из инвентаря. Если действие невозможно — status: "impossible".`);
 
@@ -464,7 +475,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
 
     const cleanStem = (w: string) => w.replace(/(?:а|ов|ев|и|ы|у|е|ом|ам|ами|ях|ых|их|ого|его|ому|ему|ым|им|ую|ею|ей|я)$/i, "");
-    const actionStems = lower.split(/[\s,.-]+/).map(cleanStem).filter((w) => w.length >= 3);
+    const actionStems = lower.split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
 
     let matchedItem = inv.find((i: any) => {
       const itemStems = (i.item_name || i.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
@@ -495,7 +506,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
 
     const cleanStem = (w: string) => w.replace(/(?:а|ов|ев|и|ы|у|е|ом|ам|ами|ях|ых|их|ого|его|ому|ему|ым|им|ую|ею|ей|я)$/i, "");
-    const actionStems = lower.split(/[\s,.-]+/).map(cleanStem).filter((w) => w.length >= 3);
+    const actionStems = lower.split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
 
     let matchedItem = inv.find((i: any) => {
       const itemStems = (i.item_name || i.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);

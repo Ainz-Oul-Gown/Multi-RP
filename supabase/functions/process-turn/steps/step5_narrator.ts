@@ -25,7 +25,34 @@ export interface NarratorInputContext {
 // ============================================
 // Промпт для LLM
 // ============================================
-function buildNarratorSystemPrompt(playerName: string, playerRace: string, playerClass: string, loreContext: string): string {
+function buildNarratorSystemPrompt(
+  playerName: string, 
+  playerRace: string, 
+  playerClass: string, 
+  loreContext: string,
+  storyline?: any
+): string {
+  let storylineSection = "";
+  if (storyline && storyline.current_arc) {
+    const arc = storyline.current_arc;
+    const remainingGoals = (arc.goals || []).filter((g: string) => !(arc.completed_goals || []).includes(g));
+    storylineSection = `
+СЮЖЕТНАЯ ЛИНИЯ («ЛЫЖИ, НО НЕ ПРАВИЛО»):
+Кампания: "${storyline.title || 'Сюжетная линия'}"
+Текущая арка (Акт ${arc.act || 1}): "${arc.title || ''}"
+Описание арки: ${arc.description || ''}
+Оставшиеся цели арки:
+${remainingGoals.length > 0 ? remainingGoals.map((g: string) => ` - [ ] ${g}`).join("\n") : "Все основные цели текущей арки достигнуты!"}
+${arc.key_npcs && arc.key_npcs.length > 0 ? `Ключевые персонажи арки: ${arc.key_npcs.join(", ")}` : ""}
+${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые локации арки: ${arc.key_locations.join(", ")}` : ""}
+
+ПРИНЦИП «ЛЫЖИ, НО НЕ ПРАВИЛО»:
+- Сюжет служит мягким ориентиром («лыжи»), направляющим мир, но НЕ железнодорожными рельсами, сковывающими свободу воли игрока.
+- Если игрок целенаправленно идёт по сюжету или выполняет цели арки — развивай интригу, вплетай ключевых NPC, выдавай подсказки.
+- Если игрок занят песочницей (сбор трав/грибов/веток, крафт, торговля, блуждание по лесу, отдых в таверне) — ПОЛНОСТЬЮ ПОДДЕРЖИ ЕГО СВОБОДУ! Не заставляй его бросать свои дела ради сюжета. Сюжет может лишь мягко отражаться в фоновой атмосфере (отдалённый слух, тревожный взгляд прохожего), не отвлекая игрока от его личных планов.
+`;
+  }
+
   return `Ты — Dungeon Master в текстовой многопользовательской ЛитРПГ.
 Твоя задача — превратить сухой SystemTruthDto в захватывающий литературный текст для КАЖДОГО игрока индивидуально.
 
@@ -55,7 +82,7 @@ function buildNarratorSystemPrompt(playerName: string, playerRace: string, playe
 }
 
 Игрок-инициатор: ${playerName} (${playerRace}, ${playerClass})
-
+${storylineSection}
 ${loreContext ? `Лор мира:\n${loreContext}\n` : ''}`;
 }
 
@@ -144,7 +171,7 @@ export function buildFallbackNarrative(systemTruth: SystemTruthDto): NarratorOut
 export async function generateNarrative(context: NarratorInputContext): Promise<NarratorOutputPayload> {
   const { system_truth, action_text, player_name, player_race, player_class, lore_context, openrouter_api_key, dm_model } = context;
 
-  const systemPrompt = buildNarratorSystemPrompt(player_name, player_race, player_class, lore_context);
+  const systemPrompt = buildNarratorSystemPrompt(player_name, player_race, player_class, lore_context, system_truth.storyline);
   const userMessage = `Действие игрока: "${action_text}"
 
 SystemTruthDto:

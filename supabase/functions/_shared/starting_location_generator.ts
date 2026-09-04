@@ -1,6 +1,7 @@
 // supabase/functions/_shared/starting_location_generator.ts
 // Генератор стартовой локации на основе карточки персонажа и первого сообщения
 import { cleanTextForAI, parseAIJson } from "./utils.ts";
+import { resolveNpcRace } from "./npcRaceResolver.ts";
 
 export interface StartingLocationResult {
   is_new_location: boolean;
@@ -125,7 +126,7 @@ export function buildFallbackStartingLocation(
   atmosphere: { sounds: string[]; visuals: string[] };
   game_time: { year: number; month: number; day: number; hour: number; minute: number };
   time: { year: number; month: number; day: number; hour: number; minute: number };
-  initial_npcs: Array<{ name: string; race: string; role: string; background: string; status_tags: string[]; is_alive: boolean }>;
+  initial_npcs: Array<{ name: string; race: string; role: string; background: string; status_tags: string[]; is_alive?: boolean }>;
 } {
   const player = paramsOrPlayer?.player ?? paramsOrPlayer ?? {};
   const action_text = actionTextOpt ?? paramsOrPlayer?.action_text ?? "";
@@ -447,7 +448,7 @@ export async function ensureStartingLocation(params: {
             location_id: locationId,
             state_id: stateId,
             name: npc.name,
-            race: npc.race || "Человек",
+            race: resolveNpcRace(npc),
             role: "secondary",
             background: npc.background || "",
             status_tags: Array.isArray(npc.status_tags) ? npc.status_tags : ["местный"],

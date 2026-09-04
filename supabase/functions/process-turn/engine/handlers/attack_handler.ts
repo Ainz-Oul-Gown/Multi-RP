@@ -8,9 +8,9 @@ import { rollDamage } from "../dice.ts";
 import { resolveWeaponSkill } from "../../../_shared/skill_engine.ts";
 
 export class AttackHandler extends BaseActionHandler {
-  readonly action_type = "attack";
+  override readonly action_type: string = "attack";
 
-  handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
+  override handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     const player = context.acting_player;
     const target = this.findNpcById(context, action.target_entity_id || "")
       || this.findPlayerById(context, action.target_entity_id || "");
@@ -76,7 +76,7 @@ export class AttackHandler extends BaseActionHandler {
 
     // Определение оружия и соответствующего боевого навыка игрока (мечи, кинжалы, топоры, копья, луки, кулаки, магия)
     const weapon = action.used_item_id ? this.findItemById(player, action.used_item_id) : null;
-    const weaponSkill = resolveWeaponSkill(weapon, action.details || "");
+    const weaponSkill = resolveWeaponSkill(weapon, (action as any).details || (action as any).target_item_name || "");
     const skillInfo = player.skills?.[weaponSkill.key];
     const skillEffects = skillInfo?.effects || {};
     const skillAttackBonus = skillEffects.attack_bonus || skillEffects.accuracy_bonus || 0;
@@ -168,9 +168,9 @@ export class AttackHandler extends BaseActionHandler {
  * Stealth Attack — атака из скрытности (преимущество + бонусный урон)
  */
 export class StealthAttackHandler extends AttackHandler {
-  readonly action_type = "stealth_attack";
+  override readonly action_type: string = "stealth_attack";
 
-  handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
+  override handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     // Выполняем базовую атаку, но форсируем преимущество
     const result = super.handle(action, context);
 

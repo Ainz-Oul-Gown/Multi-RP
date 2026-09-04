@@ -89,6 +89,19 @@ export interface SystemTruthDto {
     tier?: number;
     creature_name?: string;
   } | null;
+  storyline?: {
+    title: string;
+    prologue?: string;
+    current_arc?: {
+      act: number;
+      title: string;
+      description: string;
+      goals: string[];
+      completed_goals: string[];
+      key_npcs?: string[];
+      key_locations?: string[];
+    } | null;
+  } | null;
 }
 
 export interface SystemTruthInputContext {
@@ -126,7 +139,10 @@ export interface SystemTruthInputContext {
     name: string;
     race?: string;
     role?: string;
+    category?: string;
     status_tags?: string[];
+    is_alive?: boolean;
+    is_hostile?: boolean;
   }>;
   // Атмосфера
   atmosphere: { sounds: string[]; visuals: string[] };
@@ -134,6 +150,8 @@ export interface SystemTruthInputContext {
   time_passed_minutes: number;
   // Случайный энкаунтер
   encounter_alert: { spawned: boolean; tier?: number; creature_name?: string } | null;
+  // Сюжетная линия сессии
+  storyline?: any;
 }
 
 // ============================================
@@ -403,8 +421,9 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         }
       }
 
-      if (knowledge.length === 0 && engine_output.system_facts?.length) {
-        knowledge.push(...engine_output.system_facts);
+      const facts = engine_output.system_facts || engine_output.raw_system_facts || [];
+      if (knowledge.length === 0 && facts.length) {
+        knowledge.push(...facts);
       }
     } else {
       // Этот игрок — НЕ инициатор. Нужно решить, видит ли он действие.
@@ -641,5 +660,6 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
     present_npcs,
     npc_context,
     encounter_alert,
+    storyline: context.storyline || null,
   };
 }

@@ -6,6 +6,7 @@ import { getHitDice, calculateHpDnd, getDieAverage } from '../config/hitDice.js'
 import { supabase, invokeFunction } from './supabase.js';
 import { saveGenerationProgress, loadGenerationProgress, clearGenerationProgress } from '../utils/generationStore.js';
 import { saveProgress, loadProgress, deleteProgress } from '../utils/indexedDB.js';
+import { resolveNpcRace } from '../utils/npcRaceResolver.js';
 
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -633,7 +634,7 @@ export async function generateAllNPCs(loreText, worldId, geography = null, onPro
         world_id: worldId,
         role,
         name: (npc.name || 'Безымянный').slice(0, 100),
-        race: (npc.race || 'Человек').slice(0, 50),
+        race: resolveNpcRace(npc).slice(0, 50),
         category,
         class: (npc.class || '').slice(0, 50),
         appearance: (npc.appearance || '').slice(0, 500),
@@ -847,7 +848,7 @@ export async function generateIntelligentNPCs(loreText, worldId, geography = nul
         world_id: worldId,
         role: npc.role === 'main' ? 'main' : 'secondary',
         name: (npc.name || 'Безымянный').slice(0, 100),
-        race: (npc.race || 'Человек').slice(0, 50),
+        race: resolveNpcRace(npc).slice(0, 50),
         category: 'npc',
         class: (npc.class || '').slice(0, 50),
         appearance: (npc.appearance || '').slice(0, 500),
@@ -1133,7 +1134,7 @@ ${geography ? `Доступные государства:\n${geography.states.ma
         world_id: worldId,
         role: 'tertiary',
         name: (npc.name || 'Безымянный').slice(0, 100),
-        race: (npc.race || 'Человек').slice(0, 50),
+        race: resolveNpcRace(npc).slice(0, 50),
         category,
         class: (npc.class || '').slice(0, 50),
         appearance: (npc.appearance || '').slice(0, 500),

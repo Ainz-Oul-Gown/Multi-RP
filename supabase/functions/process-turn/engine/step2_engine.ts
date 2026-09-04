@@ -102,6 +102,7 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
       mutations: [],
       encounter_triggered: { triggered: false },
       raw_system_facts: [`Действие заблокировано: ${router_output.clarification_msg}`],
+      system_facts: [`Действие заблокировано: ${router_output.clarification_msg}`],
     };
   }
 
@@ -120,6 +121,7 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
       mutations: [],
       encounter_triggered: { triggered: false },
       raw_system_facts: [`Требуется уточнение: ${router_output.clarification_msg}`],
+      system_facts: [`Требуется уточнение: ${router_output.clarification_msg}`],
     };
   }
 
@@ -169,5 +171,6 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
     mutations,
     encounter_triggered,
     raw_system_facts,
+    system_facts: raw_system_facts,
   };
 }

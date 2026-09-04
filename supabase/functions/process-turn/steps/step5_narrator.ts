@@ -145,44 +145,61 @@ ${JSON.stringify(system_truth, null, 2)}
 
 Сгенерируй нарратив в JSON.`;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${openrouter_api_key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: dm_model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-    }),
-  });
+  const modelsToTry = [dm_model, "google/gemini-2.0-flash-001", "meta-llama/llama-3.3-70b-instruct"];
+  let lastErr: any = null;
 
-  if (!response.ok) {
-    throw new Error(`Narrator LLM error: ${response.status}`);
+  for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
+    const curModel = modelsToTry[attempt];
+    try {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 600 * attempt));
+      }
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouter_api_key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: curModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.7,
+          max_tokens: 2000,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Narrator LLM error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content || content.trim() === "") throw new Error("Empty narrator response");
+
+      const parsed = safeParseJson(content);
+      if (!parsed || typeof parsed.players !== "object") {
+        throw new Error("Failed to parse narrator JSON");
+      }
+
+      // Валидация: проверяем, что все players из SystemTruthDto присутствуют
+      const validatedPlayers: Record<string, string> = {};
+      for (const pid of Object.keys(system_truth.player_truths)) {
+        validatedPlayers[pid] = typeof parsed.players[pid] === "string" ? parsed.players[pid] : "…";
+      }
+
+      return {
+        players: validatedPlayers,
+        global_narrative: typeof parsed.global_narrative === "string" ? parsed.global_narrative : "",
+      };
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[step5_narrator] Attempt ${attempt + 1} (${curModel}) failed:`, err);
+    }
   }
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Empty narrator response");
-
-  const parsed = safeParseJson(content);
-  if (!parsed || typeof parsed.players !== "object") {
-    throw new Error("Failed to parse narrator JSON");
-  }
-
-  // Валидация: проверяем, что все players из SystemTruthDto присутствуют
-  const validatedPlayers: Record<string, string> = {};
-  for (const pid of Object.keys(system_truth.player_truths)) {
-    validatedPlayers[pid] = typeof parsed.players[pid] === "string" ? parsed.players[pid] : "…";
-  }
-
-  return {
-    players: validatedPlayers,
-    global_narrative: typeof parsed.global_narrative === "string" ? parsed.global_narrative : "",
-  };
+  throw lastErr || new Error("Failed all narrator attempts");
 }
+

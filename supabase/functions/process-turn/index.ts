@@ -11,8 +11,9 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
-import { parsePlayerIntent } from "./steps/step1_router.ts";
+import { parsePlayerIntent, buildRouterHeuristicFallback } from "./steps/step1_router.ts";
 import { executeEngine } from "./engine/step2_engine.ts";
+
 import { applyTurnMutations } from "./steps/step3_persistence.ts";
 import { compileSystemTruth } from "./steps/step4_system_truth.ts";
 import { generateNarrative, buildFallbackNarrative } from "./steps/step5_narrator.ts";
@@ -41,8 +42,12 @@ const CORS = {
 // ============================================
 async function callAI(systemPrompt: string, userMessage: string, apiKey: string, retries = 3, model?: string): Promise<string> {
   const useModel = model || AI_MODEL;
+  let lastError: Error | null = null;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 1200 * attempt));
+      }
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -60,19 +65,25 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
         }),
       });
       if (!response.ok) {
-        const errText = await response.text();
-        if (attempt === retries - 1) throw new Error(`AI API error: ${response.status}`);
-        continue;
+        lastError = new Error(`AI API error: ${response.status}`);
+        continue; // retry
       }
       const data = await response.json();
-      return data.choices[0].message.content;
+      const content = data?.choices?.[0]?.message?.content;
+      // OpenRouter sometimes returns null/empty content — treat as transient error, retry
+      if (!content || content.trim() === "") {
+        lastError = new Error("AI Router: пустой ответ от LLM");
+        console.warn(`[callAI] attempt ${attempt + 1}/${retries} — empty content, retrying...`);
+        continue;
+      }
+      return content;
     } catch (err) {
-      if (attempt === retries - 1) throw err;
-      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
-  throw new Error("AI call failed after all retries");
+  throw new Error(`AI Router: не удалось получить валидный ответ после ${retries} попыток. Последняя ошибка: ${lastError?.message || "unknown"}`);
 }
+
 
 // ============================================
 // Утилиты времени (для fallback в GPS, если Шаг 1.6 не вызывается)
@@ -160,7 +171,12 @@ serve(async (req) => {
 
     // Load location, available locations, lore
     let currentLocationName: string | null = null, currentStateName: string | null = null;
-    if (session.current_location_id) {
+    // Wild zone — природная зона вне именных локаций (лес, пещера, поле)
+    const currentWildZone: string | null = session.current_wild_zone || null;
+    if (currentWildZone) {
+      // Player is in open world — no named location
+      currentLocationName = null;
+    } else if (session.current_location_id) {
       try {
         const { data: locData } = await supabase
           .from("locations")
@@ -219,10 +235,16 @@ serve(async (req) => {
     // Load all NPCs in current location (for router, engine and system truth context)
     let allNpcs: any[] = [];
     if (session.current_location_id) {
-      const { data: npcData } = await supabase.from("npcs")
-        .select("id, name, race, class, role, category, hp, max_hp, armor_class, level, is_alive, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time")
+      const { data: npcData, error: npcErr } = await supabase.from("npcs")
+        .select("id, name, race, class, role, category, hp, max_hp, armor_class, level, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time")
         .eq("location_id", session.current_location_id);
-      allNpcs = npcData || [];
+      if (!npcErr) {
+        // Derive is_alive from hp (column might not exist yet in all environments)
+        allNpcs = (npcData || []).map((n: any) => ({
+          ...n,
+          is_alive: (n.hp ?? 10) > 0,
+        }));
+      }
     }
 
     // Проверяем, первый ли это ход в сессии (нет сообщений игрока или локация не задана)
@@ -326,11 +348,18 @@ serve(async (req) => {
       current_location_name: currentLocationName,
     };
 
-    const routerResult = await parsePlayerIntent(
-      routerInput,
-      openrouterApiKey,
-      satelliteModel
-    );
+    let routerResult: any;
+    try {
+      routerResult = await parsePlayerIntent(
+        routerInput,
+        openrouterApiKey,
+        satelliteModel
+      );
+    } catch (routerErr: any) {
+      console.warn(`[${requestId}] [STEP 1] Router LLM failed (${routerErr?.message}), using heuristic fallback...`);
+      routerResult = buildRouterHeuristicFallback(routerInput);
+    }
+
 
     if (routerResult.status === "clarification_needed") {
       return new Response(JSON.stringify({
@@ -347,6 +376,8 @@ serve(async (req) => {
     let time_passed_minutes = 0;
     let location_changed = startingLocationGenerated,
       new_location_id: string | null = startingLocationGenerated ? session.current_location_id : null,
+      new_wild_zone: string | null = null,
+      wild_zone_changed = false,
       travel_description = "";
     try {
       const gpsSystemPrompt = buildGpsPrompt({
@@ -358,6 +389,7 @@ serve(async (req) => {
         currentDay: session.game_day || 14, currentHour: session.game_hour || 10,
         currentMinute: session.game_minute || 0,
         currentLocation: currentLocationName, currentState: currentStateName,
+        currentWildZone,
         wantsLocationChange: false, locationChangeDescription: "",
         availableLocations,
       });
@@ -365,13 +397,26 @@ serve(async (req) => {
       const gpsParsed = parseAIJson(gpsResp);
       if (gpsParsed) {
         time_passed_minutes = Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0));
-        if (gpsParsed.location_changed === true && gpsParsed.new_location_id) {
-          location_changed = true;
-          new_location_id = gpsParsed.new_location_id;
-          travel_description = gpsParsed.travel_description || "";
+        if (gpsParsed.location_changed === true) {
+          if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
+            // Переход в дикую зону (лес, пещера, поле)
+            wild_zone_changed = true;
+            new_wild_zone = gpsParsed.new_location_name;
+            travel_description = gpsParsed.travel_description || "";
+            console.log(`[${requestId}] [GPS] Wild zone: ${new_wild_zone}`);
+          } else if (gpsParsed.new_location_id) {
+            // Переход в именованную локацию
+            location_changed = true;
+            new_location_id = gpsParsed.new_location_id;
+            wild_zone_changed = true;
+            new_wild_zone = null; // очищаем дикую зону
+            travel_description = gpsParsed.travel_description || "";
+            console.log(`[${requestId}] [GPS] Location change → ${new_location_id}`);
+          }
         }
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) { /* ignore GPS errors, game continues */ }
+
 
     // ============================================
     // ШАГ 2: Game Engine
@@ -381,12 +426,12 @@ serve(async (req) => {
     // Загрузка навыков игрока для математических бонусов движка (урон, попадание, сбор, время)
     const { data: pSkills } = await supabase
       .from("player_skills")
-      .select("skill_id, level, effects")
+      .select("skill_key, level, effects")
       .eq("player_id", player.id);
     const skillsMap: Record<string, { level: number; effects: Record<string, number> }> = {};
     if (pSkills) {
       for (const ps of pSkills) {
-        skillsMap[ps.skill_id] = { level: ps.level, effects: ps.effects || {} };
+        skillsMap[ps.skill_key] = { level: ps.level, effects: ps.effects || {} };
       }
     }
 
@@ -462,7 +507,11 @@ serve(async (req) => {
       session.game_minute = nt.minute;
     }
     if (location_changed && new_location_id) {
-      await supabase.from("sessions").update({ current_location_id: new_location_id }).eq("id", session_id);
+      await supabase.from("sessions").update({
+        current_location_id: new_location_id,
+        current_wild_zone: null, // вернулись в именованную локацию
+        current_wild_zone_description: null,
+      }).eq("id", session_id);
 
       // Спутники и члены отряда перемещаются вместе с игроком в новую локацию
       try {
@@ -485,6 +534,17 @@ serve(async (req) => {
         console.warn(`[${requestId}] [COMPANION] Failed to move companions:`, moveErr);
       }
     }
+
+    if (wild_zone_changed && new_wild_zone) {
+      await supabase.from("sessions").update({
+        current_wild_zone: new_wild_zone,
+        current_wild_zone_description: travel_description || null,
+      }).eq("id", session_id);
+      currentLocationName = new_wild_zone;
+      session.current_wild_zone = new_wild_zone;
+      console.log(`[${requestId}] [WILD_ZONE] Player entered wild zone: ${new_wild_zone}`);
+    }
+
 
     // ============================================
     // АВТОНОМНЫЕ ЭКСПЕДИЦИИ NPC (0 токенов, Lazy Calendar Simulation)
@@ -1162,11 +1222,13 @@ serve(async (req) => {
       npc_combat_turns: npcCombatTurns,
       game_time: systemTruth.environment.time,
       time_minutes: time_passed_minutes,
-      location_changed,
+      location_changed: location_changed || wild_zone_changed,
       new_location_id,
       current_location_name: currentLocationName,
       current_state_name: currentStateName,
+      current_wild_zone: session.current_wild_zone || null,
     }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
+
 
   } catch (err) {
     console.error(`[${requestId}] ❌ ERROR:`, err);

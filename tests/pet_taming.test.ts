@@ -142,6 +142,7 @@ describe("Интеллектуальная система приручения �
         })),
       };
 
+      const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.7);
       const result = await evaluatePetTamingAttempt({
         supabase: mockSupabase,
         acting_player: mockPlayer,
@@ -149,6 +150,7 @@ describe("Интеллектуальная система приручения �
         action_text: "Глажу волка за ухом и даю лакомый кусок дичи",
         offered_item_name: "Лакомый кусок дичи",
       });
+      randomSpy.mockRestore();
 
       expect(result).not.toBeNull();
       expect(result?.new_score).toBeGreaterThanOrEqual(50);
@@ -157,6 +159,7 @@ describe("Интеллектуальная система приручения �
       expect(result?.status_tags).toContain("спутник");
       expect(result?.status_tags).toContain("в_отряде");
     });
+
 
     it("дает огромный бонус к приручению при исцелении раненого зверя", async () => {
       const woundedBeast = {

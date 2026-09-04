@@ -145,7 +145,7 @@ export async function getSession(id) {
     .single();
   if (error) throw error;
   if (data) {
-    data.current_location_name = null;
+    data.current_location_name = data.current_wild_zone || null;
     data.current_state_name = null;
     if (data.current_location_id) {
       try {
@@ -155,7 +155,9 @@ export async function getSession(id) {
           .eq('id', data.current_location_id)
           .maybeSingle();
         if (locData) {
-          data.current_location_name = locData.name || null;
+          if (!data.current_wild_zone) {
+            data.current_location_name = locData.name || null;
+          }
           const stateObj = Array.isArray(locData.states) ? locData.states[0] : locData.states;
           data.current_state_name = stateObj?.name || null;
         }
@@ -164,6 +166,7 @@ export async function getSession(id) {
       }
     }
   }
+
   return data;
 }
 

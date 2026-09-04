@@ -349,7 +349,12 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         }
         // Успех
         if (ar.dice_roll) {
-          knowledge.push(`Бросок ${ar.dice_roll.roll}+${ar.dice_roll.modifier} vs DC ${ar.dice_roll.dc} → ${ar.dice_roll.success ? "успех" : "провал"}.`);
+          const rollVal = (ar.dice_roll as any).d20 ?? (ar.dice_roll as any).roll ?? (ar.dice_roll as any).total ?? 10;
+          const modVal = ar.dice_roll.modifier ?? 0;
+          const dcVal = (ar.dice_roll as any).target_dc ?? (ar.dice_roll as any).dc ?? 12;
+          const modStr = modVal >= 0 ? `+${modVal}` : `${modVal}`;
+          const isSuccess = ar.success;
+          knowledge.push(`Бросок d20 (${rollVal}${modStr} = ${rollVal + modVal}) vs DC ${dcVal} → ${isSuccess ? "успех" : "провал"}.`);
         }
         if (ar.damage_dealt !== undefined && ar.damage_dealt > 0) {
           knowledge.push(`Нанесено ${ar.damage_dealt} урона.`);
@@ -360,8 +365,11 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         if (ar.action_type === "harvest_ambient" && added.length > 0) {
           knowledge.push(`Вы добыли: ${added.join(", ")}.`);
         }
+        if (ar.action_type === "search" && added.length > 0) {
+          knowledge.push(`Вы нашли: ${added.join(", ")}.`);
+        }
         // Действия без броска и урона (свободное перемещение, разговор, осмотр)
-        if (!ar.dice_roll && (ar.damage_dealt === undefined || ar.damage_dealt === 0) && ar.action_type !== "craft_recipe" && ar.action_type !== "harvest_ambient") {
+        if (!ar.dice_roll && (ar.damage_dealt === undefined || ar.damage_dealt === 0) && ar.action_type !== "craft_recipe" && ar.action_type !== "harvest_ambient" && ar.action_type !== "search") {
           if (ar.details) {
             knowledge.push(ar.details);
           }

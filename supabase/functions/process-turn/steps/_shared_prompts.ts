@@ -72,17 +72,20 @@ export function buildGpsPrompt(params: {
   currentMinute: number;
   currentLocation: string | null;
   currentState: string | null;
+  currentWildZone?: string | null;
   wantsLocationChange: boolean;
   locationChangeDescription: string;
   availableLocations: { id?: string; name: string; type?: string; state_name?: string }[];
 }): string {
   const timeStr = `${params.currentDay}.${params.currentMonth}.${params.currentYear} ${params.currentHour}:${params.currentMinute.toString().padStart(2, '0')}`;
-  const locationStr = params.currentLocation
-    ? `${params.currentLocation}` + (params.currentState ? `, ${params.currentState}` : '')
-    : 'неизвестно';
+  const locationStr = params.currentWildZone
+    ? `Дикая зона: ${params.currentWildZone}`
+    : params.currentLocation
+      ? `${params.currentLocation}` + (params.currentState ? `, ${params.currentState}` : '')
+      : 'неизвестно';
 
   const locationsList = params.availableLocations?.length
-    ? params.availableLocations.map(l => `- ${l.name} (${l.type || ''}, ${l.state_name || ''})`).join('\n')
+    ? params.availableLocations.map(l => `- [ID:${l.id || 'null'}] ${l.name} (${l.type || ''}, ${l.state_name || ''})`).join('\n')
     : 'локации не найдены';
 
   return `Ты — система GPS в текстовой RPG. Определи сколько времени занимает действие и как изменится локация.
@@ -96,8 +99,7 @@ export function buildGpsPrompt(params: {
 
 ${params.wantsLocationChange ? `Игрок хочет переместиться: ${params.locationChangeDescription}` : 'Игрок не меняет локацию'}
 
-${params.wantsLocationChange ? `Доступные локации:
-${locationsList}` : ''}
+${params.wantsLocationChange ? `Именованные локации мира (города, деревни, поселения):\n${locationsList}` : ''}
 
 Верни ТОЛЬКО валидный JSON без markdown:
 
@@ -105,6 +107,7 @@ ${locationsList}` : ''}
   "time_minutes": 30,
   "new_location_id": null,
   "new_location_name": null,
+  "is_wild_zone": false,
   "location_changed": false,
   "travel_description": ""
 }
@@ -115,11 +118,13 @@ ${locationsList}` : ''}
 - Бой: 5-30 минут
 - Отдых короткий: 15-30 минут
 - Отдых долгий (сон): 6-10 часов (360-600 минут)
-- Перемещение по городу: 10-30 минут
+- Перемещение по локации: 10-30 минут
 - Перемещение между локациями: 1-12 часов
 
 ПРАВИЛА ЛОКАЦИИ:
-- Если игрок не меняет локацию: location_changed = false, new_location_id = null
-- Если игрок меняет локацию: location_changed = true
+- Если игрок остаётся там же: location_changed = false
+- Если игрок переходит в именованную локацию из списка: location_changed = true, new_location_id = ID из списка, new_location_name = название, is_wild_zone = false
+- Если игрок идёт в природное место (лес, поле, пещера, горы, берег реки, руины вне города): location_changed = true, new_location_id = null, new_location_name = краткое название места ("Лес у Ривервуда", "Горная тропа", "Прибрежные скалы"), is_wild_zone = true
+- Если игрок возвращается в ближайший город/деревню из дикой зоны: location_changed = true, выбери ближайшую именованную локацию из списка
 - travel_description: краткое описание перемещения`;
 }

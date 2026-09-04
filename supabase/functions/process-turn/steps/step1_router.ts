@@ -292,6 +292,9 @@ export async function parsePlayerIntent(
     try {
       console.log(`[step1_router] Attempt ${attempt + 1}/${retries}, model: ${resolvedModel}`);
 
+      const modelList = [resolvedModel, "google/gemini-2.0-flash-001", "meta-llama/llama-3.3-70b-instruct"];
+      const currentModel = modelList[attempt % modelList.length] || resolvedModel;
+
       const response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
@@ -299,7 +302,7 @@ export async function parsePlayerIntent(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: resolvedModel,
+          model: currentModel,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage },
@@ -318,11 +321,11 @@ export async function parsePlayerIntent(
       const data = await response.json();
       const rawContent = data.choices?.[0]?.message?.content;
 
-      if (!rawContent) {
+      if (!rawContent || rawContent.trim() === "") {
         throw new Error("AI Router: пустой ответ от LLM");
       }
 
-      console.log(`[step1_router] Raw LLM response (${rawContent.length} chars):`, rawContent.slice(0, 200));
+      console.log(`[step1_router] Raw LLM response (${rawContent.length} chars) using ${currentModel}:`, rawContent.slice(0, 200));
 
       // Парсинг JSON
       const parsed = parseAIJson(rawContent);
@@ -374,10 +377,98 @@ export async function parsePlayerIntent(
 
       if (attempt < retries - 1) {
         // Экспоненциальная задержка
-        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
       }
     }
   }
 
   throw new Error(`AI Router: не удалось получить валидный ответ после ${retries} попыток. Последняя ошибка: ${lastError?.message}`);
 }
+
+/**
+ * Эвристический парсер действий на случай сбоя API OpenRouter
+ */
+export function buildRouterHeuristicFallback(input: RouterInputContext): RouterOutputPayload {
+
+  const rawText = (input?.player_action_text || (input as any)?.action_text || "").trim();
+  const lower = rawText.toLowerCase();
+
+  const actions: RouterAction[] = [];
+  let skillHint: string | null = null;
+  let timeEstimate = 15;
+
+  if (lower.includes("палк") || lower.includes("ветк")) {
+    actions.push({
+      action_type: "harvest_ambient",
+      target_entity_id: null,
+      target_item_name: "палки",
+      used_item_id: null,
+      consumed_materials: null,
+      stat_to_check: "survival",
+      ai_custom_dc: 10,
+      improper_tool_usage: null,
+    });
+    skillHint = "gathering";
+  } else if (lower.includes("камн") || lower.includes("руда") || lower.includes("кремень")) {
+    actions.push({
+      action_type: "harvest_ambient",
+      target_entity_id: null,
+      target_item_name: "камни",
+      used_item_id: null,
+      consumed_materials: null,
+      stat_to_check: "survival",
+      ai_custom_dc: 10,
+      improper_tool_usage: null,
+    });
+    skillHint = "gathering";
+  } else if (lower.includes("трав") || lower.includes("растен") || lower.includes("ягод") || lower.includes("съедобн") || lower.includes("гриб") || lower.includes("пищ") || lower.includes("еду")) {
+    actions.push({
+      action_type: "harvest_ambient",
+      target_entity_id: null,
+      target_item_name: "съедобные растения",
+      used_item_id: null,
+      consumed_materials: null,
+      stat_to_check: "survival",
+      ai_custom_dc: 12,
+      improper_tool_usage: null,
+    });
+    skillHint = "gathering";
+  } else if (lower.includes("кружк") || lower.includes("чашк") || lower.includes("посуд")) {
+    actions.push({
+      action_type: "search",
+      target_entity_id: null,
+      target_item_name: "кружка",
+      used_item_id: null,
+      consumed_materials: null,
+      stat_to_check: "investigation",
+      ai_custom_dc: 10,
+      improper_tool_usage: null,
+    });
+  } else if (lower.includes("ищу") || lower.includes("обыск") || lower.includes("найти") || lower.includes("поискать")) {
+    actions.push({
+      action_type: "search",
+      target_entity_id: null,
+      target_item_name: "находка",
+      used_item_id: null,
+      consumed_materials: null,
+      stat_to_check: "investigation",
+      ai_custom_dc: 12,
+      improper_tool_usage: null,
+    });
+  }
+
+  const isForest = lower.includes("лес") || lower.includes("рощ") || lower.includes("дерев");
+  const sounds = isForest ? ["шелест листвы", "пение лесных птиц"] : ["шаги", "шум ветра"];
+  const visuals = isForest ? ["густые ветви деревьев", "игра солнечных лучей"] : ["окружающий пейзаж", "свет"];
+
+  return {
+    status: "success",
+    clarification_msg: null,
+    skill_hint: skillHint as any,
+    actions,
+    time_estimate_minutes: timeEstimate,
+    atmosphere: { sounds, visuals },
+    encounter_intent: { type: "none", target_name: null },
+  };
+}
+

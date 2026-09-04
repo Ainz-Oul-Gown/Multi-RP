@@ -45,6 +45,8 @@ export async function renderGame(container, sessionId, user) {
   let unsubMessages = null;
   let unsubPlayers = null;
   let unsubTurnQueue = null;
+  let realtimeSubscribed = false;
+  const instanceId = Date.now().toString(36); // unique per render call
 
   // ============================================
   // ТУМАН ВОЙНЫ: фильтр видимости сообщений
@@ -161,6 +163,9 @@ export async function renderGame(container, sessionId, user) {
   }
 
   function subscribeRealtime() {
+    if (realtimeSubscribed) return; // prevent double-subscribe
+    realtimeSubscribed = true;
+
     unsubMessages = subscribeToSessionMessages(sessionId, (payload) => {
       if (payload.eventType === 'INSERT') {
         const msg = payload.new;
@@ -198,9 +203,9 @@ export async function renderGame(container, sessionId, user) {
       }
     });
 
-    // Подписка на очередь ходов
+    // Подписка на очередь ходов — уникальное имя канала во избежание конфликтов
     unsubTurnQueue = supabase
-      .channel(`realtime:turn_queue:${sessionId}`)
+      .channel(`turn_queue:${sessionId}:${instanceId}`)
       .on(
         'postgres_changes',
         {
@@ -302,7 +307,10 @@ export async function renderGame(container, sessionId, user) {
     const hour = session?.game_hour ?? session?.game_time?.hour ?? 10;
     const minute = session?.game_minute ?? session?.game_time?.minute ?? 0;
     const timeStr = formatGameCalendarDate(day, month, year, hour, minute);
-    const locationStr = session?.current_location_name || '';
+    const locationStr = session?.current_wild_zone
+      ? `🌲 ${session.current_wild_zone}`
+      : (session?.current_location_name || '');
+
 
     container.innerHTML = `
       <div class="game-page">
@@ -1064,19 +1072,20 @@ export async function renderGame(container, sessionId, user) {
     }
   }
 
-  function togglePanel(panel) {
+  async function togglePanel(panel) {
     activePanel = activePanel === panel ? null : panel;
     if (activePanel === 'inventory') {
-      refreshInventory();
+      await refreshInventory();
     }
     if (activePanel === 'npc') {
-      refreshNpcPanel();
+      await refreshNpcPanel();
     }
     if (activePanel === 'profile') {
-      refreshProfile();
+      await refreshProfile();
     }
     render();
   }
+
 
   async function handleSend() {
     if (isSubmitting || !currentPlayer || !isMyTurn) return;
@@ -1142,14 +1151,16 @@ export async function renderGame(container, sessionId, user) {
       }
 
       // Обновление локации при смене или генерации начальной локации
-      if (result.current_location_name) {
+      if (result.current_location_name || result.current_wild_zone !== undefined) {
         session = {
           ...session,
           current_location_name: result.current_location_name,
           current_state_name: result.current_state_name || session?.current_state_name,
           current_location_id: result.new_location_id || session?.current_location_id,
+          current_wild_zone: result.current_wild_zone !== undefined ? result.current_wild_zone : session?.current_wild_zone,
         };
       }
+
 
       // Обновление локации при смене
       if (result.location_changed) {
@@ -1251,7 +1262,8 @@ export async function renderGame(container, sessionId, user) {
 
     // Update location and time in header without full re-render
     const locEl = document.querySelector('.game-header-location');
-    const locStr = session?.current_location_name || '';
+    const locStr = session?.current_wild_zone ? `🌲 ${session.current_wild_zone}` : (session?.current_location_name || '');
+
     if (locStr) {
       if (locEl) {
         locEl.textContent = `📍 ${locStr}`;

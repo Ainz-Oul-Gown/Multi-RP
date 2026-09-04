@@ -454,17 +454,67 @@ serve(async (req) => {
 
     // turn_queue: текущий ход completed → следующий active
     try {
-      await supabase.from("turn_queue").update({
-        status: "completed", resolved_at: new Date().toISOString(),
-        parsed_action: routerResult, roll_result: engineResult,
-      }).eq("session_id", session_id).eq("player_id", player.id).in("status", ["active", "waiting"]);
+      const { data: existingTurns } = await supabase.from("turn_queue")
+        .select("id, player_id, status")
+        .eq("session_id", session_id)
+        .order("created_at", { ascending: true });
 
-      const { data: nextTurn } = await supabase.from("turn_queue")
-        .select("id, player_id")
-        .eq("session_id", session_id).eq("status", "waiting")
-        .order("created_at", { ascending: true }).limit(1).maybeSingle();
-      if (nextTurn) {
-        await supabase.from("turn_queue").update({ status: "active" }).eq("id", nextTurn.id);
+      if (!existingTurns || existingTurns.length === 0) {
+        // Очереди ещё нет — инициализируем для всех игроков сессии
+        if (allPlayers && allPlayers.length > 1) {
+          const nextPlayer = allPlayers.find((p: any) => p.id !== player.id) || allPlayers[0];
+          for (const p of allPlayers) {
+            const isActor = p.id === player.id;
+            const isNext = p.id === nextPlayer.id && !isActor;
+            await supabase.from("turn_queue").insert({
+              session_id,
+              player_id: p.id,
+              status: isActor ? "completed" : (isNext ? "active" : "waiting"),
+              resolved_at: isActor ? new Date().toISOString() : null,
+              parsed_action: isActor ? routerResult : null,
+              roll_result: isActor ? engineResult : null,
+            });
+          }
+        }
+      } else {
+        // Добавляем игроков сессии, которых ещё нет в turn_queue
+        if (allPlayers && allPlayers.length > 1) {
+          const existingPids = new Set(existingTurns.map((t: any) => t.player_id));
+          for (const p of allPlayers) {
+            if (!existingPids.has(p.id)) {
+              await supabase.from("turn_queue").insert({
+                session_id,
+                player_id: p.id,
+                status: "waiting",
+              });
+            }
+          }
+        }
+
+        // Завершаем текущий ход игрока
+        await supabase.from("turn_queue").update({
+          status: "completed", resolved_at: new Date().toISOString(),
+          parsed_action: routerResult, roll_result: engineResult,
+        }).eq("session_id", session_id).eq("player_id", player.id);
+
+        // Ищем следующий ход со статусом 'waiting'
+        const { data: nextTurn } = await supabase.from("turn_queue")
+          .select("id, player_id")
+          .eq("session_id", session_id).eq("status", "waiting")
+          .order("created_at", { ascending: true }).limit(1).maybeSingle();
+
+        if (nextTurn) {
+          await supabase.from("turn_queue").update({ status: "active" }).eq("id", nextTurn.id);
+        } else {
+          // Раунд завершен! Все игроки сделали ход.
+          // Перезапускаем очередь: первый игрок становится 'active', остальные 'waiting'
+          const firstTurn = existingTurns[0];
+          const otherTurnIds = existingTurns.slice(1).map((t: any) => t.id);
+          if (otherTurnIds.length > 0) {
+            await supabase.from("turn_queue").update({ status: "waiting", resolved_at: null }).in("id", otherTurnIds);
+          }
+          await supabase.from("turn_queue").update({ status: "active", resolved_at: null }).eq("id", firstTurn.id);
+        }
       }
     } catch (queueErr) { console.warn(`[${requestId}] [SAVE] turn_queue update failed:`, queueErr); }
 

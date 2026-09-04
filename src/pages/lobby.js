@@ -1557,8 +1557,13 @@ export function renderLobby(container, user) {
 
       // Extract session ID from URL or plain text
       let sessionId = input;
-      const urlMatch = input.match(/session\/([a-f0-9-]+)/i);
-      if (urlMatch) sessionId = urlMatch[1];
+      const uuidMatch = input.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      if (uuidMatch) {
+        sessionId = uuidMatch[0];
+      } else {
+        const urlMatch = input.match(/session\/([a-f0-9-]+)/i);
+        if (urlMatch) sessionId = urlMatch[1];
+      }
 
       document.getElementById('joinSessionModal').classList.remove('open');
       router.navigate(`/session/${sessionId}`);

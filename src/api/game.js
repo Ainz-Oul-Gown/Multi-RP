@@ -294,9 +294,126 @@ export async function getCurrentTurn(sessionId) {
     .eq('session_id', sessionId)
     .eq('status', 'active')
     .order('created_at')
-    .single();
+    .limit(1)
+    .maybeSingle();
   if (error && error.code !== 'PGRST116') throw error;
   return data;
+}
+
+export async function getTurnQueue(sessionId) {
+  const { data, error } = await supabase
+    .from('turn_queue')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function initTurnQueue(sessionId, players = []) {
+  if (!sessionId || !players.length) return null;
+
+  // 1. Получаем существующую очередь для сессии
+  const { data: existing, error: fetchErr } = await supabase
+    .from('turn_queue')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+
+  if (fetchErr) {
+    console.warn('Failed to fetch turn_queue:', fetchErr);
+    return null;
+  }
+
+  // 2. Если очереди ещё нет — создаём для каждого игрока
+  if (!existing || existing.length === 0) {
+    const toInsert = players.map((p, idx) => ({
+      session_id: sessionId,
+      player_id: p.id,
+      status: idx === 0 ? 'active' : 'waiting',
+    }));
+    const { data: created, error: insertErr } = await supabase
+      .from('turn_queue')
+      .insert(toInsert)
+      .select();
+    if (insertErr) {
+      console.warn('Failed to insert turn_queue:', insertErr);
+      return null;
+    }
+    return created?.find((t) => t.status === 'active') || created?.[0] || null;
+  }
+
+  // 3. Проверяем, есть ли игроки, которых ещё нет в очереди (зашли позже)
+  const existingPlayerIds = new Set(existing.map((t) => t.player_id));
+  const missingPlayers = players.filter((p) => !existingPlayerIds.has(p.id));
+  if (missingPlayers.length > 0) {
+    const toInsert = missingPlayers.map((p) => ({
+      session_id: sessionId,
+      player_id: p.id,
+      status: 'waiting',
+    }));
+    await supabase.from('turn_queue').insert(toInsert);
+  }
+
+  // 4. Проверяем активный ход
+  const activeTurn = existing.find((t) => t.status === 'active');
+  if (activeTurn) {
+    return activeTurn;
+  }
+
+  // Если активного хода нет, но есть ожидающие — активируем первый waiting
+  const waitingTurn = existing.find((t) => t.status === 'waiting');
+  if (waitingTurn) {
+    const { data: updated } = await supabase
+      .from('turn_queue')
+      .update({ status: 'active' })
+      .eq('id', waitingTurn.id)
+      .select()
+      .maybeSingle();
+    return updated || waitingTurn;
+  }
+
+  // Если все ходы завершены (completed) — перезапускаем раунд
+  const firstTurn = existing[0];
+  const otherIds = existing.slice(1).map((t) => t.id);
+  if (otherIds.length > 0) {
+    await supabase.from('turn_queue').update({ status: 'waiting', resolved_at: null }).in('id', otherIds);
+  }
+  const { data: updated } = await supabase
+    .from('turn_queue')
+    .update({ status: 'active', resolved_at: null })
+    .eq('id', firstTurn.id)
+    .select()
+    .maybeSingle();
+  return updated || firstTurn;
+}
+
+export async function passTurn(sessionId, targetPlayerId) {
+  if (!sessionId || !targetPlayerId) return;
+  // Переводим все активные ходы в waiting
+  await supabase
+    .from('turn_queue')
+    .update({ status: 'waiting' })
+    .eq('session_id', sessionId)
+    .eq('status', 'active');
+
+  // Активируем ход целевого игрока
+  const { data: updated } = await supabase
+    .from('turn_queue')
+    .update({ status: 'active', resolved_at: null })
+    .eq('session_id', sessionId)
+    .eq('player_id', targetPlayerId)
+    .select()
+    .maybeSingle();
+
+  // Если у целевого игрока ещё не было записи в turn_queue, создаём её
+  if (!updated) {
+    await supabase.from('turn_queue').insert({
+      session_id: sessionId,
+      player_id: targetPlayerId,
+      status: 'active',
+    });
+  }
 }
 
 export async function submitAction(sessionId, playerId, actionText) {

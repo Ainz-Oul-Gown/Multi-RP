@@ -3,7 +3,8 @@ import { supabase, subscribeToSessionMessages, subscribeToSessionPlayers, invoke
 import {
   getSession, getSessionPlayers, getPlayer, getPlayerInventory,
   getSessionMessages, submitAction, updatePlayer, addInventoryItem,
-  removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn, createPlayer,
+  removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn,
+  getTurnQueue, initTurnQueue, passTurn, createPlayer,
   getCharacterCards
 } from '../api/game.js';
 import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows } from '../config.js';
@@ -32,6 +33,7 @@ export async function renderGame(container, sessionId, user) {
   let activePanel = null; // 'profile' | 'inventory' | 'settings' | null
   let isSubmitting = false;
   let isMyTurn = true; // По умолчанию разрешаем ввод
+  let activePlayerName = '';
   let unsubMessages = null;
   let unsubPlayers = null;
   let unsubTurnQueue = null;
@@ -76,12 +78,23 @@ export async function renderGame(container, sessionId, user) {
   async function load() {
     try {
       session = await getSession(sessionId);
+      if (!session) {
+        toast.error('Сессия не найдена');
+        router.navigate('/');
+        return;
+      }
       allPlayers = await getSessionPlayers(sessionId);
-      currentPlayer = allPlayers.find((p) => p.user_id === user.id) || allPlayers[0];
+      // Определяем текущего игрока для данного пользователя
+      currentPlayer = user?.id ? allPlayers.find((p) => p.user_id === user.id) : null;
+      if (!currentPlayer && allPlayers.length === 1 && !allPlayers[0].user_id) {
+        currentPlayer = allPlayers[0];
+      }
       messages = await getSessionMessages(sessionId);
 
-      // Проверяем очередь ходов при загрузке
-      await checkTurnQueue();
+      // Если персонаж уже есть, проверяем очередь ходов
+      if (currentPlayer) {
+        await checkTurnQueue();
+      }
     } catch (err) {
       toast.error('Ошибка загрузки: ' + err.message);
       router.navigate('/');
@@ -106,20 +119,32 @@ export async function renderGame(container, sessionId, user) {
     // Если в сессии 1 игрок — всегда его ход
     if (allPlayers.length <= 1) {
       isMyTurn = true;
+      activePlayerName = currentPlayer.name || 'Герой';
+      updateInputState();
       return;
     }
 
     try {
-      const currentTurn = await getCurrentTurn(sessionId);
+      let currentTurn = await getCurrentTurn(sessionId);
+      if (!currentTurn) {
+        // Очередь пуста или нет активного хода — самоисцеление/инициализация
+        currentTurn = await initTurnQueue(sessionId, allPlayers);
+      }
       if (currentTurn) {
         isMyTurn = currentTurn.player_id === currentPlayer.id;
+        const activeP = allPlayers.find((p) => p.id === currentTurn.player_id);
+        activePlayerName = activeP ? (activeP.name || 'Герой') : 'Напарник';
       } else {
-        // Нет активного хода — разрешаем ввод (первый ход)
+        // Нет активного хода — разрешаем ввод
         isMyTurn = true;
+        activePlayerName = currentPlayer.name || 'Герой';
       }
-    } catch {
+    } catch (err) {
+      console.warn('checkTurnQueue fallback:', err);
       isMyTurn = true;
+      activePlayerName = currentPlayer.name || 'Герой';
     }
+    updateInputState();
   }
 
   function subscribeRealtime() {
@@ -134,14 +159,29 @@ export async function renderGame(container, sessionId, user) {
       }
     });
 
-    unsubPlayers = subscribeToSessionPlayers(sessionId, (payload) => {
-      if (payload.eventType === 'UPDATE') {
+    unsubPlayers = subscribeToSessionPlayers(sessionId, async (payload) => {
+      if (payload.eventType === 'INSERT') {
+        const newPlayer = payload.new;
+        const exists = allPlayers.some((p) => p.id === newPlayer.id);
+        if (!exists) {
+          allPlayers.push(newPlayer);
+          toast.info(`Игрок «${newPlayer.name || 'Герой'}» присоединился к сессии!`);
+          const countEl = document.getElementById('participantsCount');
+          if (countEl) countEl.textContent = `Участники (${allPlayers.length})`;
+          const listEl = document.getElementById('sessionPlayersList');
+          if (listEl) listEl.innerHTML = renderSessionParticipants(allPlayers);
+          await checkTurnQueue();
+        }
+      } else if (payload.eventType === 'UPDATE') {
         const idx = allPlayers.findIndex((p) => p.id === payload.new.id);
         if (idx >= 0) allPlayers[idx] = { ...allPlayers[idx], ...payload.new };
         if (currentPlayer && currentPlayer.id === payload.new.id) {
           currentPlayer = { ...currentPlayer, ...payload.new };
           updatePlayerUI();
         }
+      } else if (payload.eventType === 'DELETE') {
+        allPlayers = allPlayers.filter((p) => p.id !== payload.old.id);
+        await checkTurnQueue();
       }
     });
 
@@ -171,6 +211,8 @@ export async function renderGame(container, sessionId, user) {
       if (turn.status === 'active') {
         const wasMyTurn = isMyTurn;
         isMyTurn = turn.player_id === currentPlayer.id;
+        const activeP = allPlayers.find((p) => p.id === turn.player_id);
+        activePlayerName = activeP ? (activeP.name || 'Герой') : 'Напарник';
 
         // Снимаем блокировку, когда наступает наш ход
         if (!wasMyTurn && isMyTurn) {
@@ -181,21 +223,40 @@ export async function renderGame(container, sessionId, user) {
       }
     }
 
-    // Если все ходы завершены — разрешаем ввод
     if (payload.eventType === 'DELETE') {
-      isMyTurn = true;
-      updateInputState();
+      checkTurnQueue();
     }
   }
 
   function updateInputState() {
     const input = document.getElementById('actionInput');
     const sendBtn = document.getElementById('sendBtn');
+    const turnIndicator = document.getElementById('turnIndicator');
+    const takeTurnBtn = document.getElementById('takeTurnBtn');
+
+    const hasMultiplePlayers = allPlayers.length > 1;
+
+    if (turnIndicator) {
+      if (!hasMultiplePlayers) {
+        turnIndicator.innerHTML = '';
+      } else if (isMyTurn) {
+        turnIndicator.innerHTML = '<span class="badge badge-success" style="display: inline-flex; align-items: center; gap: 4px;">🟢 Ваш ход</span>';
+      } else {
+        turnIndicator.innerHTML = `<span class="badge badge-warning" style="display: inline-flex; align-items: center; gap: 4px;">⏳ Ход: ${escapeHtml(activePlayerName || 'Напарник')}</span>`;
+      }
+    }
+
+    if (takeTurnBtn) {
+      takeTurnBtn.style.display = (hasMultiplePlayers && !isMyTurn) ? 'inline-flex' : 'none';
+    }
+
     if (!input || !sendBtn) return;
 
     if (!isMyTurn || isSubmitting) {
       input.disabled = true;
-      input.placeholder = 'Ожидание действий напарника...';
+      input.placeholder = isSubmitting
+        ? 'Обработка действия...'
+        : `Ожидание действий напарника (${activePlayerName || 'другой игрок'})...`;
       sendBtn.disabled = true;
     } else {
       input.disabled = false;
@@ -262,11 +323,23 @@ export async function renderGame(container, sessionId, user) {
 
         <!-- Input Area -->
         <footer class="game-input-area">
+          <div class="game-turn-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; font-size: var(--fs-xs); min-height: 24px;">
+            <div id="turnIndicator" style="display: flex; align-items: center; gap: 0.5rem;">
+              ${allPlayers.length > 1
+                ? (isMyTurn
+                    ? '<span class="badge badge-success" style="display: inline-flex; align-items: center; gap: 4px;">🟢 Ваш ход</span>'
+                    : `<span class="badge badge-warning" style="display: inline-flex; align-items: center; gap: 4px;">⏳ Ход: ${escapeHtml(activePlayerName || 'Напарник')}</span>`)
+                : ''}
+            </div>
+            <button class="btn btn-ghost btn-xs" id="takeTurnBtn" style="display: ${allPlayers.length > 1 && !isMyTurn ? 'inline-flex' : 'none'}; font-size: var(--fs-xs); padding: 2px 8px;" title="Если напарник долго не отвечает, вы можете перехватить ход">
+              ⏭️ Взять ход
+            </button>
+          </div>
           <div class="game-input-wrapper">
             <textarea
               class="game-input"
               id="actionInput"
-              placeholder="${isMyTurn ? 'Опишите действие вашего героя...' : 'Ожидание действий напарника...'}"
+              placeholder="${isMyTurn ? 'Опишите действие вашего героя...' : `Ожидание действий напарника (${activePlayerName || 'другой игрок'})...`}"
               rows="1"
               ${isSubmitting || !isMyTurn ? 'disabled' : ''}
             ></textarea>
@@ -520,9 +593,38 @@ export async function renderGame(container, sessionId, user) {
     `;
   }
 
+  function renderSessionParticipants(players) {
+    return players.map((p) => {
+      const isCurrent = currentPlayer && p.id === currentPlayer.id;
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 0;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-success);"></span>
+            <span style="font-size: var(--fs-sm); font-weight: ${isCurrent ? '700' : '400'};">
+              ${escapeHtml(p?.name || 'Герой')}${isCurrent ? ' (Вы)' : ''}
+            </span>
+            <span class="text-muted" style="font-size: var(--fs-xs);">${escapeHtml(p?.race || '')}/${escapeHtml(p?.class || '')}</span>
+          </div>
+          <span style="font-size: var(--fs-xs); color: var(--accent-gold);">❤️ ${p?.hp || 0}/${p?.max_hp || 0}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
   function renderSessionSettings(session) {
     return `
       <div class="session-info">
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">Мультиплеер и приглашения</label>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+            <button class="btn btn-primary btn-sm" id="copyInviteBtnGame" style="width: 100%;">
+              🔗 Скопировать ссылку для напарника
+            </button>
+            <button class="btn btn-ghost btn-sm" id="copyIdBtnGame" style="width: 100%; border: 1px solid var(--border-color);">
+              📋 Скопировать ID сессии
+            </button>
+          </div>
+        </div>
         <div class="form-group" style="margin-bottom: 1rem;">
           <label class="form-label">Мир</label>
           <p>${session.worlds?.name || 'Не задан'}</p>
@@ -540,15 +642,9 @@ export async function renderGame(container, sessionId, user) {
           <p>${session.current_plot_stage ? `📖 Сюжет (${session.current_plot_stage})` : '🎭 Песочница'}</p>
         </div>
         <div class="form-group">
-          <label class="form-label">Участники (${allPlayers.length})</label>
-          <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.5rem;">
-            ${allPlayers.map((p) => `
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-success);"></span>
-                <span style="font-size: var(--fs-sm);">${escapeHtml(p?.name || 'Герой')}</span>
-                <span class="text-muted" style="font-size: var(--fs-xs);">${p?.race || ''}/${p?.class || ''}</span>
-              </div>
-            `).join('')}
+          <label class="form-label" id="participantsCount">Участники (${allPlayers.length})</label>
+          <div id="sessionPlayersList" style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.5rem;">
+            ${renderSessionParticipants(allPlayers)}
           </div>
         </div>
       </div>
@@ -569,6 +665,32 @@ export async function renderGame(container, sessionId, user) {
     document.getElementById('closeInventoryBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeSettingsBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('panelOverlay')?.addEventListener('click', () => togglePanel(null));
+
+    // Multi-player: take turn button
+    document.getElementById('takeTurnBtn')?.addEventListener('click', async () => {
+      try {
+        toast.info('Переключение хода...');
+        await passTurn(sessionId, currentPlayer.id);
+        isMyTurn = true;
+        activePlayerName = currentPlayer.name || 'Герой';
+        updateInputState();
+      } catch (err) {
+        toast.error('Не удалось переключить ход: ' + err.message);
+      }
+    });
+
+    // Multi-player: copy invite link & ID
+    document.getElementById('copyInviteBtnGame')?.addEventListener('click', () => {
+      const base = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+      const url = `${window.location.origin}${base}#/session/${sessionId}`;
+      navigator.clipboard.writeText(url);
+      toast.success('Инвайт-ссылка скопирована!');
+    });
+
+    document.getElementById('copyIdBtnGame')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(sessionId);
+      toast.success('ID сессии скопирован!');
+    });
 
     // Auto-resize textarea
     const input = document.getElementById('actionInput');
@@ -821,6 +943,8 @@ export async function renderGame(container, sessionId, user) {
 
               console.log('[character-card] player created:', currentPlayer.id);
               allPlayers.push(currentPlayer);
+              await initTurnQueue(sessionId, allPlayers);
+              await checkTurnQueue();
               toast.success(`Герой «${card.name}» выбран!`);
               render();
               subscribeRealtime();
@@ -933,6 +1057,8 @@ export async function renderGame(container, sessionId, user) {
 
         console.log('[create-character] player created:', currentPlayer.id);
         allPlayers.push(currentPlayer);
+        await initTurnQueue(sessionId, allPlayers);
+        await checkTurnQueue();
         toast.success('Персонаж создан!');
         render();
         subscribeRealtime();

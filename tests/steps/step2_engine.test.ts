@@ -406,34 +406,39 @@ describe("CraftHandler", () => {
   });
 
   it("провал крафта списывает 50% материалов", () => {
-    const ctx = makeContext({
-      router_output: makeRouterOutput([
-        {
-          action_type: "craft_recipe",
-          target_entity_id: null,
-          target_item_name: "Меч",
-          used_item_id: null,
-          consumed_materials: [
-            { id: "item-wood", quantity: 4 },
-          ],
-          stat_to_check: "dexterity",
-          ai_custom_dc: 100, // гарантированный провал
-          improper_tool_usage: null,
-          dynamic_blueprint: { item_name: "Меч" },
-        },
-      ]),
-    });
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.0001);
+    try {
+      const ctx = makeContext({
+        router_output: makeRouterOutput([
+          {
+            action_type: "craft_recipe",
+            target_entity_id: null,
+            target_item_name: "Меч",
+            used_item_id: null,
+            consumed_materials: [
+              { id: "item-wood", quantity: 4 },
+            ],
+            stat_to_check: "dexterity",
+            ai_custom_dc: 100, // гарантированный провал
+            improper_tool_usage: null,
+            dynamic_blueprint: { item_name: "Меч" },
+          },
+        ]),
+      });
 
-    const result = executeEngine(ctx);
-    expect(result.action_results[0].success).toBe(false);
-    
-    const deleteMutation = result.mutations.find((m) => m.type === "DELETE_ITEM");
-    expect(deleteMutation).toBeDefined();
-    // 50% от 4 = 2
-    expect((deleteMutation as any).quantity).toBe(2);
-    
-    // Нет INSERT_ITEM при провале
-    expect(result.mutations.find((m) => m.type === "INSERT_ITEM")).toBeUndefined();
+      const result = executeEngine(ctx);
+      expect(result.action_results[0].success).toBe(false);
+      
+      const deleteMutation = result.mutations.find((m) => m.type === "DELETE_ITEM");
+      expect(deleteMutation).toBeDefined();
+      // 50% от 4 = 2
+      expect((deleteMutation as any).quantity).toBe(2);
+      
+      // Нет INSERT_ITEM при провале
+      expect(result.mutations.find((m) => m.type === "INSERT_ITEM")).toBeUndefined();
+    } finally {
+      randomSpy.mockRestore();
+    }
   });
 });
 

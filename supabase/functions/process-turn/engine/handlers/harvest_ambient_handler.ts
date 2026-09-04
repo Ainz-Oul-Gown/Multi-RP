@@ -6,12 +6,102 @@ import { ActionHandlerResult, EngineInputContext, EngineMutation } from "../type
 import { RouterAction } from "../../types.ts";
 import { rollD100 } from "../dice.ts";
 
+export function resolveHarvestedItem(
+  rawTargetName?: string | null,
+  actionText?: string
+): { name: string; type: string } {
+  const text = ((actionText || "") + " " + (rawTargetName || "")).toLowerCase();
+  const isGeneric =
+    !rawTargetName ||
+    /^(ресурс|предмет|resource|item|находка|добыча|материал)$/i.test(
+      rawTargetName.trim()
+    );
+
+  if (!isGeneric && rawTargetName) {
+    const lower = rawTargetName.toLowerCase();
+    if (/гриб|ягод|фрукт|яблок|груш|плод|хлеб|сыр|мяс|дичь|рыб/i.test(lower)) {
+      return {
+        name: rawTargetName,
+        type: /мяс|дичь|рыб/i.test(lower) ? "cooking_ingredient" : "food",
+      };
+    }
+    if (/трав|растен|корен|цвет|мох|листь|алхим/i.test(lower)) {
+      return { name: rawTargetName, type: "herb" };
+    }
+    if (/ветк|палк|древ|бревн|суч|доск/i.test(lower)) {
+      return { name: rawTargetName, type: "wood" };
+    }
+    if (/руд|жил|метал/i.test(lower)) {
+      return { name: rawTargetName, type: "ore" };
+    }
+    if (/кристал|самоцвет|алмаз|рубин|изумруд|аметист/i.test(lower)) {
+      return { name: rawTargetName, type: "gem" };
+    }
+    if (/кам|кремен|булыж|гранит|обсидиан/i.test(lower)) {
+      return { name: rawTargetName, type: "stone" };
+    }
+    if (/шкур|кож|мех/i.test(lower)) {
+      return { name: rawTargetName, type: "leather" };
+    }
+    if (/микросхем|плат|чип|провод|кабел/i.test(lower)) {
+      return { name: rawTargetName, type: "electronics" };
+    }
+    if (/лом|хлам|свалк|утиль|детал|запчаст/i.test(lower)) {
+      return { name: rawTargetName, type: "scrap" };
+    }
+    if (/стим|аптечк|медпак|бинт|вакцин|лекарств/i.test(lower)) {
+      return { name: rawTargetName, type: "stim" };
+    }
+    if (/патрон|пуль|снаряд|болт|стрел/i.test(lower)) {
+      return { name: rawTargetName, type: "ammo" };
+    }
+    if (/батаре|энергоячейк|аккумул/i.test(lower)) {
+      return { name: rawTargetName, type: "energy_cell" };
+    }
+    if (/шард|флешк|софт|диск|чип данных/i.test(lower)) {
+      return { name: rawTargetName, type: "datashard" };
+    }
+    return { name: rawTargetName, type: "material" };
+  }
+
+  // Извлечение из текста действия игрока (фэнтези и природа)
+  if (/гриб/i.test(text)) return { name: "Лесные грибы", type: "food" };
+  if (/черник/i.test(text)) return { name: "Лесная черника", type: "food" };
+  if (/земляник|клубник/i.test(text)) return { name: "Дикая земляника", type: "food" };
+  if (/малин/i.test(text)) return { name: "Лесная малина", type: "food" };
+  if (/брусник|клюкв/i.test(text)) return { name: "Северные ягоды", type: "food" };
+  if (/ягод/i.test(text)) return { name: "Спелые лесные ягоды", type: "food" };
+  if (/фрукт|яблок|груш|плод/i.test(text)) return { name: "Дикие плоды", type: "food" };
+  if (/трав|растен|корен|цвет|мох/i.test(text)) return { name: "Дикие целебные травы", type: "herb" };
+  if (/палк|ветк|суч|древ/i.test(text)) return { name: "Сухие ветки и сучья", type: "wood" };
+  if (/кам|кремен|булыж/i.test(text)) return { name: "Полевые камни", type: "stone" };
+  if (/руд|жил|шахт/i.test(text)) return { name: "Железная руда", type: "ore" };
+  if (/кристал|самоцвет/i.test(text)) return { name: "Осколок мана-кристалла", type: "gem" };
+  if (/рыб|улов/i.test(text)) return { name: "Свежая рыба", type: "cooking_ingredient" };
+  if (/дичь|мяс|охот/i.test(text)) return { name: "Свежая дичь", type: "cooking_ingredient" };
+  if (/шкур|кож|мех/i.test(text)) return { name: "Шкура дикого зверя", type: "leather" };
+  if (/вод|родник|ручей/i.test(text)) return { name: "Чистая родниковая вода", type: "drink" };
+
+  // Киберпанк / Sci-Fi / Постапокалипсис (свалка, город, технологии)
+  if (/провод|кабел|микросхем|плат|чип/i.test(text)) return { name: "Медные провода и микросхемы", type: "electronics" };
+  if (/свалк|лом|хлам|утиль|детал|запчаст/i.test(text)) return { name: "Электронный лом и детали", type: "scrap" };
+  if (/батаре|энерг|аккумул/i.test(text)) return { name: "Энергоячейка", type: "energy_cell" };
+  if (/стим|аптечк|бинт|лекарств|мед/i.test(text)) return { name: "Полевой стимулятор", type: "stim" };
+  if (/патрон|пуль|снаряд/i.test(text)) return { name: "Коробка патронов", type: "ammo" };
+  if (/шард|данн|флешк|софт/i.test(text)) return { name: "Зашифрованный дата-шард", type: "datashard" };
+
+  return { name: "Лесные дары", type: "food" };
+}
+
 export class HarvestAmbientHandler extends BaseActionHandler {
   readonly action_type = "harvest_ambient";
 
   handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     const player = context.acting_player;
-    const targetItem = action.target_item_name || "ресурс";
+    const rawActionText = (action as any).raw_action_text || (context.router_output as any)?.raw_action_text || "";
+    const resolved = resolveHarvestedItem(action.target_item_name, rawActionText);
+    const targetItem = resolved.name;
+    const itemType = (action as any).item_type || resolved.type;
 
     // ============================================
     // Модификатор (survival = WIS) + бонус навыка собирательства/шахтёрства
@@ -23,6 +113,7 @@ export class HarvestAmbientHandler extends BaseActionHandler {
     const skillName = isMining && player.skills?.mining ? "Шахтёрское дело" : "Собирательство";
     const skillEffects = applicableSkill?.effects || {};
     const skillCheckBonus = Math.floor((applicableSkill?.level || 0) / 10);
+
     const findChanceBonusPct = skillEffects.find_chance_bonus_pct || skillEffects.ore_yield_bonus_pct || 0;
 
     // DC: из AI (обычно 10-15 для лёгкого сбора, 25-40 для сложного)
@@ -75,7 +166,7 @@ export class HarvestAmbientHandler extends BaseActionHandler {
 
     const newItem = {
       item_name: targetItem,
-      type: "material",
+      type: itemType,
       quantity,
       attributes: { harvested_at: context.session.id },
     };

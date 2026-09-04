@@ -101,6 +101,77 @@ function advanceTime(base: { year: number; month: number; day: number; hour: num
 }
 
 // ============================================
+// Парсинг намерения прокачки характеристик из текста чата
+// ============================================
+function parseStatAllocationIntent(text: string): { stat: string; points: number } | null {
+  if (!text) return null;
+  const clean = text.toLowerCase().trim();
+
+  const statMap: Record<string, string> = {
+    "сил": "STR", "str": "STR", "strength": "STR",
+    "ловк": "DEX", "dex": "DEX", "dexterity": "DEX",
+    "вынос": "CON", "con": "CON", "constitution": "CON", "тело": "CON",
+    "интел": "INT", "int": "INT", "intelligence": "INT", "ум": "INT",
+    "мудр": "WIS", "wis": "WIS", "wisdom": "WIS",
+    "хариз": "CHA", "cha": "CHA", "charisma": "CHA", "обаяни": "CHA"
+  };
+
+  // Шаблон 1: глагол + количество + характеристика
+  // "вкладываю 2 очка в силу", "качаю ловкость +1", "добавь 2 в выносливость", "повысь мудрость на 1"
+  const verbRegex = /(?:вкладываю|вкачиваю|качаю|повышаю|добавь|распредели|кинь|увеличь|подними|повысь|поставь)\s*(?:себе)?\s*(\+?\d+)?\s*(?:очка|очко|очков|ед|пт|поинт[а-я]*)?\s*(?:в|на|к)?\s*([а-яa-z]+)/i;
+  const match1 = clean.match(verbRegex);
+  if (match1) {
+    const rawPts = match1[1] ? parseInt(match1[1].replace("+", ""), 10) : 1;
+    const rawStat = match1[2].toLowerCase();
+    for (const [prefix, statKey] of Object.entries(statMap)) {
+      if (rawStat.startsWith(prefix)) {
+        return { stat: statKey, points: isNaN(rawPts) || rawPts <= 0 ? 1 : rawPts };
+      }
+    }
+  }
+
+  // Шаблон 2: характеристика + количество ("ловкость +1", "сила 2", "интеллект +2")
+  const statFirstRegex = /([а-яa-z]+)\s*(?:\+|\bплюс\b|\bна\b)?\s*(\d+)\s*(?:очка|очко|очков|ед|пт|поинт[а-я]*)?/i;
+  const match2 = clean.match(statFirstRegex);
+  if (match2) {
+    const rawStat = match2[1].toLowerCase();
+    const rawPts = parseInt(match2[2], 10);
+    for (const [prefix, statKey] of Object.entries(statMap)) {
+      if (rawStat.startsWith(prefix)) {
+        return { stat: statKey, points: isNaN(rawPts) || rawPts <= 0 ? 1 : rawPts };
+      }
+    }
+  }
+
+  // Шаблон 3: +N характеристика ("+1 сила", "+2 выносливость")
+  const plusFirstRegex = /\+(\d+)\s*(?:в|на|к)?\s*([а-яa-z]+)/i;
+  const match3 = clean.match(plusFirstRegex);
+  if (match3) {
+    const rawPts = parseInt(match3[1], 10);
+    const rawStat = match3[2].toLowerCase();
+    for (const [prefix, statKey] of Object.entries(statMap)) {
+      if (rawStat.startsWith(prefix)) {
+        return { stat: statKey, points: isNaN(rawPts) || rawPts <= 0 ? 1 : rawPts };
+      }
+    }
+  }
+
+  // Шаблон 4: глагол + характеристика без цифр ("качаю силу", "повысь ловкость" -> 1 очко)
+  const simpleRegex = /(?:вкладываю|вкачиваю|качаю|повышаю|увеличь|подними|повысь)\s*(?:себе)?\s*(?:в|на|к)?\s*([а-яa-z]+)/i;
+  const match4 = clean.match(simpleRegex);
+  if (match4) {
+    const rawStat = match4[1].toLowerCase();
+    for (const [prefix, statKey] of Object.entries(statMap)) {
+      if (rawStat.startsWith(prefix)) {
+        return { stat: statKey, points: 1 };
+      }
+    }
+  }
+
+  return null;
+}
+
+// ============================================
 // Main Handler — 5-шаговый конвейер
 // ============================================
 serve(async (req) => {
@@ -174,8 +245,8 @@ serve(async (req) => {
     // Wild zone — природная зона вне именных локаций (лес, пещера, поле)
     const currentWildZone: string | null = session.current_wild_zone || null;
     if (currentWildZone) {
-      // Player is in open world — no named location
-      currentLocationName = null;
+      // Player is in open world / wild zone — use currentWildZone as location name
+      currentLocationName = currentWildZone;
     } else if (session.current_location_id) {
       try {
         const { data: locData } = await supabase
@@ -291,6 +362,48 @@ serve(async (req) => {
         }
       } catch (locGenErr) {
         console.warn(`[${requestId}] [STARTING_LOCATION] Generation error:`, locGenErr);
+      }
+    }
+
+    // ============================================
+    // Чат: распределение очков характеристик
+    // ============================================
+    let statAllocatedFact: string | null = null;
+    const statAllocIntent = parseStatAllocationIntent(safeActionText);
+    if (statAllocIntent) {
+      console.log(`[${requestId}] [STAT_ALLOC] Detected chat intent: +${statAllocIntent.points} to ${statAllocIntent.stat}`);
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc("allocate_stat_points", {
+          p_player_id: player.id,
+          p_stat_name: statAllocIntent.stat,
+          p_points: statAllocIntent.points,
+        });
+        if (rpcErr) {
+          console.warn(`[${requestId}] [STAT_ALLOC] RPC error:`, rpcErr);
+        } else if (rpcRes && rpcRes.success) {
+          console.log(`[${requestId}] [STAT_ALLOC] Successfully allocated:`, rpcRes);
+          const statNamesRu: Record<string, string> = {
+            STR: "силу", DEX: "ловкость", CON: "выносливость",
+            INT: "интеллект", WIS: "мудрость", CHA: "харизму"
+          };
+          const statRu = statNamesRu[statAllocIntent.stat] || statAllocIntent.stat;
+          statAllocatedFact = `${player.name} успешно вложил ${statAllocIntent.points} очк. в характеристику ${statRu} (новое значение: ${rpcRes.new_value}, свободно очков: ${rpcRes.remaining_points}).`;
+
+          player.stat_points = rpcRes.remaining_points;
+          if (!player.stats) player.stats = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
+          player.stats[statAllocIntent.stat] = rpcRes.new_value;
+          if (statAllocIntent.stat === "CON") {
+            const conMod = Math.floor((rpcRes.new_value - 10) / 2);
+            player.max_hp = Math.max(10, rpcRes.new_value * 2 + (player.level || 1) * Math.max(1, conMod + 5));
+          } else if (statAllocIntent.stat === "INT") {
+            player.max_mp = Math.max(20, rpcRes.new_value * 2 + (player.level || 1) * 5);
+          }
+        } else if (rpcRes && !rpcRes.success) {
+          console.log(`[${requestId}] [STAT_ALLOC] Allocation rejected: ${rpcRes.error}`);
+          statAllocatedFact = `${player.name} попытался распределить очки в ${statAllocIntent.stat}, но не смог: ${rpcRes.error}`;
+        }
+      } catch (allocEx) {
+        console.warn(`[${requestId}] [STAT_ALLOC] Exception:`, allocEx);
       }
     }
 
@@ -451,7 +564,10 @@ serve(async (req) => {
     }
 
     const engineResult = executeEngine({
-      router_output: routerResult,
+      router_output: {
+        ...routerResult,
+        raw_action_text: safeActionText,
+      },
       session: {
         id: session_id,
         difficulty: session.difficulty || "normal",
@@ -478,6 +594,9 @@ serve(async (req) => {
         location_items: new Map(),
       },
     });
+    if (statAllocatedFact) {
+      engineResult.system_facts.push(statAllocatedFact);
+    }
     console.log(`[${requestId}] [STEP 2] OK: ${engineResult.mutations.length} mutations`);
 
     // ============================================
@@ -639,7 +758,7 @@ serve(async (req) => {
         const newMaxMp = Math.max(20, intVal * 2 + newLevel * 5);
         const newMp = Math.min(newMaxMp, (player.mp || 50) + 15);
 
-        await supabase.from("players").update({
+        const { error: lvlUpdateErr } = await supabase.from("players").update({
           level: newLevel,
           xp: leftoverXp,
           stat_points: newStatPoints,
@@ -649,6 +768,18 @@ serve(async (req) => {
           mp: newMp,
           updated_at: new Date().toISOString(),
         }).eq("id", player.id);
+
+        if (lvlUpdateErr) {
+          console.error(`[${requestId}] [LEVEL_UP] DB update error:`, lvlUpdateErr);
+        } else {
+          player.level = newLevel;
+          player.xp = leftoverXp;
+          player.stat_points = newStatPoints;
+          player.max_hp = newMaxHp;
+          player.hp = newHp;
+          player.max_mp = newMaxMp;
+          player.mp = newMp;
+        }
 
         playerLevelUp = {
           old_level: currentLevel,
@@ -661,10 +792,15 @@ serve(async (req) => {
         };
         console.log(`[${requestId}] [LEVEL_UP] Player ${player.name} leveled up to ${newLevel}! (+2 stat points)`);
       } else {
-        await supabase.from("players").update({
+        const { error: xpUpdateErr } = await supabase.from("players").update({
           xp: currentXp,
           updated_at: new Date().toISOString(),
         }).eq("id", player.id);
+        if (xpUpdateErr) {
+          console.error(`[${requestId}] [XP_UPDATE] DB update error:`, xpUpdateErr);
+        } else {
+          player.xp = currentXp;
+        }
       }
     } catch (lvlErr) {
       console.warn(`[${requestId}] Leveling check failed:`, lvlErr);
@@ -685,7 +821,7 @@ serve(async (req) => {
         game_minute: session.game_minute || 0,
         current_location_id: session.current_location_id,
       },
-      location: { name: currentLocationName || "Неизвестно", weather: routerInput.weather?.description || null },
+      location: { name: currentLocationName || currentWildZone || "Открытый мир", weather: routerInput.weather?.description || null },
       players: (allPlayers || []).map((p: any) => ({
         id: p.id, name: p.name || "Герой", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
       })),

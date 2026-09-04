@@ -9,6 +9,7 @@ import {
 } from "../supabase/functions/_shared/skill_engine.ts";
 import { AttackHandler } from "../supabase/functions/process-turn/engine/handlers/attack_handler.ts";
 import { HarvestAmbientHandler } from "../supabase/functions/process-turn/engine/handlers/harvest_ambient_handler.ts";
+import { getItemMeta, ITEM_TYPES } from "../src/config.js";
 
 describe("Система навыков (Track 2: Action-based 1..100)", () => {
   it("нормализует синонимы кожевничества к каноническому ключу leatherworking", () => {
@@ -182,7 +183,10 @@ describe("Влияние навыков на игровой процесс в Ga
       ai_custom_dc: 5, // лёгкий DC для гарантированного успеха
     } as any;
 
+    const randSpy = vi.spyOn(Math, "random").mockReturnValue(0.7);
     const res = harvestHandler.handle(action, harvestContext);
+    randSpy.mockRestore();
+
     expect(res.result.success).toBe(true);
     expect(res.mutations.length).toBeGreaterThan(0);
     expect(res.system_facts[0]).toContain("навык Собирательство ур. 100: +60% к находкам");
@@ -258,5 +262,74 @@ describe("Влияние навыков на игровой процесс в Ga
     expect(res.result.success).toBe(true);
     expect(res.system_facts[0]).toContain("Шахтёрское дело");
   });
+
+  it("корректно определяет название и тип для природных и научно-фантастических сборов (ягоды, травы, лом, стимы)", () => {
+    const handler = new HarvestAmbientHandler();
+    const ctx = {
+      session: { id: "s1", difficulty: "normal" },
+      acting_player: {
+        id: "p1",
+        name: "Кибер-Влад",
+        stats: { STR: 12, DEX: 14, CON: 12, INT: 14, WIS: 14, CHA: 10 },
+        skills: {},
+      },
+    } as any;
+
+    // 1. Сбор ягод (Fantasy)
+    const berryRes = handler.handle({
+      type: "harvest_ambient",
+      target_item_name: "ресурс",
+      raw_action_text: "собираю чернику в лесу",
+      ai_custom_dc: 2,
+    } as any, ctx);
+    expect(berryRes.result.success).toBe(true);
+    const berryItem = (berryRes.mutations[0] as any).item;
+    expect(berryItem.item_name).toBe("Лесная черника");
+    expect(berryItem.type).toBe("food");
+
+    // 2. Сбор металлолома / электроники (Cyberpunk / Sci-Fi)
+    const scrapRes = handler.handle({
+      type: "harvest_ambient",
+      target_item_name: "ресурс",
+      raw_action_text: "разбираю сломанного дрона на металлолом и электронику",
+      ai_custom_dc: 2,
+    } as any, ctx);
+    expect(scrapRes.result.success).toBe(true);
+    const scrapItem = (scrapRes.mutations[0] as any).item;
+    expect(scrapItem.item_name).toContain("лом");
+    expect(scrapItem.type).toBe("scrap");
+
+    // 3. Сбор стимулятора
+    const stimRes = handler.handle({
+      type: "harvest_ambient",
+      target_item_name: "ресурс",
+      raw_action_text: "нахожу медицинский стимулятор в руинах лаборатории",
+      ai_custom_dc: 2,
+    } as any, ctx);
+    expect(stimRes.result.success).toBe(true);
+    const stimItem = (stimRes.mutations[0] as any).item;
+    expect(stimItem.item_name).toMatch(/стимулятор/i);
+    expect(stimItem.type).toBe("stim");
+  });
+
+  it("getItemMeta возвращает корректные значки и бейджи для фэнтези и sci-fi/киберпанк предметов", () => {
+    // Fantasy
+    expect(getItemMeta("weapon").icon).toBe("⚔️");
+    expect(getItemMeta("herb").icon).toBe("🌿");
+    expect(getItemMeta("wood").icon).toBe("🪵");
+    expect(getItemMeta("gem").icon).toBe("💎");
+
+    // Sci-Fi / Cyberpunk
+    expect(getItemMeta("cyberware").icon).toBe("🦾");
+    expect(getItemMeta("stim").icon).toBe("💉");
+    expect(getItemMeta("firearm").icon).toBe("🔫");
+    expect(getItemMeta("datashard").icon).toBe("💽");
+    expect(getItemMeta("electronics").icon).toBe("🔌");
+    expect(getItemMeta("scrap").icon).toBe("⚙️");
+
+    // Fallback for unknown type
+    expect(getItemMeta("unknown_artifact").icon).toBe("🎒");
+  });
 });
+
 

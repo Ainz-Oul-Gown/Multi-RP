@@ -308,6 +308,21 @@ textarea.input {
   color: var(--accent-info);
 }
 
+.badge-secondary {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
+.badge-warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
 /* ===================== Toggle Switch ===================== */
 .toggle {
   position: relative;

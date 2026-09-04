@@ -180,7 +180,61 @@ export const DIFFICULTY_PRESETS = {
   hard: { label: 'Хардкор', modifier: 'disadvantage', description: 'Суровый мир, где любая ошибка может стать фатальной.' },
 };
 
-export const ITEM_TYPES = ['weapon', 'armor', 'consumable', 'misc'];
+export const ITEM_TYPES = [
+  // Классика и Фэнтези
+  'weapon', 'armor', 'shield', 'consumable', 'potion', 'food',
+  'material', 'herb', 'ore', 'wood', 'gem', 'scroll',
+  // Киберпанк, Научная фантастика, Постапокалипсис
+  'firearm', 'energy_weapon', 'nanosuit', 'cyberware', 'implant',
+  'software', 'datashard', 'gadget', 'stim', 'medicine',
+  'ammo', 'energy_cell', 'scrap', 'electronics', 'chemical',
+  // Общие категории
+  'tool', 'quest', 'currency', 'misc'
+];
+
+export const ITEM_TYPE_META = {
+  // Фэнтези
+  weapon: { label: 'Оружие', icon: '⚔️', badge: 'primary' },
+  armor: { label: 'Броня', icon: '🛡️', badge: 'info' },
+  shield: { label: 'Щит', icon: '🛡️', badge: 'info' },
+  consumable: { label: 'Расходник', icon: '🍞', badge: 'gold' },
+  potion: { label: 'Зелье', icon: '🧪', badge: 'gold' },
+  food: { label: 'Еда', icon: '🍖', badge: 'gold' },
+  material: { label: 'Материал', icon: '📦', badge: 'secondary' },
+  herb: { label: 'Растение/Трава', icon: '🌿', badge: 'success' },
+  ore: { label: 'Руда/Металл', icon: '⛏️', badge: 'secondary' },
+  wood: { label: 'Древесина', icon: '🪵', badge: 'secondary' },
+  gem: { label: 'Самоцвет', icon: '💎', badge: 'gold' },
+  scroll: { label: 'Свиток', icon: '📜', badge: 'info' },
+
+  // Киберпанк и Sci-Fi
+  firearm: { label: 'Огнестрел', icon: '🔫', badge: 'danger' },
+  energy_weapon: { label: 'Энергооружие', icon: '⚡', badge: 'danger' },
+  nanosuit: { label: 'Экзокостюм', icon: '🦿', badge: 'info' },
+  cyberware: { label: 'Киберимплант', icon: '🦾', badge: 'primary' },
+  implant: { label: 'Биоимплант', icon: '🧬', badge: 'primary' },
+  software: { label: 'Программа/Софт', icon: '💾', badge: 'info' },
+  datashard: { label: 'Дата-чип', icon: '💽', badge: 'info' },
+  gadget: { label: 'Гаджет', icon: '📱', badge: 'primary' },
+  stim: { label: 'Стимулятор', icon: '💉', badge: 'warning' },
+  medicine: { label: 'Медикаменты', icon: '💊', badge: 'success' },
+  ammo: { label: 'Боеприпасы', icon: '🎯', badge: 'warning' },
+  energy_cell: { label: 'Энергоячейка', icon: '🔋', badge: 'gold' },
+  scrap: { label: 'Металлолом', icon: '⚙️', badge: 'secondary' },
+  electronics: { label: 'Электроника', icon: '🔌', badge: 'info' },
+  chemical: { label: 'Химикат/Реагент', icon: '⚗️', badge: 'warning' },
+
+  // Универсальные
+  tool: { label: 'Инструмент', icon: '🔨', badge: 'secondary' },
+  quest: { label: 'Квестовый', icon: '⭐', badge: 'gold' },
+  currency: { label: 'Валюта', icon: '🪙', badge: 'gold' },
+  misc: { label: 'Разное', icon: '🎒', badge: 'secondary' },
+};
+
+export function getItemMeta(type) {
+  const normalized = (type || 'misc').toLowerCase().trim();
+  return ITEM_TYPE_META[normalized] || { label: normalized, icon: '🎒', badge: 'secondary' };
+}
 
 // Routes
 export const ROUTES = {

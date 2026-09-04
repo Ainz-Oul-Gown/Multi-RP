@@ -53,6 +53,20 @@ function buildRouterSystemPrompt(): string {
 
 8. **Атмосфера**: 1-3 звука и 1-3 визуальных образа для сцены.
 
+9. **Сбор ресурсов (harvest_ambient)**:
+   - Если игрок собирает природные или окружающие ресурсы (ягоды, травы, грибы, ветки, руду, камни, воду, или в sci-fi/киберпанке: металлолом, микросхемы, запчасти, проводку, картриджи стимуляторов, чипы памяти):
+   - action_type: "harvest_ambient"
+   - Обязательно указывай 'target_item_name' с конкретным названием на русском языке в именительном падеже (например: "Лесная черника", "Целебная трава", "Медный самородок", "Обломки электроники", "Химический стимулятор", "Сухие ветки"). НИКОГДА не оставляй target_item_name пустым или словом "ресурс"!
+   - Указывай 'item_type':
+     * Для еды/трав/лекарств: "consumable", "herb", "food", "potion", "stim"
+     * Для материалов/руды/дерева/металла: "material", "wood", "ore", "gem", "scrap", "electronics"
+     * Для технологий/киберпанка: "cyberware", "implant", "software", "datashard", "ammo", "energy_cell"
+     * По умолчанию: "material" или "consumable"
+
+10. **Прокачка характеристик / распределение очков**:
+   - Если игрок распределяет свободные очки характеристик (например: "Вкладываю 2 очка в силу", "Качаю ловкость +1", "распредели очки"):
+   - Это валидное действие! Ставь status: "success", time_estimate_minutes: 5, actions: [] (движок игры автоматически применит улучшение характеристик персонажа).
+
 ## ФОРМАТ ОТВЕТА
 
 Отвечай ТОЛЬКО валидным JSON без markdown-разметки (без \`\`\`json).
@@ -66,6 +80,7 @@ function buildRouterSystemPrompt(): string {
       "action_type": "attack" | "stealth_attack" | "move" | "loot" | "craft_recipe" | "craft_custom" | "transfer" | "talk" | "search" | "harvest_ambient",
       "target_entity_id": "uuid или null",
       "target_item_name": "string или null",
+      "item_type": "string или null",
       "used_item_id": "uuid или null",
       "consumed_materials": [{"id": "uuid", "quantity": 1}] или null,
       "stat_to_check": "strength" | "dexterity" | "stealth" | "survival" | "investigation" | "insight" | "none",
@@ -253,12 +268,14 @@ function normalizeRouterOutput(parsed: any): RouterOutputPayload {
       action_type: a.action_type,
       target_entity_id: a.target_entity_id ?? null,
       target_item_name: a.target_item_name ?? null,
+      item_type: a.item_type ?? null,
       used_item_id: a.used_item_id ?? null,
       consumed_materials: a.consumed_materials ?? null,
       stat_to_check: a.stat_to_check,
       ai_custom_dc: a.ai_custom_dc ?? null,
       improper_tool_usage: a.improper_tool_usage ?? null,
       dynamic_blueprint: a.dynamic_blueprint ?? null,
+      raw_action_text: a.raw_action_text ?? parsed.raw_action_text ?? null,
     })),
     encounter_intent: {
       type: parsed.encounter_intent.type,
@@ -348,7 +365,12 @@ export async function parsePlayerIntent(
           rawAction.includes("где я") ||
           rawAction.includes("взглянуть") ||
           rawAction.includes("посмотр") ||
-          rawAction.includes("прибыл");
+          rawAction.includes("прибыл") ||
+          rawAction.includes("вкладываю") ||
+          rawAction.includes("качаю") ||
+          rawAction.includes("вкачиваю") ||
+          rawAction.includes("распредели") ||
+          rawAction.includes("очк");
 
         if (isVagueBotMessage || isDescriptiveOrArrival) {
           console.log(`[step1_router] Converting false clarification_needed to success for action: "${rawAction}"`);

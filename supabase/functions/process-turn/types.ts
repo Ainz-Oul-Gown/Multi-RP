@@ -120,12 +120,14 @@ export interface RouterAction {
   action_type: ActionType;
   target_entity_id: string | null;
   target_item_name: string | null;
+  item_type?: string | null;
   used_item_id: string | null;
   consumed_materials: Array<{ id: string; quantity: number }> | null;
   stat_to_check: StatToCheck;
   ai_custom_dc: number | null;
   improper_tool_usage: ImproperToolUsage | null;
   dynamic_blueprint?: any | null;
+  raw_action_text?: string | null;
 }
 
 export interface EncounterIntent {

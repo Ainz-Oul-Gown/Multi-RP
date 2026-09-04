@@ -8,7 +8,7 @@ import {
   getCharacterCards, getNpcRelationships, getNpcMemories, getRelationshipTierLabelClient,
   getPlayerSkills, allocateStatPoints
 } from '../api/game.js';
-import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows } from '../config.js';
+import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows, getItemMeta } from '../config.js';
 import { toast } from '../utils/toast.js';
 import { router } from '../router.js';
 
@@ -693,12 +693,14 @@ export async function renderGame(container, sessionId, user) {
         </div>
 
         <div class="inventory-list">
-          ${inventory.length ? inventory.map((item) => `
+          ${inventory.length ? inventory.map((item) => {
+            const meta = getItemMeta(item.type);
+            return `
             <div class="inventory-item">
               <div class="inventory-item-info">
                 <div class="inventory-item-name">${escapeHtml(item.item_name)}</div>
                 <div class="inventory-item-meta">
-                  <span class="badge badge-${item.type === 'weapon' ? 'primary' : item.type === 'armor' ? 'info' : 'gold'}">${item.type}</span>
+                  <span class="badge badge-${meta.badge}">${meta.icon} ${escapeHtml(meta.label)}</span>
                   ${item.quantity > 1 ? `<span>x${item.quantity}</span>` : ''}
                 </div>
               </div>
@@ -708,7 +710,8 @@ export async function renderGame(container, sessionId, user) {
                 </div>
               ` : ''}
             </div>
-          `).join('') : `
+            `;
+          }).join('') : `
             <div class="empty-state">
               <p class="text-muted">Инвентарь пуст</p>
             </div>
@@ -1074,16 +1077,14 @@ export async function renderGame(container, sessionId, user) {
 
   async function togglePanel(panel) {
     activePanel = activePanel === panel ? null : panel;
+    render();
     if (activePanel === 'inventory') {
       await refreshInventory();
-    }
-    if (activePanel === 'npc') {
+    } else if (activePanel === 'npc') {
       await refreshNpcPanel();
-    }
-    if (activePanel === 'profile') {
+    } else if (activePanel === 'profile') {
       await refreshProfile();
     }
-    render();
   }
 
 

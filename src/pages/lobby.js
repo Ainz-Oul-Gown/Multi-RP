@@ -396,8 +396,8 @@ export function renderLobby(container, user) {
              </span>
            </div>
 
-           <div style="margin-bottom: 1.25rem; padding: 0.85rem; background: rgba(255,255,255,0.04); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-             <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-muted, #94a3b8);">⚡ Быстрые пресеты связок:</div>
+           <div style="margin-bottom: 1.25rem; padding: 0.85rem; background: rgba(212, 163, 89, 0.08); border-radius: 8px; border: 1px solid rgba(212, 163, 89, 0.25);">
+             <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--accent-gold-bright);">⚡ Быстрые пресеты связок:</div>
              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                <button type="button" class="btn btn-secondary btn-sm" id="presetFreeBtn" title="Все роли на качественных бесплатных моделях OpenRouter">🆓 Бесплатно ($0)</button>
                <button type="button" class="btn btn-secondary btn-sm" id="presetOptimumBtn" title="Минимум затрат (~$0.50/1000 ходов) при максимальном интеллекте парсера и нарратора">⚡ Оптимум (Топ)</button>
@@ -407,7 +407,7 @@ export function renderLobby(container, user) {
 
            <div class="form-group" style="margin-bottom: 1rem;">
              <label class="form-label">Модель для генерации карточек</label>
-             <select class="input" id="cardModelInput">
+             <select class="input select" id="cardModelInput">
                ${CARD_GENERATION_MODELS.map(m => `<option value="${m.id}" ${userSettings?.card_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
              </select>
              <span class="form-hint">Модель для генерации NPC, географии и бестиария</span>
@@ -415,7 +415,7 @@ export function renderLobby(container, user) {
 
             <div class="form-group" style="margin-bottom: 1rem;">
               <label class="form-label">Модель для ДМа (рассказчик)</label>
-              <select class="input" id="dmModelInput">
+              <select class="input select" id="dmModelInput">
                 ${DM_MODELS.map(m => `<option value="${m.id}" ${userSettings?.dm_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
               </select>
               <span class="form-hint">Модель для narration и ответов в игре</span>
@@ -423,7 +423,7 @@ export function renderLobby(container, user) {
 
             <div class="form-group" style="margin-bottom: 1rem;">
               <label class="form-label">Модель для GPS (время и локация)</label>
-              <select class="input" id="gpsModelInput">
+              <select class="input select" id="gpsModelInput">
                 ${GPS_MODELS.map(m => `<option value="${m.id}" ${userSettings?.gps_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
               </select>
               <span class="form-hint">Модель для определения времени действия и локации</span>
@@ -431,7 +431,7 @@ export function renderLobby(container, user) {
 
             <div class="form-group" style="margin-bottom: 1.5rem;">
               <label class="form-label">Модель для Сателит (намерения)</label>
-              <select class="input" id="satelliteModelInput">
+              <select class="input select" id="satelliteModelInput">
                 ${SATELLITE_MODELS.map(m => `<option value="${m.id}" ${userSettings?.satellite_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
               </select>
               <span class="form-hint">Модель для анализа намерений игрока</span>

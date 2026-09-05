@@ -202,208 +202,6 @@ Files
 ================================================================
 
 ================
-File: src/pages/auth.js
-================
-  1: // src/pages/auth.js — Страница авторизации
-  2: import { signIn, signUp, signInWithGoogle } from '../api/supabase.js';
-  3: import { toast } from '../utils/toast.js';
-  4: 
-  5: export function renderAuth(container) {
-  6:   let isLogin = true;
-  7: 
-  8:   function render() {
-  9:     container.innerHTML = `
- 10:       <div class="page page-centered">
- 11:         <div class="auth-container">
- 12:           <div class="auth-header">
- 13:             <div class="auth-logo">🕯️</div>
- 14:             <h1 class="auth-title">Таверна «Путник и Дракон»</h1>
- 15:             <p class="auth-subtitle">Приют искателей приключений и текстовых RPG</p>
- 16:           </div>
- 17: 
- 18:           <button class="btn btn-google btn-lg" id="googleBtn" style="width: 100%;">
- 19:             <svg class="google-icon" viewBox="0 0 24 24" width="20" height="20">
- 20:               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
- 21:               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
- 22:               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
- 23:               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
- 24:             </svg>
- 25:             Войти через Google
- 26:           </button>
- 27: 
- 28:           <div class="auth-divider">
- 29:             <span>или</span>
- 30:           </div>
- 31: 
- 32:           <form class="auth-form" id="authForm">
- 33:             <div class="form-group">
- 34:               <label class="form-label">Email</label>
- 35:               <input type="email" class="input" id="authEmail" placeholder="your@email.com" required />
- 36:             </div>
- 37: 
- 38:             <div class="form-group">
- 39:               <label class="form-label">Пароль</label>
- 40:               <input type="password" class="input" id="authPassword" placeholder="Минимум 6 символов" required minlength="6" />
- 41:             </div>
- 42: 
- 43:             <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;" id="authSubmit">
- 44:               ${isLogin ? 'Войти' : 'Создать аккаунт'}
- 45:             </button>
- 46:           </form>
- 47: 
- 48:           <p class="auth-toggle">
- 49:             ${isLogin ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}
- 50:             <a href="#" id="authToggle">${isLogin ? 'Зарегистрироваться' : 'Войти'}</a>
- 51:           </p>
- 52:         </div>
- 53:       </div>
- 54:     `;
- 55: 
- 56:     document.getElementById('authToggle').addEventListener('click', (e) => {
- 57:       e.preventDefault();
- 58:       isLogin = !isLogin;
- 59:       render();
- 60:     });
- 61: 
- 62:     document.getElementById('authForm').addEventListener('submit', handleSubmit);
- 63:     document.getElementById('googleBtn').addEventListener('click', handleGoogle);
- 64:   }
- 65: 
- 66:   async function handleGoogle() {
- 67:     const btn = document.getElementById('googleBtn');
- 68:     btn.disabled = true;
- 69:     btn.textContent = 'Перенаправление...';
- 70:     try {
- 71:       await signInWithGoogle();
- 72:     } catch (err) {
- 73:       toast.error(err.message || 'Ошибка Google-авторизации');
- 74:       btn.disabled = false;
- 75:       btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" width="20" height="20"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Войти через Google`;
- 76:     }
- 77:   }
- 78: 
- 79:   async function handleSubmit(e) {
- 80:     e.preventDefault();
- 81:     const email = document.getElementById('authEmail').value;
- 82:     const password = document.getElementById('authPassword').value;
- 83:     const submitBtn = document.getElementById('authSubmit');
- 84: 
- 85:     submitBtn.disabled = true;
- 86:     submitBtn.textContent = 'Загрузка...';
- 87: 
- 88:     try {
- 89:       if (isLogin) {
- 90:         await signIn(email, password);
- 91:         toast.success('Добро пожаловать!');
- 92:       } else {
- 93:         await signUp(email, password);
- 94:         toast.success('Аккаунт создан! Проверьте почту для подтверждения.');
- 95:       }
- 96:     } catch (err) {
- 97:       toast.error(err.message || 'Ошибка авторизации');
- 98:     } finally {
- 99:       submitBtn.disabled = false;
-100:       submitBtn.textContent = isLogin ? 'Войти' : 'Создать аккаунт';
-101:     }
-102:   }
-103: 
-104:   render();
-105: }
-
-================
-File: src/styles/variables.css
-================
- 1: /* src/styles/variables.css — Дизайн-система фэнтезийной таверны («Путник и Дракон») */
- 2: :root {
- 3:   /* Цветовая палитра — Теплая таверна, мореный дуб, латунь и каминное пламя */
- 4:   --bg-primary: #15110e;        /* Глубокий оттенок темного дуба */
- 5:   --bg-secondary: #1e1713;      /* Полированный мореный дуб */
- 6:   --bg-tertiary: #281f19;       /* Деревянная обшивка стен таверны */
- 7:   --bg-card: #221a14;           /* Планшет / пергамент на дубовой подложке */
- 8:   --bg-input: #120e0b;          /* Углубленный темный слот в дереве */
- 9:   --bg-hover: #33271f;          /* Теплый отсвет камина */
-10:   --bg-parchment: #f4ecd8;      /* Светлый состаренный пергамент */
-11:   --bg-parchment-dark: #2a2018; /* Темный пергамент для хроники */
-12: 
-13:   /* Акценты: Пламя очага, червонное золото, сургуч и целебные травы */
-14:   --accent-primary: #c85a32;    /* Теплый янтарь / каминный огонь */
-15:   --accent-primary-hover: #dc6a3f;
-16:   --accent-secondary: #5a3825;  /* Выделанная седельная кожа */
-17:   --accent-gold: #d4a359;       /* Чеканное античное золото */
-18:   --accent-gold-bright: #f3c87a;/* Яркий золотой отблеск */
-19:   --accent-gold-dark: #9b7235;  /* Состаренная темная бронза */
-20:   --accent-success: #388e3c;    /* Травяной изумруд / исцеление */
-21:   --accent-danger: #a93226;     /* Королевский сургуч / урон */
-22:   --accent-crimson: #8b1e1f;    /* Кровь и жизненная сила (HP) */
-23:   --accent-info: #3b7a9e;       /* Рунический синий / магическая мана */
-24:   --accent-warning: #d97706;    /* Янтарный воск */
-25: 
-26:   /* Текст: пергаментные и чернильные оттенки */
-27:   --text-primary: #f5eedc;      /* Теплый светлый пергамент */
-28:   --text-secondary: #c5b6a3;    /* Состаренная бумага */
-29:   --text-muted: #857565;        /* Древесная зола */
-30:   --text-accent: #d4a359;       /* Золотое тиснение */
-31:   --text-gold: #f3c87a;         /* Золотое свечение */
-32:   --text-dark: #1e1713;         /* Темные чернила для светлых плашек */
-33: 
-34:   /* Рамки и филигрань */
-35:   --border-color: rgba(212, 163, 89, 0.22);  /* Латунная окантовка */
-36:   --border-subtle: rgba(255, 255, 255, 0.06);
-37:   --border-accent: #d4a359;                  /* Золотая кайма */
-38:   --border-gold: rgba(212, 163, 89, 0.45);   /* Чеканное золото */
-39:   --border-wood: #3d2f25;                    /* Стык дубовых досок */
-40: 
-41:   /* Типографика */
-42:   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-43:   --font-heading: 'Cinzel', 'MedievalSharp', 'Georgia', serif;
-44:   --font-story: 'MedievalSharp', 'Cinzel', 'Georgia', serif;
-45:   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-46: 
-47:   --fs-xs: 0.75rem;
-48:   --fs-sm: 0.875rem;
-49:   --fs-base: 1rem;
-50:   --fs-lg: 1.125rem;
-51:   --fs-xl: 1.25rem;
-52:   --fs-2xl: 1.5rem;
-53:   --fs-3xl: 2rem;
-54: 
-55:   /* Отступы */
-56:   --space-xs: 0.25rem;
-57:   --space-sm: 0.5rem;
-58:   --space-md: 1rem;
-59:   --space-lg: 1.5rem;
-60:   --space-xl: 2rem;
-61:   --space-2xl: 3rem;
-62: 
-63:   /* Скругления */
-64:   --radius-sm: 4px;
-65:   --radius-md: 8px;
-66:   --radius-lg: 12px;
-67:   --radius-xl: 18px;
-68:   --radius-full: 9999px;
-69: 
-70:   /* Тени и теплое каминное свечение */
-71:   --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.45);
-72:   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
-73:   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.7);
-74:   --shadow-glow: 0 0 18px rgba(212, 163, 89, 0.25);
-75:   --shadow-hearth: 0 0 24px rgba(200, 90, 50, 0.2);
-76:   --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.6);
-77: 
-78:   /* Анимации */
-79:   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-80:   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-81:   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
-82: 
-83:   /* z-index */
-84:   --z-header: 100;
-85:   --z-sidebar: 200;
-86:   --z-modal: 300;
-87:   --z-toast: 400;
-88:   --z-overlay: 500;
-89: }
-
-================
 File: src/utils/toast.js
 ================
  1: // src/utils/toast.js — Система уведомлений
@@ -1579,6 +1377,208 @@ File: src/config/hitDice.js
 109:  * Все доступные кости хитов
 110:  */
 111: export const ALL_HIT_DICE = [6, 8, 10, 12];
+
+================
+File: src/pages/auth.js
+================
+  1: // src/pages/auth.js — Страница авторизации
+  2: import { signIn, signUp, signInWithGoogle } from '../api/supabase.js';
+  3: import { toast } from '../utils/toast.js';
+  4: 
+  5: export function renderAuth(container) {
+  6:   let isLogin = true;
+  7: 
+  8:   function render() {
+  9:     container.innerHTML = `
+ 10:       <div class="page page-centered">
+ 11:         <div class="auth-container">
+ 12:           <div class="auth-header">
+ 13:             <div class="auth-logo">🕯️</div>
+ 14:             <h1 class="auth-title">Таверна «Путник и Дракон»</h1>
+ 15:             <p class="auth-subtitle">Приют искателей приключений и текстовых RPG</p>
+ 16:           </div>
+ 17: 
+ 18:           <button class="btn btn-google btn-lg" id="googleBtn" style="width: 100%;">
+ 19:             <svg class="google-icon" viewBox="0 0 24 24" width="20" height="20">
+ 20:               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+ 21:               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+ 22:               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+ 23:               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+ 24:             </svg>
+ 25:             Войти через Google
+ 26:           </button>
+ 27: 
+ 28:           <div class="auth-divider">
+ 29:             <span>или</span>
+ 30:           </div>
+ 31: 
+ 32:           <form class="auth-form" id="authForm">
+ 33:             <div class="form-group">
+ 34:               <label class="form-label">Email</label>
+ 35:               <input type="email" class="input" id="authEmail" placeholder="your@email.com" required />
+ 36:             </div>
+ 37: 
+ 38:             <div class="form-group">
+ 39:               <label class="form-label">Пароль</label>
+ 40:               <input type="password" class="input" id="authPassword" placeholder="Минимум 6 символов" required minlength="6" />
+ 41:             </div>
+ 42: 
+ 43:             <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;" id="authSubmit">
+ 44:               ${isLogin ? 'Войти' : 'Создать аккаунт'}
+ 45:             </button>
+ 46:           </form>
+ 47: 
+ 48:           <p class="auth-toggle">
+ 49:             ${isLogin ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}
+ 50:             <a href="#" id="authToggle">${isLogin ? 'Зарегистрироваться' : 'Войти'}</a>
+ 51:           </p>
+ 52:         </div>
+ 53:       </div>
+ 54:     `;
+ 55: 
+ 56:     document.getElementById('authToggle').addEventListener('click', (e) => {
+ 57:       e.preventDefault();
+ 58:       isLogin = !isLogin;
+ 59:       render();
+ 60:     });
+ 61: 
+ 62:     document.getElementById('authForm').addEventListener('submit', handleSubmit);
+ 63:     document.getElementById('googleBtn').addEventListener('click', handleGoogle);
+ 64:   }
+ 65: 
+ 66:   async function handleGoogle() {
+ 67:     const btn = document.getElementById('googleBtn');
+ 68:     btn.disabled = true;
+ 69:     btn.textContent = 'Перенаправление...';
+ 70:     try {
+ 71:       await signInWithGoogle();
+ 72:     } catch (err) {
+ 73:       toast.error(err.message || 'Ошибка Google-авторизации');
+ 74:       btn.disabled = false;
+ 75:       btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" width="20" height="20"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Войти через Google`;
+ 76:     }
+ 77:   }
+ 78: 
+ 79:   async function handleSubmit(e) {
+ 80:     e.preventDefault();
+ 81:     const email = document.getElementById('authEmail').value;
+ 82:     const password = document.getElementById('authPassword').value;
+ 83:     const submitBtn = document.getElementById('authSubmit');
+ 84: 
+ 85:     submitBtn.disabled = true;
+ 86:     submitBtn.textContent = 'Загрузка...';
+ 87: 
+ 88:     try {
+ 89:       if (isLogin) {
+ 90:         await signIn(email, password);
+ 91:         toast.success('Добро пожаловать!');
+ 92:       } else {
+ 93:         await signUp(email, password);
+ 94:         toast.success('Аккаунт создан! Проверьте почту для подтверждения.');
+ 95:       }
+ 96:     } catch (err) {
+ 97:       toast.error(err.message || 'Ошибка авторизации');
+ 98:     } finally {
+ 99:       submitBtn.disabled = false;
+100:       submitBtn.textContent = isLogin ? 'Войти' : 'Создать аккаунт';
+101:     }
+102:   }
+103: 
+104:   render();
+105: }
+
+================
+File: src/styles/variables.css
+================
+ 1: /* src/styles/variables.css — Дизайн-система фэнтезийной таверны («Путник и Дракон») */
+ 2: :root {
+ 3:   /* Цветовая палитра — Теплая таверна, мореный дуб, латунь и каминное пламя */
+ 4:   --bg-primary: #15110e;        /* Глубокий оттенок темного дуба */
+ 5:   --bg-secondary: #1e1713;      /* Полированный мореный дуб */
+ 6:   --bg-tertiary: #281f19;       /* Деревянная обшивка стен таверны */
+ 7:   --bg-card: #221a14;           /* Планшет / пергамент на дубовой подложке */
+ 8:   --bg-input: #120e0b;          /* Углубленный темный слот в дереве */
+ 9:   --bg-hover: #33271f;          /* Теплый отсвет камина */
+10:   --bg-parchment: #f4ecd8;      /* Светлый состаренный пергамент */
+11:   --bg-parchment-dark: #2a2018; /* Темный пергамент для хроники */
+12: 
+13:   /* Акценты: Пламя очага, червонное золото, сургуч и целебные травы */
+14:   --accent-primary: #c85a32;    /* Теплый янтарь / каминный огонь */
+15:   --accent-primary-hover: #dc6a3f;
+16:   --accent-secondary: #5a3825;  /* Выделанная седельная кожа */
+17:   --accent-gold: #d4a359;       /* Чеканное античное золото */
+18:   --accent-gold-bright: #f3c87a;/* Яркий золотой отблеск */
+19:   --accent-gold-dark: #9b7235;  /* Состаренная темная бронза */
+20:   --accent-success: #388e3c;    /* Травяной изумруд / исцеление */
+21:   --accent-danger: #a93226;     /* Королевский сургуч / урон */
+22:   --accent-crimson: #8b1e1f;    /* Кровь и жизненная сила (HP) */
+23:   --accent-info: #3b7a9e;       /* Рунический синий / магическая мана */
+24:   --accent-warning: #d97706;    /* Янтарный воск */
+25: 
+26:   /* Текст: пергаментные и чернильные оттенки */
+27:   --text-primary: #f5eedc;      /* Теплый светлый пергамент */
+28:   --text-secondary: #d5c7b5;    /* Состаренная бумага */
+29:   --text-muted: #ab9c8a;        /* Древесная зола (высококонтрастный теплый оттенок) */
+30:   --text-accent: #d4a359;       /* Золотое тиснение */
+31:   --text-gold: #f3c87a;         /* Золотое свечение */
+32:   --text-dark: #1e1713;         /* Темные чернила для светлых плашек */
+33: 
+34:   /* Рамки и филигрань */
+35:   --border-color: rgba(212, 163, 89, 0.22);  /* Латунная окантовка */
+36:   --border-subtle: rgba(255, 255, 255, 0.06);
+37:   --border-accent: #d4a359;                  /* Золотая кайма */
+38:   --border-gold: rgba(212, 163, 89, 0.45);   /* Чеканное золото */
+39:   --border-wood: #3d2f25;                    /* Стык дубовых досок */
+40: 
+41:   /* Типографика */
+42:   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+43:   --font-heading: 'Cinzel', 'MedievalSharp', 'Georgia', serif;
+44:   --font-story: 'MedievalSharp', 'Cinzel', 'Georgia', serif;
+45:   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+46: 
+47:   --fs-xs: 0.75rem;
+48:   --fs-sm: 0.875rem;
+49:   --fs-base: 1rem;
+50:   --fs-lg: 1.125rem;
+51:   --fs-xl: 1.25rem;
+52:   --fs-2xl: 1.5rem;
+53:   --fs-3xl: 2rem;
+54: 
+55:   /* Отступы */
+56:   --space-xs: 0.25rem;
+57:   --space-sm: 0.5rem;
+58:   --space-md: 1rem;
+59:   --space-lg: 1.5rem;
+60:   --space-xl: 2rem;
+61:   --space-2xl: 3rem;
+62: 
+63:   /* Скругления */
+64:   --radius-sm: 4px;
+65:   --radius-md: 8px;
+66:   --radius-lg: 12px;
+67:   --radius-xl: 18px;
+68:   --radius-full: 9999px;
+69: 
+70:   /* Тени и теплое каминное свечение */
+71:   --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.45);
+72:   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
+73:   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.7);
+74:   --shadow-glow: 0 0 18px rgba(212, 163, 89, 0.25);
+75:   --shadow-hearth: 0 0 24px rgba(200, 90, 50, 0.2);
+76:   --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+77: 
+78:   /* Анимации */
+79:   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+80:   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+81:   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+82: 
+83:   /* z-index */
+84:   --z-header: 100;
+85:   --z-sidebar: 200;
+86:   --z-modal: 300;
+87:   --z-toast: 400;
+88:   --z-overlay: 500;
+89: }
 
 ================
 File: src/utils/dice.js
@@ -13024,183 +13024,6 @@ File: tests/pipeline_integration.test.ts
 424: });
 
 ================
-File: tests/wild_zone_and_search.test.ts
-================
-  1: import { describe, it, expect } from "vitest";
-  2: import { SearchHandler, LootSearchHandler } from "../supabase/functions/process-turn/engine/handlers/loot_search_handler.ts";
-  3: import { buildRouterHeuristicFallback } from "../supabase/functions/process-turn/steps/step1_router.ts";
-  4: 
-  5: describe("SearchHandler & LootSearchHandler: No dummy 'находка' items", () => {
-  6:   it("SearchHandler with generic target ('находка', 'что-нибудь', or empty) produces perception fact, NOT an item mutation", () => {
-  7:     const handler = new SearchHandler();
-  8:     const context: any = {
-  9:       acting_player: {
- 10:         id: "player-vlad",
- 11:         name: "Влад",
- 12:         stats: { WIS: 14, INT: 14 },
- 13:       },
- 14:       session: { difficulty: "easy" },
- 15:     };
- 16: 
- 17:     // Case 1: target_item_name is "находка"
- 18:     const actionNahodka: any = {
- 19:       action_type: "search",
- 20:       target_item_name: "находка",
- 21:       ai_custom_dc: 2,
- 22:     };
- 23:     const res1 = handler.handle(actionNahodka, context);
- 24:     expect(res1.result.success).toBe(true);
- 25:     expect(res1.mutations).toHaveLength(0); // NO INSERT_ITEM for dummy "находка"!
- 26:     expect(res1.system_facts[0]).toContain("Влад внимательно осмотрел округу");
- 27: 
- 28:     // Case 2: target_item_name is null / empty
- 29:     const actionEmpty: any = {
- 30:       action_type: "search",
- 31:       target_item_name: null,
- 32:       ai_custom_dc: 2,
- 33:     };
- 34:     const res2 = handler.handle(actionEmpty, context);
- 35:     expect(res2.result.success).toBe(true);
- 36:     expect(res2.mutations).toHaveLength(0);
- 37:   });
- 38: 
- 39:   it("SearchHandler with specific target ('древний ключ') creates the specific item in mutations", () => {
- 40:     const handler = new SearchHandler();
- 41:     const context: any = {
- 42:       acting_player: {
- 43:         id: "player-vlad",
- 44:         name: "Влад",
- 45:         stats: { WIS: 14, INT: 14 },
- 46:       },
- 47:       session: { difficulty: "easy" },
- 48:     };
- 49: 
- 50:     const actionKey: any = {
- 51:       action_type: "search",
- 52:       target_item_name: "древний ключ",
- 53:     };
- 54:     const res = handler.handle(actionKey, context);
- 55:     expect(res.result.success).toBe(true);
- 56:     expect(res.mutations).toHaveLength(1);
- 57:     expect(res.mutations[0].type).toBe("INSERT_ITEM");
- 58:     expect(res.mutations[0].item.item_name).toBe("древний ключ");
- 59:   });
- 60: 
- 61:   it("LootSearchHandler resolves generic targets to 'Трофей (<TargetName>)' instead of dummy names", () => {
- 62:     const handler = new LootSearchHandler();
- 63:     const context: any = {
- 64:       acting_player: {
- 65:         id: "player-vlad",
- 66:         name: "Влад",
- 67:         stats: { INT: 30 },
- 68:       },
- 69:       session: { difficulty: "easy" },
- 70:       targets: {
- 71:         npcs: new Map([
- 72:           ["wolf-1", { id: "wolf-1", name: "Лютый волк", is_alive: false }],
- 73:         ]),
- 74:       },
- 75:     };
- 76: 
- 77:     const actionLoot: any = {
- 78:       action_type: "loot",
- 79:       target_entity_id: "wolf-1",
- 80:       target_item_name: "добыча",
- 81:     };
- 82:     const res = handler.handle(actionLoot, context);
- 83:     expect(res.result.success).toBe(true);
- 84:     expect(res.mutations).toHaveLength(1);
- 85:     expect(res.mutations[0].item.item_name).toBe("Трофей (Лютый волк)");
- 86:   });
- 87: });
- 88: 
- 89: describe("Router Heuristic: Gathering resources vs search", () => {
- 90:   it("'Ищу в округе камни' yields harvest_ambient for 'Камни' (material), NOT search", () => {
- 91:     const input: any = {
- 92:       player_action_text: "Ищу в округе камни",
- 93:       inventory: [],
- 94:       nearby_npcs: [],
- 95:     };
- 96:     const res = buildRouterHeuristicFallback(input);
- 97:     expect(res.actions).toHaveLength(1);
- 98:     expect(res.actions[0].action_type).toBe("harvest_ambient");
- 99:     expect(res.actions[0].target_item_name).toBe("Камни");
-100:     expect(res.actions[0].item_type).toBe("material");
-101:     expect(res.skill_hint).toBe("gathering");
-102:   });
-103: 
-104:   it("'Ищу палки в округе' yields harvest_ambient for 'Сухие ветки' (material)", () => {
-105:     const input: any = {
-106:       player_action_text: "Ищу палки в округе",
-107:       inventory: [],
-108:       nearby_npcs: [],
-109:     };
-110:     const res = buildRouterHeuristicFallback(input);
-111:     expect(res.actions).toHaveLength(1);
-112:     expect(res.actions[0].action_type).toBe("harvest_ambient");
-113:     expect(res.actions[0].target_item_name).toBe("Сухие ветки");
-114:     expect(res.actions[0].item_type).toBe("material");
-115:   });
-116: 
-117:   it("'Ищу грибы' yields harvest_ambient for 'Лесные грибы' (food)", () => {
-118:     const input: any = {
-119:       player_action_text: "Ищу грибы",
-120:       inventory: [],
-121:       nearby_npcs: [],
-122:     };
-123:     const res = buildRouterHeuristicFallback(input);
-124:     expect(res.actions).toHaveLength(1);
-125:     expect(res.actions[0].action_type).toBe("harvest_ambient");
-126:     expect(res.actions[0].target_item_name).toBe("Лесные грибы");
-127:     expect(res.actions[0].item_type).toBe("food");
-128:   });
-129: 
-130:   it("Generic search without resources has null target_item_name (never 'находка')", () => {
-131:     const input: any = {
-132:       player_action_text: "Обыскиваю старый чердак",
-133:       inventory: [],
-134:       nearby_npcs: [],
-135:     };
-136:     const res = buildRouterHeuristicFallback(input);
-137:     expect(res.actions).toHaveLength(1);
-138:     expect(res.actions[0].action_type).toBe("search");
-139:     expect(res.actions[0].target_item_name).toBeNull();
-140:   });
-141: });
-142: 
-143: describe("Wild Zone NPC Isolation: Town NPCs stay in town", () => {
-144:   it("filters out town merchants and citizens when in a wild zone", () => {
-145:     const isCompanionNpc = (n: any) => {
-146:       const role = (n.role || "").toLowerCase();
-147:       const tags = Array.isArray(n.status_tags) ? n.status_tags.map((t: string) => String(t).toLowerCase()) : [];
-148:       return role === "companion" || role === "спутник" || tags.some((t: string) => ["companion", "спутник", "в_отряде", "питомец", "приручен"].includes(t));
-149:     };
-150: 
-151:     const allNpcs = [
-152:       { id: "gordon", name: "Гордон", role: "secondary", status_tags: ["торговец"], is_hostile: false },
-153:       { id: "blacksmith", name: "Кузнец Торвальд", role: "secondary", status_tags: ["кузнец"], is_hostile: false },
-154:       { id: "companion-1", name: "Лидия", role: "companion", status_tags: ["спутник", "в_отряде"], is_hostile: false },
-155:       { id: "wolf", name: "Лесной волк", role: "mob", status_tags: ["дикий", "зверь"], is_hostile: true },
-156:     ];
-157: 
-158:     const currentWildZone = "Лес у Ривервуда";
-159: 
-160:     const filtered = currentWildZone
-161:       ? allNpcs.filter((n) =>
-162:           isCompanionNpc(n) ||
-163:           n.is_hostile === true ||
-164:           (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))
-165:         )
-166:       : allNpcs;
-167: 
-168:     expect(filtered).toHaveLength(2);
-169:     expect(filtered.map((n) => n.name)).toEqual(["Лидия", "Лесной волк"]);
-170:     expect(filtered.some((n) => n.name === "Гордон")).toBe(false);
-171:     expect(filtered.some((n) => n.name === "Кузнец Торвальд")).toBe(false);
-172:   });
-173: });
-
-================
 File: src/api/supabase.js
 ================
   1: // src/api/supabase.js — Клиент Supabase
@@ -15096,687 +14919,181 @@ File: tests/utils.test.ts
 140: });
 
 ================
-File: src/styles/main.css
+File: tests/wild_zone_and_search.test.ts
 ================
-  1: /* src/styles/main.css — Глобальные стили таверны («Путник и Дракон») */
-  2: @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=MedievalSharp&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-  3: @import './variables.css';
+  1: import { describe, it, expect } from "vitest";
+  2: import { SearchHandler, LootSearchHandler } from "../supabase/functions/process-turn/engine/handlers/loot_search_handler.ts";
+  3: import { buildRouterHeuristicFallback } from "../supabase/functions/process-turn/steps/step1_router.ts";
   4: 
-  5: /* Reset */
-  6: *, *::before, *::after {
-  7:   margin: 0;
-  8:   padding: 0;
-  9:   box-sizing: border-box;
- 10: }
- 11: 
- 12: html, body {
- 13:   height: 100%;
- 14:   font-family: var(--font-main);
- 15:   font-size: var(--fs-base);
- 16:   color: var(--text-primary);
- 17:   background: 
- 18:     radial-gradient(circle at 50% 0%, rgba(200, 90, 50, 0.09) 0%, transparent 65%),
- 19:     radial-gradient(circle at 85% 20%, rgba(212, 163, 89, 0.05) 0%, transparent 45%),
- 20:     var(--bg-primary);
- 21:   background-attachment: fixed;
- 22:   line-height: 1.6;
- 23:   -webkit-font-smoothing: antialiased;
- 24: }
- 25: 
- 26: a {
- 27:   color: var(--accent-gold);
- 28:   text-decoration: none;
- 29:   transition: all var(--transition-fast);
- 30: }
- 31: 
- 32: a:hover {
- 33:   color: var(--accent-gold-bright);
- 34:   text-shadow: 0 0 8px rgba(212, 163, 89, 0.4);
- 35: }
- 36: 
- 37: button {
- 38:   cursor: pointer;
- 39:   font-family: inherit;
- 40:   border: none;
- 41:   outline: none;
- 42: }
- 43: 
- 44: input, textarea, select {
- 45:   font-family: inherit;
- 46:   font-size: inherit;
- 47:   outline: none;
- 48: }
+  5: describe("SearchHandler & LootSearchHandler: No dummy 'находка' items", () => {
+  6:   it("SearchHandler with generic target ('находка', 'что-нибудь', or empty) produces perception fact, NOT an item mutation", () => {
+  7:     const handler = new SearchHandler();
+  8:     const context: any = {
+  9:       acting_player: {
+ 10:         id: "player-vlad",
+ 11:         name: "Влад",
+ 12:         stats: { WIS: 14, INT: 14 },
+ 13:       },
+ 14:       session: { difficulty: "easy" },
+ 15:     };
+ 16: 
+ 17:     // Case 1: target_item_name is "находка"
+ 18:     const actionNahodka: any = {
+ 19:       action_type: "search",
+ 20:       target_item_name: "находка",
+ 21:       ai_custom_dc: 2,
+ 22:     };
+ 23:     const res1 = handler.handle(actionNahodka, context);
+ 24:     expect(res1.result.success).toBe(true);
+ 25:     expect(res1.mutations).toHaveLength(0); // NO INSERT_ITEM for dummy "находка"!
+ 26:     expect(res1.system_facts[0]).toContain("Влад внимательно осмотрел округу");
+ 27: 
+ 28:     // Case 2: target_item_name is null / empty
+ 29:     const actionEmpty: any = {
+ 30:       action_type: "search",
+ 31:       target_item_name: null,
+ 32:       ai_custom_dc: 2,
+ 33:     };
+ 34:     const res2 = handler.handle(actionEmpty, context);
+ 35:     expect(res2.result.success).toBe(true);
+ 36:     expect(res2.mutations).toHaveLength(0);
+ 37:   });
+ 38: 
+ 39:   it("SearchHandler with specific target ('древний ключ') creates the specific item in mutations", () => {
+ 40:     const handler = new SearchHandler();
+ 41:     const context: any = {
+ 42:       acting_player: {
+ 43:         id: "player-vlad",
+ 44:         name: "Влад",
+ 45:         stats: { WIS: 14, INT: 14 },
+ 46:       },
+ 47:       session: { difficulty: "easy" },
+ 48:     };
  49: 
- 50: img {
- 51:   max-width: 100%;
- 52:   display: block;
- 53: }
- 54: 
- 55: /* ===================== Scrollbar ===================== */
- 56: ::-webkit-scrollbar {
- 57:   width: 7px;
- 58:   height: 7px;
- 59: }
+ 50:     const actionKey: any = {
+ 51:       action_type: "search",
+ 52:       target_item_name: "древний ключ",
+ 53:     };
+ 54:     const res = handler.handle(actionKey, context);
+ 55:     expect(res.result.success).toBe(true);
+ 56:     expect(res.mutations).toHaveLength(1);
+ 57:     expect(res.mutations[0].type).toBe("INSERT_ITEM");
+ 58:     expect(res.mutations[0].item.item_name).toBe("древний ключ");
+ 59:   });
  60: 
- 61: ::-webkit-scrollbar-track {
- 62:   background: rgba(18, 14, 11, 0.85);
- 63:   border-left: 1px solid rgba(212, 163, 89, 0.08);
- 64: }
- 65: 
- 66: ::-webkit-scrollbar-thumb {
- 67:   background: rgba(212, 163, 89, 0.3);
- 68:   border-radius: var(--radius-full);
- 69:   border: 1px solid rgba(212, 163, 89, 0.15);
- 70: }
- 71: 
- 72: ::-webkit-scrollbar-thumb:hover {
- 73:   background: rgba(212, 163, 89, 0.55);
- 74:   box-shadow: 0 0 6px rgba(212, 163, 89, 0.4);
- 75: }
+ 61:   it("LootSearchHandler resolves generic targets to 'Трофей (<TargetName>)' instead of dummy names", () => {
+ 62:     const handler = new LootSearchHandler();
+ 63:     const context: any = {
+ 64:       acting_player: {
+ 65:         id: "player-vlad",
+ 66:         name: "Влад",
+ 67:         stats: { INT: 30 },
+ 68:       },
+ 69:       session: { difficulty: "easy" },
+ 70:       targets: {
+ 71:         npcs: new Map([
+ 72:           ["wolf-1", { id: "wolf-1", name: "Лютый волк", is_alive: false }],
+ 73:         ]),
+ 74:       },
+ 75:     };
  76: 
- 77: /* ===================== Layout ===================== */
- 78: #app {
- 79:   height: 100%;
- 80:   display: flex;
- 81:   flex-direction: column;
- 82: }
- 83: 
- 84: .page {
- 85:   flex: 1;
- 86:   display: flex;
- 87:   flex-direction: column;
- 88:   min-height: 100vh;
- 89: }
- 90: 
- 91: .page-centered {
- 92:   align-items: center;
- 93:   justify-content: center;
- 94:   padding: var(--space-xl);
- 95: }
- 96: 
- 97: /* ===================== Buttons ===================== */
- 98: .btn {
- 99:   display: inline-flex;
-100:   align-items: center;
-101:   justify-content: center;
-102:   gap: var(--space-sm);
-103:   padding: var(--space-sm) var(--space-lg);
-104:   border-radius: var(--radius-md);
-105:   font-family: var(--font-heading);
-106:   font-weight: 600;
-107:   font-size: var(--fs-sm);
-108:   letter-spacing: 0.3px;
-109:   transition: all var(--transition-fast);
-110:   white-space: nowrap;
-111:   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-112:   user-select: none;
-113: }
-114: 
-115: .btn:active:not(:disabled) {
-116:   transform: translateY(1px) scale(0.98);
-117:   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-118: }
-119: 
-120: .btn-primary {
-121:   background: linear-gradient(180deg, #c85a32 0%, #9e381b 100%);
-122:   color: #fff8f0;
-123:   border: 1px solid rgba(243, 200, 122, 0.4);
-124:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-125: }
-126: 
-127: .btn-primary:hover:not(:disabled) {
-128:   background: linear-gradient(180deg, #dc6a3f 0%, #ab4223 100%);
-129:   box-shadow: 0 0 14px rgba(200, 90, 50, 0.45), 0 2px 6px rgba(0, 0, 0, 0.5);
-130:   border-color: rgba(243, 200, 122, 0.6);
-131: }
-132: 
-133: .btn-secondary {
-134:   background: linear-gradient(180deg, #2b211a 0%, #1d1612 100%);
-135:   color: var(--text-primary);
-136:   border: 1px solid var(--border-color);
-137: }
-138: 
-139: .btn-secondary:hover:not(:disabled) {
-140:   background: linear-gradient(180deg, #372a21 0%, #251c17 100%);
-141:   border-color: var(--accent-gold);
-142:   color: var(--accent-gold-bright);
-143:   box-shadow: 0 0 10px rgba(212, 163, 89, 0.2);
-144: }
-145: 
-146: .btn-ghost {
-147:   background: transparent;
-148:   color: var(--text-secondary);
-149:   box-shadow: none;
-150: }
-151: 
-152: .btn-ghost:hover:not(:disabled) {
-153:   background: rgba(212, 163, 89, 0.1);
-154:   color: var(--accent-gold-bright);
-155: }
-156: 
-157: .btn-danger {
-158:   background: linear-gradient(180deg, #a93226 0%, #782218 100%);
-159:   color: #fff;
-160:   border: 1px solid rgba(255, 120, 120, 0.25);
-161:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-162: }
-163: 
-164: .btn-danger:hover:not(:disabled) {
-165:   background: linear-gradient(180deg, #c0392b 0%, #8b281d 100%);
-166:   box-shadow: 0 0 12px rgba(169, 50, 38, 0.4);
-167: }
-168: 
-169: .btn-gold {
-170:   background: linear-gradient(180deg, #e5b364 0%, #b88331 100%);
-171:   color: #17110a;
-172:   border: 1px solid #f6d89b;
-173:   font-weight: 700;
-174:   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
-175: }
-176: 
-177: .btn-gold:hover:not(:disabled) {
-178:   background: linear-gradient(180deg, #f1c77b 0%, #c6923c 100%);
-179:   box-shadow: 0 0 14px rgba(212, 163, 89, 0.45);
-180: }
-181: 
-182: .btn-warning {
-183:   background: linear-gradient(180deg, #d97706 0%, #92400e 100%);
-184:   color: #fff;
-185:   border: 1px solid rgba(251, 191, 36, 0.3);
-186:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-187: }
-188: 
-189: .btn-warning:hover:not(:disabled) {
-190:   background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
-191:   box-shadow: 0 0 12px rgba(217, 119, 6, 0.4);
-192: }
-193: 
-194: .btn-success {
-195:   background: linear-gradient(180deg, #2e7d32 0%, #1b5e20 100%);
-196:   color: #fff;
-197:   border: 1px solid rgba(129, 199, 132, 0.3);
-198:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-199: }
-200: 
-201: .btn-success:hover:not(:disabled) {
-202:   background: linear-gradient(180deg, #388e3c 0%, #2e7d32 100%);
-203:   box-shadow: 0 0 12px rgba(46, 125, 50, 0.4);
-204: }
-205: 
-206: .btn:disabled {
-207:   opacity: 0.45;
-208:   cursor: not-allowed;
-209:   filter: grayscale(0.5);
-210:   box-shadow: none;
-211: }
-212: 
-213: .btn-sm {
-214:   padding: var(--space-xs) var(--space-md);
-215:   font-size: var(--fs-xs);
-216: }
-217: 
-218: .btn-lg {
-219:   padding: var(--space-md) var(--space-xl);
-220:   font-size: var(--fs-lg);
-221: }
-222: 
-223: .btn-icon {
-224:   width: 40px;
-225:   height: 40px;
-226:   padding: 0;
-227:   border-radius: var(--radius-md);
-228: }
-229: 
-230: /* ===================== Form Elements ===================== */
-231: .input {
-232:   width: 100%;
-233:   padding: var(--space-sm) var(--space-md);
-234:   background: var(--bg-input);
-235:   border: 1px solid var(--border-color);
-236:   border-radius: var(--radius-md);
-237:   color: var(--text-primary);
-238:   font-size: var(--fs-base);
-239:   box-shadow: var(--shadow-inset);
-240:   transition: all var(--transition-fast);
-241: }
-242: 
-243: .input:focus {
-244:   border-color: var(--accent-gold);
-245:   box-shadow: var(--shadow-inset), 0 0 0 2px rgba(212, 163, 89, 0.25);
-246: }
-247: 
-248: .input::placeholder {
-249:   color: var(--text-muted);
-250: }
-251: 
-252: textarea.input {
-253:   resize: vertical;
-254:   min-height: 80px;
-255:   font-family: var(--font-main);
-256: }
-257: 
-258: .select {
-259:   appearance: none;
-260:   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23d4a359' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-261:   background-repeat: no-repeat;
-262:   background-position: right 12px center;
-263:   padding-right: 36px;
-264: }
-265: 
-266: .form-group {
-267:   display: flex;
-268:   flex-direction: column;
-269:   gap: var(--space-xs);
-270: }
-271: 
-272: .form-label {
-273:   font-family: var(--font-heading);
-274:   font-size: var(--fs-sm);
-275:   font-weight: 600;
-276:   color: var(--accent-gold);
-277:   letter-spacing: 0.3px;
-278: }
-279: 
-280: .form-hint {
-281:   font-size: var(--fs-xs);
-282:   color: var(--text-muted);
-283: }
-284: 
-285: /* ===================== Cards (Tavern Wooden Tablets) ===================== */
-286: .card {
-287:   background: linear-gradient(180deg, #241c16 0%, #1c1511 100%);
-288:   border: 1px solid var(--border-color);
-289:   border-radius: var(--radius-lg);
-290:   padding: var(--space-lg);
-291:   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-292:   transition: all var(--transition-fast);
-293: }
-294: 
-295: .card:hover {
-296:   border-color: var(--accent-gold);
-297:   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6), 0 0 14px rgba(212, 163, 89, 0.16);
-298: }
-299: 
-300: .card-header {
-301:   display: flex;
-302:   align-items: center;
-303:   justify-content: space-between;
-304:   margin-bottom: var(--space-md);
-305:   border-bottom: 1px solid rgba(212, 163, 89, 0.12);
-306:   padding-bottom: var(--space-sm);
-307: }
-308: 
-309: .card-title {
-310:   font-family: var(--font-heading);
-311:   font-size: var(--fs-xl);
-312:   font-weight: 700;
-313:   color: var(--accent-gold-bright);
-314:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-315:   letter-spacing: 0.3px;
-316: }
-317: 
-318: /* ===================== Badge (Wax Seals & Brass Labels) ===================== */
-319: .badge {
-320:   display: inline-flex;
-321:   align-items: center;
-322:   padding: 3px 10px;
-323:   border-radius: var(--radius-full);
-324:   font-family: var(--font-heading);
-325:   font-size: var(--fs-xs);
-326:   font-weight: 600;
-327:   letter-spacing: 0.3px;
-328:   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-329: }
-330: 
-331: .badge-primary {
-332:   background: rgba(200, 90, 50, 0.2);
-333:   color: #f39c12;
-334:   border: 1px solid rgba(200, 90, 50, 0.4);
-335: }
-336: 
-337: .badge-success {
-338:   background: rgba(56, 142, 60, 0.2);
-339:   color: #81c784;
-340:   border: 1px solid rgba(56, 142, 60, 0.4);
-341: }
-342: 
-343: .badge-gold {
-344:   background: rgba(212, 163, 89, 0.2);
-345:   color: var(--accent-gold-bright);
-346:   border: 1px solid rgba(212, 163, 89, 0.45);
-347: }
-348: 
-349: .badge-info {
-350:   background: rgba(59, 122, 158, 0.2);
-351:   color: #7fb3d5;
-352:   border: 1px solid rgba(59, 122, 158, 0.4);
-353: }
-354: 
-355: .badge-secondary {
-356:   background: rgba(197, 182, 163, 0.12);
-357:   color: var(--text-secondary);
-358:   border: 1px solid rgba(197, 182, 163, 0.2);
-359: }
-360: 
-361: .badge-warning {
-362:   background: rgba(217, 119, 6, 0.2);
-363:   color: #fbbf24;
-364:   border: 1px solid rgba(217, 119, 6, 0.4);
-365: }
-366: 
-367: .badge-danger {
-368:   background: rgba(169, 50, 38, 0.2);
-369:   color: #f1948a;
-370:   border: 1px solid rgba(169, 50, 38, 0.4);
-371: }
-372: 
-373: /* ===================== Toggle Switch ===================== */
-374: .toggle {
-375:   position: relative;
-376:   width: 48px;
-377:   height: 26px;
-378:   background: var(--bg-input);
-379:   border: 1px solid var(--border-color);
-380:   border-radius: var(--radius-full);
-381:   cursor: pointer;
-382:   box-shadow: var(--shadow-inset);
-383:   transition: all var(--transition-fast);
-384: }
-385: 
-386: .toggle.active {
-387:   background: var(--accent-primary);
-388:   border-color: var(--accent-gold);
-389:   box-shadow: 0 0 10px rgba(200, 90, 50, 0.4);
-390: }
-391: 
-392: .toggle::after {
-393:   content: '';
-394:   position: absolute;
-395:   top: 2px;
-396:   left: 2px;
-397:   width: 20px;
-398:   height: 20px;
-399:   background: linear-gradient(180deg, #f6d89b 0%, #d4a359 100%);
-400:   border-radius: 50%;
-401:   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-402:   transition: transform var(--transition-fast);
-403: }
-404: 
-405: .toggle.active::after {
-406:   transform: translateX(22px);
-407:   background: #fff;
-408: }
-409: 
-410: /* ===================== Modal (Grimoire / Ancient Ledger) ===================== */
-411: .modal-overlay {
-412:   position: fixed;
-413:   inset: 0;
-414:   background: rgba(10, 8, 6, 0.82);
-415:   backdrop-filter: blur(8px);
-416:   -webkit-backdrop-filter: blur(8px);
-417:   display: flex;
-418:   align-items: center;
-419:   justify-content: center;
-420:   z-index: var(--z-modal);
-421:   opacity: 0;
-422:   pointer-events: none;
-423:   transition: opacity var(--transition-base);
-424: }
-425: 
-426: .modal-overlay.open {
-427:   opacity: 1;
-428:   pointer-events: all;
-429: }
-430: 
-431: .modal {
-432:   background: linear-gradient(180deg, #251d17 0%, #1a130f 100%);
-433:   border: 1px solid var(--border-gold);
-434:   border-radius: var(--radius-lg);
-435:   padding: var(--space-xl);
-436:   max-width: 520px;
-437:   width: 90%;
-438:   max-height: 85vh;
-439:   overflow-y: auto;
-440:   box-shadow: 0 14px 45px rgba(0, 0, 0, 0.85), 0 0 25px rgba(212, 163, 89, 0.15);
-441:   transform: translateY(20px) scale(0.98);
-442:   transition: all var(--transition-base);
-443: }
-444: 
-445: .modal-overlay.open .modal {
-446:   transform: translateY(0) scale(1);
-447: }
-448: 
-449: /* ===================== Toast Notifications ===================== */
-450: .toast-container {
-451:   position: fixed;
-452:   top: var(--space-lg);
-453:   right: var(--space-lg);
-454:   z-index: var(--z-toast);
-455:   display: flex;
-456:   flex-direction: column;
-457:   gap: var(--space-sm);
-458: }
-459: 
-460: .toast {
-461:   background: linear-gradient(180deg, #271f19 0%, #1e1713 100%);
-462:   border: 1px solid var(--border-color);
-463:   border-radius: var(--radius-md);
-464:   padding: var(--space-md) var(--space-lg);
-465:   min-width: 290px;
-466:   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
-467:   animation: slideIn 0.3s ease;
-468:   color: var(--text-primary);
-469:   font-family: var(--font-main);
-470: }
-471: 
-472: .toast-success { border-left: 4px solid var(--accent-success); }
-473: .toast-error { border-left: 4px solid var(--accent-danger); }
-474: .toast-info { border-left: 4px solid var(--accent-info); }
-475: .toast-warning { border-left: 4px solid var(--accent-gold); }
-476: 
-477: @keyframes slideIn {
-478:   from { transform: translateX(100%); opacity: 0; }
-479:   to { transform: translateX(0); opacity: 1; }
-480: }
-481: 
-482: /* ===================== HP Bar (Vitality Vial) ===================== */
-483: .hp-bar-container {
-484:   width: 100%;
-485:   height: 10px;
-486:   background: rgba(18, 14, 11, 0.85);
-487:   border: 1px solid rgba(212, 163, 89, 0.2);
-488:   border-radius: var(--radius-full);
-489:   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
-490:   overflow: hidden;
-491: }
-492: 
-493: .hp-bar {
-494:   height: 100%;
-495:   background: linear-gradient(90deg, #2e7d32, #43a047);
-496:   border-radius: var(--radius-full);
-497:   box-shadow: 0 0 8px rgba(67, 160, 71, 0.5);
-498:   transition: width var(--transition-base);
-499: }
-500: 
-501: .hp-bar.low {
-502:   background: linear-gradient(90deg, #d97706, #f59e0b);
-503:   box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
-504: }
-505: 
-506: .hp-bar.critical {
-507:   background: linear-gradient(90deg, #9e2a2b, #c0392b);
-508:   box-shadow: 0 0 10px rgba(192, 57, 43, 0.7);
-509:   animation: hpPulse 1.5s infinite ease-in-out;
-510: }
-511: 
-512: @keyframes hpPulse {
-513:   0%, 100% { opacity: 1; }
-514:   50% { opacity: 0.6; }
-515: }
-516: 
-517: /* ===================== Character Stats Grid (Brass Plaques) ===================== */
-518: .stats-grid-3,
-519: .stats-grid-6 {
-520:   display: grid;
-521:   grid-template-columns: repeat(3, 1fr);
-522:   gap: var(--space-sm);
-523: }
-524: 
-525: .stat-card {
-526:   background: linear-gradient(180deg, #292019 0%, #1f1712 100%);
-527:   border: 1px solid rgba(212, 163, 89, 0.25);
-528:   border-radius: var(--radius-md);
-529:   padding: var(--space-sm) var(--space-md);
-530:   text-align: center;
-531:   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(212, 163, 89, 0.1);
-532:   transition: all var(--transition-fast);
-533: }
-534: 
-535: .stat-card:hover {
-536:   border-color: var(--accent-gold);
-537:   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55), 0 0 10px rgba(212, 163, 89, 0.2);
-538: }
-539: 
-540: .stat-card-label {
-541:   font-family: var(--font-heading);
-542:   font-size: var(--fs-xs);
-543:   font-weight: 700;
-544:   color: var(--accent-gold);
-545:   text-transform: uppercase;
-546:   letter-spacing: 0.5px;
-547: }
-548: 
-549: .stat-card-value {
-550:   font-size: var(--fs-xl);
-551:   font-weight: 700;
-552:   color: var(--text-primary);
-553:   font-family: var(--font-mono);
-554:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-555: }
-556: 
-557: .stat-card-modifier {
-558:   font-size: var(--fs-xs);
-559:   color: var(--accent-gold-bright);
-560:   font-weight: 600;
-561: }
-562: 
-563: .stat-card-input {
-564:   width: 100%;
-565:   padding: var(--space-sm);
-566:   background: var(--bg-input);
-567:   border: 1px solid var(--border-color);
-568:   border-radius: var(--radius-md);
-569:   color: var(--text-primary);
-570:   font-size: var(--fs-lg);
-571:   font-weight: 700;
-572:   text-align: center;
-573:   font-family: var(--font-mono);
-574:   box-shadow: var(--shadow-inset);
-575:   transition: all var(--transition-fast);
-576: }
-577: 
-578: .stat-card-input:focus {
-579:   border-color: var(--accent-gold);
-580:   box-shadow: var(--shadow-inset), 0 0 0 2px rgba(212, 163, 89, 0.25);
-581: }
-582: 
-583: .stats-sum {
-584:   display: inline-flex;
-585:   align-items: center;
-586:   gap: var(--space-xs);
-587:   padding: var(--space-xs) var(--space-md);
-588:   background: rgba(212, 163, 89, 0.12);
-589:   border: 1px solid rgba(212, 163, 89, 0.3);
-590:   border-radius: var(--radius-full);
-591:   font-size: var(--fs-sm);
-592:   font-weight: 600;
-593:   color: var(--text-secondary);
-594: }
-595: 
-596: .stats-sum strong {
-597:   color: var(--accent-gold-bright);
-598: }
-599: 
-600: /* ===================== Responsive ===================== */
-601: @media (max-width: 768px) {
-602:   :root {
-603:     --fs-base: 0.9375rem;
-604:   }
-605: 
-606:   .btn-lg {
-607:     padding: var(--space-sm) var(--space-lg);
-608:   }
-609: 
-610:   .card {
-611:     padding: var(--space-md);
-612:   }
-613: 
-614:   .modal {
-615:     width: 100%;
-616:     max-width: 100%;
-617:     height: 100%;
-618:     max-height: 100vh;
-619:     border-radius: 0;
-620:     padding: var(--space-md);
-621:   }
-622: 
-623:   .modal-overlay {
-624:     align-items: flex-end;
-625:   }
-626: 
-627:   .modal-overlay.open .modal {
-628:     transform: translateY(0);
-629:   }
-630: 
-631:   .toast-container {
-632:     top: var(--space-sm);
-633:     right: var(--space-sm);
-634:     left: var(--space-sm);
-635:   }
-636: 
-637:   .toast {
-638:     min-width: auto;
-639:     width: 100%;
-640:   }
-641: 
-642:   .btn {
-643:     min-height: 42px;
-644:     padding: var(--space-sm) var(--space-md);
-645:   }
-646: 
-647:   .btn-sm {
-648:     min-height: 36px;
-649:   }
-650: 
-651:   .input {
-652:     font-size: 16px;
-653:     padding: var(--space-sm) var(--space-md);
-654:   }
-655: 
-656:   textarea.input {
-657:     min-height: 90px;
-658:   }
-659: }
-660: 
-661: @media (max-width: 480px) {
-662:   :root {
-663:     --fs-base: 0.875rem;
-664:   }
-665: 
-666:   .btn {
-667:     padding: var(--space-xs) var(--space-sm);
-668:     font-size: var(--fs-sm);
-669:   }
-670: 
-671:   .card {
-672:     padding: var(--space-sm);
-673:     border-radius: var(--radius-md);
-674:   }
-675: 
-676:   .card-title {
-677:     font-size: var(--fs-lg);
-678:   }
-679: }
+ 77:     const actionLoot: any = {
+ 78:       action_type: "loot",
+ 79:       target_entity_id: "wolf-1",
+ 80:       target_item_name: "добыча",
+ 81:     };
+ 82:     const res = handler.handle(actionLoot, context);
+ 83:     expect(res.result.success).toBe(true);
+ 84:     expect(res.mutations).toHaveLength(1);
+ 85:     expect(res.mutations[0].item.item_name).toBe("Трофей (Лютый волк)");
+ 86:   });
+ 87: });
+ 88: 
+ 89: describe("Router Heuristic: Gathering resources vs search", () => {
+ 90:   it("'Ищу в округе камни' yields harvest_ambient for 'Камни' (material), NOT search", () => {
+ 91:     const input: any = {
+ 92:       player_action_text: "Ищу в округе камни",
+ 93:       inventory: [],
+ 94:       nearby_npcs: [],
+ 95:     };
+ 96:     const res = buildRouterHeuristicFallback(input);
+ 97:     expect(res.actions).toHaveLength(1);
+ 98:     expect(res.actions[0].action_type).toBe("harvest_ambient");
+ 99:     expect(res.actions[0].target_item_name).toBe("Камни");
+100:     expect(res.actions[0].item_type).toBe("material");
+101:     expect(res.skill_hint).toBe("gathering");
+102:   });
+103: 
+104:   it("'Ищу палки в округе' yields harvest_ambient for 'Сухие ветки' (material)", () => {
+105:     const input: any = {
+106:       player_action_text: "Ищу палки в округе",
+107:       inventory: [],
+108:       nearby_npcs: [],
+109:     };
+110:     const res = buildRouterHeuristicFallback(input);
+111:     expect(res.actions).toHaveLength(1);
+112:     expect(res.actions[0].action_type).toBe("harvest_ambient");
+113:     expect(res.actions[0].target_item_name).toBe("Сухие ветки");
+114:     expect(res.actions[0].item_type).toBe("material");
+115:   });
+116: 
+117:   it("'Ищу грибы' yields harvest_ambient for 'Лесные грибы' (food)", () => {
+118:     const input: any = {
+119:       player_action_text: "Ищу грибы",
+120:       inventory: [],
+121:       nearby_npcs: [],
+122:     };
+123:     const res = buildRouterHeuristicFallback(input);
+124:     expect(res.actions).toHaveLength(1);
+125:     expect(res.actions[0].action_type).toBe("harvest_ambient");
+126:     expect(res.actions[0].target_item_name).toBe("Лесные грибы");
+127:     expect(res.actions[0].item_type).toBe("food");
+128:   });
+129: 
+130:   it("Generic search without resources has null target_item_name (never 'находка')", () => {
+131:     const input: any = {
+132:       player_action_text: "Обыскиваю старый чердак",
+133:       inventory: [],
+134:       nearby_npcs: [],
+135:     };
+136:     const res = buildRouterHeuristicFallback(input);
+137:     expect(res.actions).toHaveLength(1);
+138:     expect(res.actions[0].action_type).toBe("search");
+139:     expect(res.actions[0].target_item_name).toBeNull();
+140:   });
+141: });
+142: 
+143: describe("Wild Zone NPC Isolation: Town NPCs stay in town", () => {
+144:   it("filters out town merchants and citizens when in a wild zone", () => {
+145:     const isCompanionNpc = (n: any) => {
+146:       const role = (n.role || "").toLowerCase();
+147:       const tags = Array.isArray(n.status_tags) ? n.status_tags.map((t: string) => String(t).toLowerCase()) : [];
+148:       return role === "companion" || role === "спутник" || tags.some((t: string) => ["companion", "спутник", "в_отряде", "питомец", "приручен"].includes(t));
+149:     };
+150: 
+151:     const allNpcs = [
+152:       { id: "gordon", name: "Гордон", role: "secondary", status_tags: ["торговец"], is_hostile: false },
+153:       { id: "blacksmith", name: "Кузнец Торвальд", role: "secondary", status_tags: ["кузнец"], is_hostile: false },
+154:       { id: "companion-1", name: "Лидия", role: "companion", status_tags: ["спутник", "в_отряде"], is_hostile: false },
+155:       { id: "wolf", name: "Лесной волк", role: "mob", status_tags: ["дикий", "зверь"], is_hostile: true },
+156:     ];
+157: 
+158:     const currentWildZone = "Лес у Ривервуда";
+159: 
+160:     const filtered = currentWildZone
+161:       ? allNpcs.filter((n) =>
+162:           isCompanionNpc(n) ||
+163:           n.is_hostile === true ||
+164:           (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))
+165:         )
+166:       : allNpcs;
+167: 
+168:     expect(filtered).toHaveLength(2);
+169:     expect(filtered.map((n) => n.name)).toEqual(["Лидия", "Лесной волк"]);
+170:     expect(filtered.some((n) => n.name === "Гордон")).toBe(false);
+171:     expect(filtered.some((n) => n.name === "Кузнец Торвальд")).toBe(false);
+172:   });
+173: });
 
 ================
 File: tests/steps/step2_engine.test.ts
@@ -17434,6 +16751,732 @@ File: tests/pet_taming.test.ts
 305:     });
 306:   });
 307: });
+
+================
+File: src/styles/main.css
+================
+  1: /* src/styles/main.css — Глобальные стили таверны («Путник и Дракон») */
+  2: @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=MedievalSharp&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  3: @import './variables.css';
+  4: 
+  5: /* Reset */
+  6: *, *::before, *::after {
+  7:   margin: 0;
+  8:   padding: 0;
+  9:   box-sizing: border-box;
+ 10: }
+ 11: 
+ 12: html, body {
+ 13:   height: 100%;
+ 14:   font-family: var(--font-main);
+ 15:   font-size: var(--fs-base);
+ 16:   color: var(--text-primary);
+ 17:   background: 
+ 18:     radial-gradient(circle at 50% 0%, rgba(200, 90, 50, 0.09) 0%, transparent 65%),
+ 19:     radial-gradient(circle at 85% 20%, rgba(212, 163, 89, 0.05) 0%, transparent 45%),
+ 20:     var(--bg-primary);
+ 21:   background-attachment: fixed;
+ 22:   line-height: 1.6;
+ 23:   -webkit-font-smoothing: antialiased;
+ 24: }
+ 25: 
+ 26: a {
+ 27:   color: var(--accent-gold);
+ 28:   text-decoration: none;
+ 29:   transition: all var(--transition-fast);
+ 30: }
+ 31: 
+ 32: a:hover {
+ 33:   color: var(--accent-gold-bright);
+ 34:   text-shadow: 0 0 8px rgba(212, 163, 89, 0.4);
+ 35: }
+ 36: 
+ 37: button {
+ 38:   cursor: pointer;
+ 39:   font-family: inherit;
+ 40:   border: none;
+ 41:   outline: none;
+ 42: }
+ 43: 
+ 44: input, textarea, select {
+ 45:   font-family: inherit;
+ 46:   font-size: inherit;
+ 47:   outline: none;
+ 48: }
+ 49: 
+ 50: img {
+ 51:   max-width: 100%;
+ 52:   display: block;
+ 53: }
+ 54: 
+ 55: /* ===================== Scrollbar ===================== */
+ 56: ::-webkit-scrollbar {
+ 57:   width: 7px;
+ 58:   height: 7px;
+ 59: }
+ 60: 
+ 61: ::-webkit-scrollbar-track {
+ 62:   background: rgba(18, 14, 11, 0.85);
+ 63:   border-left: 1px solid rgba(212, 163, 89, 0.08);
+ 64: }
+ 65: 
+ 66: ::-webkit-scrollbar-thumb {
+ 67:   background: rgba(212, 163, 89, 0.3);
+ 68:   border-radius: var(--radius-full);
+ 69:   border: 1px solid rgba(212, 163, 89, 0.15);
+ 70: }
+ 71: 
+ 72: ::-webkit-scrollbar-thumb:hover {
+ 73:   background: rgba(212, 163, 89, 0.55);
+ 74:   box-shadow: 0 0 6px rgba(212, 163, 89, 0.4);
+ 75: }
+ 76: 
+ 77: /* ===================== Layout ===================== */
+ 78: #app {
+ 79:   height: 100%;
+ 80:   display: flex;
+ 81:   flex-direction: column;
+ 82: }
+ 83: 
+ 84: .page {
+ 85:   flex: 1;
+ 86:   display: flex;
+ 87:   flex-direction: column;
+ 88:   min-height: 100vh;
+ 89: }
+ 90: 
+ 91: .page-centered {
+ 92:   align-items: center;
+ 93:   justify-content: center;
+ 94:   padding: var(--space-xl);
+ 95: }
+ 96: 
+ 97: /* ===================== Buttons ===================== */
+ 98: .btn {
+ 99:   display: inline-flex;
+100:   align-items: center;
+101:   justify-content: center;
+102:   gap: var(--space-sm);
+103:   padding: var(--space-sm) var(--space-lg);
+104:   border-radius: var(--radius-md);
+105:   font-family: var(--font-heading);
+106:   font-weight: 600;
+107:   font-size: var(--fs-sm);
+108:   letter-spacing: 0.3px;
+109:   transition: all var(--transition-fast);
+110:   white-space: nowrap;
+111:   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+112:   user-select: none;
+113: }
+114: 
+115: .btn:active:not(:disabled) {
+116:   transform: translateY(1px) scale(0.98);
+117:   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+118: }
+119: 
+120: .btn-primary {
+121:   background: linear-gradient(180deg, #c85a32 0%, #9e381b 100%);
+122:   color: #fff8f0;
+123:   border: 1px solid rgba(243, 200, 122, 0.4);
+124:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+125: }
+126: 
+127: .btn-primary:hover:not(:disabled) {
+128:   background: linear-gradient(180deg, #dc6a3f 0%, #ab4223 100%);
+129:   box-shadow: 0 0 14px rgba(200, 90, 50, 0.45), 0 2px 6px rgba(0, 0, 0, 0.5);
+130:   border-color: rgba(243, 200, 122, 0.6);
+131: }
+132: 
+133: .btn-secondary {
+134:   background: linear-gradient(180deg, #2b211a 0%, #1d1612 100%);
+135:   color: var(--text-primary);
+136:   border: 1px solid var(--border-color);
+137: }
+138: 
+139: .btn-secondary:hover:not(:disabled) {
+140:   background: linear-gradient(180deg, #372a21 0%, #251c17 100%);
+141:   border-color: var(--accent-gold);
+142:   color: var(--accent-gold-bright);
+143:   box-shadow: 0 0 10px rgba(212, 163, 89, 0.2);
+144: }
+145: 
+146: .btn-ghost {
+147:   background: transparent;
+148:   color: var(--text-secondary);
+149:   box-shadow: none;
+150: }
+151: 
+152: .btn-ghost:hover:not(:disabled) {
+153:   background: rgba(212, 163, 89, 0.1);
+154:   color: var(--accent-gold-bright);
+155: }
+156: 
+157: .btn-danger {
+158:   background: linear-gradient(180deg, #a93226 0%, #782218 100%);
+159:   color: #fff;
+160:   border: 1px solid rgba(255, 120, 120, 0.25);
+161:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+162: }
+163: 
+164: .btn-danger:hover:not(:disabled) {
+165:   background: linear-gradient(180deg, #c0392b 0%, #8b281d 100%);
+166:   box-shadow: 0 0 12px rgba(169, 50, 38, 0.4);
+167: }
+168: 
+169: .btn-gold {
+170:   background: linear-gradient(180deg, #e5b364 0%, #b88331 100%);
+171:   color: #17110a;
+172:   border: 1px solid #f6d89b;
+173:   font-weight: 700;
+174:   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
+175: }
+176: 
+177: .btn-gold:hover:not(:disabled) {
+178:   background: linear-gradient(180deg, #f1c77b 0%, #c6923c 100%);
+179:   box-shadow: 0 0 14px rgba(212, 163, 89, 0.45);
+180: }
+181: 
+182: .btn-warning {
+183:   background: linear-gradient(180deg, #d97706 0%, #92400e 100%);
+184:   color: #fff;
+185:   border: 1px solid rgba(251, 191, 36, 0.3);
+186:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+187: }
+188: 
+189: .btn-warning:hover:not(:disabled) {
+190:   background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+191:   box-shadow: 0 0 12px rgba(217, 119, 6, 0.4);
+192: }
+193: 
+194: .btn-success {
+195:   background: linear-gradient(180deg, #2e7d32 0%, #1b5e20 100%);
+196:   color: #fff;
+197:   border: 1px solid rgba(129, 199, 132, 0.3);
+198:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+199: }
+200: 
+201: .btn-success:hover:not(:disabled) {
+202:   background: linear-gradient(180deg, #388e3c 0%, #2e7d32 100%);
+203:   box-shadow: 0 0 12px rgba(46, 125, 50, 0.4);
+204: }
+205: 
+206: .btn:disabled {
+207:   opacity: 0.45;
+208:   cursor: not-allowed;
+209:   filter: grayscale(0.5);
+210:   box-shadow: none;
+211: }
+212: 
+213: .btn-sm {
+214:   padding: var(--space-xs) var(--space-md);
+215:   font-size: var(--fs-xs);
+216: }
+217: 
+218: .btn-lg {
+219:   padding: var(--space-md) var(--space-xl);
+220:   font-size: var(--fs-lg);
+221: }
+222: 
+223: .btn-icon {
+224:   width: 40px;
+225:   height: 40px;
+226:   padding: 0;
+227:   border-radius: var(--radius-md);
+228: }
+229: 
+230: /* ===================== Form Elements ===================== */
+231: .input {
+232:   width: 100%;
+233:   padding: var(--space-sm) var(--space-md);
+234:   background: var(--bg-input);
+235:   border: 1px solid var(--border-color);
+236:   border-radius: var(--radius-md);
+237:   color: var(--text-primary);
+238:   font-size: var(--fs-base);
+239:   box-shadow: var(--shadow-inset);
+240:   transition: all var(--transition-fast);
+241: }
+242: 
+243: .input:focus {
+244:   border-color: var(--accent-gold);
+245:   box-shadow: var(--shadow-inset), 0 0 0 2px rgba(212, 163, 89, 0.25);
+246: }
+247: 
+248: .input::placeholder {
+249:   color: var(--text-muted);
+250: }
+251: 
+252: textarea.input {
+253:   resize: vertical;
+254:   min-height: 80px;
+255:   font-family: var(--font-main);
+256: }
+257: 
+258: select,
+259: select.input,
+260: .select {
+261:   appearance: none;
+262:   -webkit-appearance: none;
+263:   -moz-appearance: none;
+264:   background-color: var(--bg-input);
+265:   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23d4a359' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+266:   background-repeat: no-repeat;
+267:   background-position: right 14px center;
+268:   padding-right: 38px;
+269:   color: var(--text-primary);
+270:   border: 1px solid var(--border-color);
+271:   border-radius: var(--radius-md);
+272:   font-family: inherit;
+273:   font-size: var(--fs-base);
+274:   cursor: pointer;
+275: }
+276: 
+277: select:focus,
+278: select.input:focus,
+279: .select:focus {
+280:   border-color: var(--accent-gold);
+281:   outline: none;
+282:   box-shadow: var(--shadow-inset), 0 0 0 2px rgba(212, 163, 89, 0.25);
+283: }
+284: 
+285: select option {
+286:   background-color: #201712 !important;
+287:   color: #f5eedc !important;
+288:   padding: 10px 14px;
+289: }
+290: 
+291: select option:checked,
+292: select option:hover {
+293:   background-color: #3b2b20 !important;
+294:   color: var(--accent-gold-bright) !important;
+295: }
+296: 
+297: code {
+298:   background: rgba(212, 163, 89, 0.12);
+299:   color: var(--accent-gold-bright);
+300:   border: 1px solid rgba(212, 163, 89, 0.25);
+301:   border-radius: var(--radius-sm);
+302:   padding: 2px 6px;
+303:   font-family: var(--font-mono);
+304:   font-size: 0.85em;
+305: }
+306: 
+307: .form-group {
+308:   display: flex;
+309:   flex-direction: column;
+310:   gap: var(--space-xs);
+311: }
+312: 
+313: .form-label {
+314:   font-family: var(--font-heading);
+315:   font-size: var(--fs-sm);
+316:   font-weight: 600;
+317:   color: var(--accent-gold);
+318:   letter-spacing: 0.3px;
+319: }
+320: 
+321: .form-hint {
+322:   font-size: var(--fs-xs);
+323:   color: var(--text-muted);
+324:   line-height: 1.45;
+325: }
+326: 
+327: /* ===================== Cards (Tavern Wooden Tablets) ===================== */
+328: .card {
+329:   background: linear-gradient(180deg, #241c16 0%, #1c1511 100%);
+330:   border: 1px solid var(--border-color);
+331:   border-radius: var(--radius-lg);
+332:   padding: var(--space-lg);
+333:   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+334:   transition: all var(--transition-fast);
+335: }
+336: 
+337: .card:hover {
+338:   border-color: var(--accent-gold);
+339:   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6), 0 0 14px rgba(212, 163, 89, 0.16);
+340: }
+341: 
+342: .card-header {
+343:   display: flex;
+344:   align-items: center;
+345:   justify-content: space-between;
+346:   margin-bottom: var(--space-md);
+347:   border-bottom: 1px solid rgba(212, 163, 89, 0.12);
+348:   padding-bottom: var(--space-sm);
+349: }
+350: 
+351: .card-title {
+352:   font-family: var(--font-heading);
+353:   font-size: var(--fs-xl);
+354:   font-weight: 700;
+355:   color: var(--accent-gold-bright);
+356:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+357:   letter-spacing: 0.3px;
+358: }
+359: 
+360: /* ===================== Badge (Wax Seals & Brass Labels) ===================== */
+361: .badge {
+362:   display: inline-flex;
+363:   align-items: center;
+364:   padding: 3px 10px;
+365:   border-radius: var(--radius-full);
+366:   font-family: var(--font-heading);
+367:   font-size: var(--fs-xs);
+368:   font-weight: 600;
+369:   letter-spacing: 0.3px;
+370:   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+371: }
+372: 
+373: .badge-primary {
+374:   background: rgba(200, 90, 50, 0.2);
+375:   color: #f39c12;
+376:   border: 1px solid rgba(200, 90, 50, 0.4);
+377: }
+378: 
+379: .badge-success {
+380:   background: rgba(56, 142, 60, 0.2);
+381:   color: #81c784;
+382:   border: 1px solid rgba(56, 142, 60, 0.4);
+383: }
+384: 
+385: .badge-gold {
+386:   background: rgba(212, 163, 89, 0.2);
+387:   color: var(--accent-gold-bright);
+388:   border: 1px solid rgba(212, 163, 89, 0.45);
+389: }
+390: 
+391: .badge-info {
+392:   background: rgba(59, 122, 158, 0.2);
+393:   color: #7fb3d5;
+394:   border: 1px solid rgba(59, 122, 158, 0.4);
+395: }
+396: 
+397: .badge-secondary {
+398:   background: rgba(197, 182, 163, 0.12);
+399:   color: var(--text-secondary);
+400:   border: 1px solid rgba(197, 182, 163, 0.2);
+401: }
+402: 
+403: .badge-warning {
+404:   background: rgba(217, 119, 6, 0.2);
+405:   color: #fbbf24;
+406:   border: 1px solid rgba(217, 119, 6, 0.4);
+407: }
+408: 
+409: .badge-danger {
+410:   background: rgba(169, 50, 38, 0.2);
+411:   color: #f1948a;
+412:   border: 1px solid rgba(169, 50, 38, 0.4);
+413: }
+414: 
+415: /* ===================== Toggle Switch ===================== */
+416: .toggle {
+417:   position: relative;
+418:   width: 48px;
+419:   height: 26px;
+420:   background: var(--bg-input);
+421:   border: 1px solid var(--border-color);
+422:   border-radius: var(--radius-full);
+423:   cursor: pointer;
+424:   box-shadow: var(--shadow-inset);
+425:   transition: all var(--transition-fast);
+426: }
+427: 
+428: .toggle.active {
+429:   background: var(--accent-primary);
+430:   border-color: var(--accent-gold);
+431:   box-shadow: 0 0 10px rgba(200, 90, 50, 0.4);
+432: }
+433: 
+434: .toggle::after {
+435:   content: '';
+436:   position: absolute;
+437:   top: 2px;
+438:   left: 2px;
+439:   width: 20px;
+440:   height: 20px;
+441:   background: linear-gradient(180deg, #f6d89b 0%, #d4a359 100%);
+442:   border-radius: 50%;
+443:   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+444:   transition: transform var(--transition-fast);
+445: }
+446: 
+447: .toggle.active::after {
+448:   transform: translateX(22px);
+449:   background: #fff;
+450: }
+451: 
+452: /* ===================== Modal (Grimoire / Ancient Ledger) ===================== */
+453: .modal-overlay {
+454:   position: fixed;
+455:   inset: 0;
+456:   background: rgba(10, 8, 6, 0.88);
+457:   display: flex;
+458:   align-items: center;
+459:   justify-content: center;
+460:   z-index: var(--z-modal);
+461:   opacity: 0;
+462:   pointer-events: none;
+463:   transition: opacity var(--transition-base);
+464: }
+465: 
+466: .modal-overlay.open {
+467:   opacity: 1;
+468:   pointer-events: all;
+469: }
+470: 
+471: .modal {
+472:   background: #201712;
+473:   border: 1px solid var(--border-gold);
+474:   border-radius: var(--radius-lg);
+475:   padding: var(--space-xl);
+476:   max-width: 520px;
+477:   width: 90%;
+478:   max-height: 85vh;
+479:   overflow-y: auto;
+480:   box-shadow: 0 14px 45px rgba(0, 0, 0, 0.85), 0 0 25px rgba(212, 163, 89, 0.15);
+481:   transform: translateY(12px);
+482:   transition: opacity var(--transition-base), transform var(--transition-base);
+483:   color: var(--text-primary);
+484:   -webkit-transform-style: flat;
+485:   transform-style: flat;
+486: }
+487: 
+488: .modal-overlay.open .modal {
+489:   transform: translateY(0);
+490: }
+491: 
+492: /* ===================== Toast Notifications ===================== */
+493: .toast-container {
+494:   position: fixed;
+495:   top: var(--space-lg);
+496:   right: var(--space-lg);
+497:   z-index: var(--z-toast);
+498:   display: flex;
+499:   flex-direction: column;
+500:   gap: var(--space-sm);
+501: }
+502: 
+503: .toast {
+504:   background: linear-gradient(180deg, #271f19 0%, #1e1713 100%);
+505:   border: 1px solid var(--border-color);
+506:   border-radius: var(--radius-md);
+507:   padding: var(--space-md) var(--space-lg);
+508:   min-width: 290px;
+509:   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+510:   animation: slideIn 0.3s ease;
+511:   color: var(--text-primary);
+512:   font-family: var(--font-main);
+513: }
+514: 
+515: .toast-success { border-left: 4px solid var(--accent-success); }
+516: .toast-error { border-left: 4px solid var(--accent-danger); }
+517: .toast-info { border-left: 4px solid var(--accent-info); }
+518: .toast-warning { border-left: 4px solid var(--accent-gold); }
+519: 
+520: @keyframes slideIn {
+521:   from { transform: translateX(100%); opacity: 0; }
+522:   to { transform: translateX(0); opacity: 1; }
+523: }
+524: 
+525: /* ===================== HP Bar (Vitality Vial) ===================== */
+526: .hp-bar-container {
+527:   width: 100%;
+528:   height: 10px;
+529:   background: rgba(18, 14, 11, 0.85);
+530:   border: 1px solid rgba(212, 163, 89, 0.2);
+531:   border-radius: var(--radius-full);
+532:   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+533:   overflow: hidden;
+534: }
+535: 
+536: .hp-bar {
+537:   height: 100%;
+538:   background: linear-gradient(90deg, #2e7d32, #43a047);
+539:   border-radius: var(--radius-full);
+540:   box-shadow: 0 0 8px rgba(67, 160, 71, 0.5);
+541:   transition: width var(--transition-base);
+542: }
+543: 
+544: .hp-bar.low {
+545:   background: linear-gradient(90deg, #d97706, #f59e0b);
+546:   box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+547: }
+548: 
+549: .hp-bar.critical {
+550:   background: linear-gradient(90deg, #9e2a2b, #c0392b);
+551:   box-shadow: 0 0 10px rgba(192, 57, 43, 0.7);
+552:   animation: hpPulse 1.5s infinite ease-in-out;
+553: }
+554: 
+555: @keyframes hpPulse {
+556:   0%, 100% { opacity: 1; }
+557:   50% { opacity: 0.6; }
+558: }
+559: 
+560: /* ===================== Character Stats Grid (Brass Plaques) ===================== */
+561: .stats-grid-3,
+562: .stats-grid-6 {
+563:   display: grid;
+564:   grid-template-columns: repeat(3, 1fr);
+565:   gap: var(--space-sm);
+566: }
+567: 
+568: .stat-card {
+569:   background: linear-gradient(180deg, #292019 0%, #1f1712 100%);
+570:   border: 1px solid rgba(212, 163, 89, 0.25);
+571:   border-radius: var(--radius-md);
+572:   padding: var(--space-sm) var(--space-md);
+573:   text-align: center;
+574:   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(212, 163, 89, 0.1);
+575:   transition: all var(--transition-fast);
+576: }
+577: 
+578: .stat-card:hover {
+579:   border-color: var(--accent-gold);
+580:   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55), 0 0 10px rgba(212, 163, 89, 0.2);
+581: }
+582: 
+583: .stat-card-label {
+584:   font-family: var(--font-heading);
+585:   font-size: var(--fs-xs);
+586:   font-weight: 700;
+587:   color: var(--accent-gold);
+588:   text-transform: uppercase;
+589:   letter-spacing: 0.5px;
+590: }
+591: 
+592: .stat-card-value {
+593:   font-size: var(--fs-xl);
+594:   font-weight: 700;
+595:   color: var(--text-primary);
+596:   font-family: var(--font-mono);
+597:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+598: }
+599: 
+600: .stat-card-modifier {
+601:   font-size: var(--fs-xs);
+602:   color: var(--accent-gold-bright);
+603:   font-weight: 600;
+604: }
+605: 
+606: .stat-card-input {
+607:   width: 100%;
+608:   padding: var(--space-sm);
+609:   background: var(--bg-input);
+610:   border: 1px solid var(--border-color);
+611:   border-radius: var(--radius-md);
+612:   color: var(--text-primary);
+613:   font-size: var(--fs-lg);
+614:   font-weight: 700;
+615:   text-align: center;
+616:   font-family: var(--font-mono);
+617:   box-shadow: var(--shadow-inset);
+618:   transition: all var(--transition-fast);
+619: }
+620: 
+621: .stat-card-input:focus {
+622:   border-color: var(--accent-gold);
+623:   box-shadow: var(--shadow-inset), 0 0 0 2px rgba(212, 163, 89, 0.25);
+624: }
+625: 
+626: .stats-sum {
+627:   display: inline-flex;
+628:   align-items: center;
+629:   gap: var(--space-xs);
+630:   padding: var(--space-xs) var(--space-md);
+631:   background: rgba(212, 163, 89, 0.12);
+632:   border: 1px solid rgba(212, 163, 89, 0.3);
+633:   border-radius: var(--radius-full);
+634:   font-size: var(--fs-sm);
+635:   font-weight: 600;
+636:   color: var(--text-secondary);
+637: }
+638: 
+639: .stats-sum strong {
+640:   color: var(--accent-gold-bright);
+641: }
+642: 
+643: /* ===================== Responsive ===================== */
+644: @media (max-width: 768px) {
+645:   :root {
+646:     --fs-base: 0.9375rem;
+647:   }
+648: 
+649:   .btn-lg {
+650:     padding: var(--space-sm) var(--space-lg);
+651:   }
+652: 
+653:   .card {
+654:     padding: var(--space-md);
+655:   }
+656: 
+657:   .modal {
+658:     width: 100%;
+659:     max-width: 100%;
+660:     height: 100%;
+661:     max-height: 100vh;
+662:     border-radius: 0;
+663:     padding: var(--space-md);
+664:   }
+665: 
+666:   .modal-overlay {
+667:     align-items: flex-end;
+668:   }
+669: 
+670:   .modal-overlay.open .modal {
+671:     transform: translateY(0);
+672:   }
+673: 
+674:   .toast-container {
+675:     top: var(--space-sm);
+676:     right: var(--space-sm);
+677:     left: var(--space-sm);
+678:   }
+679: 
+680:   .toast {
+681:     min-width: auto;
+682:     width: 100%;
+683:   }
+684: 
+685:   .btn {
+686:     min-height: 42px;
+687:     padding: var(--space-sm) var(--space-md);
+688:   }
+689: 
+690:   .btn-sm {
+691:     min-height: 36px;
+692:   }
+693: 
+694:   .input {
+695:     font-size: 16px;
+696:     padding: var(--space-sm) var(--space-md);
+697:   }
+698: 
+699:   textarea.input {
+700:     min-height: 90px;
+701:   }
+702: }
+703: 
+704: @media (max-width: 480px) {
+705:   :root {
+706:     --fs-base: 0.875rem;
+707:   }
+708: 
+709:   .btn {
+710:     padding: var(--space-xs) var(--space-sm);
+711:     font-size: var(--fs-sm);
+712:   }
+713: 
+714:   .card {
+715:     padding: var(--space-sm);
+716:     border-radius: var(--radius-md);
+717:   }
+718: 
+719:   .card-title {
+720:     font-size: var(--fs-lg);
+721:   }
+722: }
 
 ================
 File: supabase/functions/_shared/npc_combat_ai.ts
@@ -20143,6 +20186,147 @@ File: supabase/functions/_shared/utils.ts
 178: }
 
 ================
+File: supabase/functions/convert-world-text/index.ts
+================
+  1: // supabase/functions/convert-world-text/index.ts
+  2: // Конвертирует текстовое описание мира в структурированный JSON
+  3: import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+  4: import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+  5: import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+  6: 
+  7: const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  8: const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  9: const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
+ 10: const AI_MODEL = "xiaomi/mimo-v2.5";
+ 11: 
+ 12: const SYSTEM_PROMPT = `Ты — D&D-дизайнер мира. Твоя задача: проанализировать текстовое описание ролевого мира и превратить его в структурированный JSON-объект настроек.
+ 13: 
+ 14: Извлеки из текста:
+ 15: - Доступные расы (races)
+ 16: - Доступные классы (classes)
+ 17: - Глобальные лимиты (max_level, starting_gold и т.д.)
+ 18: - Локации/регионы (locations)
+ 19: - Фракции (factions)
+ 20: - Ключевые правила дома (house_rules)
+ 21: 
+ 22: Формат ответа — ТОЛЬКО валидный JSON без markdown:
+ 23: 
+ 24: {
+ 25:   "races": ["Человек", "Эльф"],
+ 26:   "classes": ["Воин", "Маг", "Плут"],
+ 27:   "max_level": 20,
+ 28:   "starting_gold": 100,
+ 29:   "locations": ["Город Теней", "Лес Древних"],
+ 30:   "factions": ["Стражи Рассвета", "Теневая Лига"],
+ 31:   "house_rules": ["Криты наносят двойной урон"],
+ 32:   "description_summary": "Краткое описание (1-2 предложения)"
+ 33: }
+ 34: 
+ 35: Если какая-то информация отсутствует в тексте — поставь пустой массив или значение по умолчанию.
+ 36: ВСЁ на русском языке.`;
+ 37: 
+ 38: const CORS = {
+ 39:   "Access-Control-Allow-Origin": "*",
+ 40:   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+ 41:   "Access-Control-Allow-Methods": "POST, OPTIONS",
+ 42: };
+ 43: 
+ 44: serve(async (req) => {
+ 45:   if (req.method === "OPTIONS") {
+ 46:     return new Response("ok", { headers: CORS });
+ 47:   }
+ 48: 
+ 49:   try {
+ 50:     const { user_id, world_name, description } = await req.json();
+ 51: 
+ 52:     const safeDescription = cleanTextForAI(description);
+ 53: 
+ 54:     console.log('convert-world-text input:', { user_id, world_name, description: safeDescription });
+ 55: 
+ 56:     const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
+ 57:     if (safeDescription && new RegExp(imagePattern.source, imagePattern.flags).test(safeDescription)) {
+ 58:       return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
+ 59:         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+ 60:       });
+ 61:     }
+ 62: 
+ 63:     if (!user_id || !world_name || !safeDescription) {
+ 64:       return new Response(JSON.stringify({ error: "user_id, world_name и description обязательны" }), {
+ 65:         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+ 66:       });
+ 67:     }
+ 68: 
+ 69:     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+ 70: 
+ 71:     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+ 72:     const { data: userSettings } = await supabase
+ 73:       .from("user_settings")
+ 74:       .select("openrouter_key")
+ 75:       .eq("id", user_id)
+ 76:       .maybeSingle();
+ 77:     if (userSettings?.openrouter_key) apiKey = sanitizeKey(userSettings.openrouter_key);
+ 78: 
+ 79:     if (!apiKey) {
+ 80:       return new Response(JSON.stringify({
+ 81:         error: "Укажите OpenRouter API Key в настройках аккаунта",
+ 82:         code: "MISSING_API_KEY",
+ 83:       }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
+ 84:     }
+ 85: 
+ 86:     const userMessage = `Мир: "${world_name}"\n\nОписание:\n${safeDescription}`;
+ 87: 
+ 88:     const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+ 89:       method: "POST",
+ 90:       headers: {
+ 91:         "Authorization": `Bearer ${apiKey}`,
+ 92:         "Content-Type": "application/json",
+ 93:       },
+ 94:       body: JSON.stringify({
+ 95:         model: AI_MODEL,
+ 96:         messages: [
+ 97:           { role: "system", content: SYSTEM_PROMPT },
+ 98:           { role: "user", content: userMessage },
+ 99:         ],
+100:         temperature: 0.5,
+101:         max_tokens: 1500,
+102:       }),
+103:     });
+104: 
+105:     console.log('convert-world-text OpenRouter status:', aiRes.status);
+106: 
+107:     if (!aiRes.ok) {
+108:       const errText = await aiRes.text();
+109:       console.error("AI error:", errText);
+110:       return new Response(JSON.stringify({ error: "Ошибка AI API" }), {
+111:         status: 502, headers: { ...CORS, "Content-Type": "application/json" },
+112:       });
+113:     }
+114: 
+115:     const aiData = await aiRes.json();
+116:     const rawContent = aiData.choices[0].message.content || "";
+117:     console.log('convert-world-text AI raw:', rawContent);
+118: 
+119:     let settings = null;
+120:     try { settings = parseAIJson(rawContent); } catch {}
+121:     if (!settings) {
+122:       return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
+123:         status: 422, headers: { ...CORS, "Content-Type": "application/json" },
+124:       });
+125:     }
+126: 
+127:     return new Response(JSON.stringify({ settings }), {
+128:       status: 200, headers: { ...CORS, "Content-Type": "application/json" },
+129:     });
+130: 
+131:   } catch (err) {
+132:     console.error("convert-world-text error:", err);
+133:     return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
+134:       status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+135:     });
+136:   }
+137: });
+
+================
 File: src/pages/session-settings.js
 ================
   1: // src/pages/session-settings.js — Экран настроек сессии (для Админа)
@@ -20652,147 +20836,6 @@ File: src/pages/session-settings.js
 505: }
 
 ================
-File: supabase/functions/convert-world-text/index.ts
-================
-  1: // supabase/functions/convert-world-text/index.ts
-  2: // Конвертирует текстовое описание мира в структурированный JSON
-  3: import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-  4: import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-  5: import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
-  6: 
-  7: const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  8: const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  9: const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
- 10: const AI_MODEL = "xiaomi/mimo-v2.5";
- 11: 
- 12: const SYSTEM_PROMPT = `Ты — D&D-дизайнер мира. Твоя задача: проанализировать текстовое описание ролевого мира и превратить его в структурированный JSON-объект настроек.
- 13: 
- 14: Извлеки из текста:
- 15: - Доступные расы (races)
- 16: - Доступные классы (classes)
- 17: - Глобальные лимиты (max_level, starting_gold и т.д.)
- 18: - Локации/регионы (locations)
- 19: - Фракции (factions)
- 20: - Ключевые правила дома (house_rules)
- 21: 
- 22: Формат ответа — ТОЛЬКО валидный JSON без markdown:
- 23: 
- 24: {
- 25:   "races": ["Человек", "Эльф"],
- 26:   "classes": ["Воин", "Маг", "Плут"],
- 27:   "max_level": 20,
- 28:   "starting_gold": 100,
- 29:   "locations": ["Город Теней", "Лес Древних"],
- 30:   "factions": ["Стражи Рассвета", "Теневая Лига"],
- 31:   "house_rules": ["Криты наносят двойной урон"],
- 32:   "description_summary": "Краткое описание (1-2 предложения)"
- 33: }
- 34: 
- 35: Если какая-то информация отсутствует в тексте — поставь пустой массив или значение по умолчанию.
- 36: ВСЁ на русском языке.`;
- 37: 
- 38: const CORS = {
- 39:   "Access-Control-Allow-Origin": "*",
- 40:   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
- 41:   "Access-Control-Allow-Methods": "POST, OPTIONS",
- 42: };
- 43: 
- 44: serve(async (req) => {
- 45:   if (req.method === "OPTIONS") {
- 46:     return new Response("ok", { headers: CORS });
- 47:   }
- 48: 
- 49:   try {
- 50:     const { user_id, world_name, description } = await req.json();
- 51: 
- 52:     const safeDescription = cleanTextForAI(description);
- 53: 
- 54:     console.log('convert-world-text input:', { user_id, world_name, description: safeDescription });
- 55: 
- 56:     const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
- 57:     if (safeDescription && new RegExp(imagePattern.source, imagePattern.flags).test(safeDescription)) {
- 58:       return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
- 59:         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
- 60:       });
- 61:     }
- 62: 
- 63:     if (!user_id || !world_name || !safeDescription) {
- 64:       return new Response(JSON.stringify({ error: "user_id, world_name и description обязательны" }), {
- 65:         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
- 66:       });
- 67:     }
- 68: 
- 69:     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
- 70: 
- 71:     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
- 72:     const { data: userSettings } = await supabase
- 73:       .from("user_settings")
- 74:       .select("openrouter_key")
- 75:       .eq("id", user_id)
- 76:       .maybeSingle();
- 77:     if (userSettings?.openrouter_key) apiKey = sanitizeKey(userSettings.openrouter_key);
- 78: 
- 79:     if (!apiKey) {
- 80:       return new Response(JSON.stringify({
- 81:         error: "Укажите OpenRouter API Key в настройках аккаунта",
- 82:         code: "MISSING_API_KEY",
- 83:       }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
- 84:     }
- 85: 
- 86:     const userMessage = `Мир: "${world_name}"\n\nОписание:\n${safeDescription}`;
- 87: 
- 88:     const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
- 89:       method: "POST",
- 90:       headers: {
- 91:         "Authorization": `Bearer ${apiKey}`,
- 92:         "Content-Type": "application/json",
- 93:       },
- 94:       body: JSON.stringify({
- 95:         model: AI_MODEL,
- 96:         messages: [
- 97:           { role: "system", content: SYSTEM_PROMPT },
- 98:           { role: "user", content: userMessage },
- 99:         ],
-100:         temperature: 0.5,
-101:         max_tokens: 1500,
-102:       }),
-103:     });
-104: 
-105:     console.log('convert-world-text OpenRouter status:', aiRes.status);
-106: 
-107:     if (!aiRes.ok) {
-108:       const errText = await aiRes.text();
-109:       console.error("AI error:", errText);
-110:       return new Response(JSON.stringify({ error: "Ошибка AI API" }), {
-111:         status: 502, headers: { ...CORS, "Content-Type": "application/json" },
-112:       });
-113:     }
-114: 
-115:     const aiData = await aiRes.json();
-116:     const rawContent = aiData.choices[0].message.content || "";
-117:     console.log('convert-world-text AI raw:', rawContent);
-118: 
-119:     let settings = null;
-120:     try { settings = parseAIJson(rawContent); } catch {}
-121:     if (!settings) {
-122:       return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
-123:         status: 422, headers: { ...CORS, "Content-Type": "application/json" },
-124:       });
-125:     }
-126: 
-127:     return new Response(JSON.stringify({ settings }), {
-128:       status: 200, headers: { ...CORS, "Content-Type": "application/json" },
-129:     });
-130: 
-131:   } catch (err) {
-132:     console.error("convert-world-text error:", err);
-133:     return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
-134:       status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-135:     });
-136:   }
-137: });
-
-================
 File: supabase/functions/process-turn/steps/step5_narrator.ts
 ================
   1: // supabase/functions/process-turn/steps/step5_narrator.ts
@@ -21159,6 +21202,694 @@ File: supabase/functions/process-turn/steps/step5_narrator.ts
 362: 
 363:   throw lastErr || new Error("Failed all narrator attempts");
 364: }
+
+================
+File: supabase/functions/process-turn/steps/step4_system_truth.ts
+================
+  1: // supabase/functions/process-turn/steps/step4_system_truth.ts
+  2: // Шаг 4: Сборка Системной Истины (System Truth Compiler)
+  3: //
+  4: // Принимает:
+  5: //   - EngineOutputPayload (Шаг 2: кубики и проверки)
+  6: //   - PersistenceOutputPayload (Шаг 3: подтверждено БД)
+  7: //   - session, location, players, npcs, items
+  8: //
+  9: // Назначение:
+ 10: //   1. Скомпилировать строгий SystemTruthDto для Шага 5 (LLM-нарратор).
+ 11: //   2. Разделить события по персональным корзинам видимости (Туман Войны / Anti-Metagaming).
+ 12: //   3. Подтянуть RAG-память NPC (match_npc_memories) только для тех NPC, с которыми игрок взаимодействовал.
+ 13: 
+ 14: import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+ 15: import { EngineOutputPayload, EngineMutation } from "../engine/types.ts";
+ 16: import {
+ 17:   calculateRelationshipTier,
+ 18:   getRelationshipTierLabel,
+ 19:   RelationshipTier,
+ 20: } from "../../_shared/npc_relationship_engine.ts";
+ 21: 
+ 22: // ============================================
+ 23: // Типы
+ 24: // ============================================
+ 25: 
+ 26: export interface PlayerKnowledge {
+ 27:   player_id: string;
+ 28:   knowledge: string[]; // Только то, что видит ЭТОТ игрок
+ 29:   hp_status: {
+ 30:     current: number;
+ 31:     max: number;
+ 32:     delta: number;
+ 33:   };
+ 34:   inventory_delta: {
+ 35:     added: string[];
+ 36:     removed: string[];
+ 37:     damaged: string[];
+ 38:   };
+ 39: }
+ 40: 
+ 41: export interface NpcContextSummary {
+ 42:   npc_id: string;
+ 43:   name: string;
+ 44:   race?: string;
+ 45:   role?: string;
+ 46:   appearance?: string | null;
+ 47:   background?: string | null;
+ 48:   habits?: string | null;
+ 49:   catchphrases?: string[];
+ 50:   current_activity?: string | null;
+ 51:   status_tags?: string[];
+ 52:   relationship_score?: number;
+ 53:   relationship_tier?: string;
+ 54:   relationship_tier_label?: string;
+ 55:   relevant_memories: string[];
+ 56:   vivid_memories?: string[];
+ 57:   regular_memories?: string[];
+ 58:   impressions?: string[];
+ 59: }
+ 60: 
+ 61: export interface SystemTruthDto {
+ 62:   session_id: string;
+ 63:   turn_status: "success" | "conflict" | "impossible";
+ 64:   environment: {
+ 65:     location_name: string;
+ 66:     weather: string | null;
+ 67:     time: {
+ 68:       year: number;
+ 69:       month: number;
+ 70:       day: number;
+ 71:       hour: number;
+ 72:       minute: number;
+ 73:     };
+ 74:     time_passed_minutes: number;
+ 75:     atmosphere: {
+ 76:       sounds: string[];
+ 77:       visuals: string[];
+ 78:     };
+ 79:   };
+ 80:   global_events: string[];
+ 81:   player_truths: Record<string, PlayerKnowledge>;
+ 82:   present_npcs?: Array<{
+ 83:     id: string;
+ 84:     name: string;
+ 85:     race?: string;
+ 86:     role?: string;
+ 87:     category?: string;
+ 88:     status_tags?: string[];
+ 89:     is_hostile?: boolean;
+ 90:     appearance?: string | null;
+ 91:     current_activity?: string | null;
+ 92:     catchphrases?: string[];
+ 93:   }>;
+ 94:   npc_context: Record<string, NpcContextSummary>;
+ 95:   encounter_alert: {
+ 96:     spawned: boolean;
+ 97:     tier?: number;
+ 98:     creature_name?: string;
+ 99:   } | null;
+100:   storyline?: {
+101:     title: string;
+102:     prologue?: string;
+103:     current_arc?: {
+104:       act: number;
+105:       title: string;
+106:       description: string;
+107:       goals: string[];
+108:       completed_goals: string[];
+109:       key_npcs?: string[];
+110:       key_locations?: string[];
+111:     } | null;
+112:   } | null;
+113: }
+114: 
+115: export interface SystemTruthInputContext {
+116:   session_id: string;
+117:   acting_player_id: string;
+118:   engine_output: EngineOutputPayload;
+119:   persistence_output: {
+120:     status: "committed" | "aborted_conflict" | "error";
+121:     applied_mutations_count: number;
+122:     new_game_time?: { year: number; month: number; day: number; hour: number; minute: number };
+123:     conflict_details?: string | null;
+124:     enriched_system_facts: string[];
+125:   };
+126:   // Состояние мира
+127:   session: {
+128:     game_year: number;
+129:     game_month: number;
+130:     game_day: number;
+131:     game_hour: number;
+132:     game_minute: number;
+133:     current_location_id: string;
+134:   };
+135:   location: { name: string; weather: string | null };
+136:   // Все игроки в комнате
+137:   players: Array<{
+138:     id: string;
+139:     name: string;
+140:     hp: number;
+141:     max_hp: number;
+142:     inventory: Array<{ id: string; item_name: string; quantity: number; durability?: number | null; condition?: string | null }>;
+143:   }>;
+144:   // Все NPC в комнате
+145:   npcs: Array<{
+146:     id: string;
+147:     name: string;
+148:     race?: string;
+149:     role?: string;
+150:     category?: string;
+151:     status_tags?: string[];
+152:     is_alive?: boolean;
+153:     is_hostile?: boolean;
+154:     appearance?: string | null;
+155:     background?: string | null;
+156:     habits?: string | null;
+157:     catchphrases?: string[];
+158:     current_activity?: string | null;
+159:   }>;
+160:   // Атмосфера
+161:   atmosphere: { sounds: string[]; visuals: string[] };
+162:   // Сколько минут прошло (для time_passed_minutes)
+163:   time_passed_minutes: number;
+164:   // Случайный энкаунтер
+165:   encounter_alert: { spawned: boolean; tier?: number; creature_name?: string } | null;
+166:   // Сюжетная линия сессии
+167:   storyline?: any;
+168: }
+169: 
+170: // ============================================
+171: // Lazy Supabase client
+172: // ============================================
+173: let _supabase: any = null;
+174: 
+175: function getSupabase() {
+176:   if (_supabase) return _supabase;
+177:   // @ts-ignore
+178:   const url = (typeof Deno !== "undefined" ? Deno.env.get("SUPABASE_URL") : null) ?? process.env?.SUPABASE_URL ?? "https://test.supabase.co";
+179:   // @ts-ignore
+180:   const key = (typeof Deno !== "undefined" ? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") : null) ?? process.env?.SUPABASE_SERVICE_ROLE_KEY ?? "test-key";
+181:   _supabase = createClient(url, key);
+182:   return _supabase;
+183: }
+184: 
+185: // ============================================
+186: // Утилиты: работа с временем
+187: // ============================================
+188: function minutesToTimeParts(baseHour: number, baseMinute: number, baseDay: number, baseMonth: number, baseYear: number, addMinutes: number) {
+189:   let totalMin = baseHour * 60 + baseMinute + addMinutes;
+190:   const minutesPerDay = 24 * 60;
+191:   const days = Math.floor(totalMin / minutesPerDay);
+192:   totalMin -= days * minutesPerDay;
+193:   const hour = Math.floor(totalMin / 60);
+194:   const minute = totalMin - hour * 60;
+195:   return {
+196:     year: baseYear,
+197:     month: baseMonth,
+198:     day: baseDay + days,
+199:     hour,
+200:     minute,
+201:   };
+202: }
+203: 
+204: function timeOfDayRu(hour: number): string {
+205:   if (hour >= 0 && hour < 6) return "ночь";
+206:   if (hour >= 6 && hour < 12) return "утро";
+207:   if (hour >= 12 && hour < 18) return "день";
+208:   return "вечер";
+209: }
+210: 
+211: // ============================================
+212: // Парсинг мутаций → human-readable события
+213: // ============================================
+214: function getDamageFromHpUpdate(m: any): number {
+215:   // delta отрицательный — значит это урон
+216:   return typeof m.delta === "number" ? -m.delta : 0;
+217: }
+218: 
+219: function getActionDisplayName(action: any): string {
+220:   return action.target_item_name || action.action_type || "действие";
+221: }
+222: 
+223: function getActionSkillLabel(actionType: string, statToCheck?: string): string {
+224:   switch (actionType) {
+225:     case "harvest_ambient": return "Выживание";
+226:     case "search":
+227:     case "loot": return "Внимательность";
+228:     case "attack": return "Атака";
+229:     case "stealth_attack": return "Скрытность";
+230:     case "craft_recipe":
+231:     case "craft_custom": return "Ремесло";
+232:     case "talk": return "Убеждение";
+233:     default:
+234:       if (statToCheck === "stealth") return "Скрытность";
+235:       if (statToCheck === "survival") return "Выживание";
+236:       if (statToCheck === "investigation") return "Внимательность";
+237:       if (statToCheck === "insight") return "Проницательность";
+238:       if (statToCheck === "strength") return "Атлетика";
+239:       if (statToCheck === "dexterity") return "Ловкость";
+240:       return "Проверка";
+241:   }
+242: }
+243: 
+244: // ============================================
+245: // Главная функция Шага 4
+246: // ============================================
+247: export async function compileSystemTruth(context: SystemTruthInputContext): Promise<SystemTruthDto> {
+248:   const {
+249:     session_id,
+250:     acting_player_id,
+251:     engine_output,
+252:     persistence_output,
+253:     session,
+254:     location,
+255:     players,
+256:     npcs,
+257:     atmosphere,
+258:     time_passed_minutes,
+259:     encounter_alert,
+260:   } = context;
+261: 
+262:   // ============================================
+263:   // 1. Определяем turn_status
+264:   // ============================================
+265:   // Приоритет: conflict > impossible > success
+266:   // (race condition важнее: даже если действие могло бы быть impossible, транзакция провалилась)
+267:   let turn_status: "success" | "conflict" | "impossible" = "success";
+268: 
+269:   if (persistence_output.status === "aborted_conflict") {
+270:     turn_status = "conflict";
+271:   } else {
+272:     const allBlocked = engine_output.action_results.length > 0 && engine_output.action_results.every((r) => r.blocked);
+273:     if (allBlocked) {
+274:       turn_status = "impossible";
+275:     }
+276:   }
+277: 
+278:   // ============================================
+279:   // 2. Считаем время
+280:   // ============================================
+281:   const baseTime = {
+282:     year: session.game_year,
+283:     month: session.game_month,
+284:     day: session.game_day,
+285:     hour: session.game_hour,
+286:     minute: session.game_minute,
+287:   };
+288:   const newTime = persistence_output.new_game_time
+289:     ? persistence_output.new_game_time
+290:     : minutesToTimeParts(
+291:         baseTime.hour,
+292:         baseTime.minute,
+293:         baseTime.day,
+294:         baseTime.month,
+295:         baseTime.year,
+296:         time_passed_minutes,
+297:       );
+298: 
+299:   const dayChanged = persistence_output.new_game_time
+300:     ? persistence_output.new_game_time.day !== baseTime.day
+301:     : Math.floor((baseTime.hour * 60 + baseTime.minute + time_passed_minutes) / (24 * 60)) > 0;
+302: 
+303:   // ============================================
+304:   // 3. Собираем global_events (видны ВСЕМ в комнате)
+305:   // ============================================
+306:   const global_events: string[] = [];
+307: 
+308:   if (encounter_alert?.spawned) {
+309:     global_events.push(`В окрестностях послышался рык: появляется ${encounter_alert.creature_name || "существо"}!`);
+310:   }
+311: 
+312:   // Смена времени суток
+313:   if (dayChanged) {
+314:     const newTod = timeOfDayRu(newTime.hour);
+315:     global_events.push(`Наступил(а) ${newTod} (${String(newTime.hour).padStart(2, "0")}:${String(newTime.minute).padStart(2, "0")}).`);
+316:   }
+317: 
+318:   // Спавн структур
+319:   for (const m of engine_output.mutations) {
+320:     if (m.type === "SPAWN_STRUCTURE") {
+321:       const sm = m as any;
+322:       global_events.push(`В локации появилась постройка: ${sm.structure?.name || "?"}.`);
+323:     }
+324:   }
+325: 
+326:   // Бросок встречи был, но не сработал (если был)
+327:   // (это не global event — это личный факт, но мы можем логировать)
+328: 
+329:   // ============================================
+330:   // 4. Считаем HP и инвентарь для каждого игрока
+331:   // ============================================
+332:   const player_truths: Record<string, PlayerKnowledge> = {};
+333: 
+334:   for (const player of players) {
+335:     // ============================================
+336:     // HP delta
+337:     // ============================================
+338:     let hpDelta = 0;
+339:     const hpMutations = engine_output.mutations.filter(
+340:       (m) => m.type === "UPDATE_HP" && (m as any).id === player.id,
+341:     );
+342:     for (const m of hpMutations) {
+343:       hpDelta += (m as any).delta as number;
+344:     }
+345: 
+346:     // ============================================
+347:     // Inventory delta
+348:     // ============================================
+349:     const added: string[] = [];
+350:     const removed: string[] = [];
+351:     const damaged: string[] = [];
+352: 
+353:     for (const m of engine_output.mutations) {
+354:       if (m.type === "INSERT_ITEM") {
+355:         const im = m as any;
+356:         if (im.owner_type === "player" && im.owner_id === player.id) {
+357:           added.push(im.item?.item_name || im.item?.name || "предмет");
+358:         }
+359:       }
+360:       if (m.type === "DELETE_ITEM") {
+361:         const dm = m as any;
+362:         const found = (player.inventory || []).find((i: any) => i.id === dm.item_id);
+363:         if (found) {
+364:           const qtyStr = dm.quantity > 1 ? ` x${dm.quantity}` : "";
+365:           removed.push(`${found.item_name || dm.item_id}${qtyStr}`);
+366:         } else if (dm.owner_type === "player" && dm.owner_id === player.id) {
+367:           removed.push(dm.item_id);
+368:         }
+369:       }
+370:       if (m.type === "UPDATE_DURABILITY") {
+371:         const um = m as any;
+372:         const found = (player.inventory || []).find((i: any) => i.id === um.item_id);
+373:         if (found) {
+374:           damaged.push(`${found.item_name || um.item_id} (износ: ${Math.abs(um.delta)})`);
+375:         } else if (um.owner_type === "player" && um.owner_id === player.id) {
+376:           damaged.push(um.item_id);
+377:         }
+378:       }
+379:       if (m.type === "TRANSFER_ITEM") {
+380:         const tm = m as any;
+381:         if (tm.to_type === "player" && tm.to_id === player.id) {
+382:           added.push(`+${tm.quantity} предмета (получено)`);
+383:         }
+384:         if (tm.from_type === "player" && tm.from_id === player.id) {
+385:           removed.push(`-${tm.quantity} предмета (передано)`);
+386:         }
+387:       }
+388:     }
+389: 
+390:     // ============================================
+391:     // Knowledge (факты для этого игрока)
+392:     // ============================================
+393:     const knowledge: string[] = [];
+394: 
+395:     // Конфликт транзакции — критичный факт
+396:     if (persistence_output.status === "aborted_conflict" && player.id === acting_player_id) {
+397:       knowledge.push("Ваше действие не удалось: предмет уже был забран другим игроком или перемещён.");
+398:     }
+399: 
+400:     // Если этот игрок — инициатор, видит свои броски и DC
+401:     if (player.id === acting_player_id) {
+402:       for (const ar of engine_output.action_results) {
+403:         if (ar.blocked) {
+404:           knowledge.push(`Действие заблокировано: ${ar.block_reason || "нет причины"}.`);
+405:           continue;
+406:         }
+407:         if (!ar.success) {
+408:           knowledge.push(`Действие "${getActionDisplayName(ar)}" провалилось: ${ar.details || "бросок не удался"}.`);
+409:           continue;
+410:         }
+411:         // Успех
+412:         if (ar.dice_roll) {
+413:           const skillLabel = getActionSkillLabel(ar.action_type, (ar as any).stat_to_check);
+414:           knowledge.push(`Проверка навыка (${skillLabel}) прошла успешно.`);
+415:         }
+416:         if (ar.details && !knowledge.includes(ar.details)) {
+417:           knowledge.push(ar.details);
+418:         }
+419:         if (ar.damage_dealt !== undefined && ar.damage_dealt > 0) {
+420:           knowledge.push(`Нанесено ${ar.damage_dealt} урона.`);
+421:         }
+422:         if (ar.action_type === "craft_recipe" && added.length > 0) {
+423:           knowledge.push(`Вы успешно создали: ${added.join(", ")}.`);
+424:         }
+425:         if (ar.action_type === "harvest_ambient" && added.length > 0) {
+426:           knowledge.push(`Вы собрали: ${added.join(", ")}.`);
+427:         }
+428:         if (ar.action_type === "search" && added.length > 0) {
+429:           knowledge.push(`Вы нашли: ${added.join(", ")}.`);
+430:         }
+431:       }
+432: 
+433:       const facts = engine_output.system_facts || engine_output.raw_system_facts || [];
+434:       for (const f of facts) {
+435:         if (!knowledge.includes(f)) {
+436:           knowledge.push(f);
+437:         }
+438:       }
+439:     } else {
+440:       // Этот игрок — НЕ инициатор. Нужно решить, видит ли он действие.
+441:       // Ищем все экшены, где цель = этот игрок
+442:       const actionsTargetingThisPlayer = engine_output.action_results.filter(
+443:         (ar) => {
+444:           const actions = engine_output.action_results;
+445:           // Определяем: цель — player с этим id
+446:           return actions.some(() => false); // упрощённо
+447:         },
+448:       );
+449:       // Более прямая проверка: были ли мутации UPDATE_HP на этого игрока
+450:       const wasAttacked = hpMutations.length > 0;
+451: 
+452:       if (wasAttacked) {
+453:         // Проверяем, было ли это скрытной атакой
+454:         const isStealth = engine_output.action_results.some(
+455:           (ar) => ar.action_type === "stealth_attack" || ar.action_type === "attack",
+456:         );
+457: 
+458:         // Упрощённо: если attack, но не stealth — видим имя инициатора
+459:         const attackerIsActing = engine_output.action_results.find(
+460:           (ar) => ar.action_type === "attack" || ar.action_type === "stealth_attack",
+461:         );
+462: 
+463:         if (attackerIsActing?.action_type === "stealth_attack") {
+464:           // Скрытная атака: ID атакующего НЕ раскрывается
+465:           knowledge.push(`Вы внезапно получили ${Math.abs(hpDelta)} физического урона. Источник урона неизвестен!`);
+466:         } else {
+467:           // Открытая атака
+468:           const actingPlayer = players.find((p) => p.id === acting_player_id);
+469:           const attackerName = actingPlayer?.name || "Неизвестный";
+470:           knowledge.push(`${attackerName} атаковал вас и нанёс ${Math.abs(hpDelta)} урона.`);
+471:         }
+472:       } else {
+473:         // Игрок не был целью — он bystander
+474:         // Видит ли он событие? Смотрим на глобальный бой
+475:         const globalAttack = engine_output.action_results.some(
+476:           (ar) => ar.action_type === "attack" || ar.action_type === "stealth_attack",
+477:         );
+478:         if (globalAttack) {
+479:           const attackerIsStealth = engine_output.action_results.some(
+480:             (ar) => ar.action_type === "stealth_attack",
+481:           );
+482:           if (attackerIsStealth) {
+483:             // Скрытая атака: bystander видит только следствие
+484:             const victimName = players.find((p) => p.id !== acting_player_id)?.name || "другой игрок";
+485:             knowledge.push(`${victimName} внезапно вздрагивает от ранения из ниоткуда.`);
+486:           } else {
+487:             const attacker = players.find((p) => p.id === acting_player_id)?.name || "Игрок";
+488:             const victim = players.find((p) => p.id !== acting_player_id)?.name || "другой игрок";
+489:             knowledge.push(`${attacker} атакует ${victim}!`);
+490:           }
+491:         }
+492:       }
+493:     }
+494: 
+495:     player_truths[player.id] = {
+496:       player_id: player.id,
+497:       knowledge,
+498:       hp_status: {
+499:         current: player.hp + hpDelta,
+500:         max: player.max_hp,
+501:         delta: hpDelta,
+502:       },
+503:       inventory_delta: { added, removed, damaged },
+504:     };
+505:   }
+506: 
+507:   // ============================================
+508:   // 5. NPC context (Lazy RAG)
+509:   // ============================================
+510:   const npc_context: Record<string, NpcContextSummary> = {};
+511: 
+512:   // Находим NPC, с которыми взаимодействовал инициатор
+513:   const interactedNpcIds = new Set<string>();
+514:   for (const ar of engine_output.action_results) {
+515:     // action.target_entity_id может быть id NPC
+516:     const targetEntityId = (ar as any).target_entity_id;
+517:     if (typeof targetEntityId === "string" && npcs.some((n) => n.id === targetEntityId)) {
+518:       interactedNpcIds.add(targetEntityId);
+519:     }
+520:     // talk-действия всегда требуют памяти
+521:     if (ar.action_type === "talk" || ar.action_type === "talk_free_action") {
+522:       // target_entity_id должен быть в списке npcs
+523:       if (typeof targetEntityId === "string") {
+524:         interactedNpcIds.add(targetEntityId);
+525:       }
+526:     }
+527:   }
+528: 
+529:   // Подтягиваем память и отношения только для активных NPC
+530:   if (interactedNpcIds.size > 0) {
+531:     const supabase = getSupabase();
+532:     for (const npcId of interactedNpcIds) {
+533:       const npc = npcs.find((n) => n.id === npcId);
+534:       if (!npc) continue;
+535: 
+536:       let score = 0;
+537:       let tier = "neutral";
+538:       let statusTags: string[] = npc?.status_tags || [];
+539: 
+540:       // 1) Отношения NPC с игроком
+541:       try {
+542:         const res = await supabase
+543:           .from("npc_relationships")
+544:           .select("score, tier, status_tags")
+545:           .eq("npc_id", npcId)
+546:           .eq("player_id", acting_player_id);
+547:         const relData = Array.isArray(res?.data) ? res.data[0] : (res?.data || null);
+548:         if (relData) {
+549:           score = typeof relData.score === "number" ? relData.score : 0;
+550:           tier = relData.tier || calculateRelationshipTier(score);
+551:           if (Array.isArray(relData.status_tags)) {
+552:             statusTags = Array.from(new Set([...statusTags, ...relData.status_tags]));
+553:           }
+554:         }
+555:       } catch {
+556:         // ignore if table not yet migrated or in test mocks
+557:       }
+558: 
+559:       // 2) Векторный поиск воспоминаний (Lazy RAG)
+560:       let memories: string[] = [];
+561:       try {
+562:         const { data, error } = await supabase.rpc("match_npc_memories", {
+563:           p_npc_id: npcId,
+564:           p_player_id: acting_player_id,
+565:           p_match_count: 3,
+566:         });
+567: 
+568:         if (!error && Array.isArray(data) && data.length > 0) {
+569:           memories = data
+570:             .map((row: any) => row.content || row.memory_text || row.text || "")
+571:             .filter((s: string) => s.length > 0);
+572:         }
+573:       } catch {
+574:         // ignore
+575:       }
+576: 
+577:       // Fallback: последние 3 воспоминания по created_at DESC
+578:       if (memories.length === 0) {
+579:         try {
+580:           const { data } = await supabase
+581:             .from("npc_memories")
+582:             .select("content, memory_text, text")
+583:             .eq("npc_id", npcId)
+584:             .order("created_at", { ascending: false })
+585:             .limit(3);
+586:           if (Array.isArray(data)) {
+587:             memories = data
+588:               .map((row: any) => row.content || row.memory_text || row.text || "")
+589:               .filter((s: string) => s.length > 0);
+590:           }
+591:         } catch {
+592:           // ignore
+593:         }
+594:       }
+595: 
+596:       // 3) Разделение по уровням памяти (vivid, regular, impression)
+597:       let vivid_memories: string[] = [];
+598:       let regular_memories: string[] = [];
+599:       let impressions: string[] = [];
+600: 
+601:       try {
+602:         const { data: tieredData } = await supabase
+603:           .from("npc_memories")
+604:           .select("memory_text, memory_type, vividness")
+605:           .eq("npc_id", npcId)
+606:           .eq("player_id", acting_player_id)
+607:           .order("created_at", { ascending: false })
+608:           .limit(10);
+609: 
+610:         if (Array.isArray(tieredData)) {
+611:           for (const row of tieredData) {
+612:             const txt = row.memory_text || "";
+613:             if (!txt) continue;
+614:             if (row.memory_type === "vivid" || (row.vividness && row.vividness >= 8)) {
+615:               vivid_memories.push(txt);
+616:             } else if (row.memory_type === "impression" || (row.vividness && row.vividness <= 3)) {
+617:               impressions.push(txt);
+618:             } else {
+619:               regular_memories.push(txt);
+620:             }
+621:           }
+622:         }
+623:       } catch {
+624:         // ignore
+625:       }
+626: 
+627:       npc_context[npcId] = {
+628:         npc_id: npcId,
+629:         name: npc?.name || "NPC",
+630:         race: npc?.race || "Гуманоид",
+631:         role: npc?.role || "Обыватель",
+632:         appearance: (npc as any)?.appearance || null,
+633:         background: (npc as any)?.background || null,
+634:         habits: (npc as any)?.habits || null,
+635:         catchphrases: Array.isArray((npc as any)?.catchphrases) ? (npc as any).catchphrases : [],
+636:         current_activity: (npc as any)?.current_activity || null,
+637:         status_tags: statusTags,
+638:         relationship_score: score,
+639:         relationship_tier: tier,
+640:         relationship_tier_label: getRelationshipTierLabel(tier as RelationshipTier),
+641:         relevant_memories: memories,
+642:         vivid_memories,
+643:         regular_memories,
+644:         impressions,
+645:       };
+646:     }
+647:   }
+648: 
+649:   // ============================================
+650:   // 6. Финальный DTO
+651:   // ============================================
+652:   const present_npcs = (npcs || [])
+653:     .filter((n) => n.is_alive !== false)
+654:     .map((n) => ({
+655:       id: n.id,
+656:       name: n.name || "NPC",
+657:       race: n.race || "Человек",
+658:       role: n.role || "Обыватель",
+659:       category: n.category || "npc",
+660:       status_tags: n.status_tags || [],
+661:       is_hostile: n.is_hostile || false,
+662:       appearance: (n as any).appearance || null,
+663:       current_activity: (n as any).current_activity || null,
+664:       catchphrases: Array.isArray((n as any).catchphrases) ? (n as any).catchphrases : [],
+665:     }));
+666: 
+667:   return {
+668:     session_id,
+669:     turn_status,
+670:     environment: {
+671:       location_name: location?.name || "Неизвестно",
+672:       weather: location?.weather || null,
+673:       time: newTime,
+674:       time_passed_minutes,
+675:       atmosphere,
+676:     },
+677:     global_events,
+678:     player_truths,
+679:     present_npcs,
+680:     npc_context,
+681:     encounter_alert,
+682:     storyline: context.storyline || null,
+683:   };
+684: }
 
 ================
 File: src/styles/game.css
@@ -23194,694 +23925,6 @@ File: src/styles/game.css
 2029:     font-size: var(--fs-xs);
 2030:   }
 2031: }
-
-================
-File: supabase/functions/process-turn/steps/step4_system_truth.ts
-================
-  1: // supabase/functions/process-turn/steps/step4_system_truth.ts
-  2: // Шаг 4: Сборка Системной Истины (System Truth Compiler)
-  3: //
-  4: // Принимает:
-  5: //   - EngineOutputPayload (Шаг 2: кубики и проверки)
-  6: //   - PersistenceOutputPayload (Шаг 3: подтверждено БД)
-  7: //   - session, location, players, npcs, items
-  8: //
-  9: // Назначение:
- 10: //   1. Скомпилировать строгий SystemTruthDto для Шага 5 (LLM-нарратор).
- 11: //   2. Разделить события по персональным корзинам видимости (Туман Войны / Anti-Metagaming).
- 12: //   3. Подтянуть RAG-память NPC (match_npc_memories) только для тех NPC, с которыми игрок взаимодействовал.
- 13: 
- 14: import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
- 15: import { EngineOutputPayload, EngineMutation } from "../engine/types.ts";
- 16: import {
- 17:   calculateRelationshipTier,
- 18:   getRelationshipTierLabel,
- 19:   RelationshipTier,
- 20: } from "../../_shared/npc_relationship_engine.ts";
- 21: 
- 22: // ============================================
- 23: // Типы
- 24: // ============================================
- 25: 
- 26: export interface PlayerKnowledge {
- 27:   player_id: string;
- 28:   knowledge: string[]; // Только то, что видит ЭТОТ игрок
- 29:   hp_status: {
- 30:     current: number;
- 31:     max: number;
- 32:     delta: number;
- 33:   };
- 34:   inventory_delta: {
- 35:     added: string[];
- 36:     removed: string[];
- 37:     damaged: string[];
- 38:   };
- 39: }
- 40: 
- 41: export interface NpcContextSummary {
- 42:   npc_id: string;
- 43:   name: string;
- 44:   race?: string;
- 45:   role?: string;
- 46:   appearance?: string | null;
- 47:   background?: string | null;
- 48:   habits?: string | null;
- 49:   catchphrases?: string[];
- 50:   current_activity?: string | null;
- 51:   status_tags?: string[];
- 52:   relationship_score?: number;
- 53:   relationship_tier?: string;
- 54:   relationship_tier_label?: string;
- 55:   relevant_memories: string[];
- 56:   vivid_memories?: string[];
- 57:   regular_memories?: string[];
- 58:   impressions?: string[];
- 59: }
- 60: 
- 61: export interface SystemTruthDto {
- 62:   session_id: string;
- 63:   turn_status: "success" | "conflict" | "impossible";
- 64:   environment: {
- 65:     location_name: string;
- 66:     weather: string | null;
- 67:     time: {
- 68:       year: number;
- 69:       month: number;
- 70:       day: number;
- 71:       hour: number;
- 72:       minute: number;
- 73:     };
- 74:     time_passed_minutes: number;
- 75:     atmosphere: {
- 76:       sounds: string[];
- 77:       visuals: string[];
- 78:     };
- 79:   };
- 80:   global_events: string[];
- 81:   player_truths: Record<string, PlayerKnowledge>;
- 82:   present_npcs?: Array<{
- 83:     id: string;
- 84:     name: string;
- 85:     race?: string;
- 86:     role?: string;
- 87:     category?: string;
- 88:     status_tags?: string[];
- 89:     is_hostile?: boolean;
- 90:     appearance?: string | null;
- 91:     current_activity?: string | null;
- 92:     catchphrases?: string[];
- 93:   }>;
- 94:   npc_context: Record<string, NpcContextSummary>;
- 95:   encounter_alert: {
- 96:     spawned: boolean;
- 97:     tier?: number;
- 98:     creature_name?: string;
- 99:   } | null;
-100:   storyline?: {
-101:     title: string;
-102:     prologue?: string;
-103:     current_arc?: {
-104:       act: number;
-105:       title: string;
-106:       description: string;
-107:       goals: string[];
-108:       completed_goals: string[];
-109:       key_npcs?: string[];
-110:       key_locations?: string[];
-111:     } | null;
-112:   } | null;
-113: }
-114: 
-115: export interface SystemTruthInputContext {
-116:   session_id: string;
-117:   acting_player_id: string;
-118:   engine_output: EngineOutputPayload;
-119:   persistence_output: {
-120:     status: "committed" | "aborted_conflict" | "error";
-121:     applied_mutations_count: number;
-122:     new_game_time?: { year: number; month: number; day: number; hour: number; minute: number };
-123:     conflict_details?: string | null;
-124:     enriched_system_facts: string[];
-125:   };
-126:   // Состояние мира
-127:   session: {
-128:     game_year: number;
-129:     game_month: number;
-130:     game_day: number;
-131:     game_hour: number;
-132:     game_minute: number;
-133:     current_location_id: string;
-134:   };
-135:   location: { name: string; weather: string | null };
-136:   // Все игроки в комнате
-137:   players: Array<{
-138:     id: string;
-139:     name: string;
-140:     hp: number;
-141:     max_hp: number;
-142:     inventory: Array<{ id: string; item_name: string; quantity: number; durability?: number | null; condition?: string | null }>;
-143:   }>;
-144:   // Все NPC в комнате
-145:   npcs: Array<{
-146:     id: string;
-147:     name: string;
-148:     race?: string;
-149:     role?: string;
-150:     category?: string;
-151:     status_tags?: string[];
-152:     is_alive?: boolean;
-153:     is_hostile?: boolean;
-154:     appearance?: string | null;
-155:     background?: string | null;
-156:     habits?: string | null;
-157:     catchphrases?: string[];
-158:     current_activity?: string | null;
-159:   }>;
-160:   // Атмосфера
-161:   atmosphere: { sounds: string[]; visuals: string[] };
-162:   // Сколько минут прошло (для time_passed_minutes)
-163:   time_passed_minutes: number;
-164:   // Случайный энкаунтер
-165:   encounter_alert: { spawned: boolean; tier?: number; creature_name?: string } | null;
-166:   // Сюжетная линия сессии
-167:   storyline?: any;
-168: }
-169: 
-170: // ============================================
-171: // Lazy Supabase client
-172: // ============================================
-173: let _supabase: any = null;
-174: 
-175: function getSupabase() {
-176:   if (_supabase) return _supabase;
-177:   // @ts-ignore
-178:   const url = (typeof Deno !== "undefined" ? Deno.env.get("SUPABASE_URL") : null) ?? process.env?.SUPABASE_URL ?? "https://test.supabase.co";
-179:   // @ts-ignore
-180:   const key = (typeof Deno !== "undefined" ? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") : null) ?? process.env?.SUPABASE_SERVICE_ROLE_KEY ?? "test-key";
-181:   _supabase = createClient(url, key);
-182:   return _supabase;
-183: }
-184: 
-185: // ============================================
-186: // Утилиты: работа с временем
-187: // ============================================
-188: function minutesToTimeParts(baseHour: number, baseMinute: number, baseDay: number, baseMonth: number, baseYear: number, addMinutes: number) {
-189:   let totalMin = baseHour * 60 + baseMinute + addMinutes;
-190:   const minutesPerDay = 24 * 60;
-191:   const days = Math.floor(totalMin / minutesPerDay);
-192:   totalMin -= days * minutesPerDay;
-193:   const hour = Math.floor(totalMin / 60);
-194:   const minute = totalMin - hour * 60;
-195:   return {
-196:     year: baseYear,
-197:     month: baseMonth,
-198:     day: baseDay + days,
-199:     hour,
-200:     minute,
-201:   };
-202: }
-203: 
-204: function timeOfDayRu(hour: number): string {
-205:   if (hour >= 0 && hour < 6) return "ночь";
-206:   if (hour >= 6 && hour < 12) return "утро";
-207:   if (hour >= 12 && hour < 18) return "день";
-208:   return "вечер";
-209: }
-210: 
-211: // ============================================
-212: // Парсинг мутаций → human-readable события
-213: // ============================================
-214: function getDamageFromHpUpdate(m: any): number {
-215:   // delta отрицательный — значит это урон
-216:   return typeof m.delta === "number" ? -m.delta : 0;
-217: }
-218: 
-219: function getActionDisplayName(action: any): string {
-220:   return action.target_item_name || action.action_type || "действие";
-221: }
-222: 
-223: function getActionSkillLabel(actionType: string, statToCheck?: string): string {
-224:   switch (actionType) {
-225:     case "harvest_ambient": return "Выживание";
-226:     case "search":
-227:     case "loot": return "Внимательность";
-228:     case "attack": return "Атака";
-229:     case "stealth_attack": return "Скрытность";
-230:     case "craft_recipe":
-231:     case "craft_custom": return "Ремесло";
-232:     case "talk": return "Убеждение";
-233:     default:
-234:       if (statToCheck === "stealth") return "Скрытность";
-235:       if (statToCheck === "survival") return "Выживание";
-236:       if (statToCheck === "investigation") return "Внимательность";
-237:       if (statToCheck === "insight") return "Проницательность";
-238:       if (statToCheck === "strength") return "Атлетика";
-239:       if (statToCheck === "dexterity") return "Ловкость";
-240:       return "Проверка";
-241:   }
-242: }
-243: 
-244: // ============================================
-245: // Главная функция Шага 4
-246: // ============================================
-247: export async function compileSystemTruth(context: SystemTruthInputContext): Promise<SystemTruthDto> {
-248:   const {
-249:     session_id,
-250:     acting_player_id,
-251:     engine_output,
-252:     persistence_output,
-253:     session,
-254:     location,
-255:     players,
-256:     npcs,
-257:     atmosphere,
-258:     time_passed_minutes,
-259:     encounter_alert,
-260:   } = context;
-261: 
-262:   // ============================================
-263:   // 1. Определяем turn_status
-264:   // ============================================
-265:   // Приоритет: conflict > impossible > success
-266:   // (race condition важнее: даже если действие могло бы быть impossible, транзакция провалилась)
-267:   let turn_status: "success" | "conflict" | "impossible" = "success";
-268: 
-269:   if (persistence_output.status === "aborted_conflict") {
-270:     turn_status = "conflict";
-271:   } else {
-272:     const allBlocked = engine_output.action_results.length > 0 && engine_output.action_results.every((r) => r.blocked);
-273:     if (allBlocked) {
-274:       turn_status = "impossible";
-275:     }
-276:   }
-277: 
-278:   // ============================================
-279:   // 2. Считаем время
-280:   // ============================================
-281:   const baseTime = {
-282:     year: session.game_year,
-283:     month: session.game_month,
-284:     day: session.game_day,
-285:     hour: session.game_hour,
-286:     minute: session.game_minute,
-287:   };
-288:   const newTime = persistence_output.new_game_time
-289:     ? persistence_output.new_game_time
-290:     : minutesToTimeParts(
-291:         baseTime.hour,
-292:         baseTime.minute,
-293:         baseTime.day,
-294:         baseTime.month,
-295:         baseTime.year,
-296:         time_passed_minutes,
-297:       );
-298: 
-299:   const dayChanged = persistence_output.new_game_time
-300:     ? persistence_output.new_game_time.day !== baseTime.day
-301:     : Math.floor((baseTime.hour * 60 + baseTime.minute + time_passed_minutes) / (24 * 60)) > 0;
-302: 
-303:   // ============================================
-304:   // 3. Собираем global_events (видны ВСЕМ в комнате)
-305:   // ============================================
-306:   const global_events: string[] = [];
-307: 
-308:   if (encounter_alert?.spawned) {
-309:     global_events.push(`В окрестностях послышался рык: появляется ${encounter_alert.creature_name || "существо"}!`);
-310:   }
-311: 
-312:   // Смена времени суток
-313:   if (dayChanged) {
-314:     const newTod = timeOfDayRu(newTime.hour);
-315:     global_events.push(`Наступил(а) ${newTod} (${String(newTime.hour).padStart(2, "0")}:${String(newTime.minute).padStart(2, "0")}).`);
-316:   }
-317: 
-318:   // Спавн структур
-319:   for (const m of engine_output.mutations) {
-320:     if (m.type === "SPAWN_STRUCTURE") {
-321:       const sm = m as any;
-322:       global_events.push(`В локации появилась постройка: ${sm.structure?.name || "?"}.`);
-323:     }
-324:   }
-325: 
-326:   // Бросок встречи был, но не сработал (если был)
-327:   // (это не global event — это личный факт, но мы можем логировать)
-328: 
-329:   // ============================================
-330:   // 4. Считаем HP и инвентарь для каждого игрока
-331:   // ============================================
-332:   const player_truths: Record<string, PlayerKnowledge> = {};
-333: 
-334:   for (const player of players) {
-335:     // ============================================
-336:     // HP delta
-337:     // ============================================
-338:     let hpDelta = 0;
-339:     const hpMutations = engine_output.mutations.filter(
-340:       (m) => m.type === "UPDATE_HP" && (m as any).id === player.id,
-341:     );
-342:     for (const m of hpMutations) {
-343:       hpDelta += (m as any).delta as number;
-344:     }
-345: 
-346:     // ============================================
-347:     // Inventory delta
-348:     // ============================================
-349:     const added: string[] = [];
-350:     const removed: string[] = [];
-351:     const damaged: string[] = [];
-352: 
-353:     for (const m of engine_output.mutations) {
-354:       if (m.type === "INSERT_ITEM") {
-355:         const im = m as any;
-356:         if (im.owner_type === "player" && im.owner_id === player.id) {
-357:           added.push(im.item?.item_name || im.item?.name || "предмет");
-358:         }
-359:       }
-360:       if (m.type === "DELETE_ITEM") {
-361:         const dm = m as any;
-362:         const found = (player.inventory || []).find((i: any) => i.id === dm.item_id);
-363:         if (found) {
-364:           const qtyStr = dm.quantity > 1 ? ` x${dm.quantity}` : "";
-365:           removed.push(`${found.item_name || dm.item_id}${qtyStr}`);
-366:         } else if (dm.owner_type === "player" && dm.owner_id === player.id) {
-367:           removed.push(dm.item_id);
-368:         }
-369:       }
-370:       if (m.type === "UPDATE_DURABILITY") {
-371:         const um = m as any;
-372:         const found = (player.inventory || []).find((i: any) => i.id === um.item_id);
-373:         if (found) {
-374:           damaged.push(`${found.item_name || um.item_id} (износ: ${Math.abs(um.delta)})`);
-375:         } else if (um.owner_type === "player" && um.owner_id === player.id) {
-376:           damaged.push(um.item_id);
-377:         }
-378:       }
-379:       if (m.type === "TRANSFER_ITEM") {
-380:         const tm = m as any;
-381:         if (tm.to_type === "player" && tm.to_id === player.id) {
-382:           added.push(`+${tm.quantity} предмета (получено)`);
-383:         }
-384:         if (tm.from_type === "player" && tm.from_id === player.id) {
-385:           removed.push(`-${tm.quantity} предмета (передано)`);
-386:         }
-387:       }
-388:     }
-389: 
-390:     // ============================================
-391:     // Knowledge (факты для этого игрока)
-392:     // ============================================
-393:     const knowledge: string[] = [];
-394: 
-395:     // Конфликт транзакции — критичный факт
-396:     if (persistence_output.status === "aborted_conflict" && player.id === acting_player_id) {
-397:       knowledge.push("Ваше действие не удалось: предмет уже был забран другим игроком или перемещён.");
-398:     }
-399: 
-400:     // Если этот игрок — инициатор, видит свои броски и DC
-401:     if (player.id === acting_player_id) {
-402:       for (const ar of engine_output.action_results) {
-403:         if (ar.blocked) {
-404:           knowledge.push(`Действие заблокировано: ${ar.block_reason || "нет причины"}.`);
-405:           continue;
-406:         }
-407:         if (!ar.success) {
-408:           knowledge.push(`Действие "${getActionDisplayName(ar)}" провалилось: ${ar.details || "бросок не удался"}.`);
-409:           continue;
-410:         }
-411:         // Успех
-412:         if (ar.dice_roll) {
-413:           const skillLabel = getActionSkillLabel(ar.action_type, (ar as any).stat_to_check);
-414:           knowledge.push(`Проверка навыка (${skillLabel}) прошла успешно.`);
-415:         }
-416:         if (ar.details && !knowledge.includes(ar.details)) {
-417:           knowledge.push(ar.details);
-418:         }
-419:         if (ar.damage_dealt !== undefined && ar.damage_dealt > 0) {
-420:           knowledge.push(`Нанесено ${ar.damage_dealt} урона.`);
-421:         }
-422:         if (ar.action_type === "craft_recipe" && added.length > 0) {
-423:           knowledge.push(`Вы успешно создали: ${added.join(", ")}.`);
-424:         }
-425:         if (ar.action_type === "harvest_ambient" && added.length > 0) {
-426:           knowledge.push(`Вы собрали: ${added.join(", ")}.`);
-427:         }
-428:         if (ar.action_type === "search" && added.length > 0) {
-429:           knowledge.push(`Вы нашли: ${added.join(", ")}.`);
-430:         }
-431:       }
-432: 
-433:       const facts = engine_output.system_facts || engine_output.raw_system_facts || [];
-434:       for (const f of facts) {
-435:         if (!knowledge.includes(f)) {
-436:           knowledge.push(f);
-437:         }
-438:       }
-439:     } else {
-440:       // Этот игрок — НЕ инициатор. Нужно решить, видит ли он действие.
-441:       // Ищем все экшены, где цель = этот игрок
-442:       const actionsTargetingThisPlayer = engine_output.action_results.filter(
-443:         (ar) => {
-444:           const actions = engine_output.action_results;
-445:           // Определяем: цель — player с этим id
-446:           return actions.some(() => false); // упрощённо
-447:         },
-448:       );
-449:       // Более прямая проверка: были ли мутации UPDATE_HP на этого игрока
-450:       const wasAttacked = hpMutations.length > 0;
-451: 
-452:       if (wasAttacked) {
-453:         // Проверяем, было ли это скрытной атакой
-454:         const isStealth = engine_output.action_results.some(
-455:           (ar) => ar.action_type === "stealth_attack" || ar.action_type === "attack",
-456:         );
-457: 
-458:         // Упрощённо: если attack, но не stealth — видим имя инициатора
-459:         const attackerIsActing = engine_output.action_results.find(
-460:           (ar) => ar.action_type === "attack" || ar.action_type === "stealth_attack",
-461:         );
-462: 
-463:         if (attackerIsActing?.action_type === "stealth_attack") {
-464:           // Скрытная атака: ID атакующего НЕ раскрывается
-465:           knowledge.push(`Вы внезапно получили ${Math.abs(hpDelta)} физического урона. Источник урона неизвестен!`);
-466:         } else {
-467:           // Открытая атака
-468:           const actingPlayer = players.find((p) => p.id === acting_player_id);
-469:           const attackerName = actingPlayer?.name || "Неизвестный";
-470:           knowledge.push(`${attackerName} атаковал вас и нанёс ${Math.abs(hpDelta)} урона.`);
-471:         }
-472:       } else {
-473:         // Игрок не был целью — он bystander
-474:         // Видит ли он событие? Смотрим на глобальный бой
-475:         const globalAttack = engine_output.action_results.some(
-476:           (ar) => ar.action_type === "attack" || ar.action_type === "stealth_attack",
-477:         );
-478:         if (globalAttack) {
-479:           const attackerIsStealth = engine_output.action_results.some(
-480:             (ar) => ar.action_type === "stealth_attack",
-481:           );
-482:           if (attackerIsStealth) {
-483:             // Скрытая атака: bystander видит только следствие
-484:             const victimName = players.find((p) => p.id !== acting_player_id)?.name || "другой игрок";
-485:             knowledge.push(`${victimName} внезапно вздрагивает от ранения из ниоткуда.`);
-486:           } else {
-487:             const attacker = players.find((p) => p.id === acting_player_id)?.name || "Игрок";
-488:             const victim = players.find((p) => p.id !== acting_player_id)?.name || "другой игрок";
-489:             knowledge.push(`${attacker} атакует ${victim}!`);
-490:           }
-491:         }
-492:       }
-493:     }
-494: 
-495:     player_truths[player.id] = {
-496:       player_id: player.id,
-497:       knowledge,
-498:       hp_status: {
-499:         current: player.hp + hpDelta,
-500:         max: player.max_hp,
-501:         delta: hpDelta,
-502:       },
-503:       inventory_delta: { added, removed, damaged },
-504:     };
-505:   }
-506: 
-507:   // ============================================
-508:   // 5. NPC context (Lazy RAG)
-509:   // ============================================
-510:   const npc_context: Record<string, NpcContextSummary> = {};
-511: 
-512:   // Находим NPC, с которыми взаимодействовал инициатор
-513:   const interactedNpcIds = new Set<string>();
-514:   for (const ar of engine_output.action_results) {
-515:     // action.target_entity_id может быть id NPC
-516:     const targetEntityId = (ar as any).target_entity_id;
-517:     if (typeof targetEntityId === "string" && npcs.some((n) => n.id === targetEntityId)) {
-518:       interactedNpcIds.add(targetEntityId);
-519:     }
-520:     // talk-действия всегда требуют памяти
-521:     if (ar.action_type === "talk" || ar.action_type === "talk_free_action") {
-522:       // target_entity_id должен быть в списке npcs
-523:       if (typeof targetEntityId === "string") {
-524:         interactedNpcIds.add(targetEntityId);
-525:       }
-526:     }
-527:   }
-528: 
-529:   // Подтягиваем память и отношения только для активных NPC
-530:   if (interactedNpcIds.size > 0) {
-531:     const supabase = getSupabase();
-532:     for (const npcId of interactedNpcIds) {
-533:       const npc = npcs.find((n) => n.id === npcId);
-534:       if (!npc) continue;
-535: 
-536:       let score = 0;
-537:       let tier = "neutral";
-538:       let statusTags: string[] = npc?.status_tags || [];
-539: 
-540:       // 1) Отношения NPC с игроком
-541:       try {
-542:         const res = await supabase
-543:           .from("npc_relationships")
-544:           .select("score, tier, status_tags")
-545:           .eq("npc_id", npcId)
-546:           .eq("player_id", acting_player_id);
-547:         const relData = Array.isArray(res?.data) ? res.data[0] : (res?.data || null);
-548:         if (relData) {
-549:           score = typeof relData.score === "number" ? relData.score : 0;
-550:           tier = relData.tier || calculateRelationshipTier(score);
-551:           if (Array.isArray(relData.status_tags)) {
-552:             statusTags = Array.from(new Set([...statusTags, ...relData.status_tags]));
-553:           }
-554:         }
-555:       } catch {
-556:         // ignore if table not yet migrated or in test mocks
-557:       }
-558: 
-559:       // 2) Векторный поиск воспоминаний (Lazy RAG)
-560:       let memories: string[] = [];
-561:       try {
-562:         const { data, error } = await supabase.rpc("match_npc_memories", {
-563:           p_npc_id: npcId,
-564:           p_player_id: acting_player_id,
-565:           p_match_count: 3,
-566:         });
-567: 
-568:         if (!error && Array.isArray(data) && data.length > 0) {
-569:           memories = data
-570:             .map((row: any) => row.content || row.memory_text || row.text || "")
-571:             .filter((s: string) => s.length > 0);
-572:         }
-573:       } catch {
-574:         // ignore
-575:       }
-576: 
-577:       // Fallback: последние 3 воспоминания по created_at DESC
-578:       if (memories.length === 0) {
-579:         try {
-580:           const { data } = await supabase
-581:             .from("npc_memories")
-582:             .select("content, memory_text, text")
-583:             .eq("npc_id", npcId)
-584:             .order("created_at", { ascending: false })
-585:             .limit(3);
-586:           if (Array.isArray(data)) {
-587:             memories = data
-588:               .map((row: any) => row.content || row.memory_text || row.text || "")
-589:               .filter((s: string) => s.length > 0);
-590:           }
-591:         } catch {
-592:           // ignore
-593:         }
-594:       }
-595: 
-596:       // 3) Разделение по уровням памяти (vivid, regular, impression)
-597:       let vivid_memories: string[] = [];
-598:       let regular_memories: string[] = [];
-599:       let impressions: string[] = [];
-600: 
-601:       try {
-602:         const { data: tieredData } = await supabase
-603:           .from("npc_memories")
-604:           .select("memory_text, memory_type, vividness")
-605:           .eq("npc_id", npcId)
-606:           .eq("player_id", acting_player_id)
-607:           .order("created_at", { ascending: false })
-608:           .limit(10);
-609: 
-610:         if (Array.isArray(tieredData)) {
-611:           for (const row of tieredData) {
-612:             const txt = row.memory_text || "";
-613:             if (!txt) continue;
-614:             if (row.memory_type === "vivid" || (row.vividness && row.vividness >= 8)) {
-615:               vivid_memories.push(txt);
-616:             } else if (row.memory_type === "impression" || (row.vividness && row.vividness <= 3)) {
-617:               impressions.push(txt);
-618:             } else {
-619:               regular_memories.push(txt);
-620:             }
-621:           }
-622:         }
-623:       } catch {
-624:         // ignore
-625:       }
-626: 
-627:       npc_context[npcId] = {
-628:         npc_id: npcId,
-629:         name: npc?.name || "NPC",
-630:         race: npc?.race || "Гуманоид",
-631:         role: npc?.role || "Обыватель",
-632:         appearance: (npc as any)?.appearance || null,
-633:         background: (npc as any)?.background || null,
-634:         habits: (npc as any)?.habits || null,
-635:         catchphrases: Array.isArray((npc as any)?.catchphrases) ? (npc as any).catchphrases : [],
-636:         current_activity: (npc as any)?.current_activity || null,
-637:         status_tags: statusTags,
-638:         relationship_score: score,
-639:         relationship_tier: tier,
-640:         relationship_tier_label: getRelationshipTierLabel(tier as RelationshipTier),
-641:         relevant_memories: memories,
-642:         vivid_memories,
-643:         regular_memories,
-644:         impressions,
-645:       };
-646:     }
-647:   }
-648: 
-649:   // ============================================
-650:   // 6. Финальный DTO
-651:   // ============================================
-652:   const present_npcs = (npcs || [])
-653:     .filter((n) => n.is_alive !== false)
-654:     .map((n) => ({
-655:       id: n.id,
-656:       name: n.name || "NPC",
-657:       race: n.race || "Человек",
-658:       role: n.role || "Обыватель",
-659:       category: n.category || "npc",
-660:       status_tags: n.status_tags || [],
-661:       is_hostile: n.is_hostile || false,
-662:       appearance: (n as any).appearance || null,
-663:       current_activity: (n as any).current_activity || null,
-664:       catchphrases: Array.isArray((n as any).catchphrases) ? (n as any).catchphrases : [],
-665:     }));
-666: 
-667:   return {
-668:     session_id,
-669:     turn_status,
-670:     environment: {
-671:       location_name: location?.name || "Неизвестно",
-672:       weather: location?.weather || null,
-673:       time: newTime,
-674:       time_passed_minutes,
-675:       atmosphere,
-676:     },
-677:     global_events,
-678:     player_truths,
-679:     present_npcs,
-680:     npc_context,
-681:     encounter_alert,
-682:     storyline: context.storyline || null,
-683:   };
-684: }
 
 ================
 File: supabase/functions/process-turn/steps/step1_router.ts
@@ -31586,8 +31629,8 @@ File: src/pages/lobby.js
  396:              </span>
  397:            </div>
  398: 
- 399:            <div style="margin-bottom: 1.25rem; padding: 0.85rem; background: rgba(255,255,255,0.04); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
- 400:              <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-muted, #94a3b8);">⚡ Быстрые пресеты связок:</div>
+ 399:            <div style="margin-bottom: 1.25rem; padding: 0.85rem; background: rgba(212, 163, 89, 0.08); border-radius: 8px; border: 1px solid rgba(212, 163, 89, 0.25);">
+ 400:              <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--accent-gold-bright);">⚡ Быстрые пресеты связок:</div>
  401:              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
  402:                <button type="button" class="btn btn-secondary btn-sm" id="presetFreeBtn" title="Все роли на качественных бесплатных моделях OpenRouter">🆓 Бесплатно ($0)</button>
  403:                <button type="button" class="btn btn-secondary btn-sm" id="presetOptimumBtn" title="Минимум затрат (~$0.50/1000 ходов) при максимальном интеллекте парсера и нарратора">⚡ Оптимум (Топ)</button>
@@ -31597,7 +31640,7 @@ File: src/pages/lobby.js
  407: 
  408:            <div class="form-group" style="margin-bottom: 1rem;">
  409:              <label class="form-label">Модель для генерации карточек</label>
- 410:              <select class="input" id="cardModelInput">
+ 410:              <select class="input select" id="cardModelInput">
  411:                ${CARD_GENERATION_MODELS.map(m => `<option value="${m.id}" ${userSettings?.card_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
  412:              </select>
  413:              <span class="form-hint">Модель для генерации NPC, географии и бестиария</span>
@@ -31605,7 +31648,7 @@ File: src/pages/lobby.js
  415: 
  416:             <div class="form-group" style="margin-bottom: 1rem;">
  417:               <label class="form-label">Модель для ДМа (рассказчик)</label>
- 418:               <select class="input" id="dmModelInput">
+ 418:               <select class="input select" id="dmModelInput">
  419:                 ${DM_MODELS.map(m => `<option value="${m.id}" ${userSettings?.dm_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
  420:               </select>
  421:               <span class="form-hint">Модель для narration и ответов в игре</span>
@@ -31613,7 +31656,7 @@ File: src/pages/lobby.js
  423: 
  424:             <div class="form-group" style="margin-bottom: 1rem;">
  425:               <label class="form-label">Модель для GPS (время и локация)</label>
- 426:               <select class="input" id="gpsModelInput">
+ 426:               <select class="input select" id="gpsModelInput">
  427:                 ${GPS_MODELS.map(m => `<option value="${m.id}" ${userSettings?.gps_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
  428:               </select>
  429:               <span class="form-hint">Модель для определения времени действия и локации</span>
@@ -31621,7 +31664,7 @@ File: src/pages/lobby.js
  431: 
  432:             <div class="form-group" style="margin-bottom: 1.5rem;">
  433:               <label class="form-label">Модель для Сателит (намерения)</label>
- 434:               <select class="input" id="satelliteModelInput">
+ 434:               <select class="input select" id="satelliteModelInput">
  435:                 ${SATELLITE_MODELS.map(m => `<option value="${m.id}" ${userSettings?.satellite_model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
  436:               </select>
  437:               <span class="form-hint">Модель для анализа намерений игрока</span>

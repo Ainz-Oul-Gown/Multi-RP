@@ -199,6 +199,30 @@ export async function updateSession(id, updates) {
   return data;
 }
 
+export async function deleteSession(id) {
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('delete_session', { p_session_id: id });
+    if (!rpcErr && rpcData?.success) {
+      return rpcData;
+    }
+    if (rpcData && rpcData.success === false && rpcData.message) {
+      throw new Error(rpcData.message);
+    }
+  } catch (err) {
+    if (err.message && !err.message.includes('Could not find')) {
+      throw err;
+    }
+  }
+
+  // Fallback: direct DELETE query with RLS cascade
+  const { error } = await supabase
+    .from('sessions')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+  return { success: true, deleted_session_id: id };
+}
+
 // ===================== PLAYERS =====================
 
 export async function getSessionPlayers(sessionId) {

@@ -1,7 +1,7 @@
 // src/pages/session-settings.js — Экран настроек сессии (для Админа)
 import { supabase, invokeFunction } from '../api/supabase.js';
 import {
-  getSession, updateSession, getSessionPlayers, createPlayer,
+  getSession, updateSession, deleteSession, getSessionPlayers, createPlayer,
   getWorlds, getLoreFiles
 } from '../api/game.js';
 import { STATS, DIFFICULTY_PRESETS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
@@ -218,6 +218,20 @@ export async function renderSessionSettings(container, sessionId, user) {
               <button class="btn btn-ghost btn-sm" id="copyIdBtn">📋</button>
             </div>
             <button class="btn btn-primary btn-sm" id="addBotBtn" style="margin-top: 1rem;">🤖 Добавить NPC-бота</button>
+          </section>
+
+          <!-- Опасная зона -->
+          <section class="card" style="border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.04); margin-top: 1.5rem;">
+            <h2 class="card-title" style="color: #ef4444;">⚠️ Опасная зона</h2>
+            <p class="form-hint" style="margin-top: 0.5rem; color: #fca5a5;">
+              Удаление сессии безвозвратно сотрёт историю партии, сообщения чата, прогресс и предметы этой игры.
+              Ваши глобальные карточки персонажей и мира сохранятся в безопасности.
+            </p>
+            <div style="margin-top: 1rem;">
+              <button class="btn btn-danger btn-sm" id="deleteSessionBtn" style="background: #dc2626; border-color: #ef4444; color: #fff;">
+                🗑️ Удалить эту сессию
+              </button>
+            </div>
           </section>
         </div>
       </div>
@@ -453,6 +467,36 @@ export async function renderSessionSettings(container, sessionId, user) {
         load();
       } catch (err) {
         toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Delete session
+    document.getElementById('deleteSessionBtn')?.addEventListener('click', async () => {
+      const worldName = session?.worlds?.name || 'этой сессии';
+      const confirmed = window.confirm(
+        `Вы действительно хотите удалить эту сессию (Мир: «${worldName}»)?\n\n` +
+        `• Все сообщения, ходы, предметы и прогресс в этой партии будут безвозвратно удалены.\n` +
+        `• Карточки персонажей и мира останутся нетронутыми в вашей библиотеке.`
+      );
+      if (!confirmed) return;
+
+      const btn = document.getElementById('deleteSessionBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Удаление...';
+      }
+
+      try {
+        toast.info('Удаление сессии...');
+        await deleteSession(sessionId);
+        toast.success('Сессия успешно удалена');
+        router.navigate('/');
+      } catch (err) {
+        toast.error('Ошибка удаления: ' + (err.message || err));
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '🗑️ Удалить эту сессию';
+        }
       }
     });
   }

@@ -1,7 +1,7 @@
 // src/pages/lobby.js — Глобальное Лобби (Dashboard)
 import { supabase, signOut, invokeFunction } from '../api/supabase.js';
 import {
-  getSessions, createSession, getWorlds, createWorld, updateWorld, deleteWorld,
+  getSessions, createSession, deleteSession, getWorlds, createWorld, updateWorld, deleteWorld,
   importWorld, exportWorld, downloadJSON,
   getUserSettings, upsertUserSettings, updateSession,
   getCharacterCards, createCharacterCard, updateCharacterCard, deleteCharacterCard,
@@ -882,12 +882,13 @@ export function renderLobby(container, user) {
                 </div>
               </div>
             ` : '<p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.5rem;">Пока нет игроков</p>'}
-            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center;">
               <button class="btn btn-primary btn-sm" data-action="join" data-id="${s.id}">
                 ${hasChar ? '🎮 Войти' : '⚔️ Создать героя'}
               </button>
               <button class="btn btn-secondary btn-sm" data-action="settings" data-id="${s.id}">⚙️</button>
               <button class="btn btn-ghost btn-sm" data-action="invite" data-id="${s.id}" title="Копировать инвайт-ссылку">🔗</button>
+              <button class="btn btn-ghost btn-sm" data-action="delete-session" data-id="${s.id}" title="Удалить сессию" style="margin-left: auto; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);">🗑️</button>
             </div>
           </div>
         `}).join('')}
@@ -2589,6 +2590,29 @@ export function renderLobby(container, user) {
         const url = `${window.location.origin}${base}#/session/${btn.dataset.id}`;
         navigator.clipboard.writeText(url);
         toast.success('Инвайт-ссылка скопирована!');
+      });
+    });
+    container.querySelectorAll('[data-action="delete-session"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const sessionId = btn.dataset.id;
+        const targetSession = sessions.find((s) => s.id === sessionId);
+        const worldName = targetSession?.worlds?.name || 'этой сессии';
+        const confirmed = window.confirm(
+          `Удалить игровую сессию в мире «${worldName}»?\n\n` +
+          `• Вся история сообщений, ходов и прогресс партии будут безвозвратно удалены.\n` +
+          `• Карточки ваших персонажей и карточка мира сохранятся в безопасности.`
+        );
+        if (!confirmed) return;
+
+        try {
+          toast.info('Удаление сессии...');
+          await deleteSession(sessionId);
+          toast.success('Сессия успешно удалена');
+          sessions = await getSessions();
+          render();
+        } catch (err) {
+          toast.error('Ошибка удаления сессии: ' + (err.message || err));
+        }
       });
     });
 

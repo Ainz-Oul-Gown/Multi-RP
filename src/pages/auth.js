@@ -10,9 +10,9 @@ export function renderAuth(container) {
       <div class="page page-centered">
         <div class="auth-container">
           <div class="auth-header">
-            <div class="auth-logo">⚔️</div>
-            <h1 class="auth-title">MultiRP AI</h1>
-            <p class="auth-subtitle">Гибридный ИИ-Движок для текстовых RPG</p>
+            <div class="auth-logo">🕯️</div>
+            <h1 class="auth-title">Таверна «Путник и Дракон»</h1>
+            <p class="auth-subtitle">Приют искателей приключений и текстовых RPG</p>
           </div>
 
           <button class="btn btn-google btn-lg" id="googleBtn" style="width: 100%;">

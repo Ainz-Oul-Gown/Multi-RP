@@ -216,9 +216,9 @@ File: src/pages/auth.js
  10:       <div class="page page-centered">
  11:         <div class="auth-container">
  12:           <div class="auth-header">
- 13:             <div class="auth-logo">⚔️</div>
- 14:             <h1 class="auth-title">MultiRP AI</h1>
- 15:             <p class="auth-subtitle">Гибридный ИИ-Движок для текстовых RPG</p>
+ 13:             <div class="auth-logo">🕯️</div>
+ 14:             <h1 class="auth-title">Таверна «Путник и Дракон»</h1>
+ 15:             <p class="auth-subtitle">Приют искателей приключений и текстовых RPG</p>
  16:           </div>
  17: 
  18:           <button class="btn btn-google btn-lg" id="googleBtn" style="width: 100%;">
@@ -313,77 +313,95 @@ File: src/pages/auth.js
 ================
 File: src/styles/variables.css
 ================
- 1: /* src/styles/variables.css — CSS Custom Properties (Тема) */
+ 1: /* src/styles/variables.css — Дизайн-система фэнтезийной таверны («Путник и Дракон») */
  2: :root {
- 3:   /* Цветовая палитра — Тёмное фэнтези */
- 4:   --bg-primary: #0f0e17;
- 5:   --bg-secondary: #1a1a2e;
- 6:   --bg-tertiary: #16213e;
- 7:   --bg-card: #1e2a3a;
- 8:   --bg-input: #0d1b2a;
- 9:   --bg-hover: #25344a;
-10: 
-11:   --accent-primary: #e94560;
-12:   --accent-secondary: #0f3460;
-13:   --accent-gold: #f0a500;
-14:   --accent-success: #2ecc71;
-15:   --accent-danger: #e74c3c;
-16:   --accent-info: #3498db;
-17: 
-18:   --text-primary: #eaeaea;
-19:   --text-secondary: #a0a0b0;
-20:   --text-muted: #6b6b7b;
-21:   --text-accent: #e94560;
-22: 
-23:   --border-color: #2a2a3e;
-24:   --border-accent: #e94560;
+ 3:   /* Цветовая палитра — Теплая таверна, мореный дуб, латунь и каминное пламя */
+ 4:   --bg-primary: #15110e;        /* Глубокий оттенок темного дуба */
+ 5:   --bg-secondary: #1e1713;      /* Полированный мореный дуб */
+ 6:   --bg-tertiary: #281f19;       /* Деревянная обшивка стен таверны */
+ 7:   --bg-card: #221a14;           /* Планшет / пергамент на дубовой подложке */
+ 8:   --bg-input: #120e0b;          /* Углубленный темный слот в дереве */
+ 9:   --bg-hover: #33271f;          /* Теплый отсвет камина */
+10:   --bg-parchment: #f4ecd8;      /* Светлый состаренный пергамент */
+11:   --bg-parchment-dark: #2a2018; /* Темный пергамент для хроники */
+12: 
+13:   /* Акценты: Пламя очага, червонное золото, сургуч и целебные травы */
+14:   --accent-primary: #c85a32;    /* Теплый янтарь / каминный огонь */
+15:   --accent-primary-hover: #dc6a3f;
+16:   --accent-secondary: #5a3825;  /* Выделанная седельная кожа */
+17:   --accent-gold: #d4a359;       /* Чеканное античное золото */
+18:   --accent-gold-bright: #f3c87a;/* Яркий золотой отблеск */
+19:   --accent-gold-dark: #9b7235;  /* Состаренная темная бронза */
+20:   --accent-success: #388e3c;    /* Травяной изумруд / исцеление */
+21:   --accent-danger: #a93226;     /* Королевский сургуч / урон */
+22:   --accent-crimson: #8b1e1f;    /* Кровь и жизненная сила (HP) */
+23:   --accent-info: #3b7a9e;       /* Рунический синий / магическая мана */
+24:   --accent-warning: #d97706;    /* Янтарный воск */
 25: 
-26:   /* Типографика */
-27:   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-28:   --font-heading: 'Cinzel', 'Playfair Display', serif;
-29:   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-30: 
-31:   --fs-xs: 0.75rem;
-32:   --fs-sm: 0.875rem;
-33:   --fs-base: 1rem;
-34:   --fs-lg: 1.125rem;
-35:   --fs-xl: 1.25rem;
-36:   --fs-2xl: 1.5rem;
-37:   --fs-3xl: 2rem;
-38: 
-39:   /* Отступы */
-40:   --space-xs: 0.25rem;
-41:   --space-sm: 0.5rem;
-42:   --space-md: 1rem;
-43:   --space-lg: 1.5rem;
-44:   --space-xl: 2rem;
-45:   --space-2xl: 3rem;
+26:   /* Текст: пергаментные и чернильные оттенки */
+27:   --text-primary: #f5eedc;      /* Теплый светлый пергамент */
+28:   --text-secondary: #c5b6a3;    /* Состаренная бумага */
+29:   --text-muted: #857565;        /* Древесная зола */
+30:   --text-accent: #d4a359;       /* Золотое тиснение */
+31:   --text-gold: #f3c87a;         /* Золотое свечение */
+32:   --text-dark: #1e1713;         /* Темные чернила для светлых плашек */
+33: 
+34:   /* Рамки и филигрань */
+35:   --border-color: rgba(212, 163, 89, 0.22);  /* Латунная окантовка */
+36:   --border-subtle: rgba(255, 255, 255, 0.06);
+37:   --border-accent: #d4a359;                  /* Золотая кайма */
+38:   --border-gold: rgba(212, 163, 89, 0.45);   /* Чеканное золото */
+39:   --border-wood: #3d2f25;                    /* Стык дубовых досок */
+40: 
+41:   /* Типографика */
+42:   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+43:   --font-heading: 'Cinzel', 'MedievalSharp', 'Georgia', serif;
+44:   --font-story: 'MedievalSharp', 'Cinzel', 'Georgia', serif;
+45:   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 46: 
-47:   /* Скругления */
-48:   --radius-sm: 4px;
-49:   --radius-md: 8px;
-50:   --radius-lg: 12px;
-51:   --radius-xl: 20px;
-52:   --radius-full: 9999px;
-53: 
-54:   /* Тени */
-55:   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-56:   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-57:   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-58:   --shadow-glow: 0 0 20px rgba(233, 69, 96, 0.3);
-59: 
-60:   /* Анимации */
-61:   --transition-fast: 150ms ease;
-62:   --transition-base: 250ms ease;
-63:   --transition-slow: 400ms ease;
-64: 
-65:   /* z-index */
-66:   --z-header: 100;
-67:   --z-sidebar: 200;
-68:   --z-modal: 300;
-69:   --z-toast: 400;
-70:   --z-overlay: 500;
-71: }
+47:   --fs-xs: 0.75rem;
+48:   --fs-sm: 0.875rem;
+49:   --fs-base: 1rem;
+50:   --fs-lg: 1.125rem;
+51:   --fs-xl: 1.25rem;
+52:   --fs-2xl: 1.5rem;
+53:   --fs-3xl: 2rem;
+54: 
+55:   /* Отступы */
+56:   --space-xs: 0.25rem;
+57:   --space-sm: 0.5rem;
+58:   --space-md: 1rem;
+59:   --space-lg: 1.5rem;
+60:   --space-xl: 2rem;
+61:   --space-2xl: 3rem;
+62: 
+63:   /* Скругления */
+64:   --radius-sm: 4px;
+65:   --radius-md: 8px;
+66:   --radius-lg: 12px;
+67:   --radius-xl: 18px;
+68:   --radius-full: 9999px;
+69: 
+70:   /* Тени и теплое каминное свечение */
+71:   --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.45);
+72:   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
+73:   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.7);
+74:   --shadow-glow: 0 0 18px rgba(212, 163, 89, 0.25);
+75:   --shadow-hearth: 0 0 24px rgba(200, 90, 50, 0.2);
+76:   --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+77: 
+78:   /* Анимации */
+79:   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+80:   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+81:   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+82: 
+83:   /* z-index */
+84:   --z-header: 100;
+85:   --z-sidebar: 200;
+86:   --z-modal: 300;
+87:   --z-toast: 400;
+88:   --z-overlay: 500;
+89: }
 
 ================
 File: src/utils/toast.js
@@ -13074,7 +13092,7 @@ File: tests/wild_zone_and_search.test.ts
  64:       acting_player: {
  65:         id: "player-vlad",
  66:         name: "Влад",
- 67:         stats: { INT: 12 },
+ 67:         stats: { INT: 30 },
  68:       },
  69:       session: { difficulty: "easy" },
  70:       targets: {
@@ -15080,8 +15098,8 @@ File: tests/utils.test.ts
 ================
 File: src/styles/main.css
 ================
-  1: /* src/styles/main.css — Глобальные стили */
-  2: @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  1: /* src/styles/main.css — Глобальные стили таверны («Путник и Дракон») */
+  2: @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=MedievalSharp&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
   3: @import './variables.css';
   4: 
   5: /* Reset */
@@ -15096,601 +15114,669 @@ File: src/styles/main.css
  14:   font-family: var(--font-main);
  15:   font-size: var(--fs-base);
  16:   color: var(--text-primary);
- 17:   background: var(--bg-primary);
- 18:   line-height: 1.6;
- 19:   -webkit-font-smoothing: antialiased;
- 20: }
- 21: 
- 22: a {
- 23:   color: var(--accent-primary);
- 24:   text-decoration: none;
- 25:   transition: color var(--transition-fast);
- 26: }
- 27: 
- 28: a:hover {
- 29:   color: var(--accent-gold);
+ 17:   background: 
+ 18:     radial-gradient(circle at 50% 0%, rgba(200, 90, 50, 0.09) 0%, transparent 65%),
+ 19:     radial-gradient(circle at 85% 20%, rgba(212, 163, 89, 0.05) 0%, transparent 45%),
+ 20:     var(--bg-primary);
+ 21:   background-attachment: fixed;
+ 22:   line-height: 1.6;
+ 23:   -webkit-font-smoothing: antialiased;
+ 24: }
+ 25: 
+ 26: a {
+ 27:   color: var(--accent-gold);
+ 28:   text-decoration: none;
+ 29:   transition: all var(--transition-fast);
  30: }
  31: 
- 32: button {
- 33:   cursor: pointer;
- 34:   font-family: inherit;
- 35:   border: none;
- 36:   outline: none;
- 37: }
- 38: 
- 39: input, textarea, select {
- 40:   font-family: inherit;
- 41:   font-size: inherit;
- 42:   outline: none;
- 43: }
- 44: 
- 45: img {
- 46:   max-width: 100%;
- 47:   display: block;
+ 32: a:hover {
+ 33:   color: var(--accent-gold-bright);
+ 34:   text-shadow: 0 0 8px rgba(212, 163, 89, 0.4);
+ 35: }
+ 36: 
+ 37: button {
+ 38:   cursor: pointer;
+ 39:   font-family: inherit;
+ 40:   border: none;
+ 41:   outline: none;
+ 42: }
+ 43: 
+ 44: input, textarea, select {
+ 45:   font-family: inherit;
+ 46:   font-size: inherit;
+ 47:   outline: none;
  48: }
  49: 
- 50: /* ===================== Scrollbar ===================== */
- 51: ::-webkit-scrollbar {
- 52:   width: 6px;
+ 50: img {
+ 51:   max-width: 100%;
+ 52:   display: block;
  53: }
  54: 
- 55: ::-webkit-scrollbar-track {
- 56:   background: var(--bg-secondary);
- 57: }
- 58: 
- 59: ::-webkit-scrollbar-thumb {
- 60:   background: var(--border-color);
- 61:   border-radius: var(--radius-full);
- 62: }
- 63: 
- 64: ::-webkit-scrollbar-thumb:hover {
- 65:   background: var(--text-muted);
- 66: }
- 67: 
- 68: /* ===================== Layout ===================== */
- 69: #app {
- 70:   height: 100%;
- 71:   display: flex;
- 72:   flex-direction: column;
- 73: }
- 74: 
- 75: .page {
- 76:   flex: 1;
- 77:   display: flex;
- 78:   flex-direction: column;
- 79:   min-height: 100vh;
- 80: }
- 81: 
- 82: .page-centered {
- 83:   align-items: center;
- 84:   justify-content: center;
- 85:   padding: var(--space-xl);
- 86: }
- 87: 
- 88: /* ===================== Buttons ===================== */
- 89: .btn {
- 90:   display: inline-flex;
- 91:   align-items: center;
- 92:   justify-content: center;
- 93:   gap: var(--space-sm);
- 94:   padding: var(--space-sm) var(--space-lg);
- 95:   border-radius: var(--radius-md);
- 96:   font-weight: 600;
- 97:   font-size: var(--fs-sm);
- 98:   transition: all var(--transition-fast);
- 99:   white-space: nowrap;
-100: }
-101: 
-102: .btn-primary {
-103:   background: var(--accent-primary);
-104:   color: #fff;
-105: }
-106: 
-107: .btn-primary:hover {
-108:   background: #d63851;
-109:   box-shadow: var(--shadow-glow);
-110: }
-111: 
-112: .btn-secondary {
-113:   background: var(--bg-tertiary);
-114:   color: var(--text-primary);
-115:   border: 1px solid var(--border-color);
-116: }
-117: 
-118: .btn-secondary:hover {
-119:   background: var(--bg-hover);
-120:   border-color: var(--accent-primary);
-121: }
-122: 
-123: .btn-ghost {
-124:   background: transparent;
-125:   color: var(--text-secondary);
-126: }
-127: 
-128: .btn-ghost:hover {
-129:   background: var(--bg-hover);
-130:   color: var(--text-primary);
+ 55: /* ===================== Scrollbar ===================== */
+ 56: ::-webkit-scrollbar {
+ 57:   width: 7px;
+ 58:   height: 7px;
+ 59: }
+ 60: 
+ 61: ::-webkit-scrollbar-track {
+ 62:   background: rgba(18, 14, 11, 0.85);
+ 63:   border-left: 1px solid rgba(212, 163, 89, 0.08);
+ 64: }
+ 65: 
+ 66: ::-webkit-scrollbar-thumb {
+ 67:   background: rgba(212, 163, 89, 0.3);
+ 68:   border-radius: var(--radius-full);
+ 69:   border: 1px solid rgba(212, 163, 89, 0.15);
+ 70: }
+ 71: 
+ 72: ::-webkit-scrollbar-thumb:hover {
+ 73:   background: rgba(212, 163, 89, 0.55);
+ 74:   box-shadow: 0 0 6px rgba(212, 163, 89, 0.4);
+ 75: }
+ 76: 
+ 77: /* ===================== Layout ===================== */
+ 78: #app {
+ 79:   height: 100%;
+ 80:   display: flex;
+ 81:   flex-direction: column;
+ 82: }
+ 83: 
+ 84: .page {
+ 85:   flex: 1;
+ 86:   display: flex;
+ 87:   flex-direction: column;
+ 88:   min-height: 100vh;
+ 89: }
+ 90: 
+ 91: .page-centered {
+ 92:   align-items: center;
+ 93:   justify-content: center;
+ 94:   padding: var(--space-xl);
+ 95: }
+ 96: 
+ 97: /* ===================== Buttons ===================== */
+ 98: .btn {
+ 99:   display: inline-flex;
+100:   align-items: center;
+101:   justify-content: center;
+102:   gap: var(--space-sm);
+103:   padding: var(--space-sm) var(--space-lg);
+104:   border-radius: var(--radius-md);
+105:   font-family: var(--font-heading);
+106:   font-weight: 600;
+107:   font-size: var(--fs-sm);
+108:   letter-spacing: 0.3px;
+109:   transition: all var(--transition-fast);
+110:   white-space: nowrap;
+111:   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+112:   user-select: none;
+113: }
+114: 
+115: .btn:active:not(:disabled) {
+116:   transform: translateY(1px) scale(0.98);
+117:   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+118: }
+119: 
+120: .btn-primary {
+121:   background: linear-gradient(180deg, #c85a32 0%, #9e381b 100%);
+122:   color: #fff8f0;
+123:   border: 1px solid rgba(243, 200, 122, 0.4);
+124:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+125: }
+126: 
+127: .btn-primary:hover:not(:disabled) {
+128:   background: linear-gradient(180deg, #dc6a3f 0%, #ab4223 100%);
+129:   box-shadow: 0 0 14px rgba(200, 90, 50, 0.45), 0 2px 6px rgba(0, 0, 0, 0.5);
+130:   border-color: rgba(243, 200, 122, 0.6);
 131: }
 132: 
-133: .btn-danger {
-134:   background: var(--accent-danger);
-135:   color: #fff;
-136: }
-137: 
-138: .btn-danger:hover {
-139:   background: #c0392b;
-140: }
-141: 
-142: .btn-gold {
-143:   background: var(--accent-gold);
-144:   color: #1a1a2e;
-145: }
-146: 
-147: .btn-gold:hover {
-148:   background: #d4940a;
-149: }
-150: 
-151: .btn-warning {
-152:   background: #f39c12;
-153:   color: #fff;
-154: }
-155: 
-156: .btn-warning:hover {
-157:   background: #e67e22;
-158: }
-159: 
-160: .btn-warning:disabled {
-161:   opacity: 0.6;
-162:   cursor: not-allowed;
-163: }
-164: 
-165: .btn-success {
-166:   background: var(--accent-success);
-167:   color: #fff;
-168: }
-169: 
-170: .btn-success:hover {
-171:   background: #27ae60;
-172: }
-173: 
-174: .btn-success:disabled {
-175:   opacity: 0.6;
-176:   cursor: not-allowed;
-177: }
-178: 
-179: .btn:disabled {
-180:   opacity: 0.5;
-181:   cursor: not-allowed;
-182: }
-183: 
-184: .btn-sm {
-185:   padding: var(--space-xs) var(--space-md);
-186:   font-size: var(--fs-xs);
+133: .btn-secondary {
+134:   background: linear-gradient(180deg, #2b211a 0%, #1d1612 100%);
+135:   color: var(--text-primary);
+136:   border: 1px solid var(--border-color);
+137: }
+138: 
+139: .btn-secondary:hover:not(:disabled) {
+140:   background: linear-gradient(180deg, #372a21 0%, #251c17 100%);
+141:   border-color: var(--accent-gold);
+142:   color: var(--accent-gold-bright);
+143:   box-shadow: 0 0 10px rgba(212, 163, 89, 0.2);
+144: }
+145: 
+146: .btn-ghost {
+147:   background: transparent;
+148:   color: var(--text-secondary);
+149:   box-shadow: none;
+150: }
+151: 
+152: .btn-ghost:hover:not(:disabled) {
+153:   background: rgba(212, 163, 89, 0.1);
+154:   color: var(--accent-gold-bright);
+155: }
+156: 
+157: .btn-danger {
+158:   background: linear-gradient(180deg, #a93226 0%, #782218 100%);
+159:   color: #fff;
+160:   border: 1px solid rgba(255, 120, 120, 0.25);
+161:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+162: }
+163: 
+164: .btn-danger:hover:not(:disabled) {
+165:   background: linear-gradient(180deg, #c0392b 0%, #8b281d 100%);
+166:   box-shadow: 0 0 12px rgba(169, 50, 38, 0.4);
+167: }
+168: 
+169: .btn-gold {
+170:   background: linear-gradient(180deg, #e5b364 0%, #b88331 100%);
+171:   color: #17110a;
+172:   border: 1px solid #f6d89b;
+173:   font-weight: 700;
+174:   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
+175: }
+176: 
+177: .btn-gold:hover:not(:disabled) {
+178:   background: linear-gradient(180deg, #f1c77b 0%, #c6923c 100%);
+179:   box-shadow: 0 0 14px rgba(212, 163, 89, 0.45);
+180: }
+181: 
+182: .btn-warning {
+183:   background: linear-gradient(180deg, #d97706 0%, #92400e 100%);
+184:   color: #fff;
+185:   border: 1px solid rgba(251, 191, 36, 0.3);
+186:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 187: }
 188: 
-189: .btn-lg {
-190:   padding: var(--space-md) var(--space-xl);
-191:   font-size: var(--fs-lg);
+189: .btn-warning:hover:not(:disabled) {
+190:   background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+191:   box-shadow: 0 0 12px rgba(217, 119, 6, 0.4);
 192: }
 193: 
-194: .btn-icon {
-195:   width: 40px;
-196:   height: 40px;
-197:   padding: 0;
-198:   border-radius: var(--radius-md);
+194: .btn-success {
+195:   background: linear-gradient(180deg, #2e7d32 0%, #1b5e20 100%);
+196:   color: #fff;
+197:   border: 1px solid rgba(129, 199, 132, 0.3);
+198:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 199: }
 200: 
-201: /* ===================== Form Elements ===================== */
-202: .input {
-203:   width: 100%;
-204:   padding: var(--space-sm) var(--space-md);
-205:   background: var(--bg-input);
-206:   border: 1px solid var(--border-color);
-207:   border-radius: var(--radius-md);
-208:   color: var(--text-primary);
-209:   font-size: var(--fs-base);
-210:   transition: border-color var(--transition-fast);
+201: .btn-success:hover:not(:disabled) {
+202:   background: linear-gradient(180deg, #388e3c 0%, #2e7d32 100%);
+203:   box-shadow: 0 0 12px rgba(46, 125, 50, 0.4);
+204: }
+205: 
+206: .btn:disabled {
+207:   opacity: 0.45;
+208:   cursor: not-allowed;
+209:   filter: grayscale(0.5);
+210:   box-shadow: none;
 211: }
 212: 
-213: .input:focus {
-214:   border-color: var(--accent-primary);
-215:   box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
+213: .btn-sm {
+214:   padding: var(--space-xs) var(--space-md);
+215:   font-size: var(--fs-xs);
 216: }
 217: 
-218: .input::placeholder {
-219:   color: var(--text-muted);
-220: }
-221: 
-222: textarea.input {
-223:   resize: vertical;
-224:   min-height: 80px;
-225:   font-family: var(--font-main);
-226: }
-227: 
-228: .select {
-229:   appearance: none;
-230:   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23a0a0b0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-231:   background-repeat: no-repeat;
-232:   background-position: right 12px center;
-233:   padding-right: 36px;
-234: }
-235: 
-236: .form-group {
-237:   display: flex;
-238:   flex-direction: column;
-239:   gap: var(--space-xs);
-240: }
-241: 
-242: .form-label {
-243:   font-size: var(--fs-sm);
-244:   font-weight: 600;
-245:   color: var(--text-secondary);
+218: .btn-lg {
+219:   padding: var(--space-md) var(--space-xl);
+220:   font-size: var(--fs-lg);
+221: }
+222: 
+223: .btn-icon {
+224:   width: 40px;
+225:   height: 40px;
+226:   padding: 0;
+227:   border-radius: var(--radius-md);
+228: }
+229: 
+230: /* ===================== Form Elements ===================== */
+231: .input {
+232:   width: 100%;
+233:   padding: var(--space-sm) var(--space-md);
+234:   background: var(--bg-input);
+235:   border: 1px solid var(--border-color);
+236:   border-radius: var(--radius-md);
+237:   color: var(--text-primary);
+238:   font-size: var(--fs-base);
+239:   box-shadow: var(--shadow-inset);
+240:   transition: all var(--transition-fast);
+241: }
+242: 
+243: .input:focus {
+244:   border-color: var(--accent-gold);
+245:   box-shadow: var(--shadow-inset), 0 0 0 2px rgba(212, 163, 89, 0.25);
 246: }
 247: 
-248: .form-hint {
-249:   font-size: var(--fs-xs);
-250:   color: var(--text-muted);
-251: }
-252: 
-253: /* ===================== Cards ===================== */
-254: .card {
-255:   background: var(--bg-card);
-256:   border: 1px solid var(--border-color);
-257:   border-radius: var(--radius-lg);
-258:   padding: var(--space-lg);
-259:   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-260: }
-261: 
-262: .card:hover {
-263:   border-color: var(--accent-primary);
-264:   box-shadow: var(--shadow-md);
-265: }
-266: 
-267: .card-header {
-268:   display: flex;
-269:   align-items: center;
-270:   justify-content: space-between;
-271:   margin-bottom: var(--space-md);
-272: }
-273: 
-274: .card-title {
-275:   font-family: var(--font-heading);
-276:   font-size: var(--fs-xl);
-277:   font-weight: 700;
-278:   color: var(--text-primary);
-279: }
-280: 
-281: /* ===================== Badge ===================== */
-282: .badge {
-283:   display: inline-flex;
-284:   align-items: center;
-285:   padding: 2px 10px;
-286:   border-radius: var(--radius-full);
-287:   font-size: var(--fs-xs);
-288:   font-weight: 600;
-289: }
-290: 
-291: .badge-primary {
-292:   background: rgba(233, 69, 96, 0.2);
-293:   color: var(--accent-primary);
-294: }
-295: 
-296: .badge-success {
-297:   background: rgba(46, 204, 113, 0.2);
-298:   color: var(--accent-success);
-299: }
-300: 
-301: .badge-gold {
-302:   background: rgba(240, 165, 0, 0.2);
-303:   color: var(--accent-gold);
-304: }
-305: 
-306: .badge-info {
-307:   background: rgba(52, 152, 219, 0.2);
-308:   color: var(--accent-info);
-309: }
-310: 
-311: .badge-secondary {
-312:   background: rgba(148, 163, 184, 0.2);
-313:   color: #94a3b8;
-314: }
-315: 
-316: .badge-warning {
-317:   background: rgba(245, 158, 11, 0.2);
-318:   color: #f59e0b;
-319: }
-320: 
-321: .badge-danger {
-322:   background: rgba(239, 68, 68, 0.2);
-323:   color: #ef4444;
-324: }
-325: 
-326: /* ===================== Toggle Switch ===================== */
-327: .toggle {
-328:   position: relative;
-329:   width: 48px;
-330:   height: 26px;
-331:   background: var(--bg-tertiary);
-332:   border: 1px solid var(--border-color);
-333:   border-radius: var(--radius-full);
-334:   cursor: pointer;
-335:   transition: background var(--transition-fast);
-336: }
-337: 
-338: .toggle.active {
-339:   background: var(--accent-primary);
-340:   border-color: var(--accent-primary);
+248: .input::placeholder {
+249:   color: var(--text-muted);
+250: }
+251: 
+252: textarea.input {
+253:   resize: vertical;
+254:   min-height: 80px;
+255:   font-family: var(--font-main);
+256: }
+257: 
+258: .select {
+259:   appearance: none;
+260:   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23d4a359' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+261:   background-repeat: no-repeat;
+262:   background-position: right 12px center;
+263:   padding-right: 36px;
+264: }
+265: 
+266: .form-group {
+267:   display: flex;
+268:   flex-direction: column;
+269:   gap: var(--space-xs);
+270: }
+271: 
+272: .form-label {
+273:   font-family: var(--font-heading);
+274:   font-size: var(--fs-sm);
+275:   font-weight: 600;
+276:   color: var(--accent-gold);
+277:   letter-spacing: 0.3px;
+278: }
+279: 
+280: .form-hint {
+281:   font-size: var(--fs-xs);
+282:   color: var(--text-muted);
+283: }
+284: 
+285: /* ===================== Cards (Tavern Wooden Tablets) ===================== */
+286: .card {
+287:   background: linear-gradient(180deg, #241c16 0%, #1c1511 100%);
+288:   border: 1px solid var(--border-color);
+289:   border-radius: var(--radius-lg);
+290:   padding: var(--space-lg);
+291:   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+292:   transition: all var(--transition-fast);
+293: }
+294: 
+295: .card:hover {
+296:   border-color: var(--accent-gold);
+297:   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6), 0 0 14px rgba(212, 163, 89, 0.16);
+298: }
+299: 
+300: .card-header {
+301:   display: flex;
+302:   align-items: center;
+303:   justify-content: space-between;
+304:   margin-bottom: var(--space-md);
+305:   border-bottom: 1px solid rgba(212, 163, 89, 0.12);
+306:   padding-bottom: var(--space-sm);
+307: }
+308: 
+309: .card-title {
+310:   font-family: var(--font-heading);
+311:   font-size: var(--fs-xl);
+312:   font-weight: 700;
+313:   color: var(--accent-gold-bright);
+314:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+315:   letter-spacing: 0.3px;
+316: }
+317: 
+318: /* ===================== Badge (Wax Seals & Brass Labels) ===================== */
+319: .badge {
+320:   display: inline-flex;
+321:   align-items: center;
+322:   padding: 3px 10px;
+323:   border-radius: var(--radius-full);
+324:   font-family: var(--font-heading);
+325:   font-size: var(--fs-xs);
+326:   font-weight: 600;
+327:   letter-spacing: 0.3px;
+328:   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+329: }
+330: 
+331: .badge-primary {
+332:   background: rgba(200, 90, 50, 0.2);
+333:   color: #f39c12;
+334:   border: 1px solid rgba(200, 90, 50, 0.4);
+335: }
+336: 
+337: .badge-success {
+338:   background: rgba(56, 142, 60, 0.2);
+339:   color: #81c784;
+340:   border: 1px solid rgba(56, 142, 60, 0.4);
 341: }
 342: 
-343: .toggle::after {
-344:   content: '';
-345:   position: absolute;
-346:   top: 2px;
-347:   left: 2px;
-348:   width: 20px;
-349:   height: 20px;
-350:   background: #fff;
-351:   border-radius: 50%;
-352:   transition: transform var(--transition-fast);
+343: .badge-gold {
+344:   background: rgba(212, 163, 89, 0.2);
+345:   color: var(--accent-gold-bright);
+346:   border: 1px solid rgba(212, 163, 89, 0.45);
+347: }
+348: 
+349: .badge-info {
+350:   background: rgba(59, 122, 158, 0.2);
+351:   color: #7fb3d5;
+352:   border: 1px solid rgba(59, 122, 158, 0.4);
 353: }
 354: 
-355: .toggle.active::after {
-356:   transform: translateX(22px);
-357: }
-358: 
-359: /* ===================== Modal ===================== */
-360: .modal-overlay {
-361:   position: fixed;
-362:   inset: 0;
-363:   background: rgba(0, 0, 0, 0.7);
-364:   display: flex;
-365:   align-items: center;
-366:   justify-content: center;
-367:   z-index: var(--z-modal);
-368:   opacity: 0;
-369:   pointer-events: none;
-370:   transition: opacity var(--transition-base);
+355: .badge-secondary {
+356:   background: rgba(197, 182, 163, 0.12);
+357:   color: var(--text-secondary);
+358:   border: 1px solid rgba(197, 182, 163, 0.2);
+359: }
+360: 
+361: .badge-warning {
+362:   background: rgba(217, 119, 6, 0.2);
+363:   color: #fbbf24;
+364:   border: 1px solid rgba(217, 119, 6, 0.4);
+365: }
+366: 
+367: .badge-danger {
+368:   background: rgba(169, 50, 38, 0.2);
+369:   color: #f1948a;
+370:   border: 1px solid rgba(169, 50, 38, 0.4);
 371: }
 372: 
-373: .modal-overlay.open {
-374:   opacity: 1;
-375:   pointer-events: all;
-376: }
-377: 
-378: .modal {
-379:   background: var(--bg-secondary);
-380:   border: 1px solid var(--border-color);
-381:   border-radius: var(--radius-lg);
-382:   padding: var(--space-xl);
-383:   max-width: 500px;
-384:   width: 90%;
-385:   max-height: 80vh;
-386:   overflow-y: auto;
-387:   transform: translateY(20px);
-388:   transition: transform var(--transition-base);
-389: }
-390: 
-391: .modal-overlay.open .modal {
-392:   transform: translateY(0);
-393: }
-394: 
-395: /* ===================== Toast Notifications ===================== */
-396: .toast-container {
-397:   position: fixed;
-398:   top: var(--space-lg);
-399:   right: var(--space-lg);
-400:   z-index: var(--z-toast);
-401:   display: flex;
-402:   flex-direction: column;
-403:   gap: var(--space-sm);
-404: }
-405: 
-406: .toast {
-407:   background: var(--bg-secondary);
-408:   border: 1px solid var(--border-color);
-409:   border-radius: var(--radius-md);
-410:   padding: var(--space-md) var(--space-lg);
-411:   min-width: 280px;
-412:   box-shadow: var(--shadow-lg);
-413:   animation: slideIn 0.3s ease;
-414: }
-415: 
-416: .toast-success { border-left: 3px solid var(--accent-success); }
-417: .toast-error { border-left: 3px solid var(--accent-danger); }
-418: .toast-info { border-left: 3px solid var(--accent-info); }
-419: .toast-warning { border-left: 3px solid var(--accent-gold); }
-420: 
-421: @keyframes slideIn {
-422:   from { transform: translateX(100%); opacity: 0; }
-423:   to { transform: translateX(0); opacity: 1; }
+373: /* ===================== Toggle Switch ===================== */
+374: .toggle {
+375:   position: relative;
+376:   width: 48px;
+377:   height: 26px;
+378:   background: var(--bg-input);
+379:   border: 1px solid var(--border-color);
+380:   border-radius: var(--radius-full);
+381:   cursor: pointer;
+382:   box-shadow: var(--shadow-inset);
+383:   transition: all var(--transition-fast);
+384: }
+385: 
+386: .toggle.active {
+387:   background: var(--accent-primary);
+388:   border-color: var(--accent-gold);
+389:   box-shadow: 0 0 10px rgba(200, 90, 50, 0.4);
+390: }
+391: 
+392: .toggle::after {
+393:   content: '';
+394:   position: absolute;
+395:   top: 2px;
+396:   left: 2px;
+397:   width: 20px;
+398:   height: 20px;
+399:   background: linear-gradient(180deg, #f6d89b 0%, #d4a359 100%);
+400:   border-radius: 50%;
+401:   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+402:   transition: transform var(--transition-fast);
+403: }
+404: 
+405: .toggle.active::after {
+406:   transform: translateX(22px);
+407:   background: #fff;
+408: }
+409: 
+410: /* ===================== Modal (Grimoire / Ancient Ledger) ===================== */
+411: .modal-overlay {
+412:   position: fixed;
+413:   inset: 0;
+414:   background: rgba(10, 8, 6, 0.82);
+415:   backdrop-filter: blur(8px);
+416:   -webkit-backdrop-filter: blur(8px);
+417:   display: flex;
+418:   align-items: center;
+419:   justify-content: center;
+420:   z-index: var(--z-modal);
+421:   opacity: 0;
+422:   pointer-events: none;
+423:   transition: opacity var(--transition-base);
 424: }
 425: 
-426: /* ===================== HP Bar ===================== */
-427: .hp-bar-container {
-428:   width: 100%;
-429:   height: 12px;
-430:   background: var(--bg-tertiary);
-431:   border-radius: var(--radius-full);
-432:   overflow: hidden;
-433: }
-434: 
-435: .hp-bar {
-436:   height: 100%;
-437:   background: var(--accent-success);
-438:   border-radius: var(--radius-full);
-439:   transition: width var(--transition-base);
-440: }
-441: 
-442: .hp-bar.low { background: var(--accent-gold); }
-443: .hp-bar.critical { background: var(--accent-danger); }
+426: .modal-overlay.open {
+427:   opacity: 1;
+428:   pointer-events: all;
+429: }
+430: 
+431: .modal {
+432:   background: linear-gradient(180deg, #251d17 0%, #1a130f 100%);
+433:   border: 1px solid var(--border-gold);
+434:   border-radius: var(--radius-lg);
+435:   padding: var(--space-xl);
+436:   max-width: 520px;
+437:   width: 90%;
+438:   max-height: 85vh;
+439:   overflow-y: auto;
+440:   box-shadow: 0 14px 45px rgba(0, 0, 0, 0.85), 0 0 25px rgba(212, 163, 89, 0.15);
+441:   transform: translateY(20px) scale(0.98);
+442:   transition: all var(--transition-base);
+443: }
 444: 
-445: /* ===================== Character Stats Grid ===================== */
-446: .stats-grid-3 {
-447:   display: grid;
-448:   grid-template-columns: repeat(3, 1fr);
-449:   gap: var(--space-sm);
-450: }
-451: 
-452: .stats-grid-6 {
-453:   display: grid;
-454:   grid-template-columns: repeat(3, 1fr);
-455:   gap: var(--space-sm);
-456: }
-457: 
-458: .stat-card {
-459:   background: var(--bg-tertiary);
-460:   border: 1px solid var(--border-color);
-461:   border-radius: var(--radius-md);
-462:   padding: var(--space-sm) var(--space-md);
-463:   text-align: center;
-464:   transition: border-color var(--transition-fast);
-465: }
-466: 
-467: .stat-card:hover {
-468:   border-color: var(--accent-primary);
-469: }
-470: 
-471: .stat-card-label {
-472:   font-size: var(--fs-xs);
-473:   font-weight: 700;
-474:   color: var(--text-muted);
-475:   text-transform: uppercase;
-476:   letter-spacing: 0.5px;
-477: }
-478: 
-479: .stat-card-value {
-480:   font-size: var(--fs-xl);
-481:   font-weight: 700;
-482:   color: var(--text-primary);
-483:   font-family: var(--font-mono);
-484: }
-485: 
-486: .stat-card-modifier {
-487:   font-size: var(--fs-xs);
-488:   color: var(--accent-gold);
-489:   font-weight: 600;
-490: }
-491: 
-492: .stat-card-input {
-493:   width: 100%;
-494:   padding: var(--space-sm);
-495:   background: var(--bg-input);
-496:   border: 1px solid var(--border-color);
-497:   border-radius: var(--radius-md);
-498:   color: var(--text-primary);
-499:   font-size: var(--fs-lg);
-500:   font-weight: 700;
-501:   text-align: center;
-502:   font-family: var(--font-mono);
-503:   transition: border-color var(--transition-fast);
+445: .modal-overlay.open .modal {
+446:   transform: translateY(0) scale(1);
+447: }
+448: 
+449: /* ===================== Toast Notifications ===================== */
+450: .toast-container {
+451:   position: fixed;
+452:   top: var(--space-lg);
+453:   right: var(--space-lg);
+454:   z-index: var(--z-toast);
+455:   display: flex;
+456:   flex-direction: column;
+457:   gap: var(--space-sm);
+458: }
+459: 
+460: .toast {
+461:   background: linear-gradient(180deg, #271f19 0%, #1e1713 100%);
+462:   border: 1px solid var(--border-color);
+463:   border-radius: var(--radius-md);
+464:   padding: var(--space-md) var(--space-lg);
+465:   min-width: 290px;
+466:   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+467:   animation: slideIn 0.3s ease;
+468:   color: var(--text-primary);
+469:   font-family: var(--font-main);
+470: }
+471: 
+472: .toast-success { border-left: 4px solid var(--accent-success); }
+473: .toast-error { border-left: 4px solid var(--accent-danger); }
+474: .toast-info { border-left: 4px solid var(--accent-info); }
+475: .toast-warning { border-left: 4px solid var(--accent-gold); }
+476: 
+477: @keyframes slideIn {
+478:   from { transform: translateX(100%); opacity: 0; }
+479:   to { transform: translateX(0); opacity: 1; }
+480: }
+481: 
+482: /* ===================== HP Bar (Vitality Vial) ===================== */
+483: .hp-bar-container {
+484:   width: 100%;
+485:   height: 10px;
+486:   background: rgba(18, 14, 11, 0.85);
+487:   border: 1px solid rgba(212, 163, 89, 0.2);
+488:   border-radius: var(--radius-full);
+489:   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+490:   overflow: hidden;
+491: }
+492: 
+493: .hp-bar {
+494:   height: 100%;
+495:   background: linear-gradient(90deg, #2e7d32, #43a047);
+496:   border-radius: var(--radius-full);
+497:   box-shadow: 0 0 8px rgba(67, 160, 71, 0.5);
+498:   transition: width var(--transition-base);
+499: }
+500: 
+501: .hp-bar.low {
+502:   background: linear-gradient(90deg, #d97706, #f59e0b);
+503:   box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
 504: }
 505: 
-506: .stat-card-input:focus {
-507:   border-color: var(--accent-primary);
-508:   box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
-509: }
-510: 
-511: /* Stats sum badge */
-512: .stats-sum {
-513:   display: inline-flex;
-514:   align-items: center;
-515:   gap: var(--space-xs);
-516:   padding: var(--space-xs) var(--space-md);
-517:   background: var(--bg-tertiary);
-518:   border-radius: var(--radius-full);
-519:   font-size: var(--fs-sm);
-520:   font-weight: 600;
-521:   color: var(--text-secondary);
-522: }
-523: 
-524: .stats-sum strong {
-525:   color: var(--accent-gold);
-526: }
-527: 
-528: /* ===================== Responsive ===================== */
-529: @media (max-width: 768px) {
-530:   :root {
-531:     --fs-base: 0.9375rem;
-532:   }
-533: 
-534:   .btn-lg {
-535:     padding: var(--space-sm) var(--space-lg);
-536:   }
-537: 
-538:   .card {
-539:     padding: var(--space-md);
-540:   }
-541: 
-542:   /* Modal full-screen on mobile */
-543:   .modal {
-544:     width: 100%;
-545:     max-width: 100%;
-546:     height: 100%;
-547:     max-height: 100vh;
-548:     border-radius: 0;
-549:     padding: var(--space-md);
-550:   }
-551: 
-552:   .modal-overlay {
-553:     align-items: flex-end;
-554:   }
-555: 
-556:   .modal-overlay.open .modal {
-557:     transform: translateY(0);
-558:   }
-559: 
-560:   /* Toast mobile */
-561:   .toast-container {
-562:     top: var(--space-sm);
-563:     right: var(--space-sm);
-564:     left: var(--space-sm);
-565:   }
-566: 
-567:   .toast {
-568:     min-width: auto;
-569:     width: 100%;
-570:   }
-571: 
-572:   /* Better touch targets */
-573:   .btn {
-574:     min-height: 44px;
-575:     padding: var(--space-sm) var(--space-md);
-576:   }
+506: .hp-bar.critical {
+507:   background: linear-gradient(90deg, #9e2a2b, #c0392b);
+508:   box-shadow: 0 0 10px rgba(192, 57, 43, 0.7);
+509:   animation: hpPulse 1.5s infinite ease-in-out;
+510: }
+511: 
+512: @keyframes hpPulse {
+513:   0%, 100% { opacity: 1; }
+514:   50% { opacity: 0.6; }
+515: }
+516: 
+517: /* ===================== Character Stats Grid (Brass Plaques) ===================== */
+518: .stats-grid-3,
+519: .stats-grid-6 {
+520:   display: grid;
+521:   grid-template-columns: repeat(3, 1fr);
+522:   gap: var(--space-sm);
+523: }
+524: 
+525: .stat-card {
+526:   background: linear-gradient(180deg, #292019 0%, #1f1712 100%);
+527:   border: 1px solid rgba(212, 163, 89, 0.25);
+528:   border-radius: var(--radius-md);
+529:   padding: var(--space-sm) var(--space-md);
+530:   text-align: center;
+531:   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(212, 163, 89, 0.1);
+532:   transition: all var(--transition-fast);
+533: }
+534: 
+535: .stat-card:hover {
+536:   border-color: var(--accent-gold);
+537:   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55), 0 0 10px rgba(212, 163, 89, 0.2);
+538: }
+539: 
+540: .stat-card-label {
+541:   font-family: var(--font-heading);
+542:   font-size: var(--fs-xs);
+543:   font-weight: 700;
+544:   color: var(--accent-gold);
+545:   text-transform: uppercase;
+546:   letter-spacing: 0.5px;
+547: }
+548: 
+549: .stat-card-value {
+550:   font-size: var(--fs-xl);
+551:   font-weight: 700;
+552:   color: var(--text-primary);
+553:   font-family: var(--font-mono);
+554:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+555: }
+556: 
+557: .stat-card-modifier {
+558:   font-size: var(--fs-xs);
+559:   color: var(--accent-gold-bright);
+560:   font-weight: 600;
+561: }
+562: 
+563: .stat-card-input {
+564:   width: 100%;
+565:   padding: var(--space-sm);
+566:   background: var(--bg-input);
+567:   border: 1px solid var(--border-color);
+568:   border-radius: var(--radius-md);
+569:   color: var(--text-primary);
+570:   font-size: var(--fs-lg);
+571:   font-weight: 700;
+572:   text-align: center;
+573:   font-family: var(--font-mono);
+574:   box-shadow: var(--shadow-inset);
+575:   transition: all var(--transition-fast);
+576: }
 577: 
-578:   .btn-sm {
-579:     min-height: 36px;
-580:   }
-581: 
-582:   /* Form elements */
-583:   .input {
-584:     font-size: 16px; /* Prevents zoom on iOS */
-585:     padding: var(--space-sm) var(--space-md);
-586:   }
-587: 
-588:   textarea.input {
-589:     min-height: 100px;
-590:   }
-591: }
-592: 
-593: @media (max-width: 480px) {
-594:   :root {
-595:     --fs-base: 0.875rem;
-596:   }
-597: 
-598:   .btn {
-599:     padding: var(--space-xs) var(--space-sm);
-600:     font-size: var(--fs-sm);
-601:   }
-602: 
-603:   .card {
-604:     padding: var(--space-sm);
-605:     border-radius: var(--radius-md);
-606:   }
-607: 
-608:   .card-title {
-609:     font-size: var(--fs-lg);
-610:   }
-611: }
+578: .stat-card-input:focus {
+579:   border-color: var(--accent-gold);
+580:   box-shadow: var(--shadow-inset), 0 0 0 2px rgba(212, 163, 89, 0.25);
+581: }
+582: 
+583: .stats-sum {
+584:   display: inline-flex;
+585:   align-items: center;
+586:   gap: var(--space-xs);
+587:   padding: var(--space-xs) var(--space-md);
+588:   background: rgba(212, 163, 89, 0.12);
+589:   border: 1px solid rgba(212, 163, 89, 0.3);
+590:   border-radius: var(--radius-full);
+591:   font-size: var(--fs-sm);
+592:   font-weight: 600;
+593:   color: var(--text-secondary);
+594: }
+595: 
+596: .stats-sum strong {
+597:   color: var(--accent-gold-bright);
+598: }
+599: 
+600: /* ===================== Responsive ===================== */
+601: @media (max-width: 768px) {
+602:   :root {
+603:     --fs-base: 0.9375rem;
+604:   }
+605: 
+606:   .btn-lg {
+607:     padding: var(--space-sm) var(--space-lg);
+608:   }
+609: 
+610:   .card {
+611:     padding: var(--space-md);
+612:   }
+613: 
+614:   .modal {
+615:     width: 100%;
+616:     max-width: 100%;
+617:     height: 100%;
+618:     max-height: 100vh;
+619:     border-radius: 0;
+620:     padding: var(--space-md);
+621:   }
+622: 
+623:   .modal-overlay {
+624:     align-items: flex-end;
+625:   }
+626: 
+627:   .modal-overlay.open .modal {
+628:     transform: translateY(0);
+629:   }
+630: 
+631:   .toast-container {
+632:     top: var(--space-sm);
+633:     right: var(--space-sm);
+634:     left: var(--space-sm);
+635:   }
+636: 
+637:   .toast {
+638:     min-width: auto;
+639:     width: 100%;
+640:   }
+641: 
+642:   .btn {
+643:     min-height: 42px;
+644:     padding: var(--space-sm) var(--space-md);
+645:   }
+646: 
+647:   .btn-sm {
+648:     min-height: 36px;
+649:   }
+650: 
+651:   .input {
+652:     font-size: 16px;
+653:     padding: var(--space-sm) var(--space-md);
+654:   }
+655: 
+656:   textarea.input {
+657:     min-height: 90px;
+658:   }
+659: }
+660: 
+661: @media (max-width: 480px) {
+662:   :root {
+663:     --fs-base: 0.875rem;
+664:   }
+665: 
+666:   .btn {
+667:     padding: var(--space-xs) var(--space-sm);
+668:     font-size: var(--fs-sm);
+669:   }
+670: 
+671:   .card {
+672:     padding: var(--space-sm);
+673:     border-radius: var(--radius-md);
+674:   }
+675: 
+676:   .card-title {
+677:     font-size: var(--fs-lg);
+678:   }
+679: }
 
 ================
 File: tests/steps/step2_engine.test.ts
@@ -20566,1899 +20652,145 @@ File: src/pages/session-settings.js
 505: }
 
 ================
-File: src/styles/game.css
+File: supabase/functions/convert-world-text/index.ts
 ================
-   1: /* src/styles/game.css — Стили игрового экрана и компонентов */
-   2: 
-   3: /* ===================== Auth Page ===================== */
-   4: .auth-container {
-   5:   max-width: 400px;
-   6:   width: 100%;
-   7: }
-   8: 
-   9: .auth-header {
-  10:   text-align: center;
-  11:   margin-bottom: var(--space-xl);
-  12: }
-  13: 
-  14: .auth-logo {
-  15:   font-size: 3rem;
-  16:   margin-bottom: var(--space-md);
-  17: }
-  18: 
-  19: .auth-title {
-  20:   font-family: var(--font-heading);
-  21:   font-size: var(--fs-3xl);
-  22:   font-weight: 700;
-  23:   color: var(--text-primary);
-  24: }
-  25: 
-  26: .auth-subtitle {
-  27:   color: var(--text-secondary);
-  28:   font-size: var(--fs-sm);
-  29:   margin-top: var(--space-sm);
-  30: }
-  31: 
-  32: .auth-form {
-  33:   display: flex;
-  34:   flex-direction: column;
-  35:   gap: var(--space-md);
-  36: }
-  37: 
-  38: .auth-toggle {
-  39:   text-align: center;
-  40:   margin-top: var(--space-lg);
-  41:   color: var(--text-secondary);
-  42:   font-size: var(--fs-sm);
-  43: }
-  44: 
-  45: /* ===================== Google Button ===================== */
-  46: .btn-google {
-  47:   display: flex;
-  48:   align-items: center;
-  49:   justify-content: center;
-  50:   gap: var(--space-sm);
-  51:   padding: var(--space-md) var(--space-lg);
-  52:   background: #fff;
-  53:   color: #333;
-  54:   border: 1px solid #dadce0;
-  55:   border-radius: var(--radius-md);
-  56:   font-weight: 600;
-  57:   font-size: var(--fs-base);
-  58:   transition: all var(--transition-fast);
-  59:   cursor: pointer;
-  60: }
-  61: 
-  62: .btn-google:hover {
-  63:   background: #f8f9fa;
-  64:   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  65: }
-  66: 
-  67: .btn-google:disabled {
-  68:   opacity: 0.6;
-  69:   cursor: not-allowed;
-  70: }
-  71: 
-  72: .google-icon {
-  73:   flex-shrink: 0;
-  74: }
-  75: 
-  76: .auth-divider {
-  77:   display: flex;
-  78:   align-items: center;
-  79:   gap: var(--space-md);
-  80:   margin: var(--space-lg) 0;
-  81:   color: var(--text-muted);
-  82:   font-size: var(--fs-sm);
-  83: }
-  84: 
-  85: .auth-divider::before,
-  86: .auth-divider::after {
-  87:   content: '';
-  88:   flex: 1;
-  89:   height: 1px;
-  90:   background: var(--border-color);
-  91: }
-  92: 
-  93: /* ===================== Lobby ===================== */
-  94: .lobby-header {
-  95:   display: flex;
-  96:   align-items: center;
-  97:   justify-content: space-between;
-  98:   padding: var(--space-md) var(--space-xl);
-  99:   background: var(--bg-secondary);
- 100:   border-bottom: 1px solid var(--border-color);
- 101:   position: sticky;
- 102:   top: 0;
- 103:   z-index: var(--z-header);
- 104: }
- 105: 
- 106: .lobby-header-left {
- 107:   display: flex;
- 108:   align-items: center;
- 109:   gap: var(--space-md);
- 110: }
- 111: 
- 112: .lobby-header-right {
- 113:   display: flex;
- 114:   align-items: center;
- 115:   gap: var(--space-sm);
- 116: }
- 117: 
- 118: .lobby-title {
- 119:   font-family: var(--font-heading);
- 120:   font-size: var(--fs-xl);
- 121:   font-weight: 700;
- 122: }
- 123: 
- 124: .lobby-tabs {
- 125:   display: flex;
- 126:   gap: 0;
- 127:   background: var(--bg-secondary);
- 128:   border-bottom: 1px solid var(--border-color);
- 129:   padding: 0 var(--space-xl);
- 130: }
- 131: 
- 132: .lobby-tab {
- 133:   padding: var(--space-md) var(--space-lg);
- 134:   background: transparent;
- 135:   color: var(--text-secondary);
- 136:   font-weight: 600;
- 137:   font-size: var(--fs-sm);
- 138:   border-bottom: 2px solid transparent;
- 139:   transition: all var(--transition-fast);
- 140: }
- 141: 
- 142: .lobby-tab:hover {
- 143:   color: var(--text-primary);
- 144:   background: var(--bg-hover);
- 145: }
- 146: 
- 147: .lobby-tab.active {
- 148:   color: var(--accent-primary);
- 149:   border-bottom-color: var(--accent-primary);
- 150: }
- 151: 
- 152: .lobby-content {
- 153:   flex: 1;
- 154:   padding: var(--space-xl);
- 155:   overflow-y: auto;
- 156: }
- 157: 
- 158: /* Card Grid */
- 159: .card-grid {
- 160:   display: grid;
- 161:   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
- 162:   gap: var(--space-lg);
- 163: }
- 164: 
- 165: /* Empty State */
- 166: .empty-state {
- 167:   text-align: center;
- 168:   padding: var(--space-2xl);
- 169:   color: var(--text-secondary);
- 170: }
- 171: 
- 172: .empty-icon {
- 173:   font-size: 3rem;
- 174:   margin-bottom: var(--space-md);
- 175:   opacity: 0.5;
- 176: }
- 177: 
- 178: .empty-state h3 {
- 179:   color: var(--text-primary);
- 180:   margin-bottom: var(--space-sm);
- 181: }
- 182: 
- 183: .empty-state p {
- 184:   margin-bottom: var(--space-lg);
- 185: }
- 186: 
- 187: /* World Settings Preview */
- 188: .world-settings-preview {
- 189:   background: var(--bg-tertiary);
- 190:   padding: var(--space-md);
- 191:   border-radius: var(--radius-md);
- 192:   font-family: var(--font-mono);
- 193:   font-size: var(--fs-xs);
- 194:   color: var(--text-muted);
- 195:   max-height: 100px;
- 196:   overflow: hidden;
- 197: }
- 198: 
- 199: /* ===================== Difficulty Options ===================== */
- 200: .difficulty-options {
- 201:   display: grid;
- 202:   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
- 203:   gap: var(--space-md);
- 204: }
- 205: 
- 206: .difficulty-option {
- 207:   padding: var(--space-md);
- 208:   background: var(--bg-tertiary);
- 209:   border: 2px solid var(--border-color);
- 210:   border-radius: var(--radius-lg);
- 211:   cursor: pointer;
- 212:   transition: all var(--transition-fast);
- 213:   text-align: center;
- 214: }
- 215: 
- 216: .difficulty-option:hover {
- 217:   border-color: var(--accent-primary);
- 218: }
- 219: 
- 220: .difficulty-option.selected {
- 221:   border-color: var(--accent-primary);
- 222:   background: rgba(233, 69, 96, 0.1);
- 223: }
- 224: 
- 225: .difficulty-label {
- 226:   font-weight: 700;
- 227:   font-size: var(--fs-lg);
- 228:   color: var(--text-primary);
- 229: }
- 230: 
- 231: .difficulty-desc {
- 232:   font-size: var(--fs-xs);
- 233:   color: var(--text-muted);
- 234:   margin-top: var(--space-xs);
- 235: }
- 236: 
- 237: /* Invite Code */
- 238: .invite-code-container {
- 239:   display: flex;
- 240:   align-items: center;
- 241:   gap: var(--space-sm);
- 242: }
- 243: 
- 244: .invite-code {
- 245:   background: var(--bg-tertiary);
- 246:   padding: var(--space-sm) var(--space-md);
- 247:   border-radius: var(--radius-md);
- 248:   font-family: var(--font-mono);
- 249:   font-size: var(--fs-sm);
- 250:   color: var(--accent-gold);
- 251:   user-select: all;
- 252: }
- 253: 
- 254: /* Lore List */
- 255: .lore-list {
- 256:   display: flex;
- 257:   flex-direction: column;
- 258:   gap: var(--space-xs);
- 259:   max-height: 150px;
- 260:   overflow-y: auto;
- 261: }
- 262: 
- 263: .lore-item {
- 264:   display: flex;
- 265:   align-items: center;
- 266:   gap: var(--space-sm);
- 267:   font-size: var(--fs-sm);
- 268: }
- 269: 
- 270: /* Player Row */
- 271: .player-row {
- 272:   display: flex;
- 273:   align-items: center;
- 274:   justify-content: space-between;
- 275:   gap: var(--space-sm);
- 276:   padding: var(--space-md);
- 277:   background: var(--bg-tertiary);
- 278:   border-radius: var(--radius-md);
- 279:   flex-wrap: wrap;
- 280: }
- 281: 
- 282: .player-info {
- 283:   display: flex;
- 284:   flex-direction: column;
- 285:   min-width: 0;
- 286:   flex: 1;
- 287: }
- 288: 
- 289: .player-info strong {
- 290:   font-size: var(--fs-base);
- 291:   word-break: break-word;
- 292: }
- 293: 
- 294: .player-stats {
- 295:   display: flex;
- 296:   gap: var(--space-xs);
- 297:   flex-shrink: 0;
- 298: }
- 299: 
- 300: /* ===================== Game Screen ===================== */
- 301: .game-page {
- 302:   height: 100vh;
- 303:   display: flex;
- 304:   flex-direction: column;
- 305:   background: var(--bg-primary);
- 306: }
- 307: 
- 308: .game-header {
- 309:   display: flex;
- 310:   flex-direction: column;
- 311:   background: rgba(26, 26, 46, 0.94);
- 312:   backdrop-filter: blur(16px);
- 313:   -webkit-backdrop-filter: blur(16px);
- 314:   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
- 315:   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
- 316:   z-index: var(--z-header);
- 317:   position: sticky;
- 318:   top: 0;
- 319:   width: 100%;
- 320: }
- 321: 
- 322: .game-header-top {
- 323:   display: flex;
- 324:   align-items: center;
- 325:   justify-content: space-between;
- 326:   padding: 6px var(--space-md);
- 327:   gap: var(--space-sm);
- 328:   min-height: 48px;
- 329: }
- 330: 
- 331: .game-header-center,
- 332: .game-header-hero {
- 333:   display: flex;
- 334:   align-items: center;
- 335:   gap: var(--space-sm);
- 336:   flex: 1;
- 337:   min-width: 0;
- 338: }
- 339: 
- 340: .game-header-name {
- 341:   font-weight: 700;
- 342:   font-size: var(--fs-sm);
- 343:   letter-spacing: 0.2px;
- 344:   white-space: nowrap;
- 345:   overflow: hidden;
- 346:   text-overflow: ellipsis;
- 347:   max-width: 160px;
- 348:   color: var(--text-primary);
- 349: }
- 350: 
- 351: .hp-bar-container {
- 352:   width: 100%;
- 353:   max-width: 140px;
- 354:   height: 10px;
- 355:   background: rgba(0, 0, 0, 0.45);
- 356:   border-radius: var(--radius-full);
- 357:   overflow: hidden;
- 358:   border: 1px solid rgba(255, 255, 255, 0.08);
- 359:   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
- 360:   flex: 1;
- 361: }
- 362: 
- 363: .hp-bar {
- 364:   height: 100%;
- 365:   background: linear-gradient(90deg, #27ae60, #2ecc71);
- 366:   border-radius: var(--radius-full);
- 367:   transition: width var(--transition-base), background-color var(--transition-base);
- 368:   box-shadow: 0 0 8px rgba(46, 204, 113, 0.4);
- 369: }
- 370: 
- 371: .hp-bar.low {
- 372:   background: linear-gradient(90deg, #d35400, #f39c12);
- 373:   box-shadow: 0 0 8px rgba(243, 156, 18, 0.4);
- 374: }
- 375: 
- 376: .hp-bar.critical {
- 377:   background: linear-gradient(90deg, #c0392b, #e74c3c);
- 378:   box-shadow: 0 0 8px rgba(231, 76, 60, 0.4);
- 379:   animation: hpPulse 1.5s infinite ease-in-out;
- 380: }
- 381: 
- 382: @keyframes hpPulse {
- 383:   0%, 100% { opacity: 1; }
- 384:   50% { opacity: 0.6; }
- 385: }
- 386: 
- 387: .game-header-hp {
- 388:   font-size: var(--fs-xs);
- 389:   color: var(--accent-success);
- 390:   font-weight: 700;
- 391:   font-family: var(--font-mono);
- 392:   white-space: nowrap;
- 393:   min-width: 36px;
- 394: }
- 395: 
- 396: .game-header-actions {
- 397:   display: flex;
- 398:   align-items: center;
- 399:   gap: 4px;
- 400:   flex-shrink: 0;
- 401: }
- 402: 
- 403: .game-header-actions .btn-icon {
- 404:   width: 36px;
- 405:   height: 36px;
- 406:   display: inline-flex;
- 407:   align-items: center;
- 408:   justify-content: center;
- 409:   border-radius: var(--radius-md);
- 410:   background: rgba(255, 255, 255, 0.04);
- 411:   border: 1px solid rgba(255, 255, 255, 0.08);
- 412:   transition: all var(--transition-fast);
- 413: }
- 414: 
- 415: .game-header-actions .btn-icon:hover {
- 416:   background: rgba(255, 255, 255, 0.1);
- 417:   border-color: rgba(255, 255, 255, 0.2);
- 418:   transform: translateY(-1px);
- 419: }
- 420: 
- 421: .game-header-actions .btn-icon:active {
- 422:   transform: translateY(1px);
- 423: }
- 424: 
- 425: /* Dedicated Sub-bar for Location & Time */
- 426: .game-status-bar {
- 427:   display: flex;
- 428:   align-items: center;
- 429:   justify-content: space-between;
- 430:   gap: var(--space-sm);
- 431:   padding: 4px var(--space-md) 6px var(--space-md);
- 432:   background: rgba(15, 14, 23, 0.55);
- 433:   border-top: 1px solid rgba(255, 255, 255, 0.05);
- 434: }
- 435: 
- 436: .game-header-location {
- 437:   display: inline-flex;
- 438:   align-items: center;
- 439:   gap: 4px;
- 440:   font-size: var(--fs-xs);
- 441:   color: #ff7b92;
- 442:   white-space: nowrap;
- 443:   overflow: hidden;
- 444:   text-overflow: ellipsis;
- 445:   max-width: 58%;
- 446:   background: rgba(233, 69, 96, 0.12);
- 447:   border-radius: var(--radius-full);
- 448:   padding: 2px 10px;
- 449:   border: 1px solid rgba(233, 69, 96, 0.28);
- 450:   font-weight: 500;
- 451:   letter-spacing: 0.1px;
- 452: }
- 453: 
- 454: .game-header-time {
- 455:   display: inline-flex;
- 456:   align-items: center;
- 457:   gap: 4px;
- 458:   font-size: var(--fs-xs);
- 459:   color: var(--text-secondary);
- 460:   white-space: nowrap;
- 461:   overflow: hidden;
- 462:   text-overflow: ellipsis;
- 463:   max-width: 42%;
- 464:   flex-shrink: 0;
- 465:   background: rgba(255, 255, 255, 0.05);
- 466:   border-radius: var(--radius-full);
- 467:   padding: 2px 10px;
- 468:   border: 1px solid rgba(255, 255, 255, 0.09);
- 469:   font-weight: 500;
- 470: }
- 471: 
- 472: /* Chat Area */
- 473: .game-chat {
- 474:   flex: 1;
- 475:   overflow-y: auto;
- 476:   padding: var(--space-md);
- 477:   scroll-behavior: smooth;
- 478: }
- 479: 
- 480: .chat-messages {
- 481:   display: flex;
- 482:   flex-direction: column;
- 483:   gap: var(--space-md);
- 484:   max-width: 800px;
- 485:   margin: 0 auto;
- 486:   width: 100%;
- 487: }
- 488: 
- 489: .chat-empty {
- 490:   text-align: center;
- 491:   padding: var(--space-2xl);
- 492:   color: var(--text-muted);
- 493: }
- 494: 
- 495: /* Messages */
- 496: .message {
- 497:   display: flex;
- 498:   gap: var(--space-sm);
- 499:   animation: fadeIn 0.3s ease;
- 500: }
- 501: 
- 502: @keyframes fadeIn {
- 503:   from { opacity: 0; transform: translateY(8px); }
- 504:   to { opacity: 1; transform: translateY(0); }
- 505: }
- 506: 
- 507: .message-avatar {
- 508:   width: 36px;
- 509:   height: 36px;
- 510:   border-radius: var(--radius-md);
- 511:   display: flex;
- 512:   align-items: center;
- 513:   justify-content: center;
- 514:   font-size: 1.2rem;
- 515:   flex-shrink: 0;
- 516: }
- 517: 
- 518: .message-master .message-avatar {
- 519:   background: rgba(233, 69, 96, 0.2);
- 520: }
- 521: 
- 522: .message-player .message-avatar {
- 523:   background: rgba(52, 152, 219, 0.2);
- 524: }
- 525: 
- 526: .message-body {
- 527:   flex: 1;
- 528: }
- 529: 
- 530: .message-sender {
- 531:   font-size: var(--fs-xs);
- 532:   font-weight: 700;
- 533:   margin-bottom: 2px;
- 534:   color: var(--text-secondary);
- 535: }
- 536: 
- 537: .message-master .message-sender {
- 538:   color: var(--accent-primary);
- 539: }
- 540: 
- 541: .message-player .message-sender {
- 542:   color: var(--accent-info);
- 543: }
- 544: 
- 545: .message-text {
- 546:   font-size: var(--fs-base);
- 547:   line-height: 1.7;
- 548:   color: var(--text-primary);
- 549: }
- 550: 
- 551: .message-system {
- 552:   justify-content: center;
- 553: }
- 554: 
- 555: .message-system .message-text {
- 556:   font-size: var(--fs-xs);
- 557:   color: var(--text-muted);
- 558:   background: var(--bg-secondary);
- 559:   padding: var(--space-xs) var(--space-md);
- 560:   border-radius: var(--radius-full);
- 561:   text-align: center;
- 562: }
- 563: 
- 564: .message-self {
- 565:   justify-content: flex-end;
- 566: }
- 567: 
- 568: .message-self .message-avatar {
- 569:   background: rgba(52, 152, 219, 0.2);
- 570: }
- 571: 
- 572: .message-self .message-body {
- 573:   text-align: right;
- 574: }
- 575: 
- 576: .message-self .message-text {
- 577:   background: var(--accent-secondary);
- 578:   color: var(--text-primary);
- 579:   padding: var(--space-sm) var(--space-md);
- 580:   border-radius: var(--radius-lg) var(--radius-sm) var(--radius-lg) var(--radius-lg);
- 581:   display: inline-block;
- 582:   max-width: 80%;
- 583: }
- 584: 
- 585: /* Input Area */
- 586: .game-input-area {
- 587:   padding: var(--space-sm) var(--space-md);
- 588:   background: var(--bg-secondary);
- 589:   border-top: 1px solid var(--border-color);
- 590: }
- 591: 
- 592: .game-input-wrapper {
- 593:   display: flex;
- 594:   align-items: flex-end;
- 595:   gap: var(--space-sm);
- 596:   max-width: 800px;
- 597:   margin: 0 auto;
- 598: }
- 599: 
- 600: .game-input {
- 601:   flex: 1;
- 602:   padding: var(--space-sm) var(--space-md);
- 603:   background: var(--bg-input);
- 604:   border: 1px solid var(--border-color);
- 605:   border-radius: var(--radius-lg);
- 606:   color: var(--text-primary);
- 607:   font-size: var(--fs-base);
- 608:   resize: none;
- 609:   max-height: 120px;
- 610:   min-height: 40px;
- 611:   font-family: var(--font-main);
- 612:   transition: border-color var(--transition-fast);
- 613: }
- 614: 
- 615: .game-input:focus {
- 616:   border-color: var(--accent-primary);
- 617: }
- 618: 
- 619: .game-input::placeholder {
- 620:   color: var(--text-muted);
- 621: }
- 622: 
- 623: .game-input:disabled {
- 624:   opacity: 0.5;
- 625:   cursor: not-allowed;
- 626: }
- 627: 
- 628: /* ===================== Side Panels ===================== */
- 629: .side-panel-overlay {
- 630:   position: fixed;
- 631:   inset: 0;
- 632:   background: rgba(0, 0, 0, 0.5);
- 633:   z-index: var(--z-sidebar);
- 634:   opacity: 0;
- 635:   pointer-events: none;
- 636:   transition: opacity var(--transition-base);
- 637: }
- 638: 
- 639: .side-panel-overlay.open {
- 640:   opacity: 1;
- 641:   pointer-events: all;
- 642: }
- 643: 
- 644: .side-panel {
- 645:   position: fixed;
- 646:   top: 0;
- 647:   right: 0;
- 648:   width: 360px;
- 649:   max-width: 90vw;
- 650:   height: 100%;
- 651:   background: var(--bg-secondary);
- 652:   border-left: 1px solid var(--border-color);
- 653:   z-index: calc(var(--z-sidebar) + 1);
- 654:   transform: translateX(100%);
- 655:   transition: transform var(--transition-base);
- 656:   display: flex;
- 657:   flex-direction: column;
- 658: }
- 659: 
- 660: .side-panel.open {
- 661:   transform: translateX(0);
- 662: }
- 663: 
- 664: .side-panel-header {
- 665:   display: flex;
- 666:   align-items: center;
- 667:   justify-content: space-between;
- 668:   padding: var(--space-md) var(--space-lg);
- 669:   border-bottom: 1px solid var(--border-color);
- 670: }
- 671: 
- 672: .side-panel-header h2 {
- 673:   font-family: var(--font-heading);
- 674:   font-size: var(--fs-lg);
- 675: }
- 676: 
- 677: .side-panel-content {
- 678:   flex: 1;
- 679:   overflow-y: auto;
- 680:   padding: var(--space-lg);
- 681: }
- 682: 
- 683: /* Profile */
- 684: .profile-card {
- 685:   display: flex;
- 686:   flex-direction: column;
- 687:   align-items: center;
- 688:   gap: var(--space-md);
- 689: }
- 690: 
- 691: .profile-avatar {
- 692:   width: 80px;
- 693:   height: 80px;
- 694:   border-radius: var(--radius-lg);
- 695:   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
- 696:   display: flex;
- 697:   align-items: center;
- 698:   justify-content: center;
- 699:   font-size: 2.5rem;
- 700:   box-shadow: var(--shadow-md);
- 701: }
- 702: 
- 703: .profile-name {
- 704:   font-family: var(--font-heading);
- 705:   font-size: var(--fs-2xl);
- 706:   font-weight: 700;
- 707:   text-align: center;
- 708:   word-break: break-word;
- 709: }
- 710: 
- 711: .profile-meta {
- 712:   color: var(--text-secondary);
- 713:   font-size: var(--fs-base);
- 714:   text-align: center;
- 715: }
- 716: 
- 717: .profile-section {
- 718:   margin-top: var(--space-lg);
- 719:   padding-top: var(--space-lg);
- 720:   border-top: 1px solid var(--border-color);
- 721: }
- 722: 
- 723: .profile-section-title {
- 724:   font-size: var(--fs-sm);
- 725:   font-weight: 700;
- 726:   color: var(--text-muted);
- 727:   text-transform: uppercase;
- 728:   letter-spacing: 0.5px;
- 729:   margin-bottom: var(--space-md);
- 730: }
- 731: 
- 732: .profile-bio {
- 733:   font-size: var(--fs-sm);
- 734:   color: var(--text-secondary);
- 735:   line-height: 1.7;
- 736:   white-space: pre-wrap;
- 737:   word-break: break-word;
- 738: }
- 739: 
- 740: .profile-injuries {
- 741:   background: rgba(231, 76, 60, 0.1);
- 742:   border: 1px solid rgba(231, 76, 60, 0.3);
- 743:   border-radius: var(--radius-md);
- 744:   padding: var(--space-md);
- 745:   font-size: var(--fs-sm);
- 746:   color: var(--accent-danger);
- 747: }
- 748: 
- 749: /* Stats Grid */
- 750: .stats-grid {
- 751:   display: grid;
- 752:   grid-template-columns: repeat(3, 1fr);
- 753:   gap: var(--space-sm);
- 754: }
- 755: 
- 756: .stat-item {
- 757:   background: var(--bg-tertiary);
- 758:   border: 1px solid var(--border-color);
- 759:   border-radius: var(--radius-md);
- 760:   padding: var(--space-sm);
- 761:   text-align: center;
- 762: }
- 763: 
- 764: .stat-label {
- 765:   font-size: var(--fs-xs);
- 766:   font-weight: 700;
- 767:   color: var(--text-muted);
- 768:   text-transform: uppercase;
- 769: }
- 770: 
- 771: .stat-value {
- 772:   font-size: var(--fs-xl);
- 773:   font-weight: 700;
- 774:   color: var(--text-primary);
- 775: }
- 776: 
- 777: .stat-modifier {
- 778:   font-size: var(--fs-xs);
- 779:   color: var(--accent-gold);
- 780: }
- 781: 
- 782: /* Inventory */
- 783: .inventory-summary {
- 784:   display: flex;
- 785:   justify-content: space-between;
- 786:   padding: var(--space-sm) var(--space-md);
- 787:   background: var(--bg-tertiary);
- 788:   border-radius: var(--radius-md);
- 789:   margin-bottom: var(--space-md);
- 790:   font-size: var(--fs-sm);
- 791: }
- 792: 
- 793: .inventory-list {
- 794:   display: flex;
- 795:   flex-direction: column;
- 796:   gap: var(--space-xs);
- 797: }
- 798: 
- 799: .inventory-item {
- 800:   padding: var(--space-sm) var(--space-md);
- 801:   background: var(--bg-tertiary);
- 802:   border-radius: var(--radius-md);
- 803:   transition: background var(--transition-fast);
- 804: }
- 805: 
- 806: .inventory-item:hover {
- 807:   background: var(--bg-hover);
- 808: }
- 809: 
- 810: .inventory-item-name {
- 811:   font-weight: 600;
- 812:   font-size: var(--fs-sm);
- 813: }
- 814: 
- 815: .inventory-item-meta {
- 816:   display: flex;
- 817:   align-items: center;
- 818:   gap: var(--space-sm);
- 819:   font-size: var(--fs-xs);
- 820:   color: var(--text-muted);
- 821:   margin-top: 2px;
- 822: }
- 823: 
- 824: /* ===================== NPC Bestiary ===================== */
- 825: .npc-card {
- 826:   padding: 0;
- 827:   overflow: hidden;
- 828: }
- 829: 
- 830: .npc-header {
- 831:   display: flex;
- 832:   align-items: center;
- 833:   justify-content: space-between;
- 834:   padding: var(--space-md);
- 835:   cursor: pointer;
- 836:   transition: background var(--transition-fast);
- 837: }
- 838: 
- 839: .npc-header:hover {
- 840:   background: var(--bg-hover);
- 841: }
- 842: 
- 843: .npc-header-info {
- 844:   display: flex;
- 845:   align-items: center;
- 846:   gap: var(--space-sm);
- 847:   flex: 1;
- 848:   min-width: 0;
- 849: }
- 850: 
- 851: .npc-role-badge {
- 852:   display: inline-flex;
- 853:   align-items: center;
- 854:   padding: 2px 8px;
- 855:   border-radius: var(--radius-full);
- 856:   font-size: var(--fs-xs);
- 857:   font-weight: 600;
- 858:   white-space: nowrap;
- 859:   flex-shrink: 0;
- 860: }
- 861: 
- 862: .npc-role-main {
- 863:   background: rgba(233, 69, 96, 0.2);
- 864:   color: var(--accent-primary);
- 865: }
- 866: 
- 867: .npc-role-secondary {
- 868:   background: var(--bg-tertiary);
- 869:   color: var(--text-muted);
- 870: }
- 871: 
- 872: .npc-role-tertiary {
- 873:   background: rgba(100, 100, 100, 0.15);
- 874:   color: var(--text-muted);
- 875:   font-style: italic;
- 876: }
- 877: 
- 878: .npc-combat-stats {
- 879:   font-size: var(--fs-xs);
- 880:   color: var(--text-muted);
- 881:   white-space: nowrap;
- 882:   flex-shrink: 0;
- 883:   font-family: var(--font-mono);
- 884: }
- 885: 
- 886: .npc-name {
- 887:   font-size: var(--fs-base);
- 888:   font-weight: 700;
- 889:   white-space: nowrap;
- 890:   overflow: hidden;
- 891:   text-overflow: ellipsis;
- 892: }
- 893: 
- 894: .npc-race {
- 895:   font-size: var(--fs-sm);
- 896:   color: var(--text-muted);
- 897:   white-space: nowrap;
- 898:   flex-shrink: 0;
- 899: }
- 900: 
- 901: .npc-category {
- 902:   display: inline-flex;
- 903:   align-items: center;
- 904:   padding: 2px 8px;
- 905:   border-radius: var(--radius-full);
- 906:   font-size: 0.65rem;
- 907:   font-weight: 600;
- 908:   white-space: nowrap;
- 909:   flex-shrink: 0;
- 910: }
- 911: 
- 912: .npc-location {
- 913:   font-size: var(--fs-xs);
- 914:   color: var(--accent-info);
- 915:   white-space: nowrap;
- 916:   flex-shrink: 0;
- 917: }
- 918: 
- 919: .npc-toggle-icon {
- 920:   font-size: var(--fs-xs);
- 921:   color: var(--text-muted);
- 922:   transition: transform var(--transition-fast);
- 923:   flex-shrink: 0;
- 924:   margin-left: var(--space-sm);
- 925: }
- 926: 
- 927: .npc-card.open .npc-toggle-icon {
- 928:   transform: rotate(180deg);
- 929: }
- 930: 
- 931: /* ===================== Bestiary Tabs ===================== */
- 932: .bestiary-tabs {
- 933:   display: flex;
- 934:   gap: 0;
- 935:   background: var(--bg-secondary);
- 936:   border-bottom: 1px solid var(--border-color);
- 937:   margin: 0 -1rem 1rem;
- 938:   padding: 0 1rem;
- 939:   overflow-x: auto;
- 940:   -webkit-overflow-scrolling: touch;
- 941: }
- 942: 
- 943: .bestiary-tabs::-webkit-scrollbar {
- 944:   display: none;
- 945: }
- 946: 
- 947: .bestiary-tab {
- 948:   padding: var(--space-sm) var(--space-md);
- 949:   background: transparent;
- 950:   color: var(--text-secondary);
- 951:   font-weight: 600;
- 952:   font-size: var(--fs-sm);
- 953:   border-bottom: 2px solid transparent;
- 954:   transition: all var(--transition-fast);
- 955:   white-space: nowrap;
- 956: }
- 957: 
- 958: .bestiary-tab:hover {
- 959:   color: var(--text-primary);
- 960:   background: var(--bg-hover);
- 961: }
- 962: 
- 963: .bestiary-tab.active {
- 964:   color: var(--accent-primary);
- 965:   border-bottom-color: var(--accent-primary);
- 966: }
- 967: 
- 968: /* ===================== State Cards ===================== */
- 969: .state-card {
- 970:   padding: 0;
- 971:   overflow: hidden;
- 972: }
- 973: 
- 974: .state-header {
- 975:   display: flex;
- 976:   align-items: center;
- 977:   justify-content: space-between;
- 978:   padding: var(--space-md);
- 979:   cursor: pointer;
- 980:   transition: background var(--transition-fast);
- 981: }
- 982: 
- 983: .state-header:hover {
- 984:   background: var(--bg-hover);
- 985: }
- 986: 
- 987: .state-header-info {
- 988:   display: flex;
- 989:   align-items: center;
- 990:   gap: var(--space-md);
- 991:   flex: 1;
- 992: }
- 993: 
- 994: .state-name {
- 995:   font-size: var(--fs-lg);
- 996:   font-weight: 700;
- 997: }
- 998: 
- 999: .state-locations-count {
-1000:   font-size: var(--fs-sm);
-1001:   color: var(--text-muted);
-1002: }
-1003: 
-1004: .state-actions {
-1005:   display: flex;
-1006:   align-items: center;
-1007:   gap: var(--space-xs);
-1008: }
-1009: 
-1010: .state-edit-form {
-1011:   padding: var(--space-md);
-1012:   padding-top: 0;
-1013:   border-top: 1px solid var(--border-color);
-1014: }
-1015: 
-1016: .cities-list {
-1017:   padding: 0 var(--space-md) var(--space-md);
-1018: }
-1019: 
-1020: .city-item {
-1021:   display: flex;
-1022:   align-items: center;
-1023:   justify-content: space-between;
-1024:   padding: var(--space-sm) var(--space-md);
-1025:   background: var(--bg-tertiary);
-1026:   border-radius: var(--radius-md);
-1027:   margin-bottom: var(--space-xs);
-1028: }
-1029: 
-1030: .city-item:hover {
-1031:   background: var(--bg-hover);
-1032: }
-1033: 
-1034: .city-info {
-1035:   display: flex;
-1036:   align-items: center;
-1037:   gap: var(--space-sm);
-1038: }
-1039: 
-1040: .city-type-icon {
-1041:   font-size: var(--fs-base);
-1042: }
-1043: 
-1044: .city-name {
-1045:   font-weight: 600;
-1046:   font-size: var(--fs-sm);
-1047: }
-1048: 
-1049: .city-type {
-1050:   font-size: var(--fs-xs);
-1051:   color: var(--text-muted);
-1052:   text-transform: uppercase;
-1053: }
-1054: 
-1055: .city-actions {
-1056:   display: flex;
-1057:   gap: var(--space-xs);
-1058: }
-1059: 
-1060: .state-card.open .npc-toggle-icon {
-1061:   transform: rotate(180deg);
-1062: }
-1063: 
-1064: /* ===================== Generation Status ===================== */
-1065: .gen-status {
-1066:   border: 1px solid var(--border-color);
-1067: }
-1068: 
-1069: .gen-status-header {
-1070:   display: flex;
-1071:   justify-content: space-between;
-1072:   align-items: center;
-1073:   margin-bottom: 0.5rem;
-1074: }
-1075: 
-1076: .gen-status-text {
-1077:   font-size: var(--fs-sm);
-1078:   font-weight: 600;
-1079:   color: var(--text-secondary);
-1080: }
-1081: 
-1082: .gen-status-progress {
-1083:   font-size: var(--fs-sm);
-1084:   font-weight: 700;
-1085:   color: var(--accent-gold);
-1086: }
-1087: 
-1088: .gen-progress-bar {
-1089:   width: 100%;
-1090:   height: 8px;
-1091:   background: var(--bg-primary);
-1092:   border-radius: var(--radius-full);
-1093:   overflow: hidden;
-1094: }
-1095: 
-1096: .gen-progress-fill {
-1097:   height: 100%;
-1098:   background: linear-gradient(90deg, var(--accent-primary), var(--accent-gold));
-1099:   border-radius: var(--radius-full);
-1100:   transition: width 0.3s ease;
-1101: }
-1102: 
-1103: /* ===================== Schema Modal ===================== */
-1104: .schema-content {
-1105:   font-size: var(--fs-sm);
-1106: }
-1107: 
-1108: .schema-section {
-1109:   margin-bottom: 1rem;
-1110:   padding-bottom: 1rem;
-1111:   border-bottom: 1px solid var(--border-color);
-1112: }
-1113: 
-1114: .schema-section:last-child {
-1115:   border-bottom: none;
-1116: }
-1117: 
-1118: .schema-section h4 {
-1119:   font-size: var(--fs-base);
-1120:   font-weight: 700;
-1121:   color: var(--text-primary);
-1122:   margin-bottom: 0.5rem;
-1123: }
-1124: 
-1125: .schema-section ul {
-1126:   list-style: none;
-1127:   padding: 0;
-1128: }
-1129: 
-1130: .schema-section li {
-1131:   padding: 0.25rem 0;
-1132:   color: var(--text-secondary);
-1133: }
-1134: 
-1135: .schema-section li strong {
-1136:   color: var(--accent-gold);
-1137: }
-1138: 
-1139: .code-example {
-1140:   background: var(--bg-primary);
-1141:   padding: var(--space-md);
-1142:   border-radius: var(--radius-md);
-1143:   font-family: var(--font-mono);
-1144:   font-size: var(--fs-xs);
-1145:   color: var(--text-muted);
-1146:   overflow-x: auto;
-1147:   white-space: pre-wrap;
-1148:   word-break: break-all;
-1149: }
-1150: 
-1151: .npc-edit-form {
-1152:   padding: var(--space-md);
-1153:   padding-top: 0;
-1154:   border-top: 1px solid var(--border-color);
-1155: }
-1156: 
-1157: .npc-form-grid {
-1158:   display: grid;
-1159:   grid-template-columns: 1fr 1fr;
-1160:   gap: var(--space-md);
-1161: }
-1162: 
-1163: .npc-actions {
-1164:   display: flex;
-1165:   gap: var(--space-sm);
-1166:   margin-top: var(--space-md);
-1167:   flex-wrap: wrap;
-1168: }
-1169: 
-1170: .npc-actions .btn {
-1171:   flex: 1;
-1172:   min-width: 120px;
-1173: }
-1174: 
-1175: /* NPC form in bestiary modal */
-1176: #createNpcForm {
-1177:   border: 1px solid var(--border-color);
-1178:   border-radius: var(--radius-lg);
-1179: }
-1180: .session-players-preview {
-1181:   display: flex;
-1182:   flex-direction: column;
-1183:   gap: var(--space-sm);
-1184: }
-1185: 
-1186: .session-player-chips {
-1187:   display: flex;
-1188:   flex-wrap: wrap;
-1189:   gap: var(--space-xs);
-1190: }
-1191: 
-1192: .player-chip {
-1193:   display: inline-flex;
-1194:   align-items: center;
-1195:   gap: 6px;
-1196:   padding: var(--space-xs) var(--space-md);
-1197:   background: var(--bg-tertiary);
-1198:   border-radius: var(--radius-full);
-1199:   font-size: var(--fs-sm);
-1200:   color: var(--text-secondary);
-1201:   white-space: nowrap;
-1202:   border: 1px solid var(--border-color);
-1203:   transition: all var(--transition-fast);
-1204: }
-1205: 
-1206: .player-chip:hover {
-1207:   border-color: var(--accent-primary);
-1208:   background: var(--bg-hover);
-1209: }
-1210: 
-1211: .player-chip-self {
-1212:   background: rgba(233, 69, 96, 0.15);
-1213:   color: var(--accent-primary);
-1214:   border-color: rgba(233, 69, 96, 0.3);
-1215: }
-1216: 
-1217: /* ===================== Character Select Grid ===================== */
-1218: .char-select-grid {
-1219:   display: grid;
-1220:   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-1221:   gap: var(--space-md);
-1222: }
-1223: 
-1224: .char-select-card {
-1225:   cursor: default;
-1226:   padding: var(--space-lg);
-1227:   display: flex;
-1228:   flex-direction: column;
-1229: }
-1230: 
-1231: .char-select-card:hover {
-1232:   border-color: var(--accent-primary);
-1233: }
-1234: 
-1235: .char-select-card .card-header {
-1236:   margin-bottom: var(--space-sm);
-1237: }
-1238: 
-1239: .char-select-bio {
-1240:   font-size: var(--fs-sm);
-1241:   color: var(--text-muted);
-1242:   line-height: 1.5;
-1243:   display: -webkit-box;
-1244:   -webkit-line-clamp: 3;
-1245:   -webkit-box-orient: vertical;
-1246:   overflow: hidden;
-1247:   flex: 1;
-1248: }
-1249: 
-1250: .char-select-actions {
-1251:   margin-top: var(--space-md);
-1252:   display: flex;
-1253:   flex-direction: column;
-1254:   gap: var(--space-sm);
-1255: }
-1256: 
-1257: /* ===================== File Drop Zone ===================== */
-1258: .plot-details {
-1259:   border: 1px solid var(--border-color);
-1260:   border-radius: var(--radius-lg);
-1261:   overflow: hidden;
-1262: }
-1263: 
-1264: .plot-summary {
-1265:   padding: var(--space-sm) var(--space-md);
-1266:   cursor: pointer;
-1267:   font-weight: 600;
-1268:   font-size: var(--fs-sm);
-1269:   display: flex;
-1270:   align-items: center;
-1271:   gap: var(--space-sm);
-1272:   transition: background var(--transition-fast);
-1273: }
-1274: 
-1275: .plot-summary:hover {
-1276:   background: var(--bg-hover);
-1277: }
-1278: 
-1279: .plot-summary::marker {
-1280:   color: var(--text-muted);
-1281: }
-1282: 
-1283: .plot-body {
-1284:   padding: 0 var(--space-md) var(--space-md);
-1285: }
-1286: 
-1287: .file-drop-zone {
-1288:   border: 2px dashed var(--border-color);
-1289:   border-radius: var(--radius-lg);
-1290:   padding: var(--space-lg);
-1291:   text-align: center;
-1292:   color: var(--text-muted);
-1293:   cursor: pointer;
-1294:   transition: all var(--transition-fast);
-1295: }
-1296: 
-1297: .file-drop-zone:hover,
-1298: .file-drop-zone.dragover {
-1299:   border-color: var(--accent-primary);
-1300:   background: rgba(233, 69, 96, 0.05);
-1301:   color: var(--text-secondary);
-1302: }
-1303: 
-1304: .file-drop-icon {
-1305:   font-size: 2rem;
-1306:   margin-bottom: var(--space-sm);
-1307: }
-1308: 
-1309: .file-drop-zone p {
-1310:   font-size: var(--fs-sm);
-1311:   line-height: 1.5;
-1312: }
-1313: 
-1314: .file-list {
-1315:   display: flex;
-1316:   flex-direction: column;
-1317:   gap: var(--space-xs);
-1318:   margin-top: var(--space-sm);
-1319: }
-1320: 
-1321: .file-item {
-1322:   display: flex;
-1323:   align-items: center;
-1324:   justify-content: space-between;
-1325:   padding: var(--space-xs) var(--space-sm);
-1326:   background: var(--bg-tertiary);
-1327:   border-radius: var(--radius-md);
-1328:   font-size: var(--fs-sm);
-1329: }
-1330: 
-1331: /* ===================== Responsive ===================== */
-1332: @media (max-width: 768px) {
-1333:   /* --- Lobby Header Mobile --- */
-1334:   .lobby-header {
-1335:     flex-wrap: wrap;
-1336:     padding: var(--space-sm) var(--space-md);
-1337:     gap: var(--space-sm);
-1338:   }
-1339: 
-1340:   .lobby-header-left {
-1341:     flex: 1 1 auto;
-1342:     min-width: 0;
-1343:     gap: var(--space-sm);
-1344:   }
-1345: 
-1346:   .lobby-title {
-1347:     font-size: var(--fs-base);
-1348:     white-space: nowrap;
-1349:   }
-1350: 
-1351:   .lobby-header-left .badge {
-1352:     max-width: 120px;
-1353:     overflow: hidden;
-1354:     text-overflow: ellipsis;
-1355:     white-space: nowrap;
-1356:     font-size: var(--fs-xs);
-1357:   }
-1358: 
-1359:   .lobby-header-right {
-1360:     flex: 1 1 auto;
-1361:     justify-content: flex-end;
-1362:     gap: 2px;
-1363:   }
-1364: 
-1365:   .lobby-header-right .btn {
-1366:     padding: var(--space-xs) var(--space-sm);
-1367:     font-size: var(--fs-xs);
-1368:   }
-1369: 
-1370:   .lobby-header-right .btn span {
-1371:     display: none;
-1372:   }
-1373: 
-1374:   /* --- Tabs Mobile --- */
-1375:   .lobby-tabs {
-1376:     padding: 0 var(--space-md);
-1377:     overflow-x: auto;
-1378:     -webkit-overflow-scrolling: touch;
-1379:   }
-1380: 
-1381:   .lobby-tabs::-webkit-scrollbar {
-1382:     display: none;
-1383:   }
-1384: 
-1385:   .lobby-tab {
-1386:     padding: var(--space-sm) var(--space-md);
-1387:     font-size: var(--fs-sm);
-1388:     white-space: nowrap;
-1389:   }
-1390: 
-1391:   /* --- Content Mobile --- */
-1392:   .lobby-content {
-1393:     padding: var(--space-md);
-1394:   }
-1395: 
-1396:   .card-grid {
-1397:     grid-template-columns: 1fr;
-1398:   }
-1399: 
-1400:   /* --- Side Panel Mobile --- */
-1401:   .side-panel {
-1402:     width: 100%;
-1403:     max-width: 100%;
-1404:   }
-1405: 
-1406:   .side-panel-header {
-1407:     padding: var(--space-sm) var(--space-md);
-1408:     min-height: 50px;
-1409:   }
-1410: 
-1411:   .side-panel-header .btn-icon {
-1412:     width: 40px;
-1413:     height: 40px;
-1414:   }
-1415: 
-1416:   .side-panel-content {
-1417:     padding: var(--space-md);
-1418:     -webkit-overflow-scrolling: touch;
-1419:   }
-1420: 
-1421:   /* --- Stats Grid Mobile --- */
-1422:   .stats-grid {
-1423:     grid-template-columns: repeat(3, 1fr);
-1424:   }
-1425: 
-1426:   /* --- Game Header Mobile (768px) --- */
-1427:   .game-header-top {
-1428:     padding: 6px var(--space-sm);
-1429:     gap: var(--space-xs);
-1430:     min-height: 46px;
-1431:   }
-1432: 
-1433:   .game-header-center,
-1434:   .game-header-hero {
-1435:     gap: 6px;
-1436:     min-width: 0;
-1437:   }
-1438: 
-1439:   .game-header-name {
-1440:     max-width: 120px;
-1441:     font-size: var(--fs-xs);
-1442:   }
-1443: 
-1444:   .hp-bar-container {
-1445:     max-width: 100px;
-1446:     height: 8px;
-1447:   }
-1448: 
-1449:   .game-header-hp {
-1450:     min-width: auto;
-1451:     font-size: 0.7rem;
-1452:   }
-1453: 
-1454:   .game-header-actions {
-1455:     gap: 3px;
-1456:   }
-1457: 
-1458:   .game-header-actions .btn-icon {
-1459:     width: 36px;
-1460:     height: 36px;
-1461:     font-size: 0.95rem;
-1462:   }
-1463: 
-1464:   .game-status-bar {
-1465:     padding: 3px var(--space-sm) 5px var(--space-sm);
-1466:     gap: 6px;
-1467:   }
-1468: 
-1469:   .game-header-location {
-1470:     font-size: 0.72rem;
-1471:     padding: 2px 8px;
-1472:     max-width: 58%;
-1473:   }
-1474: 
-1475:   .game-header-time {
-1476:     font-size: 0.72rem;
-1477:     padding: 2px 8px;
-1478:     max-width: 42%;
-1479:   }
-1480: 
-1481:   /* --- Auth Mobile --- */
-1482:   .auth-container {
-1483:     padding: 0 var(--space-md);
-1484:   }
-1485: 
-1486:   .btn-google {
-1487:     font-size: var(--fs-base);
-1488:   }
-1489: 
-1490:   /* --- Character Select Mobile --- */
-1491:   .char-select-grid {
-1492:     grid-template-columns: 1fr;
-1493:   }
-1494: 
-1495:   /* --- Profile Mobile --- */
-1496:   .profile-avatar {
-1497:     width: 64px;
-1498:     height: 64px;
-1499:     font-size: 2rem;
-1500:   }
-1501: 
-1502:   .profile-name {
-1503:     font-size: var(--fs-xl);
-1504:   }
-1505: 
-1506:   /* --- NPC Cards Mobile --- */
-1507:   .npc-header {
-1508:     padding: var(--space-sm) var(--space-md);
-1509:   }
-1510: 
-1511:   .npc-header-info {
-1512:     gap: var(--space-xs);
-1513:   }
-1514: 
-1515:   .npc-role-badge {
-1516:     font-size: 0.65rem;
-1517:     padding: 2px 6px;
-1518:   }
-1519: 
-1520:   .npc-name {
-1521:     font-size: var(--fs-sm);
-1522:   }
-1523: 
-1524:   .npc-race {
-1525:     font-size: var(--fs-xs);
-1526:   }
-1527: 
-1528:   .npc-edit-form {
-1529:     padding: var(--space-sm);
-1530:     padding-top: 0;
-1531:   }
-1532: 
-1533:   .npc-form-grid {
-1534:     grid-template-columns: 1fr;
-1535:     gap: var(--space-sm);
-1536:   }
-1537: 
-1538:   .npc-actions {
-1539:     flex-direction: column;
-1540:   }
-1541: 
-1542:   .npc-actions .btn {
-1543:     min-height: 44px;
-1544:   }
-1545: }
-1546: 
-1547: @media (max-width: 480px) {
-1548:   .lobby-header-left .badge {
-1549:     display: none;
-1550:   }
-1551: 
-1552:   .lobby-header-right .btn {
-1553:     padding: var(--space-xs) 6px;
-1554:   }
-1555: 
-1556:   .lobby-title {
-1557:     font-size: var(--fs-sm);
-1558:   }
-1559: 
-1560:   .lobby-tab {
-1561:     padding: var(--space-sm) var(--space-sm);
-1562:     font-size: var(--fs-xs);
-1563:   }
-1564: 
-1565:   /* Game header compact (<=480px) */
-1566:   .game-header-top {
-1567:     padding: 4px 6px;
-1568:     min-height: 42px;
-1569:     gap: 4px;
-1570:   }
-1571: 
-1572:   .game-header-center,
-1573:   .game-header-hero {
-1574:     gap: 4px;
-1575:     min-width: 0;
-1576:   }
-1577: 
-1578:   .game-header-name {
-1579:     max-width: 78px;
-1580:     font-size: 0.75rem;
-1581:   }
-1582: 
-1583:   .hp-bar-container {
-1584:     max-width: 60px;
-1585:     height: 6px;
-1586:   }
-1587: 
-1588:   .game-header-hp {
-1589:     min-width: auto;
-1590:     font-size: 0.65rem;
-1591:   }
-1592: 
-1593:   .game-header-actions {
-1594:     gap: 2px;
-1595:   }
-1596: 
-1597:   .game-header-actions .btn-icon {
-1598:     width: 32px;
-1599:     height: 32px;
-1600:     font-size: 0.85rem;
-1601:   }
-1602: 
-1603:   .game-status-bar {
-1604:     padding: 2px 6px 4px 6px;
-1605:     gap: 4px;
-1606:   }
-1607: 
-1608:   .game-header-location {
-1609:     font-size: 0.68rem;
-1610:     padding: 2px 6px;
-1611:     max-width: 58%;
-1612:   }
-1613: 
-1614:   .game-header-time {
-1615:     font-size: 0.68rem;
-1616:     padding: 2px 6px;
-1617:     max-width: 42%;
-1618:   }
-1619: 
-1620:   /* Chat messages tighter */
-1621:   .game-chat {
-1622:     padding: var(--space-xs) var(--space-sm);
-1623:   }
-1624: 
-1625:   .chat-messages {
-1626:     gap: var(--space-sm);
-1627:   }
-1628: 
-1629:   .message-avatar {
-1630:     width: 32px;
-1631:     height: 32px;
-1632:     font-size: 1rem;
-1633:     border-radius: var(--radius-sm);
-1634:   }
-1635: 
-1636:   .message-text {
-1637:     font-size: 0.875rem;
-1638:     line-height: 1.6;
-1639:   }
-1640: 
-1641:   /* Input compact & safe area */
-1642:   .game-input-area {
-1643:     padding: var(--space-xs) var(--space-sm) max(var(--space-xs), env(safe-area-inset-bottom, 8px)) var(--space-sm);
-1644:   }
-1645: 
-1646:   .game-input {
-1647:     font-size: 0.875rem;
-1648:     padding: var(--space-xs) var(--space-sm);
-1649:     min-height: 38px;
-1650:   }
-1651: 
-1652:   .game-input-wrapper .btn-primary {
-1653:     min-width: 38px;
-1654:     min-height: 38px;
-1655:     padding: 0;
-1656:     display: inline-flex;
-1657:     align-items: center;
-1658:     justify-content: center;
-1659:   }
-1660: 
-1661:   /* Character creation */
-1662:   .stats-grid {
-1663:     gap: var(--space-xs);
-1664:   }
-1665: 
-1666:   .stat-item {
-1667:     padding: var(--space-xs);
-1668:   }
-1669: 
-1670:   .stat-value {
-1671:     font-size: var(--fs-lg);
-1672:   }
-1673: 
-1674:   /* NPC Cards Small Mobile */
-1675:   .npc-header-info {
-1676:     flex-wrap: wrap;
-1677:   }
-1678: 
-1679:   .npc-race {
-1680:     display: none;
-1681:   }
-1682: 
-1683:   .npc-category {
-1684:     font-size: 0.6rem;
-1685:   }
-1686: 
-1687:   .npc-location {
-1688:     font-size: 0.6rem;
-1689:     width: 100%;
-1690:     margin-top: 2px;
-1691:   }
-1692: 
-1693:   /* Bestiary Tabs Mobile */
-1694:   .bestiary-tab {
-1695:     padding: var(--space-xs) var(--space-sm);
-1696:     font-size: var(--fs-xs);
-1697:   }
-1698: 
-1699:   /* State Cards Mobile */
-1700:   .state-header {
-1701:     padding: var(--space-sm);
-1702:   }
-1703: 
-1704:   .state-header-info {
-1705:     gap: var(--space-sm);
-1706:   }
-1707: 
-1708:   .state-name {
-1709:     font-size: var(--fs-base);
-1710:   }
-1711: 
-1712:   .state-actions .btn {
-1713:     padding: var(--space-xs);
-1714:     font-size: var(--fs-xs);
-1715:   }
-1716: 
-1717:   .city-item {
-1718:     padding: var(--space-xs) var(--space-sm);
-1719:   }
-1720: 
-1721:   .city-name {
-1722:     font-size: var(--fs-xs);
-1723:   }
-1724: }
-1725: 
-1726: /* ===================== NPC Relationships & Memories Panel ===================== */
-1727: .npc-rel-card {
-1728:   background: var(--bg-secondary);
-1729:   border: 1px solid var(--border-color);
-1730:   border-radius: var(--radius-md);
-1731:   padding: var(--space-md);
-1732:   margin-bottom: var(--space-md);
-1733:   display: flex;
-1734:   flex-direction: column;
-1735:   gap: var(--space-sm);
-1736:   transition: border-color var(--transition-fast);
-1737: }
-1738: 
-1739: .npc-rel-card:hover {
-1740:   border-color: var(--accent-primary);
-1741: }
-1742: 
-1743: .npc-rel-header {
-1744:   display: flex;
-1745:   justify-content: space-between;
-1746:   align-items: flex-start;
-1747:   gap: var(--space-sm);
-1748: }
-1749: 
-1750: .npc-rel-name {
-1751:   font-weight: 700;
-1752:   font-size: var(--fs-base);
-1753:   color: var(--text-primary);
-1754: }
-1755: 
-1756: .npc-rel-meta {
-1757:   font-size: var(--fs-xs);
-1758:   color: var(--text-muted);
-1759: }
-1760: 
-1761: .npc-tier-badge {
-1762:   font-size: var(--fs-xs);
-1763:   font-weight: 600;
-1764:   padding: 2px 8px;
-1765:   border-radius: 9999px;
-1766:   white-space: nowrap;
-1767: }
-1768: 
-1769: .rel-bar-wrapper {
-1770:   display: flex;
-1771:   flex-direction: column;
-1772:   gap: 4px;
-1773: }
-1774: 
-1775: .rel-bar-labels {
-1776:   display: flex;
-1777:   justify-content: space-between;
-1778:   font-size: var(--fs-xs);
-1779:   color: var(--text-muted);
-1780: }
-1781: 
-1782: .rel-bar-track {
-1783:   height: 8px;
-1784:   background: rgba(255, 255, 255, 0.08);
-1785:   border-radius: 4px;
-1786:   position: relative;
-1787:   overflow: hidden;
-1788: }
-1789: 
-1790: .rel-bar-center-marker {
-1791:   position: absolute;
-1792:   left: 50%;
-1793:   top: 0;
-1794:   bottom: 0;
-1795:   width: 2px;
-1796:   background: rgba(255, 255, 255, 0.25);
-1797:   z-index: 2;
-1798: }
-1799: 
-1800: .rel-bar-fill {
-1801:   height: 100%;
-1802:   position: absolute;
-1803:   border-radius: 4px;
-1804:   transition: width 0.3s ease, left 0.3s ease;
-1805: }
-1806: 
-1807: .npc-status-tags {
-1808:   display: flex;
-1809:   flex-wrap: wrap;
-1810:   gap: 4px;
-1811:   margin-top: 2px;
-1812: }
-1813: 
-1814: .npc-tag {
-1815:   font-size: 0.7rem;
-1816:   padding: 1px 6px;
-1817:   background: rgba(255, 255, 255, 0.06);
-1818:   border: 1px solid rgba(255, 255, 255, 0.1);
-1819:   border-radius: 4px;
-1820:   color: var(--text-secondary);
-1821: }
-1822: 
-1823: .npc-memories-toggle {
-1824:   width: 100%;
-1825:   display: flex;
-1826:   align-items: center;
-1827:   justify-content: space-between;
-1828:   padding: var(--space-xs) var(--space-sm);
-1829:   background: rgba(255, 255, 255, 0.03);
-1830:   border: 1px solid var(--border-color);
-1831:   border-radius: var(--radius-sm);
-1832:   font-size: var(--fs-xs);
-1833:   color: var(--text-secondary);
-1834:   cursor: pointer;
-1835:   transition: all var(--transition-fast);
-1836: }
-1837: 
-1838: .npc-memories-toggle:hover {
-1839:   background: rgba(255, 255, 255, 0.07);
-1840:   color: var(--text-primary);
-1841: }
-1842: 
-1843: .npc-memories-body {
-1844:   display: flex;
-1845:   flex-direction: column;
-1846:   gap: var(--space-xs);
-1847:   margin-top: var(--space-xs);
-1848:   padding: var(--space-sm);
-1849:   background: rgba(0, 0, 0, 0.2);
-1850:   border-radius: var(--radius-sm);
-1851:   font-size: var(--fs-xs);
-1852: }
-1853: 
-1854: .memory-item {
-1855:   padding: var(--space-xs) var(--space-sm);
-1856:   border-radius: 4px;
-1857:   background: rgba(255, 255, 255, 0.04);
-1858:   border-left: 3px solid #94a3b8;
-1859:   display: flex;
-1860:   flex-direction: column;
-1861:   gap: 2px;
-1862: }
-1863: 
-1864: .memory-item.vivid {
-1865:   border-left-color: #f59e0b;
-1866:   background: rgba(245, 158, 11, 0.08);
-1867: }
-1868: 
-1869: .memory-item.belief {
-1870:   border-left-color: #a855f7;
-1871:   background: rgba(168, 85, 247, 0.08);
-1872: }
-1873: 
-1874: .memory-item.impression {
-1875:   border-left-color: #06b6d4;
-1876:   background: rgba(6, 182, 212, 0.06);
-1877: }
-1878: 
-1879: .memory-item-header {
-1880:   display: flex;
-1881:   justify-content: space-between;
-1882:   align-items: center;
-1883:   font-size: 0.7rem;
-1884:   color: var(--text-muted);
-1885: }
-1886: 
-1887: .memory-item-text {
-1888:   color: var(--text-primary);
-1889:   line-height: 1.4;
-1890:   font-style: italic;
-1891: }
+  1: // supabase/functions/convert-world-text/index.ts
+  2: // Конвертирует текстовое описание мира в структурированный JSON
+  3: import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+  4: import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+  5: import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+  6: 
+  7: const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  8: const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  9: const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
+ 10: const AI_MODEL = "xiaomi/mimo-v2.5";
+ 11: 
+ 12: const SYSTEM_PROMPT = `Ты — D&D-дизайнер мира. Твоя задача: проанализировать текстовое описание ролевого мира и превратить его в структурированный JSON-объект настроек.
+ 13: 
+ 14: Извлеки из текста:
+ 15: - Доступные расы (races)
+ 16: - Доступные классы (classes)
+ 17: - Глобальные лимиты (max_level, starting_gold и т.д.)
+ 18: - Локации/регионы (locations)
+ 19: - Фракции (factions)
+ 20: - Ключевые правила дома (house_rules)
+ 21: 
+ 22: Формат ответа — ТОЛЬКО валидный JSON без markdown:
+ 23: 
+ 24: {
+ 25:   "races": ["Человек", "Эльф"],
+ 26:   "classes": ["Воин", "Маг", "Плут"],
+ 27:   "max_level": 20,
+ 28:   "starting_gold": 100,
+ 29:   "locations": ["Город Теней", "Лес Древних"],
+ 30:   "factions": ["Стражи Рассвета", "Теневая Лига"],
+ 31:   "house_rules": ["Криты наносят двойной урон"],
+ 32:   "description_summary": "Краткое описание (1-2 предложения)"
+ 33: }
+ 34: 
+ 35: Если какая-то информация отсутствует в тексте — поставь пустой массив или значение по умолчанию.
+ 36: ВСЁ на русском языке.`;
+ 37: 
+ 38: const CORS = {
+ 39:   "Access-Control-Allow-Origin": "*",
+ 40:   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+ 41:   "Access-Control-Allow-Methods": "POST, OPTIONS",
+ 42: };
+ 43: 
+ 44: serve(async (req) => {
+ 45:   if (req.method === "OPTIONS") {
+ 46:     return new Response("ok", { headers: CORS });
+ 47:   }
+ 48: 
+ 49:   try {
+ 50:     const { user_id, world_name, description } = await req.json();
+ 51: 
+ 52:     const safeDescription = cleanTextForAI(description);
+ 53: 
+ 54:     console.log('convert-world-text input:', { user_id, world_name, description: safeDescription });
+ 55: 
+ 56:     const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
+ 57:     if (safeDescription && new RegExp(imagePattern.source, imagePattern.flags).test(safeDescription)) {
+ 58:       return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
+ 59:         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+ 60:       });
+ 61:     }
+ 62: 
+ 63:     if (!user_id || !world_name || !safeDescription) {
+ 64:       return new Response(JSON.stringify({ error: "user_id, world_name и description обязательны" }), {
+ 65:         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+ 66:       });
+ 67:     }
+ 68: 
+ 69:     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+ 70: 
+ 71:     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+ 72:     const { data: userSettings } = await supabase
+ 73:       .from("user_settings")
+ 74:       .select("openrouter_key")
+ 75:       .eq("id", user_id)
+ 76:       .maybeSingle();
+ 77:     if (userSettings?.openrouter_key) apiKey = sanitizeKey(userSettings.openrouter_key);
+ 78: 
+ 79:     if (!apiKey) {
+ 80:       return new Response(JSON.stringify({
+ 81:         error: "Укажите OpenRouter API Key в настройках аккаунта",
+ 82:         code: "MISSING_API_KEY",
+ 83:       }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
+ 84:     }
+ 85: 
+ 86:     const userMessage = `Мир: "${world_name}"\n\nОписание:\n${safeDescription}`;
+ 87: 
+ 88:     const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+ 89:       method: "POST",
+ 90:       headers: {
+ 91:         "Authorization": `Bearer ${apiKey}`,
+ 92:         "Content-Type": "application/json",
+ 93:       },
+ 94:       body: JSON.stringify({
+ 95:         model: AI_MODEL,
+ 96:         messages: [
+ 97:           { role: "system", content: SYSTEM_PROMPT },
+ 98:           { role: "user", content: userMessage },
+ 99:         ],
+100:         temperature: 0.5,
+101:         max_tokens: 1500,
+102:       }),
+103:     });
+104: 
+105:     console.log('convert-world-text OpenRouter status:', aiRes.status);
+106: 
+107:     if (!aiRes.ok) {
+108:       const errText = await aiRes.text();
+109:       console.error("AI error:", errText);
+110:       return new Response(JSON.stringify({ error: "Ошибка AI API" }), {
+111:         status: 502, headers: { ...CORS, "Content-Type": "application/json" },
+112:       });
+113:     }
+114: 
+115:     const aiData = await aiRes.json();
+116:     const rawContent = aiData.choices[0].message.content || "";
+117:     console.log('convert-world-text AI raw:', rawContent);
+118: 
+119:     let settings = null;
+120:     try { settings = parseAIJson(rawContent); } catch {}
+121:     if (!settings) {
+122:       return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
+123:         status: 422, headers: { ...CORS, "Content-Type": "application/json" },
+124:       });
+125:     }
+126: 
+127:     return new Response(JSON.stringify({ settings }), {
+128:       status: 200, headers: { ...CORS, "Content-Type": "application/json" },
+129:     });
+130: 
+131:   } catch (err) {
+132:     console.error("convert-world-text error:", err);
+133:     return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
+134:       status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+135:     });
+136:   }
+137: });
 
 ================
 File: supabase/functions/process-turn/steps/step5_narrator.ts
@@ -22829,145 +21161,2039 @@ File: supabase/functions/process-turn/steps/step5_narrator.ts
 364: }
 
 ================
-File: supabase/functions/convert-world-text/index.ts
+File: src/styles/game.css
 ================
-  1: // supabase/functions/convert-world-text/index.ts
-  2: // Конвертирует текстовое описание мира в структурированный JSON
-  3: import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-  4: import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-  5: import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
-  6: 
-  7: const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  8: const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  9: const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
- 10: const AI_MODEL = "xiaomi/mimo-v2.5";
- 11: 
- 12: const SYSTEM_PROMPT = `Ты — D&D-дизайнер мира. Твоя задача: проанализировать текстовое описание ролевого мира и превратить его в структурированный JSON-объект настроек.
- 13: 
- 14: Извлеки из текста:
- 15: - Доступные расы (races)
- 16: - Доступные классы (classes)
- 17: - Глобальные лимиты (max_level, starting_gold и т.д.)
- 18: - Локации/регионы (locations)
- 19: - Фракции (factions)
- 20: - Ключевые правила дома (house_rules)
- 21: 
- 22: Формат ответа — ТОЛЬКО валидный JSON без markdown:
- 23: 
- 24: {
- 25:   "races": ["Человек", "Эльф"],
- 26:   "classes": ["Воин", "Маг", "Плут"],
- 27:   "max_level": 20,
- 28:   "starting_gold": 100,
- 29:   "locations": ["Город Теней", "Лес Древних"],
- 30:   "factions": ["Стражи Рассвета", "Теневая Лига"],
- 31:   "house_rules": ["Криты наносят двойной урон"],
- 32:   "description_summary": "Краткое описание (1-2 предложения)"
- 33: }
- 34: 
- 35: Если какая-то информация отсутствует в тексте — поставь пустой массив или значение по умолчанию.
- 36: ВСЁ на русском языке.`;
- 37: 
- 38: const CORS = {
- 39:   "Access-Control-Allow-Origin": "*",
- 40:   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
- 41:   "Access-Control-Allow-Methods": "POST, OPTIONS",
- 42: };
- 43: 
- 44: serve(async (req) => {
- 45:   if (req.method === "OPTIONS") {
- 46:     return new Response("ok", { headers: CORS });
- 47:   }
- 48: 
- 49:   try {
- 50:     const { user_id, world_name, description } = await req.json();
- 51: 
- 52:     const safeDescription = cleanTextForAI(description);
- 53: 
- 54:     console.log('convert-world-text input:', { user_id, world_name, description: safeDescription });
- 55: 
- 56:     const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
- 57:     if (safeDescription && new RegExp(imagePattern.source, imagePattern.flags).test(safeDescription)) {
- 58:       return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
- 59:         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
- 60:       });
- 61:     }
- 62: 
- 63:     if (!user_id || !world_name || !safeDescription) {
- 64:       return new Response(JSON.stringify({ error: "user_id, world_name и description обязательны" }), {
- 65:         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
- 66:       });
- 67:     }
- 68: 
- 69:     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
- 70: 
- 71:     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
- 72:     const { data: userSettings } = await supabase
- 73:       .from("user_settings")
- 74:       .select("openrouter_key")
- 75:       .eq("id", user_id)
- 76:       .maybeSingle();
- 77:     if (userSettings?.openrouter_key) apiKey = sanitizeKey(userSettings.openrouter_key);
- 78: 
- 79:     if (!apiKey) {
- 80:       return new Response(JSON.stringify({
- 81:         error: "Укажите OpenRouter API Key в настройках аккаунта",
- 82:         code: "MISSING_API_KEY",
- 83:       }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
- 84:     }
- 85: 
- 86:     const userMessage = `Мир: "${world_name}"\n\nОписание:\n${safeDescription}`;
- 87: 
- 88:     const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
- 89:       method: "POST",
- 90:       headers: {
- 91:         "Authorization": `Bearer ${apiKey}`,
- 92:         "Content-Type": "application/json",
- 93:       },
- 94:       body: JSON.stringify({
- 95:         model: AI_MODEL,
- 96:         messages: [
- 97:           { role: "system", content: SYSTEM_PROMPT },
- 98:           { role: "user", content: userMessage },
- 99:         ],
-100:         temperature: 0.5,
-101:         max_tokens: 1500,
-102:       }),
-103:     });
-104: 
-105:     console.log('convert-world-text OpenRouter status:', aiRes.status);
-106: 
-107:     if (!aiRes.ok) {
-108:       const errText = await aiRes.text();
-109:       console.error("AI error:", errText);
-110:       return new Response(JSON.stringify({ error: "Ошибка AI API" }), {
-111:         status: 502, headers: { ...CORS, "Content-Type": "application/json" },
-112:       });
-113:     }
-114: 
-115:     const aiData = await aiRes.json();
-116:     const rawContent = aiData.choices[0].message.content || "";
-117:     console.log('convert-world-text AI raw:', rawContent);
-118: 
-119:     let settings = null;
-120:     try { settings = parseAIJson(rawContent); } catch {}
-121:     if (!settings) {
-122:       return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
-123:         status: 422, headers: { ...CORS, "Content-Type": "application/json" },
-124:       });
-125:     }
-126: 
-127:     return new Response(JSON.stringify({ settings }), {
-128:       status: 200, headers: { ...CORS, "Content-Type": "application/json" },
-129:     });
-130: 
-131:   } catch (err) {
-132:     console.error("convert-world-text error:", err);
-133:     return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
-134:       status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-135:     });
-136:   }
-137: });
+   1: /* src/styles/game.css — Атмосферные стили таверны («Путник и Дракон») */
+   2: 
+   3: /* ===================== Auth Page (Вход в таверну) ===================== */
+   4: .auth-container {
+   5:   max-width: 420px;
+   6:   width: 100%;
+   7:   background: linear-gradient(180deg, rgba(34, 26, 20, 0.95) 0%, rgba(22, 17, 13, 0.98) 100%);
+   8:   border: 1px solid var(--border-gold);
+   9:   border-radius: var(--radius-xl);
+  10:   padding: var(--space-2xl) var(--space-xl);
+  11:   box-shadow: 0 16px 45px rgba(0, 0, 0, 0.8), 0 0 30px rgba(200, 90, 50, 0.15);
+  12:   position: relative;
+  13: }
+  14: 
+  15: .auth-container::before {
+  16:   content: '';
+  17:   position: absolute;
+  18:   top: 0;
+  19:   left: 15%;
+  20:   right: 15%;
+  21:   height: 2px;
+  22:   background: linear-gradient(90deg, transparent, var(--accent-gold-bright), transparent);
+  23: }
+  24: 
+  25: .auth-header {
+  26:   text-align: center;
+  27:   margin-bottom: var(--space-xl);
+  28: }
+  29: 
+  30: .auth-logo {
+  31:   font-size: 3.2rem;
+  32:   margin-bottom: var(--space-sm);
+  33:   filter: drop-shadow(0 2px 8px rgba(212, 163, 89, 0.4));
+  34:   animation: lanternGlow 3s infinite ease-in-out;
+  35: }
+  36: 
+  37: @keyframes lanternGlow {
+  38:   0%, 100% { filter: drop-shadow(0 0 10px rgba(212, 163, 89, 0.35)); }
+  39:   50% { filter: drop-shadow(0 0 20px rgba(200, 90, 50, 0.6)); }
+  40: }
+  41: 
+  42: .auth-title {
+  43:   font-family: var(--font-heading);
+  44:   font-size: var(--fs-3xl);
+  45:   font-weight: 800;
+  46:   color: var(--accent-gold-bright);
+  47:   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 16px rgba(212, 163, 89, 0.25);
+  48:   letter-spacing: 0.5px;
+  49: }
+  50: 
+  51: .auth-subtitle {
+  52:   color: var(--text-secondary);
+  53:   font-size: var(--fs-sm);
+  54:   margin-top: var(--space-xs);
+  55:   font-family: var(--font-main);
+  56:   letter-spacing: 0.2px;
+  57: }
+  58: 
+  59: .auth-form {
+  60:   display: flex;
+  61:   flex-direction: column;
+  62:   gap: var(--space-md);
+  63: }
+  64: 
+  65: .auth-toggle {
+  66:   text-align: center;
+  67:   margin-top: var(--space-lg);
+  68:   color: var(--text-muted);
+  69:   font-size: var(--fs-sm);
+  70: }
+  71: 
+  72: .auth-toggle a {
+  73:   font-weight: 600;
+  74:   color: var(--accent-gold);
+  75: }
+  76: 
+  77: /* ===================== Google Button ===================== */
+  78: .btn-google {
+  79:   display: flex;
+  80:   align-items: center;
+  81:   justify-content: center;
+  82:   gap: var(--space-sm);
+  83:   padding: var(--space-md) var(--space-lg);
+  84:   background: linear-gradient(180deg, #fdfbf7 0%, #ece5d8 100%);
+  85:   color: #2b1f17;
+  86:   border: 1px solid rgba(212, 163, 89, 0.4);
+  87:   border-radius: var(--radius-md);
+  88:   font-family: var(--font-heading);
+  89:   font-weight: 700;
+  90:   font-size: var(--fs-sm);
+  91:   letter-spacing: 0.3px;
+  92:   transition: all var(--transition-fast);
+  93:   cursor: pointer;
+  94:   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  95: }
+  96: 
+  97: .btn-google:hover {
+  98:   background: #ffffff;
+  99:   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 10px rgba(212, 163, 89, 0.3);
+ 100:   transform: translateY(-1px);
+ 101: }
+ 102: 
+ 103: .btn-google:active {
+ 104:   transform: translateY(1px);
+ 105: }
+ 106: 
+ 107: .btn-google:disabled {
+ 108:   opacity: 0.55;
+ 109:   cursor: not-allowed;
+ 110: }
+ 111: 
+ 112: .google-icon {
+ 113:   flex-shrink: 0;
+ 114: }
+ 115: 
+ 116: .auth-divider {
+ 117:   display: flex;
+ 118:   align-items: center;
+ 119:   gap: var(--space-md);
+ 120:   margin: var(--space-lg) 0;
+ 121:   color: var(--text-muted);
+ 122:   font-size: var(--fs-xs);
+ 123:   font-family: var(--font-heading);
+ 124:   text-transform: uppercase;
+ 125:   letter-spacing: 1px;
+ 126: }
+ 127: 
+ 128: .auth-divider::before,
+ 129: .auth-divider::after {
+ 130:   content: '';
+ 131:   flex: 1;
+ 132:   height: 1px;
+ 133:   background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+ 134: }
+ 135: 
+ 136: /* ===================== Lobby (Зал Гильдии и Доска Заказов) ===================== */
+ 137: .lobby-header {
+ 138:   display: flex;
+ 139:   align-items: center;
+ 140:   justify-content: space-between;
+ 141:   padding: var(--space-md) var(--space-xl);
+ 142:   background: linear-gradient(180deg, rgba(32, 24, 19, 0.95) 0%, rgba(22, 17, 13, 0.95) 100%);
+ 143:   backdrop-filter: blur(12px);
+ 144:   -webkit-backdrop-filter: blur(12px);
+ 145:   border-bottom: 1px solid var(--border-gold);
+ 146:   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+ 147:   position: sticky;
+ 148:   top: 0;
+ 149:   z-index: var(--z-header);
+ 150: }
+ 151: 
+ 152: .lobby-header-left {
+ 153:   display: flex;
+ 154:   align-items: center;
+ 155:   gap: var(--space-md);
+ 156: }
+ 157: 
+ 158: .lobby-header-right {
+ 159:   display: flex;
+ 160:   align-items: center;
+ 161:   gap: var(--space-sm);
+ 162: }
+ 163: 
+ 164: .lobby-title {
+ 165:   font-family: var(--font-heading);
+ 166:   font-size: var(--fs-xl);
+ 167:   font-weight: 800;
+ 168:   color: var(--accent-gold-bright);
+ 169:   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 12px rgba(212, 163, 89, 0.3);
+ 170:   letter-spacing: 0.5px;
+ 171: }
+ 172: 
+ 173: .lobby-tabs {
+ 174:   display: flex;
+ 175:   gap: 0;
+ 176:   background: #18120e;
+ 177:   border-bottom: 2px solid var(--border-wood);
+ 178:   padding: 0 var(--space-xl);
+ 179:   box-shadow: inset 0 -1px 0 rgba(212, 163, 89, 0.15);
+ 180: }
+ 181: 
+ 182: .lobby-tab {
+ 183:   padding: var(--space-md) var(--space-xl);
+ 184:   background: transparent;
+ 185:   color: var(--text-secondary);
+ 186:   font-family: var(--font-heading);
+ 187:   font-weight: 700;
+ 188:   font-size: var(--fs-sm);
+ 189:   letter-spacing: 0.4px;
+ 190:   border-bottom: 2px solid transparent;
+ 191:   transition: all var(--transition-fast);
+ 192:   cursor: pointer;
+ 193: }
+ 194: 
+ 195: .lobby-tab:hover {
+ 196:   color: var(--accent-gold);
+ 197:   background: rgba(212, 163, 89, 0.07);
+ 198: }
+ 199: 
+ 200: .lobby-tab.active {
+ 201:   color: var(--accent-gold-bright);
+ 202:   border-bottom-color: var(--accent-gold);
+ 203:   background: rgba(212, 163, 89, 0.12);
+ 204:   text-shadow: 0 0 8px rgba(212, 163, 89, 0.4);
+ 205: }
+ 206: 
+ 207: .lobby-content {
+ 208:   flex: 1;
+ 209:   padding: var(--space-xl);
+ 210:   overflow-y: auto;
+ 211: }
+ 212: 
+ 213: /* Card Grid (Доска объявлений) */
+ 214: .card-grid {
+ 215:   display: grid;
+ 216:   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+ 217:   gap: var(--space-lg);
+ 218: }
+ 219: 
+ 220: /* Empty State */
+ 221: .empty-state {
+ 222:   text-align: center;
+ 223:   padding: var(--space-2xl);
+ 224:   color: var(--text-secondary);
+ 225:   background: rgba(28, 21, 16, 0.5);
+ 226:   border: 1px dashed rgba(212, 163, 89, 0.25);
+ 227:   border-radius: var(--radius-lg);
+ 228: }
+ 229: 
+ 230: .empty-icon {
+ 231:   font-size: 3.5rem;
+ 232:   margin-bottom: var(--space-md);
+ 233:   opacity: 0.6;
+ 234:   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+ 235: }
+ 236: 
+ 237: .empty-state h3 {
+ 238:   font-family: var(--font-heading);
+ 239:   color: var(--accent-gold);
+ 240:   margin-bottom: var(--space-sm);
+ 241: }
+ 242: 
+ 243: .empty-state p {
+ 244:   margin-bottom: var(--space-lg);
+ 245:   color: var(--text-muted);
+ 246: }
+ 247: 
+ 248: /* World Settings Preview */
+ 249: .world-settings-preview {
+ 250:   background: var(--bg-input);
+ 251:   padding: var(--space-md);
+ 252:   border-radius: var(--radius-md);
+ 253:   border: 1px solid rgba(212, 163, 89, 0.15);
+ 254:   font-family: var(--font-mono);
+ 255:   font-size: var(--fs-xs);
+ 256:   color: var(--text-muted);
+ 257:   max-height: 100px;
+ 258:   overflow: hidden;
+ 259:   box-shadow: var(--shadow-inset);
+ 260: }
+ 261: 
+ 262: /* ===================== Difficulty Options ===================== */
+ 263: .difficulty-options {
+ 264:   display: grid;
+ 265:   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+ 266:   gap: var(--space-md);
+ 267: }
+ 268: 
+ 269: .difficulty-option {
+ 270:   padding: var(--space-md);
+ 271:   background: linear-gradient(180deg, #281f18 0%, #1e1713 100%);
+ 272:   border: 2px solid var(--border-color);
+ 273:   border-radius: var(--radius-lg);
+ 274:   cursor: pointer;
+ 275:   transition: all var(--transition-fast);
+ 276:   text-align: center;
+ 277:   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+ 278: }
+ 279: 
+ 280: .difficulty-option:hover {
+ 281:   border-color: var(--accent-gold);
+ 282:   transform: translateY(-2px);
+ 283:   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 10px rgba(212, 163, 89, 0.2);
+ 284: }
+ 285: 
+ 286: .difficulty-option.selected {
+ 287:   border-color: var(--accent-gold-bright);
+ 288:   background: linear-gradient(180deg, #372a20 0%, #291e17 100%);
+ 289:   box-shadow: 0 0 14px rgba(212, 163, 89, 0.35);
+ 290: }
+ 291: 
+ 292: .difficulty-label {
+ 293:   font-family: var(--font-heading);
+ 294:   font-weight: 700;
+ 295:   font-size: var(--fs-lg);
+ 296:   color: var(--accent-gold-bright);
+ 297: }
+ 298: 
+ 299: .difficulty-desc {
+ 300:   font-size: var(--fs-xs);
+ 301:   color: var(--text-muted);
+ 302:   margin-top: var(--space-xs);
+ 303: }
+ 304: 
+ 305: /* Invite Code */
+ 306: .invite-code-container {
+ 307:   display: flex;
+ 308:   align-items: center;
+ 309:   gap: var(--space-sm);
+ 310: }
+ 311: 
+ 312: .invite-code {
+ 313:   background: var(--bg-input);
+ 314:   padding: var(--space-sm) var(--space-md);
+ 315:   border: 1px solid rgba(212, 163, 89, 0.3);
+ 316:   border-radius: var(--radius-md);
+ 317:   font-family: var(--font-mono);
+ 318:   font-size: var(--fs-sm);
+ 319:   color: var(--accent-gold-bright);
+ 320:   box-shadow: var(--shadow-inset);
+ 321:   user-select: all;
+ 322: }
+ 323: 
+ 324: /* Lore List */
+ 325: .lore-list {
+ 326:   display: flex;
+ 327:   flex-direction: column;
+ 328:   gap: var(--space-xs);
+ 329:   max-height: 150px;
+ 330:   overflow-y: auto;
+ 331: }
+ 332: 
+ 333: .lore-item {
+ 334:   display: flex;
+ 335:   align-items: center;
+ 336:   gap: var(--space-sm);
+ 337:   font-size: var(--fs-sm);
+ 338:   color: var(--text-secondary);
+ 339: }
+ 340: 
+ 341: /* Player Row */
+ 342: .player-row {
+ 343:   display: flex;
+ 344:   align-items: center;
+ 345:   justify-content: space-between;
+ 346:   gap: var(--space-sm);
+ 347:   padding: var(--space-md);
+ 348:   background: linear-gradient(180deg, #281f18 0%, #1e1611 100%);
+ 349:   border: 1px solid var(--border-color);
+ 350:   border-radius: var(--radius-md);
+ 351:   flex-wrap: wrap;
+ 352:   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+ 353: }
+ 354: 
+ 355: .player-info {
+ 356:   display: flex;
+ 357:   flex-direction: column;
+ 358:   min-width: 0;
+ 359:   flex: 1;
+ 360: }
+ 361: 
+ 362: .player-info strong {
+ 363:   font-family: var(--font-heading);
+ 364:   font-size: var(--fs-base);
+ 365:   color: var(--text-primary);
+ 366:   word-break: break-word;
+ 367: }
+ 368: 
+ 369: .player-stats {
+ 370:   display: flex;
+ 371:   gap: var(--space-xs);
+ 372:   flex-shrink: 0;
+ 373: }
+ 374: 
+ 375: /* ===================== Game Screen (Походная Панель) ===================== */
+ 376: .game-page {
+ 377:   height: 100vh;
+ 378:   display: flex;
+ 379:   flex-direction: column;
+ 380:   background: var(--bg-primary);
+ 381: }
+ 382: 
+ 383: .game-header {
+ 384:   display: flex;
+ 385:   flex-direction: column;
+ 386:   background: linear-gradient(180deg, rgba(32, 24, 19, 0.96) 0%, rgba(22, 17, 13, 0.96) 100%);
+ 387:   backdrop-filter: blur(16px);
+ 388:   -webkit-backdrop-filter: blur(16px);
+ 389:   border-bottom: 1px solid var(--border-gold);
+ 390:   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.65);
+ 391:   z-index: var(--z-header);
+ 392:   position: sticky;
+ 393:   top: 0;
+ 394:   width: 100%;
+ 395: }
+ 396: 
+ 397: .game-header-top {
+ 398:   display: flex;
+ 399:   align-items: center;
+ 400:   justify-content: space-between;
+ 401:   padding: 7px var(--space-md);
+ 402:   gap: var(--space-sm);
+ 403:   min-height: 48px;
+ 404: }
+ 405: 
+ 406: .game-header-center,
+ 407: .game-header-hero {
+ 408:   display: flex;
+ 409:   align-items: center;
+ 410:   gap: var(--space-sm);
+ 411:   flex: 1;
+ 412:   min-width: 0;
+ 413: }
+ 414: 
+ 415: .game-header-name {
+ 416:   font-family: var(--font-heading);
+ 417:   font-weight: 700;
+ 418:   font-size: var(--fs-sm);
+ 419:   letter-spacing: 0.3px;
+ 420:   white-space: nowrap;
+ 421:   overflow: hidden;
+ 422:   text-overflow: ellipsis;
+ 423:   max-width: 160px;
+ 424:   color: var(--accent-gold-bright);
+ 425:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+ 426: }
+ 427: 
+ 428: /* HP Vial (Склянка жизненной силы) */
+ 429: .hp-bar-container {
+ 430:   width: 100%;
+ 431:   max-width: 140px;
+ 432:   height: 11px;
+ 433:   background: rgba(14, 10, 8, 0.95);
+ 434:   border-radius: var(--radius-full);
+ 435:   overflow: hidden;
+ 436:   border: 1px solid rgba(212, 163, 89, 0.4);
+ 437:   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8);
+ 438:   flex: 1;
+ 439: }
+ 440: 
+ 441: .hp-bar {
+ 442:   height: 100%;
+ 443:   background: linear-gradient(90deg, #2e7d32, #43a047);
+ 444:   border-radius: var(--radius-full);
+ 445:   transition: width var(--transition-base), background-color var(--transition-base);
+ 446:   box-shadow: 0 0 10px rgba(67, 160, 71, 0.6);
+ 447: }
+ 448: 
+ 449: .hp-bar.low {
+ 450:   background: linear-gradient(90deg, #d97706, #f59e0b);
+ 451:   box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+ 452: }
+ 453: 
+ 454: .hp-bar.critical {
+ 455:   background: linear-gradient(90deg, #9e2a2b, #c0392b);
+ 456:   box-shadow: 0 0 12px rgba(192, 57, 43, 0.8);
+ 457:   animation: hpPulse 1.5s infinite ease-in-out;
+ 458: }
+ 459: 
+ 460: .game-header-hp {
+ 461:   font-size: var(--fs-xs);
+ 462:   color: #81c784;
+ 463:   font-weight: 700;
+ 464:   font-family: var(--font-mono);
+ 465:   white-space: nowrap;
+ 466:   min-width: 36px;
+ 467:   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+ 468: }
+ 469: 
+ 470: .game-header-actions {
+ 471:   display: flex;
+ 472:   align-items: center;
+ 473:   gap: 4px;
+ 474:   flex-shrink: 0;
+ 475: }
+ 476: 
+ 477: .game-header-actions .btn-icon {
+ 478:   width: 36px;
+ 479:   height: 36px;
+ 480:   display: inline-flex;
+ 481:   align-items: center;
+ 482:   justify-content: center;
+ 483:   border-radius: var(--radius-md);
+ 484:   background: rgba(212, 163, 89, 0.06);
+ 485:   border: 1px solid rgba(212, 163, 89, 0.2);
+ 486:   color: var(--text-primary);
+ 487:   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+ 488:   transition: all var(--transition-fast);
+ 489: }
+ 490: 
+ 491: .game-header-actions .btn-icon:hover {
+ 492:   background: rgba(212, 163, 89, 0.16);
+ 493:   border-color: var(--accent-gold);
+ 494:   color: var(--accent-gold-bright);
+ 495:   box-shadow: 0 0 10px rgba(212, 163, 89, 0.3);
+ 496:   transform: translateY(-1px);
+ 497: }
+ 498: 
+ 499: .game-header-actions .btn-icon:active {
+ 500:   transform: translateY(1px);
+ 501: }
+ 502: 
+ 503: /* Dedicated Sub-bar for Location & Time (Компас и Часы) */
+ 504: .game-status-bar {
+ 505:   display: flex;
+ 506:   align-items: center;
+ 507:   justify-content: space-between;
+ 508:   gap: var(--space-sm);
+ 509:   padding: 4px var(--space-md) 6px var(--space-md);
+ 510:   background: rgba(18, 14, 11, 0.75);
+ 511:   border-top: 1px solid rgba(212, 163, 89, 0.12);
+ 512: }
+ 513: 
+ 514: .game-header-location {
+ 515:   display: inline-flex;
+ 516:   align-items: center;
+ 517:   gap: 5px;
+ 518:   font-size: var(--fs-xs);
+ 519:   color: #f5b041;
+ 520:   white-space: nowrap;
+ 521:   overflow: hidden;
+ 522:   text-overflow: ellipsis;
+ 523:   max-width: 58%;
+ 524:   background: rgba(200, 90, 50, 0.15);
+ 525:   border-radius: var(--radius-full);
+ 526:   padding: 2px 10px;
+ 527:   border: 1px solid rgba(212, 163, 89, 0.35);
+ 528:   font-weight: 600;
+ 529:   letter-spacing: 0.2px;
+ 530:   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+ 531: }
+ 532: 
+ 533: .game-header-time {
+ 534:   display: inline-flex;
+ 535:   align-items: center;
+ 536:   gap: 5px;
+ 537:   font-size: var(--fs-xs);
+ 538:   color: var(--text-secondary);
+ 539:   white-space: nowrap;
+ 540:   overflow: hidden;
+ 541:   text-overflow: ellipsis;
+ 542:   max-width: 42%;
+ 543:   flex-shrink: 0;
+ 544:   background: rgba(212, 163, 89, 0.08);
+ 545:   border-radius: var(--radius-full);
+ 546:   padding: 2px 10px;
+ 547:   border: 1px solid rgba(212, 163, 89, 0.22);
+ 548:   font-weight: 500;
+ 549: }
+ 550: 
+ 551: /* ===================== Chat Area (Хроника приключений) ===================== */
+ 552: .game-chat {
+ 553:   flex: 1;
+ 554:   overflow-y: auto;
+ 555:   padding: var(--space-md);
+ 556:   scroll-behavior: smooth;
+ 557:   background: radial-gradient(circle at 50% 10%, rgba(200, 90, 50, 0.05) 0%, transparent 60%);
+ 558: }
+ 559: 
+ 560: .chat-messages {
+ 561:   display: flex;
+ 562:   flex-direction: column;
+ 563:   gap: var(--space-md);
+ 564:   max-width: 820px;
+ 565:   margin: 0 auto;
+ 566:   width: 100%;
+ 567: }
+ 568: 
+ 569: .chat-empty {
+ 570:   text-align: center;
+ 571:   padding: var(--space-2xl);
+ 572:   color: var(--text-muted);
+ 573:   background: rgba(28, 21, 16, 0.4);
+ 574:   border: 1px dashed rgba(212, 163, 89, 0.2);
+ 575:   border-radius: var(--radius-lg);
+ 576: }
+ 577: 
+ 578: /* Messages */
+ 579: .message {
+ 580:   display: flex;
+ 581:   gap: var(--space-sm);
+ 582:   animation: fadeIn 0.3s ease;
+ 583: }
+ 584: 
+ 585: .message-avatar {
+ 586:   width: 38px;
+ 587:   height: 38px;
+ 588:   border-radius: var(--radius-md);
+ 589:   display: flex;
+ 590:   align-items: center;
+ 591:   justify-content: center;
+ 592:   font-size: 1.25rem;
+ 593:   flex-shrink: 0;
+ 594:   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+ 595: }
+ 596: 
+ 597: .message-master .message-avatar {
+ 598:   background: rgba(212, 163, 89, 0.15);
+ 599:   border: 1px solid rgba(212, 163, 89, 0.4);
+ 600: }
+ 601: 
+ 602: .message-player .message-avatar {
+ 603:   background: rgba(59, 122, 158, 0.2);
+ 604:   border: 1px solid rgba(59, 122, 158, 0.4);
+ 605: }
+ 606: 
+ 607: .message-body {
+ 608:   flex: 1;
+ 609: }
+ 610: 
+ 611: .message-sender {
+ 612:   font-family: var(--font-heading);
+ 613:   font-size: var(--fs-xs);
+ 614:   font-weight: 700;
+ 615:   margin-bottom: 3px;
+ 616:   letter-spacing: 0.3px;
+ 617: }
+ 618: 
+ 619: .message-master .message-sender {
+ 620:   color: var(--accent-gold-bright);
+ 621: }
+ 622: 
+ 623: .message-player .message-sender {
+ 624:   color: #7fb3d5;
+ 625: }
+ 626: 
+ 627: /* Master message (Пергаментная летопись) */
+ 628: .message-master .message-text {
+ 629:   font-size: var(--fs-base);
+ 630:   line-height: 1.75;
+ 631:   color: var(--text-primary);
+ 632:   background: linear-gradient(135deg, rgba(38, 29, 22, 0.8) 0%, rgba(26, 20, 15, 0.88) 100%);
+ 633:   border: 1px solid rgba(212, 163, 89, 0.22);
+ 634:   border-left: 3px solid var(--accent-gold);
+ 635:   border-radius: 4px var(--radius-lg) var(--radius-lg) 4px;
+ 636:   padding: var(--space-md) var(--space-lg);
+ 637:   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+ 638: }
+ 639: 
+ 640: /* System message (Слухи таверны) */
+ 641: .message-system {
+ 642:   justify-content: center;
+ 643: }
+ 644: 
+ 645: .message-system .message-text {
+ 646:   font-size: var(--fs-xs);
+ 647:   color: var(--text-muted);
+ 648:   background: rgba(24, 18, 14, 0.85);
+ 649:   border: 1px solid rgba(212, 163, 89, 0.15);
+ 650:   padding: var(--space-xs) var(--space-md);
+ 651:   border-radius: var(--radius-full);
+ 652:   text-align: center;
+ 653:   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+ 654: }
+ 655: 
+ 656: /* Self message (Кожаный путевой дневник) */
+ 657: .message-self {
+ 658:   justify-content: flex-end;
+ 659: }
+ 660: 
+ 661: .message-self .message-avatar {
+ 662:   background: rgba(200, 90, 50, 0.2);
+ 663:   border: 1px solid rgba(200, 90, 50, 0.4);
+ 664: }
+ 665: 
+ 666: .message-self .message-body {
+ 667:   text-align: right;
+ 668: }
+ 669: 
+ 670: .message-self .message-text {
+ 671:   background: linear-gradient(135deg, #3d2b1e 0%, #291b12 100%);
+ 672:   color: var(--text-primary);
+ 673:   border: 1px solid rgba(212, 163, 89, 0.35);
+ 674:   padding: var(--space-sm) var(--space-md);
+ 675:   border-radius: var(--radius-lg) var(--radius-sm) var(--radius-lg) var(--radius-lg);
+ 676:   display: inline-block;
+ 677:   max-width: 82%;
+ 678:   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+ 679:   line-height: 1.6;
+ 680: }
+ 681: 
+ 682: /* ===================== Input Area (Очаг действий) ===================== */
+ 683: .game-input-area {
+ 684:   padding: var(--space-sm) var(--space-md);
+ 685:   background: linear-gradient(180deg, rgba(28, 21, 16, 0.96) 0%, rgba(18, 14, 11, 0.98) 100%);
+ 686:   backdrop-filter: blur(14px);
+ 687:   -webkit-backdrop-filter: blur(14px);
+ 688:   border-top: 1px solid var(--border-gold);
+ 689:   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.55);
+ 690: }
+ 691: 
+ 692: .game-input-wrapper {
+ 693:   display: flex;
+ 694:   align-items: flex-end;
+ 695:   gap: var(--space-sm);
+ 696:   max-width: 820px;
+ 697:   margin: 0 auto;
+ 698: }
+ 699: 
+ 700: .game-input {
+ 701:   flex: 1;
+ 702:   padding: var(--space-sm) var(--space-md);
+ 703:   background: var(--bg-input);
+ 704:   border: 1px solid rgba(212, 163, 89, 0.3);
+ 705:   border-radius: var(--radius-lg);
+ 706:   color: var(--text-primary);
+ 707:   font-size: var(--fs-base);
+ 708:   box-shadow: var(--shadow-inset);
+ 709:   resize: none;
+ 710:   max-height: 120px;
+ 711:   min-height: 42px;
+ 712:   font-family: var(--font-main);
+ 713:   transition: all var(--transition-fast);
+ 714: }
+ 715: 
+ 716: .game-input:focus {
+ 717:   border-color: var(--accent-gold);
+ 718:   box-shadow: var(--shadow-inset), 0 0 0 2px rgba(212, 163, 89, 0.25);
+ 719: }
+ 720: 
+ 721: .game-input::placeholder {
+ 722:   color: var(--text-muted);
+ 723: }
+ 724: 
+ 725: .game-input:disabled {
+ 726:   opacity: 0.5;
+ 727:   cursor: not-allowed;
+ 728: }
+ 729: 
+ 730: /* ===================== Side Panels (Фолианты и Гримуары) ===================== */
+ 731: .side-panel-overlay {
+ 732:   position: fixed;
+ 733:   inset: 0;
+ 734:   background: rgba(10, 8, 6, 0.75);
+ 735:   backdrop-filter: blur(6px);
+ 736:   -webkit-backdrop-filter: blur(6px);
+ 737:   z-index: var(--z-sidebar);
+ 738:   opacity: 0;
+ 739:   pointer-events: none;
+ 740:   transition: opacity var(--transition-base);
+ 741: }
+ 742: 
+ 743: .side-panel-overlay.open {
+ 744:   opacity: 1;
+ 745:   pointer-events: all;
+ 746: }
+ 747: 
+ 748: .side-panel {
+ 749:   position: fixed;
+ 750:   top: 0;
+ 751:   right: 0;
+ 752:   width: 380px;
+ 753:   max-width: 90vw;
+ 754:   height: 100%;
+ 755:   background: linear-gradient(180deg, #241c16 0%, #18120e 100%);
+ 756:   border-left: 2px solid var(--accent-gold);
+ 757:   box-shadow: -8px 0 35px rgba(0, 0, 0, 0.8);
+ 758:   z-index: calc(var(--z-sidebar) + 1);
+ 759:   transform: translateX(100%);
+ 760:   transition: transform var(--transition-base);
+ 761:   display: flex;
+ 762:   flex-direction: column;
+ 763: }
+ 764: 
+ 765: .side-panel.open {
+ 766:   transform: translateX(0);
+ 767: }
+ 768: 
+ 769: .side-panel-header {
+ 770:   display: flex;
+ 771:   align-items: center;
+ 772:   justify-content: space-between;
+ 773:   padding: var(--space-md) var(--space-lg);
+ 774:   border-bottom: 1px solid rgba(212, 163, 89, 0.25);
+ 775:   background: rgba(18, 14, 11, 0.6);
+ 776: }
+ 777: 
+ 778: .side-panel-header h2 {
+ 779:   font-family: var(--font-heading);
+ 780:   font-size: var(--fs-lg);
+ 781:   font-weight: 700;
+ 782:   color: var(--accent-gold-bright);
+ 783:   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+ 784: }
+ 785: 
+ 786: .side-panel-content {
+ 787:   flex: 1;
+ 788:   overflow-y: auto;
+ 789:   padding: var(--space-lg);
+ 790: }
+ 791: 
+ 792: /* Profile (Грамота авантюриста) */
+ 793: .profile-card {
+ 794:   display: flex;
+ 795:   flex-direction: column;
+ 796:   align-items: center;
+ 797:   gap: var(--space-md);
+ 798: }
+ 799: 
+ 800: .profile-avatar {
+ 801:   width: 84px;
+ 802:   height: 84px;
+ 803:   border-radius: var(--radius-lg);
+ 804:   background: linear-gradient(135deg, #c85a32, #5a3825);
+ 805:   border: 2px solid var(--border-gold);
+ 806:   display: flex;
+ 807:   align-items: center;
+ 808:   justify-content: center;
+ 809:   font-size: 2.6rem;
+ 810:   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 15px rgba(212, 163, 89, 0.25);
+ 811: }
+ 812: 
+ 813: .profile-name {
+ 814:   font-family: var(--font-heading);
+ 815:   font-size: var(--fs-2xl);
+ 816:   font-weight: 700;
+ 817:   color: var(--accent-gold-bright);
+ 818:   text-align: center;
+ 819:   word-break: break-word;
+ 820:   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+ 821: }
+ 822: 
+ 823: .profile-meta {
+ 824:   color: var(--text-secondary);
+ 825:   font-size: var(--fs-base);
+ 826:   text-align: center;
+ 827: }
+ 828: 
+ 829: .profile-section {
+ 830:   margin-top: var(--space-lg);
+ 831:   padding-top: var(--space-lg);
+ 832:   border-top: 1px solid rgba(212, 163, 89, 0.15);
+ 833: }
+ 834: 
+ 835: .profile-section-title {
+ 836:   font-family: var(--font-heading);
+ 837:   font-size: var(--fs-sm);
+ 838:   font-weight: 700;
+ 839:   color: var(--accent-gold);
+ 840:   text-transform: uppercase;
+ 841:   letter-spacing: 0.5px;
+ 842:   margin-bottom: var(--space-md);
+ 843: }
+ 844: 
+ 845: .profile-bio {
+ 846:   font-size: var(--fs-sm);
+ 847:   color: var(--text-secondary);
+ 848:   line-height: 1.7;
+ 849:   white-space: pre-wrap;
+ 850:   word-break: break-word;
+ 851:   background: rgba(18, 14, 11, 0.5);
+ 852:   padding: var(--space-md);
+ 853:   border-radius: var(--radius-md);
+ 854:   border: 1px solid rgba(212, 163, 89, 0.12);
+ 855: }
+ 856: 
+ 857: .profile-injuries {
+ 858:   background: rgba(169, 50, 38, 0.15);
+ 859:   border: 1px solid rgba(169, 50, 38, 0.4);
+ 860:   border-radius: var(--radius-md);
+ 861:   padding: var(--space-md);
+ 862:   font-size: var(--fs-sm);
+ 863:   color: #f1948a;
+ 864: }
+ 865: 
+ 866: /* Stats Grid */
+ 867: .stats-grid {
+ 868:   display: grid;
+ 869:   grid-template-columns: repeat(3, 1fr);
+ 870:   gap: var(--space-sm);
+ 871: }
+ 872: 
+ 873: .stat-item {
+ 874:   background: linear-gradient(180deg, #281f18 0%, #1e1611 100%);
+ 875:   border: 1px solid rgba(212, 163, 89, 0.25);
+ 876:   border-radius: var(--radius-md);
+ 877:   padding: var(--space-sm);
+ 878:   text-align: center;
+ 879:   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+ 880: }
+ 881: 
+ 882: .stat-label {
+ 883:   font-family: var(--font-heading);
+ 884:   font-size: var(--fs-xs);
+ 885:   font-weight: 700;
+ 886:   color: var(--accent-gold);
+ 887:   text-transform: uppercase;
+ 888: }
+ 889: 
+ 890: .stat-value {
+ 891:   font-size: var(--fs-xl);
+ 892:   font-weight: 700;
+ 893:   color: var(--text-primary);
+ 894:   font-family: var(--font-mono);
+ 895: }
+ 896: 
+ 897: .stat-modifier {
+ 898:   font-size: var(--fs-xs);
+ 899:   color: var(--accent-gold-bright);
+ 900: }
+ 901: 
+ 902: /* Inventory (Вещмешок авантюриста) */
+ 903: .inventory-summary {
+ 904:   display: flex;
+ 905:   justify-content: space-between;
+ 906:   padding: var(--space-sm) var(--space-md);
+ 907:   background: rgba(18, 14, 11, 0.7);
+ 908:   border: 1px solid rgba(212, 163, 89, 0.2);
+ 909:   border-radius: var(--radius-md);
+ 910:   margin-bottom: var(--space-md);
+ 911:   font-size: var(--fs-sm);
+ 912:   color: var(--text-secondary);
+ 913: }
+ 914: 
+ 915: .inventory-list {
+ 916:   display: flex;
+ 917:   flex-direction: column;
+ 918:   gap: var(--space-xs);
+ 919: }
+ 920: 
+ 921: .inventory-item {
+ 922:   padding: var(--space-sm) var(--space-md);
+ 923:   background: linear-gradient(180deg, #261e17 0%, #1c1511 100%);
+ 924:   border: 1px solid rgba(212, 163, 89, 0.18);
+ 925:   border-radius: var(--radius-md);
+ 926:   transition: all var(--transition-fast);
+ 927:   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+ 928: }
+ 929: 
+ 930: .inventory-item:hover {
+ 931:   background: linear-gradient(180deg, #32261e 0%, #241b14 100%);
+ 932:   border-color: var(--accent-gold);
+ 933:   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5), 0 0 8px rgba(212, 163, 89, 0.2);
+ 934: }
+ 935: 
+ 936: .inventory-item-name {
+ 937:   font-family: var(--font-heading);
+ 938:   font-weight: 600;
+ 939:   font-size: var(--fs-sm);
+ 940:   color: var(--text-primary);
+ 941: }
+ 942: 
+ 943: .inventory-item-meta {
+ 944:   display: flex;
+ 945:   align-items: center;
+ 946:   gap: var(--space-sm);
+ 947:   font-size: var(--fs-xs);
+ 948:   color: var(--text-muted);
+ 949:   margin-top: 2px;
+ 950: }
+ 951: 
+ 952: /* ===================== NPC Bestiary (Бестиарий и Жители) ===================== */
+ 953: .npc-card {
+ 954:   padding: 0;
+ 955:   overflow: hidden;
+ 956:   background: linear-gradient(180deg, #241c16 0%, #1c1511 100%);
+ 957:   border: 1px solid var(--border-color);
+ 958:   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+ 959: }
+ 960: 
+ 961: .npc-header {
+ 962:   display: flex;
+ 963:   align-items: center;
+ 964:   justify-content: space-between;
+ 965:   padding: var(--space-md);
+ 966:   cursor: pointer;
+ 967:   transition: background var(--transition-fast);
+ 968: }
+ 969: 
+ 970: .npc-header:hover {
+ 971:   background: rgba(212, 163, 89, 0.08);
+ 972: }
+ 973: 
+ 974: .npc-header-info {
+ 975:   display: flex;
+ 976:   align-items: center;
+ 977:   gap: var(--space-sm);
+ 978:   flex: 1;
+ 979:   min-width: 0;
+ 980: }
+ 981: 
+ 982: .npc-role-badge {
+ 983:   display: inline-flex;
+ 984:   align-items: center;
+ 985:   padding: 2px 8px;
+ 986:   border-radius: var(--radius-full);
+ 987:   font-family: var(--font-heading);
+ 988:   font-size: var(--fs-xs);
+ 989:   font-weight: 600;
+ 990:   white-space: nowrap;
+ 991:   flex-shrink: 0;
+ 992: }
+ 993: 
+ 994: .npc-role-main {
+ 995:   background: rgba(200, 90, 50, 0.2);
+ 996:   color: #f39c12;
+ 997:   border: 1px solid rgba(200, 90, 50, 0.4);
+ 998: }
+ 999: 
+1000: .npc-role-secondary {
+1001:   background: rgba(212, 163, 89, 0.12);
+1002:   color: var(--accent-gold);
+1003:   border: 1px solid rgba(212, 163, 89, 0.25);
+1004: }
+1005: 
+1006: .npc-role-tertiary {
+1007:   background: rgba(255, 255, 255, 0.05);
+1008:   color: var(--text-muted);
+1009:   font-style: italic;
+1010: }
+1011: 
+1012: .npc-combat-stats {
+1013:   font-size: var(--fs-xs);
+1014:   color: var(--accent-gold);
+1015:   white-space: nowrap;
+1016:   flex-shrink: 0;
+1017:   font-family: var(--font-mono);
+1018: }
+1019: 
+1020: .npc-name {
+1021:   font-family: var(--font-heading);
+1022:   font-size: var(--fs-base);
+1023:   font-weight: 700;
+1024:   color: var(--text-primary);
+1025:   white-space: nowrap;
+1026:   overflow: hidden;
+1027:   text-overflow: ellipsis;
+1028: }
+1029: 
+1030: .npc-race {
+1031:   font-size: var(--fs-sm);
+1032:   color: var(--text-muted);
+1033:   white-space: nowrap;
+1034:   flex-shrink: 0;
+1035: }
+1036: 
+1037: .npc-category {
+1038:   display: inline-flex;
+1039:   align-items: center;
+1040:   padding: 2px 8px;
+1041:   border-radius: var(--radius-full);
+1042:   font-size: 0.65rem;
+1043:   font-weight: 600;
+1044:   white-space: nowrap;
+1045:   flex-shrink: 0;
+1046: }
+1047: 
+1048: .npc-location {
+1049:   font-size: var(--fs-xs);
+1050:   color: #7fb3d5;
+1051:   white-space: nowrap;
+1052:   flex-shrink: 0;
+1053: }
+1054: 
+1055: .npc-toggle-icon {
+1056:   font-size: var(--fs-xs);
+1057:   color: var(--accent-gold);
+1058:   transition: transform var(--transition-fast);
+1059:   flex-shrink: 0;
+1060:   margin-left: var(--space-sm);
+1061: }
+1062: 
+1063: .npc-card.open .npc-toggle-icon {
+1064:   transform: rotate(180deg);
+1065: }
+1066: 
+1067: /* Bestiary Tabs */
+1068: .bestiary-tabs {
+1069:   display: flex;
+1070:   gap: 0;
+1071:   background: #18120e;
+1072:   border-bottom: 1px solid var(--border-color);
+1073:   margin: 0 -1rem 1rem;
+1074:   padding: 0 1rem;
+1075:   overflow-x: auto;
+1076:   -webkit-overflow-scrolling: touch;
+1077: }
+1078: 
+1079: .bestiary-tabs::-webkit-scrollbar {
+1080:   display: none;
+1081: }
+1082: 
+1083: .bestiary-tab {
+1084:   padding: var(--space-sm) var(--space-md);
+1085:   background: transparent;
+1086:   color: var(--text-secondary);
+1087:   font-family: var(--font-heading);
+1088:   font-weight: 600;
+1089:   font-size: var(--fs-sm);
+1090:   border-bottom: 2px solid transparent;
+1091:   transition: all var(--transition-fast);
+1092:   white-space: nowrap;
+1093:   cursor: pointer;
+1094: }
+1095: 
+1096: .bestiary-tab:hover {
+1097:   color: var(--accent-gold);
+1098:   background: rgba(212, 163, 89, 0.08);
+1099: }
+1100: 
+1101: .bestiary-tab.active {
+1102:   color: var(--accent-gold-bright);
+1103:   border-bottom-color: var(--accent-gold);
+1104:   background: rgba(212, 163, 89, 0.12);
+1105: }
+1106: 
+1107: /* State Cards */
+1108: .state-card {
+1109:   padding: 0;
+1110:   overflow: hidden;
+1111:   background: linear-gradient(180deg, #241c16 0%, #1c1511 100%);
+1112:   border: 1px solid var(--border-color);
+1113:   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+1114: }
+1115: 
+1116: .state-header {
+1117:   display: flex;
+1118:   align-items: center;
+1119:   justify-content: space-between;
+1120:   padding: var(--space-md);
+1121:   cursor: pointer;
+1122:   transition: background var(--transition-fast);
+1123: }
+1124: 
+1125: .state-header:hover {
+1126:   background: rgba(212, 163, 89, 0.08);
+1127: }
+1128: 
+1129: .state-header-info {
+1130:   display: flex;
+1131:   align-items: center;
+1132:   gap: var(--space-md);
+1133:   flex: 1;
+1134: }
+1135: 
+1136: .state-name {
+1137:   font-family: var(--font-heading);
+1138:   font-size: var(--fs-lg);
+1139:   font-weight: 700;
+1140:   color: var(--accent-gold-bright);
+1141: }
+1142: 
+1143: .state-locations-count {
+1144:   font-size: var(--fs-sm);
+1145:   color: var(--text-muted);
+1146: }
+1147: 
+1148: .state-actions {
+1149:   display: flex;
+1150:   align-items: center;
+1151:   gap: var(--space-xs);
+1152: }
+1153: 
+1154: .state-edit-form {
+1155:   padding: var(--space-md);
+1156:   padding-top: 0;
+1157:   border-top: 1px solid rgba(212, 163, 89, 0.15);
+1158: }
+1159: 
+1160: .cities-list {
+1161:   padding: 0 var(--space-md) var(--space-md);
+1162: }
+1163: 
+1164: .city-item {
+1165:   display: flex;
+1166:   align-items: center;
+1167:   justify-content: space-between;
+1168:   padding: var(--space-sm) var(--space-md);
+1169:   background: rgba(18, 14, 11, 0.7);
+1170:   border: 1px solid rgba(212, 163, 89, 0.15);
+1171:   border-radius: var(--radius-md);
+1172:   margin-bottom: var(--space-xs);
+1173: }
+1174: 
+1175: .city-item:hover {
+1176:   background: rgba(212, 163, 89, 0.08);
+1177:   border-color: var(--accent-gold);
+1178: }
+1179: 
+1180: .city-info {
+1181:   display: flex;
+1182:   align-items: center;
+1183:   gap: var(--space-sm);
+1184: }
+1185: 
+1186: .city-type-icon {
+1187:   font-size: var(--fs-base);
+1188: }
+1189: 
+1190: .city-name {
+1191:   font-family: var(--font-heading);
+1192:   font-weight: 600;
+1193:   font-size: var(--fs-sm);
+1194: }
+1195: 
+1196: .city-type {
+1197:   font-size: var(--fs-xs);
+1198:   color: var(--text-muted);
+1199:   text-transform: uppercase;
+1200: }
+1201: 
+1202: .city-actions {
+1203:   display: flex;
+1204:   gap: var(--space-xs);
+1205: }
+1206: 
+1207: .state-card.open .npc-toggle-icon {
+1208:   transform: rotate(180deg);
+1209: }
+1210: 
+1211: /* Generation Status */
+1212: .gen-status {
+1213:   border: 1px solid var(--border-gold);
+1214:   background: linear-gradient(180deg, #281f18 0%, #1e1713 100%);
+1215: }
+1216: 
+1217: .gen-status-header {
+1218:   display: flex;
+1219:   justify-content: space-between;
+1220:   align-items: center;
+1221:   margin-bottom: 0.5rem;
+1222: }
+1223: 
+1224: .gen-status-text {
+1225:   font-size: var(--fs-sm);
+1226:   font-weight: 600;
+1227:   color: var(--accent-gold);
+1228: }
+1229: 
+1230: .gen-status-progress {
+1231:   font-size: var(--fs-sm);
+1232:   font-weight: 700;
+1233:   color: var(--accent-gold-bright);
+1234: }
+1235: 
+1236: .gen-progress-bar {
+1237:   width: 100%;
+1238:   height: 8px;
+1239:   background: var(--bg-input);
+1240:   border-radius: var(--radius-full);
+1241:   overflow: hidden;
+1242:   box-shadow: var(--shadow-inset);
+1243: }
+1244: 
+1245: .gen-progress-fill {
+1246:   height: 100%;
+1247:   background: linear-gradient(90deg, var(--accent-primary), var(--accent-gold));
+1248:   border-radius: var(--radius-full);
+1249:   box-shadow: 0 0 10px rgba(212, 163, 89, 0.5);
+1250:   transition: width 0.3s ease;
+1251: }
+1252: 
+1253: /* Schema Modal */
+1254: .schema-content {
+1255:   font-size: var(--fs-sm);
+1256: }
+1257: 
+1258: .schema-section {
+1259:   margin-bottom: 1rem;
+1260:   padding-bottom: 1rem;
+1261:   border-bottom: 1px solid rgba(212, 163, 89, 0.15);
+1262: }
+1263: 
+1264: .schema-section:last-child {
+1265:   border-bottom: none;
+1266: }
+1267: 
+1268: .schema-section h4 {
+1269:   font-family: var(--font-heading);
+1270:   font-size: var(--fs-base);
+1271:   font-weight: 700;
+1272:   color: var(--accent-gold-bright);
+1273:   margin-bottom: 0.5rem;
+1274: }
+1275: 
+1276: .schema-section ul {
+1277:   list-style: none;
+1278:   padding: 0;
+1279: }
+1280: 
+1281: .schema-section li {
+1282:   padding: 0.25rem 0;
+1283:   color: var(--text-secondary);
+1284: }
+1285: 
+1286: .schema-section li strong {
+1287:   color: var(--accent-gold);
+1288: }
+1289: 
+1290: .code-example {
+1291:   background: var(--bg-input);
+1292:   border: 1px solid rgba(212, 163, 89, 0.2);
+1293:   padding: var(--space-md);
+1294:   border-radius: var(--radius-md);
+1295:   font-family: var(--font-mono);
+1296:   font-size: var(--fs-xs);
+1297:   color: var(--accent-gold);
+1298:   overflow-x: auto;
+1299:   white-space: pre-wrap;
+1300:   word-break: break-all;
+1301:   box-shadow: var(--shadow-inset);
+1302: }
+1303: 
+1304: .npc-edit-form {
+1305:   padding: var(--space-md);
+1306:   padding-top: 0;
+1307:   border-top: 1px solid rgba(212, 163, 89, 0.15);
+1308: }
+1309: 
+1310: .npc-form-grid {
+1311:   display: grid;
+1312:   grid-template-columns: 1fr 1fr;
+1313:   gap: var(--space-md);
+1314: }
+1315: 
+1316: .npc-actions {
+1317:   display: flex;
+1318:   gap: var(--space-sm);
+1319:   margin-top: var(--space-md);
+1320:   flex-wrap: wrap;
+1321: }
+1322: 
+1323: .npc-actions .btn {
+1324:   flex: 1;
+1325:   min-width: 120px;
+1326: }
+1327: 
+1328: #createNpcForm {
+1329:   border: 1px solid var(--border-gold);
+1330:   border-radius: var(--radius-lg);
+1331:   background: linear-gradient(180deg, #241c16 0%, #1c1511 100%);
+1332: }
+1333: 
+1334: .session-players-preview {
+1335:   display: flex;
+1336:   flex-direction: column;
+1337:   gap: var(--space-sm);
+1338: }
+1339: 
+1340: .session-player-chips {
+1341:   display: flex;
+1342:   flex-wrap: wrap;
+1343:   gap: var(--space-xs);
+1344: }
+1345: 
+1346: .player-chip {
+1347:   display: inline-flex;
+1348:   align-items: center;
+1349:   gap: 6px;
+1350:   padding: var(--space-xs) var(--space-md);
+1351:   background: rgba(18, 14, 11, 0.7);
+1352:   border-radius: var(--radius-full);
+1353:   font-size: var(--fs-sm);
+1354:   color: var(--text-secondary);
+1355:   white-space: nowrap;
+1356:   border: 1px solid rgba(212, 163, 89, 0.2);
+1357:   transition: all var(--transition-fast);
+1358: }
+1359: 
+1360: .player-chip:hover {
+1361:   border-color: var(--accent-gold);
+1362:   background: rgba(212, 163, 89, 0.1);
+1363:   color: var(--accent-gold-bright);
+1364: }
+1365: 
+1366: .player-chip-self {
+1367:   background: rgba(200, 90, 50, 0.15);
+1368:   color: var(--accent-gold-bright);
+1369:   border-color: rgba(200, 90, 50, 0.4);
+1370: }
+1371: 
+1372: /* Character Select Grid */
+1373: .char-select-grid {
+1374:   display: grid;
+1375:   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+1376:   gap: var(--space-md);
+1377: }
+1378: 
+1379: .char-select-card {
+1380:   cursor: default;
+1381:   padding: var(--space-lg);
+1382:   display: flex;
+1383:   flex-direction: column;
+1384: }
+1385: 
+1386: .char-select-card:hover {
+1387:   border-color: var(--accent-gold);
+1388:   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6), 0 0 12px rgba(212, 163, 89, 0.2);
+1389: }
+1390: 
+1391: .char-select-card .card-header {
+1392:   margin-bottom: var(--space-sm);
+1393: }
+1394: 
+1395: .char-select-bio {
+1396:   font-size: var(--fs-sm);
+1397:   color: var(--text-muted);
+1398:   line-height: 1.6;
+1399:   display: -webkit-box;
+1400:   -webkit-line-clamp: 3;
+1401:   -webkit-box-orient: vertical;
+1402:   overflow: hidden;
+1403:   flex: 1;
+1404: }
+1405: 
+1406: .char-select-actions {
+1407:   margin-top: var(--space-md);
+1408:   display: flex;
+1409:   flex-direction: column;
+1410:   gap: var(--space-sm);
+1411: }
+1412: 
+1413: /* File Drop Zone (Сюжетный свиток) */
+1414: .plot-details {
+1415:   border: 1px solid var(--border-color);
+1416:   border-radius: var(--radius-lg);
+1417:   overflow: hidden;
+1418:   background: rgba(18, 14, 11, 0.5);
+1419: }
+1420: 
+1421: .plot-summary {
+1422:   padding: var(--space-sm) var(--space-md);
+1423:   cursor: pointer;
+1424:   font-family: var(--font-heading);
+1425:   font-weight: 600;
+1426:   font-size: var(--fs-sm);
+1427:   color: var(--accent-gold);
+1428:   display: flex;
+1429:   align-items: center;
+1430:   gap: var(--space-sm);
+1431:   transition: background var(--transition-fast);
+1432: }
+1433: 
+1434: .plot-summary:hover {
+1435:   background: rgba(212, 163, 89, 0.08);
+1436:   color: var(--accent-gold-bright);
+1437: }
+1438: 
+1439: .plot-summary::marker {
+1440:   color: var(--accent-gold);
+1441: }
+1442: 
+1443: .plot-body {
+1444:   padding: 0 var(--space-md) var(--space-md);
+1445: }
+1446: 
+1447: .file-drop-zone {
+1448:   border: 2px dashed rgba(212, 163, 89, 0.35);
+1449:   border-radius: var(--radius-lg);
+1450:   padding: var(--space-lg);
+1451:   text-align: center;
+1452:   color: var(--text-muted);
+1453:   cursor: pointer;
+1454:   background: rgba(18, 14, 11, 0.6);
+1455:   transition: all var(--transition-fast);
+1456: }
+1457: 
+1458: .file-drop-zone:hover,
+1459: .file-drop-zone.dragover {
+1460:   border-color: var(--accent-gold-bright);
+1461:   background: rgba(212, 163, 89, 0.08);
+1462:   color: var(--accent-gold);
+1463: }
+1464: 
+1465: .file-drop-icon {
+1466:   font-size: 2.2rem;
+1467:   margin-bottom: var(--space-sm);
+1468:   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+1469: }
+1470: 
+1471: .file-drop-zone p {
+1472:   font-size: var(--fs-sm);
+1473:   line-height: 1.5;
+1474: }
+1475: 
+1476: .file-list {
+1477:   display: flex;
+1478:   flex-direction: column;
+1479:   gap: var(--space-xs);
+1480:   margin-top: var(--space-sm);
+1481: }
+1482: 
+1483: .file-item {
+1484:   display: flex;
+1485:   align-items: center;
+1486:   justify-content: space-between;
+1487:   padding: var(--space-xs) var(--space-sm);
+1488:   background: rgba(18, 14, 11, 0.7);
+1489:   border: 1px solid rgba(212, 163, 89, 0.2);
+1490:   border-radius: var(--radius-md);
+1491:   font-size: var(--fs-sm);
+1492: }
+1493: 
+1494: /* ===================== NPC Relationships & Memories Panel ===================== */
+1495: .npc-rel-card {
+1496:   background: linear-gradient(180deg, #261e17 0%, #1c1511 100%);
+1497:   border: 1px solid var(--border-color);
+1498:   border-radius: var(--radius-md);
+1499:   padding: var(--space-md);
+1500:   margin-bottom: var(--space-md);
+1501:   display: flex;
+1502:   flex-direction: column;
+1503:   gap: var(--space-sm);
+1504:   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+1505:   transition: border-color var(--transition-fast);
+1506: }
+1507: 
+1508: .npc-rel-card:hover {
+1509:   border-color: var(--accent-gold);
+1510: }
+1511: 
+1512: .npc-rel-header {
+1513:   display: flex;
+1514:   justify-content: space-between;
+1515:   align-items: flex-start;
+1516:   gap: var(--space-sm);
+1517: }
+1518: 
+1519: .npc-rel-name {
+1520:   font-family: var(--font-heading);
+1521:   font-weight: 700;
+1522:   font-size: var(--fs-base);
+1523:   color: var(--accent-gold-bright);
+1524: }
+1525: 
+1526: .npc-rel-meta {
+1527:   font-size: var(--fs-xs);
+1528:   color: var(--text-muted);
+1529: }
+1530: 
+1531: .npc-tier-badge {
+1532:   font-family: var(--font-heading);
+1533:   font-size: var(--fs-xs);
+1534:   font-weight: 600;
+1535:   padding: 2px 8px;
+1536:   border-radius: 9999px;
+1537:   white-space: nowrap;
+1538: }
+1539: 
+1540: .rel-bar-wrapper {
+1541:   display: flex;
+1542:   flex-direction: column;
+1543:   gap: 4px;
+1544: }
+1545: 
+1546: .rel-bar-labels {
+1547:   display: flex;
+1548:   justify-content: space-between;
+1549:   font-size: var(--fs-xs);
+1550:   color: var(--text-muted);
+1551: }
+1552: 
+1553: .rel-bar-track {
+1554:   height: 8px;
+1555:   background: rgba(14, 10, 8, 0.85);
+1556:   border: 1px solid rgba(212, 163, 89, 0.2);
+1557:   border-radius: 4px;
+1558:   position: relative;
+1559:   overflow: hidden;
+1560:   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+1561: }
+1562: 
+1563: .rel-bar-center-marker {
+1564:   position: absolute;
+1565:   left: 50%;
+1566:   top: 0;
+1567:   bottom: 0;
+1568:   width: 2px;
+1569:   background: rgba(212, 163, 89, 0.5);
+1570:   z-index: 2;
+1571: }
+1572: 
+1573: .rel-bar-fill {
+1574:   height: 100%;
+1575:   position: absolute;
+1576:   border-radius: 4px;
+1577:   transition: width 0.3s ease, left 0.3s ease;
+1578: }
+1579: 
+1580: .npc-status-tags {
+1581:   display: flex;
+1582:   flex-wrap: wrap;
+1583:   gap: 4px;
+1584:   margin-top: 2px;
+1585: }
+1586: 
+1587: .npc-tag {
+1588:   font-size: 0.7rem;
+1589:   padding: 1px 6px;
+1590:   background: rgba(212, 163, 89, 0.1);
+1591:   border: 1px solid rgba(212, 163, 89, 0.25);
+1592:   border-radius: 4px;
+1593:   color: var(--text-secondary);
+1594: }
+1595: 
+1596: .npc-memories-toggle {
+1597:   width: 100%;
+1598:   display: flex;
+1599:   align-items: center;
+1600:   justify-content: space-between;
+1601:   padding: var(--space-xs) var(--space-sm);
+1602:   background: rgba(18, 14, 11, 0.6);
+1603:   border: 1px solid rgba(212, 163, 89, 0.2);
+1604:   border-radius: var(--radius-sm);
+1605:   font-size: var(--fs-xs);
+1606:   color: var(--text-secondary);
+1607:   cursor: pointer;
+1608:   transition: all var(--transition-fast);
+1609: }
+1610: 
+1611: .npc-memories-toggle:hover {
+1612:   background: rgba(212, 163, 89, 0.1);
+1613:   color: var(--accent-gold-bright);
+1614: }
+1615: 
+1616: .npc-memories-body {
+1617:   display: flex;
+1618:   flex-direction: column;
+1619:   gap: var(--space-xs);
+1620:   margin-top: var(--space-xs);
+1621:   padding: var(--space-sm);
+1622:   background: rgba(12, 9, 7, 0.85);
+1623:   border-radius: var(--radius-sm);
+1624:   font-size: var(--fs-xs);
+1625:   border: 1px solid rgba(212, 163, 89, 0.12);
+1626: }
+1627: 
+1628: .memory-item {
+1629:   padding: var(--space-xs) var(--space-sm);
+1630:   border-radius: 4px;
+1631:   background: rgba(212, 163, 89, 0.05);
+1632:   border-left: 3px solid #94a3b8;
+1633:   display: flex;
+1634:   flex-direction: column;
+1635:   gap: 2px;
+1636: }
+1637: 
+1638: .memory-item.vivid {
+1639:   border-left-color: var(--accent-gold-bright);
+1640:   background: rgba(212, 163, 89, 0.1);
+1641: }
+1642: 
+1643: .memory-item.belief {
+1644:   border-left-color: #a855f7;
+1645:   background: rgba(168, 85, 247, 0.08);
+1646: }
+1647: 
+1648: .memory-item.impression {
+1649:   border-left-color: #06b6d4;
+1650:   background: rgba(6, 182, 212, 0.06);
+1651: }
+1652: 
+1653: .memory-item-header {
+1654:   display: flex;
+1655:   justify-content: space-between;
+1656:   align-items: center;
+1657:   font-size: 0.7rem;
+1658:   color: var(--text-muted);
+1659: }
+1660: 
+1661: .memory-item-text {
+1662:   color: var(--text-primary);
+1663:   line-height: 1.45;
+1664:   font-style: italic;
+1665: }
+1666: 
+1667: /* ===================== Responsive (Mobile & Tablet) ===================== */
+1668: @media (max-width: 768px) {
+1669:   .lobby-header {
+1670:     flex-wrap: wrap;
+1671:     padding: var(--space-sm) var(--space-md);
+1672:     gap: var(--space-sm);
+1673:   }
+1674: 
+1675:   .lobby-header-left {
+1676:     flex: 1 1 auto;
+1677:     min-width: 0;
+1678:     gap: var(--space-sm);
+1679:   }
+1680: 
+1681:   .lobby-title {
+1682:     font-size: var(--fs-base);
+1683:     white-space: nowrap;
+1684:   }
+1685: 
+1686:   .lobby-tabs {
+1687:     padding: 0 var(--space-md);
+1688:     overflow-x: auto;
+1689:     -webkit-overflow-scrolling: touch;
+1690:   }
+1691: 
+1692:   .lobby-tabs::-webkit-scrollbar {
+1693:     display: none;
+1694:   }
+1695: 
+1696:   .lobby-tab {
+1697:     padding: var(--space-sm) var(--space-md);
+1698:     font-size: var(--fs-sm);
+1699:     white-space: nowrap;
+1700:   }
+1701: 
+1702:   .lobby-content {
+1703:     padding: var(--space-md);
+1704:   }
+1705: 
+1706:   .card-grid {
+1707:     grid-template-columns: 1fr;
+1708:   }
+1709: 
+1710:   /* Side Panel Mobile */
+1711:   .side-panel {
+1712:     width: 100%;
+1713:     max-width: 100%;
+1714:   }
+1715: 
+1716:   .side-panel-header {
+1717:     padding: var(--space-sm) var(--space-md);
+1718:     min-height: 50px;
+1719:   }
+1720: 
+1721:   .side-panel-header .btn-icon {
+1722:     width: 40px;
+1723:     height: 40px;
+1724:   }
+1725: 
+1726:   .side-panel-content {
+1727:     padding: var(--space-md);
+1728:     -webkit-overflow-scrolling: touch;
+1729:   }
+1730: 
+1731:   /* Stats Grid Mobile */
+1732:   .stats-grid {
+1733:     grid-template-columns: repeat(3, 1fr);
+1734:   }
+1735: 
+1736:   /* Game Header Mobile (768px) */
+1737:   .game-header-top {
+1738:     padding: 6px var(--space-sm);
+1739:     gap: var(--space-xs);
+1740:     min-height: 46px;
+1741:   }
+1742: 
+1743:   .game-header-center,
+1744:   .game-header-hero {
+1745:     gap: 6px;
+1746:     min-width: 0;
+1747:   }
+1748: 
+1749:   .game-header-name {
+1750:     max-width: 120px;
+1751:     font-size: var(--fs-xs);
+1752:   }
+1753: 
+1754:   .hp-bar-container {
+1755:     max-width: 100px;
+1756:     height: 8px;
+1757:   }
+1758: 
+1759:   .game-header-hp {
+1760:     min-width: auto;
+1761:     font-size: 0.7rem;
+1762:   }
+1763: 
+1764:   .game-header-actions {
+1765:     gap: 3px;
+1766:   }
+1767: 
+1768:   .game-header-actions .btn-icon {
+1769:     width: 36px;
+1770:     height: 36px;
+1771:     font-size: 0.95rem;
+1772:   }
+1773: 
+1774:   .game-status-bar {
+1775:     padding: 3px var(--space-sm) 5px var(--space-sm);
+1776:     gap: 6px;
+1777:   }
+1778: 
+1779:   .game-header-location {
+1780:     font-size: 0.72rem;
+1781:     padding: 2px 8px;
+1782:     max-width: 58%;
+1783:   }
+1784: 
+1785:   .game-header-time {
+1786:     font-size: 0.72rem;
+1787:     padding: 2px 8px;
+1788:     max-width: 42%;
+1789:   }
+1790: 
+1791:   /* Auth Mobile */
+1792:   .auth-container {
+1793:     padding: var(--space-xl) var(--space-md);
+1794:   }
+1795: 
+1796:   .btn-google {
+1797:     font-size: var(--fs-base);
+1798:   }
+1799: 
+1800:   .char-select-grid {
+1801:     grid-template-columns: 1fr;
+1802:   }
+1803: 
+1804:   .profile-avatar {
+1805:     width: 68px;
+1806:     height: 68px;
+1807:     font-size: 2.1rem;
+1808:   }
+1809: 
+1810:   .profile-name {
+1811:     font-size: var(--fs-xl);
+1812:   }
+1813: 
+1814:   .npc-header {
+1815:     padding: var(--space-sm) var(--space-md);
+1816:   }
+1817: 
+1818:   .npc-header-info {
+1819:     gap: var(--space-xs);
+1820:   }
+1821: 
+1822:   .npc-role-badge {
+1823:     font-size: 0.65rem;
+1824:     padding: 2px 6px;
+1825:   }
+1826: 
+1827:   .npc-name {
+1828:     font-size: var(--fs-sm);
+1829:   }
+1830: 
+1831:   .npc-race {
+1832:     font-size: var(--fs-xs);
+1833:   }
+1834: 
+1835:   .npc-edit-form {
+1836:     padding: var(--space-sm);
+1837:     padding-top: 0;
+1838:   }
+1839: 
+1840:   .npc-form-grid {
+1841:     grid-template-columns: 1fr;
+1842:     gap: var(--space-sm);
+1843:   }
+1844: 
+1845:   .npc-actions {
+1846:     flex-direction: column;
+1847:   }
+1848: 
+1849:   .npc-actions .btn {
+1850:     min-height: 42px;
+1851:   }
+1852: }
+1853: 
+1854: @media (max-width: 480px) {
+1855:   .lobby-header-left .badge {
+1856:     display: none;
+1857:   }
+1858: 
+1859:   .lobby-header-right .btn {
+1860:     padding: var(--space-xs) 6px;
+1861:   }
+1862: 
+1863:   .lobby-title {
+1864:     font-size: var(--fs-sm);
+1865:   }
+1866: 
+1867:   .lobby-tab {
+1868:     padding: var(--space-sm) var(--space-sm);
+1869:     font-size: var(--fs-xs);
+1870:   }
+1871: 
+1872:   /* Game header compact (<=480px) */
+1873:   .game-header-top {
+1874:     padding: 4px 6px;
+1875:     min-height: 42px;
+1876:     gap: 4px;
+1877:   }
+1878: 
+1879:   .game-header-center,
+1880:   .game-header-hero {
+1881:     gap: 4px;
+1882:     min-width: 0;
+1883:   }
+1884: 
+1885:   .game-header-name {
+1886:     max-width: 78px;
+1887:     font-size: 0.75rem;
+1888:   }
+1889: 
+1890:   .hp-bar-container {
+1891:     max-width: 60px;
+1892:     height: 6px;
+1893:   }
+1894: 
+1895:   .game-header-hp {
+1896:     min-width: auto;
+1897:     font-size: 0.65rem;
+1898:   }
+1899: 
+1900:   .game-header-actions {
+1901:     gap: 2px;
+1902:   }
+1903: 
+1904:   .game-header-actions .btn-icon {
+1905:     width: 32px;
+1906:     height: 32px;
+1907:     font-size: 0.85rem;
+1908:   }
+1909: 
+1910:   .game-status-bar {
+1911:     padding: 2px 6px 4px 6px;
+1912:     gap: 4px;
+1913:   }
+1914: 
+1915:   .game-header-location {
+1916:     font-size: 0.68rem;
+1917:     padding: 2px 6px;
+1918:     max-width: 58%;
+1919:   }
+1920: 
+1921:   .game-header-time {
+1922:     font-size: 0.68rem;
+1923:     padding: 2px 6px;
+1924:     max-width: 42%;
+1925:   }
+1926: 
+1927:   /* Chat messages tighter */
+1928:   .game-chat {
+1929:     padding: var(--space-xs) var(--space-sm);
+1930:   }
+1931: 
+1932:   .chat-messages {
+1933:     gap: var(--space-sm);
+1934:   }
+1935: 
+1936:   .message-avatar {
+1937:     width: 32px;
+1938:     height: 32px;
+1939:     font-size: 1rem;
+1940:     border-radius: var(--radius-sm);
+1941:   }
+1942: 
+1943:   .message-text {
+1944:     font-size: 0.875rem;
+1945:     line-height: 1.6;
+1946:   }
+1947: 
+1948:   /* Input compact & safe area */
+1949:   .game-input-area {
+1950:     padding: var(--space-xs) var(--space-sm) max(var(--space-xs), env(safe-area-inset-bottom, 8px)) var(--space-sm);
+1951:   }
+1952: 
+1953:   .game-input {
+1954:     font-size: 0.875rem;
+1955:     padding: var(--space-xs) var(--space-sm);
+1956:     min-height: 38px;
+1957:   }
+1958: 
+1959:   .game-input-wrapper .btn-primary {
+1960:     min-width: 38px;
+1961:     min-height: 38px;
+1962:     padding: 0;
+1963:     display: inline-flex;
+1964:     align-items: center;
+1965:     justify-content: center;
+1966:   }
+1967: 
+1968:   /* Character creation */
+1969:   .stats-grid {
+1970:     gap: var(--space-xs);
+1971:   }
+1972: 
+1973:   .stat-item {
+1974:     padding: var(--space-xs);
+1975:   }
+1976: 
+1977:   .stat-value {
+1978:     font-size: var(--fs-lg);
+1979:   }
+1980: 
+1981:   /* NPC Cards Small Mobile */
+1982:   .npc-header-info {
+1983:     flex-wrap: wrap;
+1984:   }
+1985: 
+1986:   .npc-race {
+1987:     display: none;
+1988:   }
+1989: 
+1990:   .npc-category {
+1991:     font-size: 0.6rem;
+1992:   }
+1993: 
+1994:   .npc-location {
+1995:     font-size: 0.6rem;
+1996:     width: 100%;
+1997:     margin-top: 2px;
+1998:   }
+1999: 
+2000:   /* Bestiary Tabs Mobile */
+2001:   .bestiary-tab {
+2002:     padding: var(--space-xs) var(--space-sm);
+2003:     font-size: var(--fs-xs);
+2004:   }
+2005: 
+2006:   /* State Cards Mobile */
+2007:   .state-header {
+2008:     padding: var(--space-sm);
+2009:   }
+2010: 
+2011:   .state-header-info {
+2012:     gap: var(--space-sm);
+2013:   }
+2014: 
+2015:   .state-name {
+2016:     font-size: var(--fs-base);
+2017:   }
+2018: 
+2019:   .state-actions .btn {
+2020:     padding: var(--space-xs);
+2021:     font-size: var(--fs-xs);
+2022:   }
+2023: 
+2024:   .city-item {
+2025:     padding: var(--space-xs) var(--space-sm);
+2026:   }
+2027: 
+2028:   .city-name {
+2029:     font-size: var(--fs-xs);
+2030:   }
+2031: }
 
 ================
 File: supabase/functions/process-turn/steps/step4_system_truth.ts
@@ -31051,24 +31277,24 @@ File: src/pages/lobby.js
   87:       <div class="page">
   88:         <header class="lobby-header">
   89:           <div class="lobby-header-left">
-  90:             <h1 class="lobby-title">⚔️ MultiRP AI</h1>
-  91:             <span class="badge badge-primary">${user.email}</span>
+  90:             <h1 class="lobby-title">🕯️ Зал Гильдии Приключенцев</h1>
+  91:             <span class="badge badge-gold" title="Странник">${user.email}</span>
   92:           </div>
   93:           <div class="lobby-header-right">
-  94:             <button class="btn btn-ghost" id="accountSettingsBtn">⚙️ Аккаунт</button>
-  95:             <button class="btn btn-ghost" id="signOutBtn">Выйти</button>
+  94:             <button class="btn btn-ghost" id="accountSettingsBtn">⚙️ Настройки</button>
+  95:             <button class="btn btn-ghost" id="signOutBtn">Выйти из таверны</button>
   96:           </div>
   97:         </header>
   98: 
   99:         <nav class="lobby-tabs">
  100:           <button class="lobby-tab ${activeTab === 'sessions' ? 'active' : ''}" data-tab="sessions">
- 101:             🎮 Сессии (${sessions.length})
+ 101:             📜 Походы и Сессии (${sessions.length})
  102:           </button>
  103:           <button class="lobby-tab ${activeTab === 'characters' ? 'active' : ''}" data-tab="characters">
- 104:             ⚔️ Персонажи (${characterCards.length})
+ 104:             ⚔️ Герои Гильдии (${characterCards.length})
  105:           </button>
  106:           <button class="lobby-tab ${activeTab === 'worlds' ? 'active' : ''}" data-tab="worlds">
- 107:             🌍 Миры (${worlds.length})
+ 107:             🗺️ Карты Миров (${worlds.length})
  108:           </button>
  109:         </nav>
  110: 

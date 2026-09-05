@@ -64,7 +64,7 @@ describe("SearchHandler & LootSearchHandler: No dummy 'находка' items", (
       acting_player: {
         id: "player-vlad",
         name: "Влад",
-        stats: { INT: 12 },
+        stats: { INT: 30 },
       },
       session: { difficulty: "easy" },
       targets: {

@@ -87,24 +87,24 @@ export function renderLobby(container, user) {
       <div class="page">
         <header class="lobby-header">
           <div class="lobby-header-left">
-            <h1 class="lobby-title">⚔️ MultiRP AI</h1>
-            <span class="badge badge-primary">${user.email}</span>
+            <h1 class="lobby-title">🕯️ Зал Гильдии Приключенцев</h1>
+            <span class="badge badge-gold" title="Странник">${user.email}</span>
           </div>
           <div class="lobby-header-right">
-            <button class="btn btn-ghost" id="accountSettingsBtn">⚙️ Аккаунт</button>
-            <button class="btn btn-ghost" id="signOutBtn">Выйти</button>
+            <button class="btn btn-ghost" id="accountSettingsBtn">⚙️ Настройки</button>
+            <button class="btn btn-ghost" id="signOutBtn">Выйти из таверны</button>
           </div>
         </header>
 
         <nav class="lobby-tabs">
           <button class="lobby-tab ${activeTab === 'sessions' ? 'active' : ''}" data-tab="sessions">
-            🎮 Сессии (${sessions.length})
+            📜 Походы и Сессии (${sessions.length})
           </button>
           <button class="lobby-tab ${activeTab === 'characters' ? 'active' : ''}" data-tab="characters">
-            ⚔️ Персонажи (${characterCards.length})
+            ⚔️ Герои Гильдии (${characterCards.length})
           </button>
           <button class="lobby-tab ${activeTab === 'worlds' ? 'active' : ''}" data-tab="worlds">
-            🌍 Миры (${worlds.length})
+            🗺️ Карты Миров (${worlds.length})
           </button>
         </nav>
 

@@ -1,31 +1,47 @@
-/* src/styles/variables.css — CSS Custom Properties (Тема) */
+/* src/styles/variables.css — Дизайн-система фэнтезийной таверны («Путник и Дракон») */
 :root {
-  /* Цветовая палитра — Тёмное фэнтези */
-  --bg-primary: #0f0e17;
-  --bg-secondary: #1a1a2e;
-  --bg-tertiary: #16213e;
-  --bg-card: #1e2a3a;
-  --bg-input: #0d1b2a;
-  --bg-hover: #25344a;
+  /* Цветовая палитра — Теплая таверна, мореный дуб, латунь и каминное пламя */
+  --bg-primary: #15110e;        /* Глубокий оттенок темного дуба */
+  --bg-secondary: #1e1713;      /* Полированный мореный дуб */
+  --bg-tertiary: #281f19;       /* Деревянная обшивка стен таверны */
+  --bg-card: #221a14;           /* Планшет / пергамент на дубовой подложке */
+  --bg-input: #120e0b;          /* Углубленный темный слот в дереве */
+  --bg-hover: #33271f;          /* Теплый отсвет камина */
+  --bg-parchment: #f4ecd8;      /* Светлый состаренный пергамент */
+  --bg-parchment-dark: #2a2018; /* Темный пергамент для хроники */
 
-  --accent-primary: #e94560;
-  --accent-secondary: #0f3460;
-  --accent-gold: #f0a500;
-  --accent-success: #2ecc71;
-  --accent-danger: #e74c3c;
-  --accent-info: #3498db;
+  /* Акценты: Пламя очага, червонное золото, сургуч и целебные травы */
+  --accent-primary: #c85a32;    /* Теплый янтарь / каминный огонь */
+  --accent-primary-hover: #dc6a3f;
+  --accent-secondary: #5a3825;  /* Выделанная седельная кожа */
+  --accent-gold: #d4a359;       /* Чеканное античное золото */
+  --accent-gold-bright: #f3c87a;/* Яркий золотой отблеск */
+  --accent-gold-dark: #9b7235;  /* Состаренная темная бронза */
+  --accent-success: #388e3c;    /* Травяной изумруд / исцеление */
+  --accent-danger: #a93226;     /* Королевский сургуч / урон */
+  --accent-crimson: #8b1e1f;    /* Кровь и жизненная сила (HP) */
+  --accent-info: #3b7a9e;       /* Рунический синий / магическая мана */
+  --accent-warning: #d97706;    /* Янтарный воск */
 
-  --text-primary: #eaeaea;
-  --text-secondary: #a0a0b0;
-  --text-muted: #6b6b7b;
-  --text-accent: #e94560;
+  /* Текст: пергаментные и чернильные оттенки */
+  --text-primary: #f5eedc;      /* Теплый светлый пергамент */
+  --text-secondary: #c5b6a3;    /* Состаренная бумага */
+  --text-muted: #857565;        /* Древесная зола */
+  --text-accent: #d4a359;       /* Золотое тиснение */
+  --text-gold: #f3c87a;         /* Золотое свечение */
+  --text-dark: #1e1713;         /* Темные чернила для светлых плашек */
 
-  --border-color: #2a2a3e;
-  --border-accent: #e94560;
+  /* Рамки и филигрань */
+  --border-color: rgba(212, 163, 89, 0.22);  /* Латунная окантовка */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-accent: #d4a359;                  /* Золотая кайма */
+  --border-gold: rgba(212, 163, 89, 0.45);   /* Чеканное золото */
+  --border-wood: #3d2f25;                    /* Стык дубовых досок */
 
   /* Типографика */
   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-heading: 'Cinzel', 'Playfair Display', serif;
+  --font-heading: 'Cinzel', 'MedievalSharp', 'Georgia', serif;
+  --font-story: 'MedievalSharp', 'Cinzel', 'Georgia', serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
   --fs-xs: 0.75rem;
@@ -48,19 +64,21 @@
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --radius-xl: 20px;
+  --radius-xl: 18px;
   --radius-full: 9999px;
 
-  /* Тени */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(233, 69, 96, 0.3);
+  /* Тени и теплое каминное свечение */
+  --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 18px rgba(212, 163, 89, 0.25);
+  --shadow-hearth: 0 0 24px rgba(200, 90, 50, 0.2);
+  --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.6);
 
   /* Анимации */
-  --transition-fast: 150ms ease;
-  --transition-base: 250ms ease;
-  --transition-slow: 400ms ease;
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* z-index */
   --z-header: 100;

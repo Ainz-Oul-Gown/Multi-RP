@@ -1695,74 +1695,7 @@ export async function renderGame(container, sessionId, user) {
   }
 
     // Character creation / selection screen
-  function renderCharacterCreation() {
-    // Try to load existing cards
-    getCharacterCards(user.id).then((cards) => {
-      const cardsEl = document.getElementById('existingCardsList');
-      if (cardsEl && cards.length) {
-        cardsEl.innerHTML = cards.map((c) => {
-          const stats = c.stats || {};
-          const total = Object.values(stats).reduce((s, v) => s + (v || 0), 0);
-          return `
-            <div class="card char-select-card" data-card-id="${c.id}">
-              <div class="card-header">
-                <h3 style="font-weight: 700;">⚔️ ${c.name}</h3>
-                <span class="badge badge-info">${c.race} / ${c.class}</span>
-              </div>
-              <p class="form-hint">❤️ ${c.hp}/${c.max_hp} &nbsp;•&nbsp; 💰 ${c.money} &nbsp;•&nbsp; 📊 ${total}</p>
-              <p class="char-select-bio">${c.bio || 'Без биографии'}</p>
-              <div class="char-select-actions">
-                <button class="btn btn-primary char-select-btn" data-card-id="${c.id}">Выбрать этого героя</button>
-              </div>
-            </div>
-          `;
-        }).join('');
-
-        // Select existing card handler - inside callback where cards is in scope
-        cardsEl.querySelectorAll('.char-select-btn').forEach((btn) => {
-          btn.addEventListener('click', async () => {
-            const cardId = btn.dataset.cardId;
-            try {
-              const card = cards.find((c) => c.id === cardId);
-              if (!card) return;
-
-              console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
-
-              currentPlayer = await createPlayer({
-                session_id: sessionId,
-                user_id: user.id,
-                name: card.name,
-                race: card.race,
-                class: card.class,
-                appearance: card.appearance,
-                bio: card.bio,
-                personality: card.personality || {},
-                power_level: card.power_level,
-                stats: card.stats || {},
-                hp: calculateHpFromStats(card.stats),
-                max_hp: calculateHpFromStats(card.stats),
-                money: card.money,
-                ...calculateDerivedStats(card.stats, card.race || 'Человек', [], getRaceAcBonus(card.race)),
-              });
-
-              console.log('[character-card] player created:', currentPlayer.id);
-              allPlayers.push(currentPlayer);
-              await initTurnQueue(sessionId, allPlayers);
-              await checkTurnQueue();
-              toast.success(`Герой «${card.name}» выбран!`);
-              render();
-              subscribeRealtime();
-            } catch (err) {
-              console.error('[character-card] select error:', err);
-              toast.error('Ошибка: ' + err.message);
-            }
-          });
-        });
-      } else if (cardsEl) {
-        cardsEl.innerHTML = '<p class="text-muted" style="text-align: center;">У вас пока нет карточек. Создайте нового героя ниже.</p>';
-      }
-    });
-
+  async function renderCharacterCreation() {
     container.innerHTML = `
       <div class="page page-centered">
         <div class="card" style="max-width: 600px; width: 100%;">
@@ -1826,6 +1759,83 @@ export async function renderGame(container, sessionId, user) {
         </div>
       </div>
     `;
+
+    // Load existing cards after DOM elements are created
+    try {
+      const cards = await getCharacterCards(user.id);
+      const cardsEl = document.getElementById('existingCardsList');
+      if (cardsEl) {
+        if (cards && cards.length > 0) {
+          cardsEl.innerHTML = cards.map((c) => {
+            const stats = c.stats || {};
+            const total = Object.values(stats).reduce((s, v) => s + (v || 0), 0);
+            return `
+              <div class="card char-select-card" data-card-id="${c.id}">
+                <div class="card-header">
+                  <h3 style="font-weight: 700;">⚔️ ${c.name}</h3>
+                  <span class="badge badge-info">${c.race} / ${c.class}</span>
+                </div>
+                <p class="form-hint">❤️ ${c.hp}/${c.max_hp} &nbsp;•&nbsp; 💰 ${c.money} &nbsp;•&nbsp; 📊 ${total}</p>
+                <p class="char-select-bio">${c.bio || 'Без биографии'}</p>
+                <div class="char-select-actions">
+                  <button class="btn btn-primary char-select-btn" data-card-id="${c.id}">Выбрать этого героя</button>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          cardsEl.querySelectorAll('.char-select-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const cardId = btn.dataset.cardId;
+              try {
+                const card = cards.find((c) => c.id === cardId);
+                if (!card) return;
+
+                console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
+
+                currentPlayer = await createPlayer({
+                  session_id: sessionId,
+                  user_id: user.id,
+                  name: card.name,
+                  race: card.race,
+                  class: card.class,
+                  appearance: card.appearance,
+                  bio: card.bio,
+                  personality: card.personality || {},
+                  power_level: card.power_level,
+                  stats: card.stats || {},
+                  hp: calculateHpFromStats(card.stats),
+                  max_hp: calculateHpFromStats(card.stats),
+                  money: card.money,
+                  ...calculateDerivedStats(card.stats, card.race || 'Человек', [], getRaceAcBonus(card.race)),
+                });
+
+                console.log('[character-card] player created:', currentPlayer.id);
+                allPlayers.push(currentPlayer);
+                await initTurnQueue(sessionId, allPlayers);
+                await checkTurnQueue();
+                toast.success(`Герой «${card.name}» выбран!`);
+                render();
+                subscribeRealtime();
+              } catch (err) {
+                console.error('[character-card] select error:', err);
+                toast.error('Ошибка: ' + err.message);
+              }
+            });
+          });
+        } else {
+          cardsEl.innerHTML = '<p class="text-muted" style="text-align: center;">У вас пока нет карточек. Создайте нового героя ниже.</p>';
+        }
+      }
+    } catch (err) {
+      console.warn('[character-creation] Failed to load cards:', err);
+      const cardsEl = document.getElementById('existingCardsList');
+      if (cardsEl) {
+        cardsEl.innerHTML = '<p class="text-muted" style="text-align: center;">Не удалось загрузить сохранённые карточки. Создайте нового героя ниже.</p>';
+      }
+    }
+
+
 
     // Create new character
     document.getElementById('createCharacterForm')?.addEventListener('submit', async (e) => {

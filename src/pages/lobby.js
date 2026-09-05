@@ -98,13 +98,13 @@ export function renderLobby(container, user) {
 
         <nav class="lobby-tabs">
           <button class="lobby-tab ${activeTab === 'sessions' ? 'active' : ''}" data-tab="sessions">
-            📜 Походы и Сессии (${sessions.length})
+            📜 Сессии (${sessions.length})
           </button>
           <button class="lobby-tab ${activeTab === 'characters' ? 'active' : ''}" data-tab="characters">
-            ⚔️ Герои Гильдии (${characterCards.length})
+            ⚔️ Персонажи (${characterCards.length})
           </button>
           <button class="lobby-tab ${activeTab === 'worlds' ? 'active' : ''}" data-tab="worlds">
-            🗺️ Карты Миров (${worlds.length})
+            🗺️ Миры (${worlds.length})
           </button>
         </nav>
 
@@ -842,7 +842,7 @@ export function renderLobby(container, user) {
         <div class="empty-state">
           <div class="empty-icon">🎮</div>
           <h3>Нет активных сессий</h3>
-          <p>Создайте новую сессию или подключитесь к существующей</p>
+          <p>Создайте новую сессию или перейдите во вкладку <strong>«Персонажи»</strong>, чтобы выбрать или настроить героя</p>
           <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
             <button class="btn btn-primary btn-lg" id="newSessionBtn">+ Новая сессия</button>
             <button class="btn btn-secondary btn-lg" id="joinSessionBtn">🔗 Присоединиться</button>

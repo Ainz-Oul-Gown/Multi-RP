@@ -328,22 +328,26 @@ export async function renderGame(container, sessionId, user) {
       <div class="game-page">
         <!-- Header -->
         <header class="game-header">
-          <button class="btn btn-ghost btn-icon" id="backBtn" title="Лобби">←</button>
-          <div class="game-header-center">
-            <span class="game-header-name">${currentPlayer?.name || 'Герой'}</span>
-            <div class="hp-bar-container">
-              <div class="hp-bar ${hpClass}" style="width: ${hpPercent}%"></div>
+          <div class="game-header-top">
+            <button class="btn btn-ghost btn-icon" id="backBtn" title="Лобби" aria-label="Вернуться в лобби">←</button>
+            <div class="game-header-center game-header-hero">
+              <span class="game-header-name" title="${currentPlayer?.name || 'Герой'}">${currentPlayer?.name || 'Герой'}</span>
+              <div class="hp-bar-container" title="HP: ${currentPlayer?.hp || 0}/${currentPlayer?.max_hp || 0}">
+                <div class="hp-bar ${hpClass}" style="width: ${hpPercent}%"></div>
+              </div>
+              <span class="game-header-hp">${currentPlayer?.hp || 0}/${currentPlayer?.max_hp || 0}</span>
             </div>
-            <span class="game-header-hp">${currentPlayer?.hp || 0}/${currentPlayer?.max_hp || 0}</span>
-            ${timeStr ? `<span class="game-header-time">🕐 ${timeStr}</span>` : ''}
-            ${locationStr ? `<span class="game-header-location">📍 ${locationStr}</span>` : ''}
+            <div class="game-header-actions">
+              <button class="btn btn-ghost btn-icon" id="storyBtn" title="Сюжет" aria-label="Сюжет">📖</button>
+              <button class="btn btn-ghost btn-icon" id="profileBtn" title="Профиль" aria-label="Профиль">👤</button>
+              <button class="btn btn-ghost btn-icon" id="inventoryBtn" title="Инвентарь" aria-label="Инвентарь">🎒</button>
+              <button class="btn btn-ghost btn-icon" id="npcBtn" title="Окружение и NPC" aria-label="Окружение и NPC">👥</button>
+              <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Настройки" aria-label="Настройки">⚙️</button>
+            </div>
           </div>
-          <div class="game-header-actions">
-            <button class="btn btn-ghost btn-icon" id="storyBtn" title="Сюжет">📖</button>
-            <button class="btn btn-ghost btn-icon" id="profileBtn" title="Профиль">👤</button>
-            <button class="btn btn-ghost btn-icon" id="inventoryBtn" title="Инвентарь">🎒</button>
-            <button class="btn btn-ghost btn-icon" id="npcBtn" title="Окружение и NPC">👥</button>
-            <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Настройки">⚙️</button>
+          <div class="game-status-bar" id="gameStatusBar">
+            <span class="game-header-location" title="${locationStr || ''}" ${!locationStr ? 'style="display:none;"' : ''}>📍 ${locationStr || ''}</span>
+            <span class="game-header-time" title="${timeStr || ''}" ${!timeStr ? 'style="display:none;"' : ''}>🕐 ${timeStr || ''}</span>
           </div>
         </header>
 
@@ -1630,18 +1634,20 @@ export async function renderGame(container, sessionId, user) {
     if (locStr) {
       if (locEl) {
         locEl.textContent = `📍 ${locStr}`;
+        locEl.title = locStr;
+        locEl.style.display = '';
       } else {
-        // Span doesn't exist yet — inject it after time span or after hp span
-        const center = document.querySelector('.game-header-center');
-        if (center) {
+        const statusBar = document.querySelector('.game-status-bar') || document.querySelector('.game-header-center');
+        if (statusBar) {
           const span = document.createElement('span');
           span.className = 'game-header-location';
           span.textContent = `📍 ${locStr}`;
-          center.appendChild(span);
+          span.title = locStr;
+          statusBar.prepend(span);
         }
       }
     } else if (locEl) {
-      locEl.remove();
+      locEl.style.display = 'none';
     }
 
     const timeEl = document.querySelector('.game-header-time');
@@ -1651,8 +1657,23 @@ export async function renderGame(container, sessionId, user) {
     const hour = session?.game_hour ?? session?.game_time?.hour ?? 10;
     const minute = session?.game_minute ?? session?.game_time?.minute ?? 0;
     const timeStr = formatGameCalendarDate(day, month, year, hour, minute);
-    if (timeStr && timeEl) {
-      timeEl.textContent = `🕐 ${timeStr}`;
+    if (timeStr) {
+      if (timeEl) {
+        timeEl.textContent = `🕐 ${timeStr}`;
+        timeEl.title = timeStr;
+        timeEl.style.display = '';
+      } else {
+        const statusBar = document.querySelector('.game-status-bar') || document.querySelector('.game-header-center');
+        if (statusBar) {
+          const span = document.createElement('span');
+          span.className = 'game-header-time';
+          span.textContent = `🕐 ${timeStr}`;
+          span.title = timeStr;
+          statusBar.appendChild(span);
+        }
+      }
+    } else if (timeEl) {
+      timeEl.style.display = 'none';
     }
   }
 

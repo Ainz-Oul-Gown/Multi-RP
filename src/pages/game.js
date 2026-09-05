@@ -329,7 +329,9 @@ export async function renderGame(container, sessionId, user) {
         <!-- Header -->
         <header class="game-header">
           <div class="game-header-top">
-            <button class="btn btn-ghost btn-icon" id="backBtn" title="Лобби" aria-label="Вернуться в лобби">←</button>
+            <button class="btn btn-ghost btn-icon" id="backBtn" title="В лобби" aria-label="Вернуться в лобби">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
             <div class="game-header-center game-header-hero">
               <span class="game-header-name" title="${currentPlayer?.name || 'Герой'}">${currentPlayer?.name || 'Герой'}</span>
               <div class="hp-bar-container" title="HP: ${currentPlayer?.hp || 0}/${currentPlayer?.max_hp || 0}">
@@ -338,16 +340,32 @@ export async function renderGame(container, sessionId, user) {
               <span class="game-header-hp">${currentPlayer?.hp || 0}/${currentPlayer?.max_hp || 0}</span>
             </div>
             <div class="game-header-actions">
-              <button class="btn btn-ghost btn-icon" id="storyBtn" title="Сюжет" aria-label="Сюжет">📖</button>
-              <button class="btn btn-ghost btn-icon" id="profileBtn" title="Профиль" aria-label="Профиль">👤</button>
-              <button class="btn btn-ghost btn-icon" id="inventoryBtn" title="Инвентарь" aria-label="Инвентарь">🎒</button>
-              <button class="btn btn-ghost btn-icon" id="npcBtn" title="Окружение и NPC" aria-label="Окружение и NPC">👥</button>
-              <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Настройки" aria-label="Настройки">⚙️</button>
+              <button class="btn btn-ghost btn-icon" id="storyBtn" title="Сюжет" aria-label="Сюжет">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-icon" id="profileBtn" title="Профиль героя" aria-label="Профиль">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-icon" id="inventoryBtn" title="Инвентарь" aria-label="Инвентарь">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-icon" id="npcBtn" title="NPC и Окружение" aria-label="Окружение и NPC">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Настройки" aria-label="Настройки">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </button>
             </div>
           </div>
           <div class="game-status-bar" id="gameStatusBar">
-            <span class="game-header-location" title="${locationStr || ''}" ${!locationStr ? 'style="display:none;"' : ''}>📍 ${locationStr || ''}</span>
-            <span class="game-header-time" title="${timeStr || ''}" ${!timeStr ? 'style="display:none;"' : ''}>🕐 ${timeStr || ''}</span>
+            <span class="game-header-location" title="${locationStr || ''}" ${!locationStr ? 'style="display:none;"' : ''}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span>${locationStr || ''}</span>
+            </span>
+            <span class="game-header-time" title="${timeStr || ''}" ${!timeStr ? 'style="display:none;"' : ''}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>${timeStr || ''}</span>
+            </span>
           </div>
         </header>
 

@@ -378,20 +378,21 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-primary);
+  overflow-x: hidden;
+  position: relative;
 }
 
 .game-header {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(32, 24, 19, 0.96) 0%, rgba(22, 17, 13, 0.96) 100%);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: linear-gradient(180deg, #251d17 0%, #1c1511 100%);
   border-bottom: 1px solid var(--border-gold);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.65);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.65);
   z-index: var(--z-header);
   position: sticky;
   top: 0;
   width: 100%;
+  overflow: hidden;
 }
 
 .game-header-top {
@@ -470,30 +471,42 @@
 .game-header-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .game-header-actions .btn-icon {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  background: rgba(212, 163, 89, 0.06);
-  border: 1px solid rgba(212, 163, 89, 0.2);
-  color: var(--text-primary);
+  background: rgba(212, 163, 89, 0.08);
+  border: 1px solid rgba(212, 163, 89, 0.28);
+  color: var(--accent-gold-bright);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.game-header-actions .btn-icon svg {
+  stroke: var(--accent-gold-bright);
+  transition: stroke var(--transition-fast), transform var(--transition-fast);
+  display: block;
 }
 
 .game-header-actions .btn-icon:hover {
-  background: rgba(212, 163, 89, 0.16);
-  border-color: var(--accent-gold);
-  color: var(--accent-gold-bright);
-  box-shadow: 0 0 10px rgba(212, 163, 89, 0.3);
+  background: rgba(212, 163, 89, 0.22);
+  border-color: var(--accent-gold-bright);
+  box-shadow: 0 0 10px rgba(212, 163, 89, 0.35);
   transform: translateY(-1px);
+}
+
+.game-header-actions .btn-icon:hover svg {
+  stroke: #fff;
+  transform: scale(1.08);
 }
 
 .game-header-actions .btn-icon:active {
@@ -507,45 +520,50 @@
   justify-content: space-between;
   gap: var(--space-sm);
   padding: 4px var(--space-md) 6px var(--space-md);
-  background: rgba(18, 14, 11, 0.75);
-  border-top: 1px solid rgba(212, 163, 89, 0.12);
+  background: rgba(16, 12, 9, 0.95);
+  border-top: 1px solid rgba(212, 163, 89, 0.15);
 }
 
 .game-header-location {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-size: var(--fs-xs);
   color: #f5b041;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 58%;
-  background: rgba(200, 90, 50, 0.15);
+  max-width: 55%;
+  background: rgba(200, 90, 50, 0.18);
   border-radius: var(--radius-full);
   padding: 2px 10px;
   border: 1px solid rgba(212, 163, 89, 0.35);
   font-weight: 600;
   letter-spacing: 0.2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .game-header-time {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-size: var(--fs-xs);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 42%;
+  max-width: 45%;
   flex-shrink: 0;
-  background: rgba(212, 163, 89, 0.08);
+  background: rgba(212, 163, 89, 0.12);
   border-radius: var(--radius-full);
   padding: 2px 10px;
-  border: 1px solid rgba(212, 163, 89, 0.22);
+  border: 1px solid rgba(212, 163, 89, 0.28);
   font-weight: 500;
+}
+
+.game-header-location svg,
+.game-header-time svg {
+  stroke: var(--accent-gold-bright);
+  flex-shrink: 0;
 }
 
 /* ===================== Chat Area (Хроника приключений) ===================== */
@@ -731,18 +749,18 @@
 .side-panel-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(10, 8, 6, 0.75);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(10, 8, 6, 0.78);
   z-index: var(--z-sidebar);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--transition-base);
+  visibility: hidden;
+  transition: opacity var(--transition-base), visibility var(--transition-base);
 }
 
 .side-panel-overlay.open {
   opacity: 1;
   pointer-events: all;
+  visibility: visible;
 }
 
 .side-panel {
@@ -754,16 +772,21 @@
   height: 100%;
   background: linear-gradient(180deg, #241c16 0%, #18120e 100%);
   border-left: 2px solid var(--accent-gold);
-  box-shadow: -8px 0 35px rgba(0, 0, 0, 0.8);
+  box-shadow: none;
   z-index: calc(var(--z-sidebar) + 1);
   transform: translateX(100%);
-  transition: transform var(--transition-base);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform var(--transition-base), visibility var(--transition-base), box-shadow var(--transition-base);
   display: flex;
   flex-direction: column;
 }
 
 .side-panel.open {
   transform: translateX(0);
+  box-shadow: -8px 0 35px rgba(0, 0, 0, 0.85);
+  visibility: visible;
+  pointer-events: all;
 }
 
 .side-panel-header {
@@ -1766,9 +1789,13 @@
   }
 
   .game-header-actions .btn-icon {
-    width: 36px;
-    height: 36px;
-    font-size: 0.95rem;
+    width: 32px;
+    height: 32px;
+  }
+
+  .game-header-actions .btn-icon svg {
+    width: 16px;
+    height: 16px;
   }
 
   .game-status-bar {
@@ -1902,9 +1929,14 @@
   }
 
   .game-header-actions .btn-icon {
-    width: 32px;
-    height: 32px;
-    font-size: 0.85rem;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+  }
+
+  .game-header-actions .btn-icon svg {
+    width: 14px;
+    height: 14px;
   }
 
   .game-status-bar {
@@ -1915,13 +1947,13 @@
   .game-header-location {
     font-size: 0.68rem;
     padding: 2px 6px;
-    max-width: 58%;
+    max-width: 52%;
   }
 
   .game-header-time {
     font-size: 0.68rem;
     padding: 2px 6px;
-    max-width: 42%;
+    max-width: 48%;
   }
 
   /* Chat messages tighter */

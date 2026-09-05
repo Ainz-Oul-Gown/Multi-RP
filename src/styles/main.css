@@ -492,15 +492,17 @@ code {
 /* ===================== Toast Notifications ===================== */
 .toast-container {
   position: fixed;
-  top: var(--space-lg);
+  bottom: var(--space-xl);
   right: var(--space-lg);
   z-index: var(--z-toast);
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: var(--space-sm);
+  pointer-events: none;
 }
 
 .toast {
+  pointer-events: auto;
   background: linear-gradient(180deg, #271f19 0%, #1e1713 100%);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -672,7 +674,8 @@ code {
   }
 
   .toast-container {
-    top: var(--space-sm);
+    bottom: 85px;
+    top: auto;
     right: var(--space-sm);
     left: var(--space-sm);
   }

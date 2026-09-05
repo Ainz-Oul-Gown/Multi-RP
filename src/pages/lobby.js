@@ -1506,10 +1506,10 @@ export function renderLobby(container, user) {
       const dm = document.getElementById('dmModelInput');
       const gps = document.getElementById('gpsModelInput');
       const sat = document.getElementById('satelliteModelInput');
-      if (card) card.value = 'meta-llama/llama-3.3-70b-instruct:free';
-      if (dm) dm.value = 'meta-llama/llama-3.3-70b-instruct:free';
-      if (gps) gps.value = 'google/gemini-2.5-flash:free';
-      if (sat) sat.value = 'meta-llama/llama-3.3-70b-instruct:free';
+      if (card) card.value = 'google/gemma-4-31b-it:free';
+      if (dm) dm.value = 'minimax/minimax-m3:free';
+      if (gps) gps.value = 'google/gemma-4-31b-it:free';
+      if (sat) sat.value = 'google/gemma-4-31b-it:free';
       toast.info('Применен пресет: 🆓 Полностью бесплатно ($0)');
     });
 
@@ -1518,9 +1518,9 @@ export function renderLobby(container, user) {
       const dm = document.getElementById('dmModelInput');
       const gps = document.getElementById('gpsModelInput');
       const sat = document.getElementById('satelliteModelInput');
-      if (card) card.value = 'meta-llama/llama-3.3-70b-instruct:free';
+      if (card) card.value = 'google/gemma-4-31b-it:free';
       if (dm) dm.value = 'openai/gpt-4o-mini';
-      if (gps) gps.value = 'meta-llama/llama-3.3-70b-instruct:free';
+      if (gps) gps.value = 'google/gemma-4-31b-it:free';
       if (sat) sat.value = 'google/gemini-flash-1.5';
       toast.info('Применен пресет: ⚡ Оптимум (~$0.50 / 1000 ходов)');
     });
@@ -1550,10 +1550,10 @@ export function renderLobby(container, user) {
       const saveBtn = document.getElementById('saveAccountSettingsBtn');
       
       const key = keyInput?.value?.trim() || '';
-      const cardModel = cardModelSelect?.value || 'xiaomi/mimo-v2.5';
-      const dmModel = dmModelSelect?.value || 'xiaomi/mimo-v2.5';
-      const gpsModel = gpsModelSelect?.value || 'xiaomi/mimo-v2.5';
-      const satelliteModel = satelliteModelSelect?.value || 'xiaomi/mimo-v2.5';
+      const cardModel = cardModelSelect?.value || 'google/gemma-4-31b-it:free';
+      const dmModel = dmModelSelect?.value || 'minimax/minimax-m3:free';
+      const gpsModel = gpsModelSelect?.value || 'google/gemma-4-31b-it:free';
+      const satelliteModel = satelliteModelSelect?.value || 'google/gemma-4-31b-it:free';
       
       console.log('Saving settings:', { cardModel, dmModel, gpsModel, satelliteModel });
       

@@ -396,6 +396,15 @@ export function renderLobby(container, user) {
              </span>
            </div>
 
+           <div style="margin-bottom: 1.25rem; padding: 0.85rem; background: rgba(255,255,255,0.04); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+             <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-muted, #94a3b8);">⚡ Быстрые пресеты связок:</div>
+             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+               <button type="button" class="btn btn-secondary btn-sm" id="presetFreeBtn" title="Все роли на качественных бесплатных моделях OpenRouter">🆓 Бесплатно ($0)</button>
+               <button type="button" class="btn btn-secondary btn-sm" id="presetOptimumBtn" title="Минимум затрат (~$0.50/1000 ходов) при максимальном интеллекте парсера и нарратора">⚡ Оптимум (Топ)</button>
+               <button type="button" class="btn btn-secondary btn-sm" id="presetMaxBtn" title="Премиум-качество с Claude 3.5 Haiku и GPT-4o Mini">👑 Максимум</button>
+             </div>
+           </div>
+
            <div class="form-group" style="margin-bottom: 1rem;">
              <label class="form-label">Модель для генерации карточек</label>
              <select class="input" id="cardModelInput">
@@ -1488,6 +1497,43 @@ export function renderLobby(container, user) {
     document.getElementById('copyUserIdBtn')?.addEventListener('click', () => {
       navigator.clipboard.writeText(user.id);
       toast.success('ID скопирован!');
+    });
+
+    // Preset buttons for model selection
+    document.getElementById('presetFreeBtn')?.addEventListener('click', () => {
+      const card = document.getElementById('cardModelInput');
+      const dm = document.getElementById('dmModelInput');
+      const gps = document.getElementById('gpsModelInput');
+      const sat = document.getElementById('satelliteModelInput');
+      if (card) card.value = 'meta-llama/llama-3.3-70b-instruct:free';
+      if (dm) dm.value = 'meta-llama/llama-3.3-70b-instruct:free';
+      if (gps) gps.value = 'google/gemini-2.5-flash:free';
+      if (sat) sat.value = 'meta-llama/llama-3.3-70b-instruct:free';
+      toast.info('Применен пресет: 🆓 Полностью бесплатно ($0)');
+    });
+
+    document.getElementById('presetOptimumBtn')?.addEventListener('click', () => {
+      const card = document.getElementById('cardModelInput');
+      const dm = document.getElementById('dmModelInput');
+      const gps = document.getElementById('gpsModelInput');
+      const sat = document.getElementById('satelliteModelInput');
+      if (card) card.value = 'meta-llama/llama-3.3-70b-instruct:free';
+      if (dm) dm.value = 'openai/gpt-4o-mini';
+      if (gps) gps.value = 'meta-llama/llama-3.3-70b-instruct:free';
+      if (sat) sat.value = 'google/gemini-flash-1.5';
+      toast.info('Применен пресет: ⚡ Оптимум (~$0.50 / 1000 ходов)');
+    });
+
+    document.getElementById('presetMaxBtn')?.addEventListener('click', () => {
+      const card = document.getElementById('cardModelInput');
+      const dm = document.getElementById('dmModelInput');
+      const gps = document.getElementById('gpsModelInput');
+      const sat = document.getElementById('satelliteModelInput');
+      if (card) card.value = 'openai/gpt-4o-mini';
+      if (dm) dm.value = 'anthropic/claude-3-5-haiku';
+      if (gps) gps.value = 'google/gemini-flash-1.5';
+      if (sat) sat.value = 'google/gemini-flash-1.5';
+      toast.info('Применен пресет: 👑 Максимальное качество');
     });
 
     // Save account settings

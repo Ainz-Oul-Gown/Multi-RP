@@ -356,26 +356,48 @@ export async function parsePlayerIntent(
     try {
       console.log(`[step1_router] Attempt ${attempt + 1}/${retries}, model: ${resolvedModel}`);
 
-      const modelList = [resolvedModel, "google/gemini-2.0-flash-001", "meta-llama/llama-3.3-70b-instruct"];
+      const modelList = [
+        resolvedModel,
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen3-235b-a22b:free",
+        "google/gemini-2.5-flash:free",
+      ];
       const currentModel = modelList[attempt % modelList.length] || resolvedModel;
 
-      const response = await fetch(OPENROUTER_URL, {
+      const requestPayload: Record<string, any> = {
+        model: currentModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        temperature: 0.2,
+        max_tokens: 1000,
+        response_format: { type: "json_object" },
+      };
+
+      let response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${resolvedApiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: currentModel,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-          temperature: 0.2,
-          max_tokens: 1000,
-        }),
+        body: JSON.stringify(requestPayload),
         signal: AbortSignal.timeout(15000),
       });
+
+      // Fallback: если модель не поддерживает response_format (HTTP 400), пробуем без него
+      if (response.status === 400) {
+        delete requestPayload.response_format;
+        response = await fetch(OPENROUTER_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${resolvedApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestPayload),
+          signal: AbortSignal.timeout(15000),
+        });
+      }
 
       if (!response.ok) {
         const errorText = await response.text();

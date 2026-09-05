@@ -43,6 +43,11 @@ export interface NpcContextSummary {
   name: string;
   race?: string;
   role?: string;
+  appearance?: string | null;
+  background?: string | null;
+  habits?: string | null;
+  catchphrases?: string[];
+  current_activity?: string | null;
   status_tags?: string[];
   relationship_score?: number;
   relationship_tier?: string;
@@ -82,6 +87,9 @@ export interface SystemTruthDto {
     category?: string;
     status_tags?: string[];
     is_hostile?: boolean;
+    appearance?: string | null;
+    current_activity?: string | null;
+    catchphrases?: string[];
   }>;
   npc_context: Record<string, NpcContextSummary>;
   encounter_alert: {
@@ -143,6 +151,11 @@ export interface SystemTruthInputContext {
     status_tags?: string[];
     is_alive?: boolean;
     is_hostile?: boolean;
+    appearance?: string | null;
+    background?: string | null;
+    habits?: string | null;
+    catchphrases?: string[];
+    current_activity?: string | null;
   }>;
   // Атмосфера
   atmosphere: { sounds: string[]; visuals: string[] };
@@ -618,6 +631,11 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         name: npc?.name || "NPC",
         race: npc?.race || "Гуманоид",
         role: npc?.role || "Обыватель",
+        appearance: (npc as any)?.appearance || null,
+        background: (npc as any)?.background || null,
+        habits: (npc as any)?.habits || null,
+        catchphrases: Array.isArray((npc as any)?.catchphrases) ? (npc as any).catchphrases : [],
+        current_activity: (npc as any)?.current_activity || null,
         status_tags: statusTags,
         relationship_score: score,
         relationship_tier: tier,
@@ -643,6 +661,9 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
       category: n.category || "npc",
       status_tags: n.status_tags || [],
       is_hostile: n.is_hostile || false,
+      appearance: (n as any).appearance || null,
+      current_activity: (n as any).current_activity || null,
+      catchphrases: Array.isArray((n as any).catchphrases) ? (n as any).catchphrases : [],
     }));
 
   return {

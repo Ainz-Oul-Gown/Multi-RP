@@ -66,11 +66,27 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
    - Вставляй короткие теги в скобках [Навык: Успех], [Получен предмет: ...], [Выброшен предмет: ...], [Урон: N] ИСКЛЮЧИТЕЛЬНО на основе фактов из knowledge.
    - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО выдумывать проверки, которых не было (например, НИКОГДА не вставляй [Скрытность: Успех], если игрок не совершал проверку скрытности в knowledge!).
 5. ЖИВЫЕ NPC В ЛОКАЦИИ (present_npcs):
-   - Если в SystemTruthDto передан массив present_npcs (NPC, находящиеся в данной локации), и игрок осматривается вокруг, гуляет, ищет кого-то, прибыл на место или просто находится в городе/поселении — ОБЯЗАТЕЛЬНО упомяни и опиши присутствующих NPC (их внешность, занятие, реакцию на героя), чтобы мир не казался вымершим!
+   - Каждый NPC имеет current_activity — ВСЕГДА показывай их занятыми делом: кузнец бьёт молотом, торговка зазывает покупателей, стражник лениво опирается на алебарду.
+   - Если есть appearance — опиши NPC через одну-две яркие физические детали (не весь список!).
+   - NPC не смотрят в пустоту и не стоят статично. Они реагируют краем взгляда, продолжают дело или переговариваются.
    - КРИТИЧЕСКИ ВАЖНО: НИКОГДА не перемещай NPC в локации, где их нет! Если игрок в лесу, горах, пещере или дикой зоне — в тексте могут быть ТОЛЬКО его спутники из отряда либо дикие обитатели/враги. Городские жители, торговцы и ремесленники остаются в городе и не появляются в глухом лесу!
 6. Используй atmosphere (звуки, визуальные образы) и погоду для создания глубокого погружения.
-7. Используй npc_context: характер NPC, шкалу отношений (-100..+100), статус-теги и прошлые воспоминания. При общении NPC должен говорить и действовать в соответствии со своим характером.
-8. Стиль: Тёмное фэнтези / ЛитРПГ. Лаконично (1–3 ёмких абзаца на игрока).
+7. ХАРАКТЕР И ОТНОШЕНИЯ NPC (npc_context):
+   - Используй habits для описания манеры поведения NPC (как держится, как говорит, мелкие жесты).
+   - Если есть catchphrases — вплети одну характерную фразу в диалог NPC органично, не цитируя списком.
+   - background влияет на подтекст и манеру речи: бывший солдат говорит кратко и сухо; торговец льстит и преувеличивает.
+   - Шкала отношений (relationship_score) СТРОГО определяет тон диалога:
+     • -100..-30 = враждебно, грубо, с угрозами или презрением;
+     • -29..+29  = нейтрально, формально, осторожно;
+     • +30..+69  = тепло, дружелюбно, охотно отвечает и шутит;
+     • +70..+100 = как со старым проверенным другом или союзником, готов выручить и делится секретами.
+   - Если NPC враждебен (is_hostile=true): он атакует, угрожает или проявляет агрессию — он НЕ может внезапно помочь игроку без веской причины.
+8. СТРУКТУРА ОТВЕТА (строго соблюдать):
+   ▸ АБЗАЦ 1 — «КАРТИНА»: Сенсорное погружение. Что видит, слышит, чувствует игрок прямо сейчас. 2–3 предложения. Запахи, текстуры, звуки, освещение. НЕ начинай с имени героя.
+   ▸ АБЗАЦ 2 — «ДЕЙСТВИЕ»: Физическое описание того, что произошло согласно ФАКТАМ. Только то, что есть в knowledge. 2–4 предложения. При успехе навыка — описывай уверенность и мастерство. При провале — напряжение, случайность, непредвиденное препятствие.
+   ▸ АБЗАЦ 3 — «МИР ОТВЕЧАЕТ» (если есть NPC, событие или диалог): Реакция мира, окружающих людей или природы. NPC говорит своими словами в соответствии с характером и уровнем отношений. 1–3 предложения.
+
+   МИНИМУМ 120 слов на игрока. Используй активный залог, конкретные и живые глаголы. ЗАПРЕЩЕНО начинать два абзаца подряд с одного и того же слова.
 9. Ответ СТРОГО в формате JSON без markdown-обёрток (без \`\`\`json):
 
 {
@@ -166,20 +182,109 @@ export function buildFallbackNarrative(systemTruth: SystemTruthDto): NarratorOut
 }
 
 // ============================================
+// Преобразование SystemTruthDto в чистый нарративный контекст
+// ============================================
+export function buildNarratorContext(system_truth: SystemTruthDto, action_text: string): string {
+  const t = system_truth.environment.time;
+  const lines: string[] = [];
+
+  lines.push(`ДЕЙСТВИЕ ИГРОКА: "${action_text}"`);
+  lines.push(`МЕСТО: ${system_truth.environment.location_name} | ВРЕМЯ: ${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`);
+
+  if (system_truth.environment.atmosphere.sounds.length > 0 || system_truth.environment.atmosphere.visuals.length > 0) {
+    const sounds = system_truth.environment.atmosphere.sounds.join(", ");
+    const visuals = system_truth.environment.atmosphere.visuals.join(", ");
+    lines.push(`АТМОСФЕРА — ${sounds ? `Звуки: ${sounds}` : ""}${sounds && visuals ? " | " : ""}${visuals ? `Визуальные детали: ${visuals}` : ""}`);
+  }
+  if (system_truth.environment.weather) {
+    lines.push(`ПОГОДА: ${system_truth.environment.weather}`);
+  }
+
+  lines.push("");
+  lines.push("ФАКТЫ ЭТОГО ХОДА (только эти факты переводить в художественный текст!):");
+  for (const [pid, truth] of Object.entries(system_truth.player_truths)) {
+    lines.push(`[Игрок ${pid}]`);
+    if (truth.knowledge.length > 0) {
+      truth.knowledge.forEach((k) => lines.push(`  • ${k}`));
+    } else {
+      lines.push(`  • Ничего особенного не произошло, персонаж осматривается или выжидает.`);
+    }
+    if (truth.hp_status.delta !== 0) {
+      const sign = truth.hp_status.delta > 0 ? "+" : "";
+      lines.push(`  • HP: ${truth.hp_status.current}/${truth.hp_status.max} (${sign}${truth.hp_status.delta})`);
+    }
+    if (truth.inventory_delta.added.length > 0) {
+      lines.push(`  • Получено: ${truth.inventory_delta.added.join(", ")}`);
+    }
+    if (truth.inventory_delta.removed.length > 0) {
+      lines.push(`  • Утрачено: ${truth.inventory_delta.removed.join(", ")}`);
+    }
+    if (truth.inventory_delta.damaged.length > 0) {
+      lines.push(`  • Повреждено: ${truth.inventory_delta.damaged.join(", ")}`);
+    }
+  }
+
+  if (system_truth.global_events.length > 0) {
+    lines.push("");
+    lines.push(`СОБЫТИЯ МИРА: ${system_truth.global_events.join(" | ")}`);
+  }
+
+  if (system_truth.present_npcs && system_truth.present_npcs.length > 0) {
+    lines.push("");
+    lines.push("NPC В ЛОКАЦИИ (оживи их, покажи занятыми делом!):");
+    system_truth.present_npcs.slice(0, 6).forEach((n) => {
+      let npcLine = `  • ${n.name} (${n.race || "Гуманоид"}, ${n.role || "обыватель"})${n.is_hostile ? " ⚔️ ВРАГ" : ""}`;
+      if (n.current_activity) npcLine += ` — сейчас занят: ${n.current_activity}`;
+      if (n.appearance) npcLine += ` | Внешность: ${n.appearance}`;
+      if (n.catchphrases && n.catchphrases.length > 0) npcLine += ` | Характерная фраза: "${n.catchphrases[0]}"`;
+      lines.push(npcLine);
+    });
+  }
+
+  const npcEntries = Object.values(system_truth.npc_context || {});
+  if (npcEntries.length > 0) {
+    lines.push("");
+    lines.push("ХАРАКТЕР И ПАМЯТЬ NPC (для диалогов и реакций):");
+    for (const ctx of npcEntries) {
+      let ctxLine = `  • ${ctx.name}`;
+      if (ctx.habits) ctxLine += ` | Привычки: ${ctx.habits}`;
+      if (ctx.background) ctxLine += ` | Предыстория: ${ctx.background.slice(0, 150)}`;
+      if (ctx.relationship_score !== undefined) {
+        ctxLine += ` | Отношения: ${ctx.relationship_score}/100 (${ctx.relationship_tier_label || ctx.relationship_tier || "нейтральные"})`;
+      }
+      if (ctx.vivid_memories && ctx.vivid_memories.length > 0) {
+        ctxLine += ` | Ярко помнит: ${ctx.vivid_memories.slice(0, 2).join("; ")}`;
+      } else if (ctx.regular_memories && ctx.regular_memories.length > 0) {
+        ctxLine += ` | Помнит: ${ctx.regular_memories.slice(0, 1).join("; ")}`;
+      }
+      lines.push(ctxLine);
+    }
+  }
+
+  if (system_truth.encounter_alert?.spawned) {
+    lines.push("");
+    lines.push(`⚠️ ВСТРЕЧА: Появляется ${system_truth.encounter_alert.creature_name || "существо"} (тир ${system_truth.encounter_alert.tier || 1})`);
+  }
+
+  return lines.join("\n");
+}
+
+// ============================================
 // Главная функция Шага 5
 // ============================================
 export async function generateNarrative(context: NarratorInputContext): Promise<NarratorOutputPayload> {
   const { system_truth, action_text, player_name, player_race, player_class, lore_context, openrouter_api_key, dm_model } = context;
 
   const systemPrompt = buildNarratorSystemPrompt(player_name, player_race, player_class, lore_context, system_truth.storyline);
-  const userMessage = `Действие игрока: "${action_text}"
+  const narratorContext = buildNarratorContext(system_truth, action_text);
+  const userMessage = `${narratorContext}\n\nСгенерируй нарратив строго по указанным фактам в JSON-формате.`;
 
-SystemTruthDto:
-${JSON.stringify(system_truth, null, 2)}
-
-Сгенерируй нарратив в JSON.`;
-
-  const modelsToTry = [dm_model, "google/gemini-2.0-flash-001", "meta-llama/llama-3.3-70b-instruct"];
+  const modelsToTry = [
+    dm_model,
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemini-2.5-flash:free",
+    "qwen/qwen3-235b-a22b:free",
+  ];
   let lastErr: any = null;
 
   for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
@@ -203,6 +308,7 @@ ${JSON.stringify(system_truth, null, 2)}
           temperature: 0.7,
           max_tokens: 2000,
         }),
+        signal: AbortSignal.timeout(28000),
       });
 
       if (!response.ok) {

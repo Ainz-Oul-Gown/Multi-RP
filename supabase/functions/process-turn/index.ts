@@ -294,9 +294,28 @@ serve(async (req) => {
 
     let loreContext = "";
     if (session.world_id) {
-      const { data: loreFiles } = await supabase.from("lore_files").select("title, content").eq("world_id", session.world_id).limit(5);
-      if (loreFiles?.length) {
-        loreContext = loreFiles.map((f) => `### ${f.title}\n${cleanTextForAI(f.content).slice(0, 500)}`).join("\n\n");
+      const { data: loreFiles } = await supabase
+        .from("lore_files")
+        .select("title, content")
+        .eq("world_id", session.world_id)
+        .limit(10);
+
+      if (loreFiles && loreFiles.length > 0) {
+        const keywords = [safeActionText, currentLocationName || "", currentWildZone || ""]
+          .join(" ")
+          .toLowerCase();
+
+        const relevantLore = loreFiles.filter((f: any) => {
+          const content = ((f.title || "") + " " + (f.content || "")).toLowerCase();
+          return keywords
+            .split(/\s+/)
+            .some((w: string) => w.length > 4 && content.includes(w));
+        }).slice(0, 2);
+
+        const allLore = relevantLore.length > 0 ? relevantLore : loreFiles.slice(0, 1);
+        loreContext = allLore
+          .map((f: any) => `### ${f.title}\n${cleanTextForAI(f.content).slice(0, 600)}`)
+          .join("\n\n");
       }
     }
     const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type").eq("session_id", session_id).order("created_at", { ascending: false }).limit(10);
@@ -862,7 +881,21 @@ serve(async (req) => {
       players: (allPlayers || []).map((p: any) => ({
         id: p.id, name: p.name || "Герой", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
       })),
-      npcs: (session.current_wild_zone ? allNpcs.filter((n: any) => isCompanionNpc(n) || n.is_hostile === true || (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))) : allNpcs).map((n: any) => ({ id: n.id, name: n.name || "NPC", race: n.race || "Существо", role: n.role || "Обыватель", status_tags: n.status_tags || [] })),
+      npcs: (session.current_wild_zone ? allNpcs.filter((n: any) => isCompanionNpc(n) || n.is_hostile === true || (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))) : allNpcs).map((n: any) => ({
+        id: n.id,
+        name: n.name || "NPC",
+        race: n.race || "Существо",
+        role: n.role || "Обыватель",
+        category: n.category,
+        status_tags: n.status_tags || [],
+        is_alive: n.is_alive,
+        is_hostile: n.is_hostile || false,
+        appearance: n.appearance || null,
+        background: n.background || null,
+        habits: n.habits || null,
+        catchphrases: Array.isArray(n.catchphrases) ? n.catchphrases : [],
+        current_activity: n.current_activity || null,
+      })),
       atmosphere: routerResult.atmosphere || { sounds: [], visuals: [] },
       time_passed_minutes,
       encounter_alert: null,

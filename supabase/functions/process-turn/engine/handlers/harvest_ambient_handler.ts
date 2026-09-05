@@ -6,11 +6,30 @@ import { ActionHandlerResult, EngineInputContext, EngineMutation } from "../type
 import { RouterAction } from "../../types.ts";
 import { rollD100 } from "../dice.ts";
 
+export const ABSTRACT_OBSERVATION_REGEX = /след|отпечат|троп|путь|дорог|тракт|запах|звук|шум|ветер|знак|символ|улик|зацепк|направлен|панорам|вид|горизонт|окрестност|информац|слух|весть|секрет|подсказк|надпис/i;
+
+export function isAbstractObservation(name?: string | null): boolean {
+  if (!name) return false;
+  return ABSTRACT_OBSERVATION_REGEX.test(name.trim());
+}
+
 export function resolveHarvestedItem(
   rawTargetName?: string | null,
   actionText?: string
-): { name: string; type: string } {
+): { name: string; type: string; is_observation?: boolean } {
   const text = ((actionText || "") + " " + (rawTargetName || "")).toLowerCase();
+
+  // Признаки реальных собираемых физических ресурсов
+  const hasPhysicalResource = /стим|аптечк|медпак|бинт|вакцин|лекарств|гриб|ягод|фрукт|плод|яблок|груш|хлеб|сыр|мяс|дичь|рыб|трав|растен|корен|цвет|мох|листь|алхим|ветк|палк|древ|бревн|суч|доск|руд|жил|метал|кристал|самоцвет|кам|кремен|булыж|гранит|шкур|кож|мех|микросхем|плат|чип|провод|кабел|лом|хлам|свалк|утиль|детал|запчаст|батаре|энергоячейк|аккумул|патрон|пуль|снаряд|шард|флешк/i.test(text);
+
+  if (!hasPhysicalResource && (isAbstractObservation(rawTargetName) || isAbstractObservation(actionText))) {
+    return {
+      name: rawTargetName || "Окружение и следы",
+      type: "observation",
+      is_observation: true,
+    };
+  }
+
   const isGeneric =
     !rawTargetName ||
     /^(ресурс|предмет|resource|item|находка|добыча|материал)$/i.test(
@@ -137,6 +156,34 @@ export class HarvestAmbientHandler extends BaseActionHandler {
         if (durMutation) mutations.push(durMutation);
         systemFacts.push(`${player.name} использовал ${usedItem.item_name} не по назначению при сборе.`);
       }
+    }
+
+    // Если действие оказалось наблюдением/следами, а не сбором физических предметов
+    if (resolved.is_observation || isAbstractObservation(targetItem)) {
+      if (!roll.success) {
+        systemFacts.push(`${player.name} попытался изучить окружение (${targetItem}), но ничего конкретного не разобрал.`);
+        return {
+          result: {
+            action_type: this.action_type,
+            success: false,
+            dice_roll: roll,
+            details: `Не удалось разобрать ${targetItem}`,
+          },
+          mutations,
+          system_facts: systemFacts,
+        };
+      }
+      systemFacts.push(`${player.name} внимательно изучил окружение и подметил важные детали: ${targetItem}.`);
+      return {
+        result: {
+          action_type: this.action_type,
+          success: true,
+          dice_roll: roll,
+          details: `Изучены ${targetItem}`,
+        },
+        mutations,
+        system_facts: systemFacts,
+      };
     }
 
     if (!roll.success) {

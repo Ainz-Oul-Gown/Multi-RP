@@ -411,8 +411,10 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         // Успех
         if (ar.dice_roll) {
           const skillLabel = getActionSkillLabel(ar.action_type, (ar as any).stat_to_check);
-          const isSuccess = ar.success;
-          knowledge.push(`[${skillLabel}: ${isSuccess ? "Успех" : "Провал"}]`);
+          knowledge.push(`Проверка навыка (${skillLabel}) прошла успешно.`);
+        }
+        if (ar.details && !knowledge.includes(ar.details)) {
+          knowledge.push(ar.details);
         }
         if (ar.damage_dealt !== undefined && ar.damage_dealt > 0) {
           knowledge.push(`Нанесено ${ar.damage_dealt} урона.`);
@@ -421,22 +423,18 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
           knowledge.push(`Вы успешно создали: ${added.join(", ")}.`);
         }
         if (ar.action_type === "harvest_ambient" && added.length > 0) {
-          knowledge.push(`Вы добыли: ${added.join(", ")}.`);
+          knowledge.push(`Вы собрали: ${added.join(", ")}.`);
         }
         if (ar.action_type === "search" && added.length > 0) {
           knowledge.push(`Вы нашли: ${added.join(", ")}.`);
         }
-        // Действия без броска и урона (свободное перемещение, разговор, осмотр)
-        if (!ar.dice_roll && (ar.damage_dealt === undefined || ar.damage_dealt === 0) && ar.action_type !== "craft_recipe" && ar.action_type !== "harvest_ambient" && ar.action_type !== "search") {
-          if (ar.details) {
-            knowledge.push(ar.details);
-          }
-        }
       }
 
       const facts = engine_output.system_facts || engine_output.raw_system_facts || [];
-      if (knowledge.length === 0 && facts.length) {
-        knowledge.push(...facts);
+      for (const f of facts) {
+        if (!knowledge.includes(f)) {
+          knowledge.push(f);
+        }
       }
     } else {
       // Этот игрок — НЕ инициатор. Нужно решить, видит ли он действие.

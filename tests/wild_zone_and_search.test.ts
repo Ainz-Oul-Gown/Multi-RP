@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import { SearchHandler, LootSearchHandler } from "../supabase/functions/process-turn/engine/handlers/loot_search_handler.ts";
 import { buildRouterHeuristicFallback } from "../supabase/functions/process-turn/steps/step1_router.ts";
 
@@ -18,6 +18,7 @@ describe("SearchHandler & LootSearchHandler: No dummy 'находка' items", (
     const actionNahodka: any = {
       action_type: "search",
       target_item_name: "находка",
+      ai_custom_dc: 2,
     };
     const res1 = handler.handle(actionNahodka, context);
     expect(res1.result.success).toBe(true);
@@ -28,6 +29,7 @@ describe("SearchHandler & LootSearchHandler: No dummy 'находка' items", (
     const actionEmpty: any = {
       action_type: "search",
       target_item_name: null,
+      ai_custom_dc: 2,
     };
     const res2 = handler.handle(actionEmpty, context);
     expect(res2.result.success).toBe(true);

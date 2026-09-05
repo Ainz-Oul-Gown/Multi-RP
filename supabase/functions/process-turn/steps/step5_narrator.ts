@@ -26,9 +26,9 @@ export interface NarratorInputContext {
 // Промпт для LLM
 // ============================================
 function buildNarratorSystemPrompt(
-  playerName: string, 
-  playerRace: string, 
-  playerClass: string, 
+  playerName: string,
+  playerRace: string,
+  playerClass: string,
   loreContext: string,
   storyline?: any
 ): string {
@@ -62,9 +62,11 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
 3. СТРОЖАЙШИЙ ЗАПРЕТ НА МЕТА-КОММЕНТАРИИ И КУБИКИ:
    - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО обсуждать в тексте кубики, числа d20, модификаторы и формулы ("Бросок d20 с вашим бонусом в 2 дает 22...", "Ваш d20 показал..."). Ты — литературный рассказчик, а не калькулятор! Описывай только физические действия персонажа, его мастерство, удачу и живой мир вокруг.
    - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО упоминать неизменное здоровье ("Ваше текущее здоровье остается неизменным на уровне 27 очков", "Вы не потеряли ХП"). Если урон или лечение не произошли — здоровье ВООБЩЕ не упоминается в тексте!
-4. СИСТЕМНЫЕ ТЕГИ ЛИТ-РПГ:
-   - Вставляй короткие теги в скобках [Навык: Успех], [Получен предмет: ...], [Выброшен предмет: ...], [Урон: N] ИСКЛЮЧИТЕЛЬНО на основе фактов из knowledge.
-   - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО выдумывать проверки, которых не было (например, НИКОГДА не вставляй [Скрытность: Успех], если игрок не совершал проверку скрытности в knowledge!).
+4. ЧИСТЫЙ ЛИТЕРАТУРНЫЙ ТЕКСТ БЕЗ ТЕХНИЧЕСКИХ ТЕГОВ:
+   - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО вставлять в текст искусственные технические скобки и псевдо-теги вроде "[Навык: Успех]", "[Выживание: Успех]", "[Получен предмет: ...]", "[Выброшен предмет: ...]", "[Урон: N]"! Это ломает погружение и выглядит как системная ошибка.
+   - Все события — применение навыков, успехи, неудачи, получение или потеря предметов, ранения — должны описываться ИСКЛЮЧИТЕЛЬНО ЖИВЫМ ХУДОЖЕСТВЕННЫМ ЯЗЫКОМ, органично вплетаясь в действие и физику мира.
+   - Например, вместо "[Навык: Успех] [Получен предмет: Сухие ветки]" пиши: "Вы приседаете на корточки, выискивая среди прошлогодней хвои крепкие сухие сучья, и связываете их бечёвкой, закрепляя на поясе."
+   - Никаких квадратных скобок с названиями проверок или предметов в литературном тексте!
 5. ЖИВЫЕ NPC В ЛОКАЦИИ (present_npcs):
    - Каждый NPC имеет current_activity — ВСЕГДА показывай их занятыми делом: кузнец бьёт молотом, торговка зазывает покупателей, стражник лениво опирается на алебарду.
    - Если есть appearance — опиши NPC через одну-две яркие физические детали (не весь список!).
@@ -279,21 +281,26 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
   const narratorContext = buildNarratorContext(system_truth, action_text);
   const userMessage = `${narratorContext}\n\nСгенерируй нарратив строго по указанным фактам в JSON-формате.`;
 
-  const modelsToTry = [
-    dm_model,
-    "google/gemma-4-31b-it:free",
-    "minimax/minimax-m3:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "google/gemma-4-26b-a4b-it:free",
-    "minimax/minimax-m2.7:free",
-  ].filter(Boolean);
+  const isTest = openrouter_api_key === "test-key" || dm_model === "test-model";
+  const modelsToTry = isTest
+    ? [dm_model || "test-model"]
+    : Array.from(
+        new Set(
+          [
+            dm_model,
+            "google/gemma-4-31b-it:free",
+            "minimax/minimax-m3:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+          ].filter(Boolean)
+        )
+      );
   let lastErr: any = null;
 
   for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
     const curModel = modelsToTry[attempt];
     try {
-      if (attempt > 0) {
-        await new Promise((r) => setTimeout(r, 600 * attempt));
+      if (attempt > 0 && !isTest) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
       }
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -326,15 +333,26 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         throw new Error("Failed to parse narrator JSON");
       }
 
-      // Валидация: проверяем, что все players из SystemTruthDto присутствуют
+      const cleanNarrativeText = (raw: string): string => {
+        if (!raw) return raw;
+        return raw
+          .replace(/\[\s*(?:Навык|Проверка|Выживание|Внимательность|Скрытность|Атлетика|Ловкость|Сила|Интеллект|Харизма|Мудрость|Ремесло|Убеждение|Атака)\s*:\s*(?:Успех|Провал|Крит|Победа)[^\]]*\]/gi, "")
+          .replace(/\[\s*(?:Получен предмет|Выброшен предмет|Найден предмет|Утрачен предмет)\s*:[^\]]*\]/gi, "")
+          .replace(/[ \t]{2,}/g, " ")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+      };
+
+      // Валидация: проверяем, что все players из SystemTruthDto присутствуют и очищены от псевдо-тегов
       const validatedPlayers: Record<string, string> = {};
       for (const pid of Object.keys(system_truth.player_truths)) {
-        validatedPlayers[pid] = typeof parsed.players[pid] === "string" ? parsed.players[pid] : "…";
+        const text = typeof parsed.players[pid] === "string" ? parsed.players[pid] : "…";
+        validatedPlayers[pid] = cleanNarrativeText(text);
       }
 
       return {
         players: validatedPlayers,
-        global_narrative: typeof parsed.global_narrative === "string" ? parsed.global_narrative : "",
+        global_narrative: typeof parsed.global_narrative === "string" ? cleanNarrativeText(parsed.global_narrative) : "",
       };
     } catch (err) {
       lastErr = err;

@@ -140,17 +140,19 @@ export class SearchHandler extends BaseActionHandler {
 
     const rawItemName = (action.target_item_name || "").trim();
     const isGeneric = !rawItemName || /^(находка|предмет|вещь|что-нибудь|что-то|лут|добыча|item|loot)$/i.test(rawItemName);
+    const isAbstract = /след|отпечат|троп|путь|дорог|тракт|запах|звук|шум|ветер|знак|символ|улик|зацепк|направлен|панорам|вид|горизонт|окрестност|информац|слух|весть|секрет|подсказк|надпис|руин/i.test(rawItemName);
 
-    if (isGeneric) {
-      // Игрок внимательно осматривал/обыскивал местность без конкретного предмета —
+    if (isGeneric || isAbstract) {
+      // Игрок внимательно осматривал/обыскивал местность без конкретного предмета или исследовал следы/улики —
       // фиксируем успех внимательности как факт восприятия без захламления инвентаря пустышками
-      systemFacts.push(`${player.name} внимательно осмотрел округу и подметил важные детали обстановки.`);
+      const desc = isAbstract ? `подмечены важные детали (${rawItemName})` : "подмечены важные детали обстановки";
+      systemFacts.push(`${player.name} внимательно осмотрел округу и обнаружил: ${rawItemName || "важные ориентиры"}.`);
       return {
         result: {
           action_type: this.action_type,
           success: true,
           dice_roll: roll,
-          details: "Успешный осмотр местности: подмечены важные детали обстановки",
+          details: `Успешный осмотр местности: ${desc}`,
         },
         mutations,
         system_facts: systemFacts,

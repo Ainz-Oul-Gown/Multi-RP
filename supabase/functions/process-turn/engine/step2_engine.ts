@@ -69,7 +69,8 @@ function rollEncounter(difficulty: "easy" | "normal" | "hard"): EncounterTrigger
   const threshold = ENCOUNTER_THRESHOLDS[difficulty];
 
   if (roll < threshold) {
-    const tier = getEncounterTier(roll);
+    const tierRoll = rollD100();
+    const tier = getEncounterTier(tierRoll);
     return {
       triggered: true,
       tier: tier.tier,

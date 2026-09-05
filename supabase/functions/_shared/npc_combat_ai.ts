@@ -77,14 +77,18 @@ function rollDice(diceStr: string): number {
 }
 
 /**
- * Тактический фоллбэк выбора атаки NPC (без LLM)
+ * Тактический фоллбэк выбора атаки NPC (без LLM):
+ * Не просто бьет самую слабую цель, а взвешивает угрозу (высокий урон / маг / танк / случайность).
  */
 export function buildFallbackNpcDecision(params: {
   npc: any;
   players: BattlefieldPlayer[];
 }): NpcTacticalDecision {
   const { npc, players } = params;
-  const target = players.slice().sort((a, b) => a.hp - b.hp)[0] || {
+  
+  // Умный выбор цели вместо чистого слабейшего:
+  // 40% вероятность атаковать активную угрозу (мага/стрелка), 40% ближайшего/наиболее раненого, 20% случайного игрока
+  let target = players[0] || {
     id: "unknown",
     name: "Игрок",
     hp: 10,
@@ -92,11 +96,27 @@ export function buildFallbackNpcDecision(params: {
     armor_class: 10,
   };
 
+  const rollChoice = Math.random();
+  if (rollChoice < 0.45 && players.length > 1) {
+    // Приоритет магов / стрелков / опасных классов
+    const priorityTarget = players.find((p) => {
+      const cls = (p.class || "").toLowerCase();
+      return cls.includes("маг") || cls.includes("лучник") || cls.includes("волшебник") || cls.includes("чернокнижник") || cls.includes("жрец");
+    });
+    if (priorityTarget) target = priorityTarget;
+  } else if (rollChoice < 0.8) {
+    // Добивание уязвимого
+    target = players.slice().sort((a, b) => a.hp - b.hp)[0] || target;
+  } else {
+    // Случайная цель в суматохе боя
+    target = players[Math.floor(Math.random() * players.length)] || target;
+  }
+
   const specialAttacks: NpcAttackDefinition[] = Array.isArray(npc.special_attacks) ? npc.special_attacks : [];
   const baseAttacks: NpcAttackDefinition[] = Array.isArray(npc.base_attacks) ? npc.base_attacks : [];
 
   const npcHpPercent = npc.max_hp ? (npc.hp / npc.max_hp) * 100 : 100;
-  const shouldUseSpecial = specialAttacks.length > 0 && (npcHpPercent < 40 || Math.random() < 0.45);
+  const shouldUseSpecial = specialAttacks.length > 0 && (npcHpPercent < 45 || Math.random() < 0.5);
 
   if (shouldUseSpecial && specialAttacks.length > 0) {
     const atk = specialAttacks[Math.floor(Math.random() * specialAttacks.length)];
@@ -107,7 +127,7 @@ export function buildFallbackNpcDecision(params: {
       damage_type: atk.damage_type || "fire",
       target_player_id: target.id,
       target_player_name: target.name,
-      tactical_reason: "Использование мощного особого навыка против уязвимого противника",
+      tactical_reason: `Тактическое применение специального приёма «${atk.name}» по ${target.name}`,
     };
   }
 
@@ -120,7 +140,7 @@ export function buildFallbackNpcDecision(params: {
       damage_type: atk.damage_type || "slashing",
       target_player_id: target.id,
       target_player_name: target.name,
-      tactical_reason: "Применение базового боевого приёма",
+      tactical_reason: `Атака приёмом «${atk.name}» с оценкой позиции противника`,
     };
   }
 
@@ -131,12 +151,14 @@ export function buildFallbackNpcDecision(params: {
     damage_type: "bludgeoning",
     target_player_id: target.id,
     target_player_name: target.name,
-    tactical_reason: "Стандартная физическая атака",
+    tactical_reason: "Прямой боевой выпад в ближнем бою",
   };
 }
 
 /**
- * ИИ-выбор тактического действия NPC на его ходу
+ * ИИ-выбор тактического действия NPC на его ходу.
+ * Использует надежные Free LLM модели с тактическим промптом, учитывающим характер существа,
+ * угрозы на поле боя, защиту союзников и тактические хитрости.
  */
 export async function decideNpcCombatAction(params: {
   npc: any;
@@ -144,7 +166,7 @@ export async function decideNpcCombatAction(params: {
   openrouter_api_key?: string;
   model?: string;
 }): Promise<NpcTacticalDecision> {
-  const { npc, players, openrouter_api_key, model = "xiaomi/mimo-v2.5" } = params;
+  const { npc, players, openrouter_api_key, model } = params;
   if (!players || players.length === 0) {
     return buildFallbackNpcDecision({ npc, players });
   }
@@ -156,63 +178,74 @@ export async function decideNpcCombatAction(params: {
   const specialAttacks = Array.isArray(npc.special_attacks) ? npc.special_attacks : [];
   const baseAttacks = Array.isArray(npc.base_attacks) ? npc.base_attacks : [];
 
-  const prompt = `Ты — тактический боевой модуль D&D для существа/NPC.
-Существо: ${npc.name} (${npc.race || "чудовище"}, роль: ${npc.role || "враг"}, уровень ${npc.level || 1}, HP ${npc.hp || 10}/${npc.max_hp || 10})
+  const prompt = `Ты — тактический боевой ИИ D&D / ЛитРПГ.
+Существо/Боец: ${npc.name} (${npc.race || "гуманоид/чудовище"}, роль: ${npc.role || "боец"}, HP ${npc.hp || 10}/${npc.max_hp || 10})
+Привычки/поведение: ${Array.isArray(npc.habits) ? npc.habits.join(", ") : npc.habits || "Опытный боец"}
 Доступные спецатаки: ${JSON.stringify(specialAttacks)}
 Доступные базовые атаки: ${JSON.stringify(baseAttacks)}
-Цели на поле боя (игроки): ${JSON.stringify(players.map((p) => ({ id: p.id, name: p.name, hp: p.hp, ac: p.armor_class, class: p.class })))}
+Участники боя (игроки): ${JSON.stringify(players.map((p) => ({ id: p.id, name: p.name, hp: p.hp, ac: p.armor_class, class: p.class })))}
 
-Выбери действие для этого хода существа:
-1. Выбери цель из списка игроков.
-2. Выбери атаку: спецатаку (если ситуация требует максимального урона/эффекта) или базовую атаку.
+Определи тактическое действие существа на этом ходу:
+- Оцени поле боя как живой противник: можно атаковать самого опасного кастера/стрелка, сковывать танка, прикрывать позицию или добивать уязвимого.
+- Выбери наиболее подходящую атаку (спецатаку или базовую атаку) из доступных списков (или базовый удар, если списки пусты).
+
 Отвечай СТРОГО в формате JSON без markdown:
 {
   "action_type": "special_attack" | "base_attack" | "basic_attack",
-  "attack_name": "Название атаки",
-  "damage_dice": "кубики урона, например 2d6",
-  "damage_type": "slashing" | "piercing" | "fire" | "poison" и т.д.,
-  "target_player_id": "uuid цели",
-  "tactical_reason": "краткое объяснение тактики"
+  "attack_name": "Точное название выбранной атаки",
+  "damage_dice": "кубики урона, например 1d8, 2d6 или 1d6",
+  "damage_type": "slashing" | "piercing" | "fire" | "poison" | "bludgeoning" и т.д.,
+  "target_player_id": "id игрока-цели",
+  "tactical_reason": "краткое живое обоснование тактики (1 предложение)"
 }`;
 
-  try {
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openrouter_api_key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: "Ты — тактический ИИ боевого движка D&D. Отвечай строго валидным JSON." },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.5,
-        max_tokens: 300,
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
+  const modelsToTry = [
+    model || "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemini-2.5-flash:free",
+    "qwen/qwen3-235b-a22b:free",
+  ];
 
-    if (resp.ok) {
-      const data = await resp.json();
-      const rawContent = data.choices?.[0]?.message?.content || "";
-      const parsed = parseAIJson(rawContent);
-      if (parsed && parsed.target_player_id && parsed.attack_name) {
-        const targetP = players.find((p) => p.id === parsed.target_player_id) || players[0];
-        return {
-          action_type: parsed.action_type || "base_attack",
-          attack_name: parsed.attack_name,
-          damage_dice: parsed.damage_dice || "1d8",
-          damage_type: parsed.damage_type || "slashing",
-          target_player_id: targetP.id,
-          target_player_name: targetP.name,
-          tactical_reason: parsed.tactical_reason || "Тактическое решение ИИ",
-        };
+  for (const curModel of modelsToTry) {
+    try {
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouter_api_key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: curModel,
+          messages: [
+            { role: "system", content: "Ты — продвинутый боевой ИИ D&D. Отвечай строго валидным JSON объектом." },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.4,
+          max_tokens: 300,
+          response_format: { type: "json_object" },
+        }),
+        signal: AbortSignal.timeout(6000),
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const rawContent = data.choices?.[0]?.message?.content || "";
+        const parsed = parseAIJson(rawContent);
+        if (parsed && parsed.target_player_id && parsed.attack_name) {
+          const targetP = players.find((p) => p.id === parsed.target_player_id) || players[0];
+          return {
+            action_type: parsed.action_type || "base_attack",
+            attack_name: parsed.attack_name,
+            damage_dice: parsed.damage_dice || "1d8",
+            damage_type: parsed.damage_type || "slashing",
+            target_player_id: targetP.id,
+            target_player_name: targetP.name,
+            tactical_reason: parsed.tactical_reason || "Тактическое решение ИИ",
+          };
+        }
       }
+    } catch (err) {
+      console.warn(`[npc_combat_ai] Model ${curModel} combat decision failed, trying next:`, err);
     }
-  } catch (err) {
-    console.warn("[npc_combat_ai] LLM tactical decision failed, using fallback:", err);
   }
 
   return buildFallbackNpcDecision({ npc, players });

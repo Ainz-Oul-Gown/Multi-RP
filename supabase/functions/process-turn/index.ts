@@ -743,7 +743,7 @@ serve(async (req) => {
     }
 
     // ============================================
-    // ИНИЦИАТИВА СПУТНИКОВ В ТЕКУЩЕЙ СЦЕНЕ (Мирные действия)
+    // ИНИЦИАТИВА СПУТНИКОВ В ТЕКУЩЕЙ СЦЕНЕ (Мирные и ролевые действия)
     // ============================================
     let companionAction: any = null;
     try {
@@ -753,6 +753,8 @@ serve(async (req) => {
         acting_player_name: player.name || "Герой",
         location_npcs: allNpcs,
         session_id,
+        openrouter_api_key: openrouterApiKey,
+        model: satelliteModel || "meta-llama/llama-3.3-70b-instruct:free",
       });
       console.log(`[${requestId}] [COMPANION] 🤝 Checked:`, companionAction ? `${companionAction.npc_name} did: ${companionAction.action_description}` : "none (no party companions in scene)");
     } catch (compErr) {

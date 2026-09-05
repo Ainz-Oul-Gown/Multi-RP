@@ -20,10 +20,13 @@ export function gameTimeToMinutes(t: GameTimePoint): number {
   );
 }
 
+import { parseAIJson } from "./utils.ts";
+
 /**
  * Инициатива спутника в текущей сцене:
- * Если игрок занимается собирательством, обустройством лагеря или мирным делом,
- * дружелюбный NPC предлагает свою помощь, добывает предмет и делится с игроком.
+ * Спутник (член отряда) анализирует действие игрока через быструю Free LLM.
+ * Он понимает контекст (даже неочевидные или рискованные замыслы игрока),
+ * активно предлагает помощь, прикрывает, ищет ресурсы или комментирует происходящее.
  */
 export async function handleCompanionInSceneAction(params: {
   supabase: any;
@@ -31,73 +34,159 @@ export async function handleCompanionInSceneAction(params: {
   acting_player_name: string;
   location_npcs: any[];
   session_id: string;
+  openrouter_api_key?: string;
+  model?: string;
 }): Promise<{
   npc_name: string;
   dialogue: string;
-  item_obtained: string;
+  item_obtained?: string;
   action_description: string;
 } | null> {
-  const { supabase, player_action_text, acting_player_name, location_npcs } = params;
+  const { supabase, player_action_text, acting_player_name, location_npcs, openrouter_api_key, model } = params;
   if (!location_npcs || location_npcs.length === 0) return null;
 
-  const lowerText = (player_action_text || "").toLowerCase();
-  const isPeacefulWork =
-    lowerText.includes("хворост") ||
-    lowerText.includes("дров") ||
-    lowerText.includes("костер") ||
-    lowerText.includes("костёр") ||
-    lowerText.includes("лагер") ||
-    lowerText.includes("ягод") ||
-    lowerText.includes("гриб") ||
-    lowerText.includes("трав") ||
-    lowerText.includes("вод") ||
-    lowerText.includes("готов") ||
-    lowerText.includes("еду") ||
-    lowerText.includes("отдых");
-
-  if (!isPeacefulWork) return null;
-
-  // Спутником может быть ТОЛЬКО персонаж, который явно состоит в отряде игрока!
+  // Ищем живого спутника из отряда
   const companion = location_npcs.find((n) => {
     if (n.is_hostile || n.is_alive === false || n.role === "hostile") return false;
     const role = (n.role || "").toLowerCase();
     const tags = Array.isArray(n.status_tags) ? n.status_tags.map((t: string) => t.toLowerCase()) : [];
-    const isPartyMember = role === "companion" || tags.includes("спутник") || tags.includes("в_отряде") || tags.includes("спутница") || tags.includes("компаньон");
-    return isPartyMember;
+    return role === "companion" || tags.includes("спутник") || tags.includes("в_отряде") || tags.includes("спутница") || tags.includes("компаньон");
   });
   if (!companion) return null;
 
-  let itemToFind = "Фляга родниковой воды";
-  let dialogue = `«${acting_player_name}, ты займись этим, а я пока сбегаю к ручью и наберу свежей воды!»`;
-  let actionDesc = `${companion.name} отправился к ручью, наполнил флягу родниковой водой и вернулся к стоянке, предложив сделать глоток.`;
+  const rawAction = (player_action_text || "").trim();
+  if (!rawAction) return null;
 
-  if (lowerText.includes("вод")) {
+  // 1. Попытка через Free LLM: анализируем намерение игрока и даем живую инициативу спутнику
+  if (openrouter_api_key) {
+    try {
+      const modelsToTry = [
+        model || "meta-llama/llama-3.3-70b-instruct:free",
+        "google/gemini-2.5-flash:free",
+        "qwen/qwen3-235b-a22b:free",
+      ];
+
+      const companionInfo = `Имя: ${companion.name}, Раса: ${companion.race || "Человек"}, Класс: ${companion.class || "Спутник"}.
+Характер/привычки: ${Array.isArray(companion.habits) ? companion.habits.join(", ") : companion.habits || "Преданный соратник"}.
+Предыстория: ${companion.background || "Спутник игрока"}.`;
+
+      const systemPrompt = `Ты — ИИ-модуль спутника в настольной ролевой игре (D&D / ЛитРПГ).
+Твоя задача — решить, как спутник игрока инициативно реагирует и помогает игроку (${acting_player_name}) в текущей сцене.
+Спутник — живой соратник, он понимает глубокий замысел игрока (даже если игрок блефует, рискует, творит безумие или готовит засаду).
+Спутник может:
+1. Помочь делу (собрать припасы, подать инструмент, прикрыть спину, встать на страже, отвлечь кого-то).
+2. Добыть полезный предмет/ресурс (если действие связано с поиском, лагерем, охотой, исследованием) — опционально.
+3. Одобрить, предупредить или эмоционально поддержать действие.
+
+Отвечай СТРОГО в формате JSON без markdown и пояснений:
+{
+  "should_act": true,
+  "dialogue": "«Прямая речь спутника к игроку»",
+  "action_description": "Художественное описание того, что конкретно сделал спутник (в 3-м лице)",
+  "item_obtained": "Название предмета или null"
+}`;
+
+      const userPrompt = `Спутник:\n${companionInfo}\n\nДействие игрока (${acting_player_name}): "${rawAction}"\n\nКак спутник реагирует и помогает? Выдай JSON.`;
+
+      for (const curModel of modelsToTry) {
+        try {
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openrouter_api_key}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: curModel,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+              temperature: 0.6,
+              max_tokens: 300,
+              response_format: { type: "json_object" },
+            }),
+            signal: AbortSignal.timeout(7000),
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            const content = data.choices?.[0]?.message?.content;
+            if (content) {
+              const parsed = parseAIJson(content);
+              if (parsed && parsed.should_act !== false && parsed.dialogue && parsed.action_description) {
+                const itemObtained = parsed.item_obtained && parsed.item_obtained !== "null" ? String(parsed.item_obtained).trim() : null;
+
+                if (itemObtained) {
+                  try {
+                    await supabase.rpc("add_item_to_inventory", {
+                      p_npc_id: companion.id,
+                      p_item_name: itemObtained,
+                      p_quantity: 1,
+                      p_type: "consumable",
+                      p_attributes: { fresh: true, collected_by: companion.name },
+                    });
+                  } catch (itemErr) {
+                    console.warn("[npc_autonomous_engine] Failed to add companion item:", itemErr);
+                  }
+                }
+
+                return {
+                  npc_name: companion.name,
+                  dialogue: parsed.dialogue.startsWith("«") ? parsed.dialogue : `«${parsed.dialogue.replace(/^["'«]|["'»]$/g, "")}»`,
+                  item_obtained: itemObtained || undefined,
+                  action_description: parsed.action_description,
+                };
+              }
+            }
+          }
+        } catch (mErr) {
+          console.warn(`[npc_autonomous_engine] Model ${curModel} companion action failed, trying next:`, mErr);
+        }
+      }
+    } catch (llmErr) {
+      console.warn("[npc_autonomous_engine] Companion LLM check error, falling back to procedural:", llmErr);
+    }
+  }
+
+  // 2. Процедурный умный fallback (если LLM недоступна или нет сети)
+  const lowerText = rawAction.toLowerCase();
+  let itemToFind: string | null = null;
+  let dialogue = `«${acting_player_name}, я прикрою тебя и помогу, на меня всегда можешь положиться!»`;
+  let actionDesc = `${companion.name} внимательно следит за окружением и ассистирует ${acting_player_name}.`;
+
+  if (lowerText.includes("вод") || lowerText.includes("пить") || lowerText.includes("ручей")) {
     itemToFind = "Охапка сухих дров";
     dialogue = `«${acting_player_name}, отлично, набирай воду, а я пока соберу сухих веток для костра!»`;
     actionDesc = `${companion.name} собрал охапку сухих веток и сложил их в центре стоянки.`;
-  } else if (lowerText.includes("хворост") || lowerText.includes("дров")) {
+  } else if (lowerText.includes("хворост") || lowerText.includes("дров") || lowerText.includes("костер") || lowerText.includes("костёр")) {
     itemToFind = "Горсть спелых лесных ягод";
     dialogue = `«${acting_player_name}, ты руби дрова, а я осмотрю кустарники на опушке — кажется, там была спелая малина!»`;
     actionDesc = `${companion.name} насобирал горсть спелых лесных ягод и угостил ${acting_player_name}.`;
+  } else if (lowerText.includes("ран") || lowerText.includes("леч") || lowerText.includes("кровь") || lowerText.includes("бинт")) {
+    itemToFind = "Целебный подорожник";
+    dialogue = `«Держись, ${acting_player_name}! Я знаю, как остановить кровь и затянуть рану.»`;
+    actionDesc = `${companion.name} наложил чистую повязку и помог обработать повреждения.`;
   }
 
-  // Кладём предмет в инвентарь NPC через RPC
-  try {
-    await supabase.rpc("add_item_to_inventory", {
-      p_npc_id: companion.id,
-      p_item_name: itemToFind,
-      p_quantity: 1,
-      p_type: "consumable",
-      p_attributes: { fresh: true, collected_by: companion.name },
-    });
-  } catch (err) {
-    console.warn("[npc_autonomous_engine] Failed to add companion item:", err);
+  if (itemToFind) {
+    try {
+      await supabase.rpc("add_item_to_inventory", {
+        p_npc_id: companion.id,
+        p_item_name: itemToFind,
+        p_quantity: 1,
+        p_type: "consumable",
+        p_attributes: { fresh: true, collected_by: companion.name },
+      });
+    } catch (err) {
+      console.warn("[npc_autonomous_engine] Failed to add companion item:", err);
+    }
   }
 
   return {
     npc_name: companion.name,
     dialogue,
-    item_obtained: itemToFind,
+    item_obtained: itemToFind || undefined,
     action_description: actionDesc,
   };
 }
@@ -323,29 +412,41 @@ export async function generateCompanionDialogue(params: {
 
 Сгенерируй живую, выразительную реплику (1-2 предложения), обращаясь к игроку по имени (${player_name}).`;
 
-      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openrouter_api_key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: model || "meta-llama/llama-3.3-70b-instruct:free",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.7,
-          max_tokens: 150,
-        }),
-        signal: AbortSignal.timeout(4000),
-      });
+      const modelsToTry = [
+        model || "meta-llama/llama-3.3-70b-instruct:free",
+        "google/gemini-2.5-flash:free",
+        "qwen/qwen3-235b-a22b:free",
+      ];
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const content = data.choices?.[0]?.message?.content?.trim();
-        if (content && content.length > 5) {
-          return content.startsWith("«") ? content : `«${content.replace(/^["'«]|["'»]$/g, "")}»`;
+      for (const curModel of modelsToTry) {
+        try {
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openrouter_api_key}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: curModel,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+              temperature: 0.7,
+              max_tokens: 150,
+            }),
+            signal: AbortSignal.timeout(4500),
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            const content = data.choices?.[0]?.message?.content?.trim();
+            if (content && content.length > 5) {
+              return content.startsWith("«") ? content : `«${content.replace(/^["'«]|["'»]$/g, "")}»`;
+            }
+          }
+        } catch (subErr) {
+          console.warn(`[npc_autonomous_engine] Dialogue model ${curModel} failed:`, subErr);
         }
       }
     } catch (e) {

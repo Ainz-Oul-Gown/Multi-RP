@@ -281,10 +281,12 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
 
   const modelsToTry = [
     dm_model,
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemini-2.5-flash:free",
-    "qwen/qwen3-235b-a22b:free",
-  ];
+    "google/gemma-4-31b-it:free",
+    "minimax/minimax-m3:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "minimax/minimax-m2.7:free",
+  ].filter(Boolean);
   let lastErr: any = null;
 
   for (let attempt = 0; attempt < modelsToTry.length; attempt++) {

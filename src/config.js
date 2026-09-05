@@ -15,10 +15,10 @@ export const AI_NARRATOR_TIMEOUT = 30000;
 // Model options for card generation (бестиарий, NPC, география)
 export const CARD_GENERATION_MODELS = [
   // ── Бесплатные (рекомендуется) ──
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: '⭐ Llama 3.3 70B (free) — рекомендуем', provider: 'Meta' },
-  { id: 'qwen/qwen3-235b-a22b:free',              name: 'Qwen3 235B (free)',                     provider: 'Alibaba' },
-  { id: 'google/gemini-2.5-flash:free',           name: 'Gemini 2.5 Flash (free)',               provider: 'Google' },
-  { id: 'deepseek/deepseek-chat-v3-0324:free',    name: 'DeepSeek V3 (free)',                    provider: 'DeepSeek' },
+  { id: 'google/gemma-4-31b-it:free',            name: '⭐ Gemma 4 31B (free) — рекомендуем',    provider: 'Google' },
+  { id: 'minimax/minimax-m3:free',                name: 'MiniMax M3 (free) — отличный русский', provider: 'MiniMax' },
+  { id: 'nvidia/nemotron-3-super-120b-a12b:free', name: 'Nemotron 3 Super 120B (free)',          provider: 'NVIDIA' },
+  { id: 'minimax/minimax-m2.7:free',              name: 'MiniMax M2.7 (free)',                   provider: 'MiniMax' },
   { id: 'openrouter/free',                        name: 'Auto Free (случайная free-модель)',      provider: 'OpenRouter' },
   // ── Платные (лучшее качество) ──
   { id: 'google/gemini-flash-1.5',                name: '💎 Gemini Flash 1.5 (~$0.075/1M) — лучший JSON', provider: 'Google' },
@@ -29,11 +29,11 @@ export const CARD_GENERATION_MODELS = [
 // Model options for DM (narrator / рассказчик)
 export const DM_MODELS = [
   // ── Бесплатные ──
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: '⭐ Llama 3.3 70B (free) — отличный текст',     provider: 'Meta' },
-  { id: 'google/gemini-2.5-flash:free',           name: 'Gemini 2.5 Flash (free)',                      provider: 'Google' },
-  { id: 'qwen/qwen3-235b-a22b:free',              name: 'Qwen3 235B (free) — богатый русский',          provider: 'Alibaba' },
-  { id: 'deepseek/deepseek-chat-v3-0324:free',    name: 'DeepSeek V3 (free)',                           provider: 'DeepSeek' },
-  { id: 'openrouter/free',                        name: 'Auto Free',                                    provider: 'OpenRouter' },
+  { id: 'google/gemma-4-31b-it:free',            name: '⭐ Gemma 4 31B (free) — топ нарратив',  provider: 'Google' },
+  { id: 'minimax/minimax-m3:free',                name: 'MiniMax M3 (free) — богатый слог',      provider: 'MiniMax' },
+  { id: 'nvidia/nemotron-3-super-120b-a12b:free', name: 'Nemotron 3 Super 120B (free)',          provider: 'NVIDIA' },
+  { id: 'minimax/minimax-m2.7:free',              name: 'MiniMax M2.7 (free)',                   provider: 'MiniMax' },
+  { id: 'openrouter/free',                        name: 'Auto Free',                             provider: 'OpenRouter' },
   // ── Платные ──
   { id: 'google/gemini-flash-1.5',                name: '💎 Gemini Flash 1.5 (~$0.30/1M) — скорость+качество', provider: 'Google' },
   { id: 'openai/gpt-4o-mini',                     name: '💎 GPT-4o Mini (~$0.60/1M) — лучший нарратив',       provider: 'OpenAI' },
@@ -46,29 +46,27 @@ export const DM_MODELS = [
 // Model options for GPS (время и локация)
 export const GPS_MODELS = [
   // ── Бесплатные (достаточно для GPS) ──
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: '⭐ Llama 3.3 70B (free) — рекомендуем',   provider: 'Meta' },
-  { id: 'google/gemini-2.5-flash:free',           name: 'Gemini 2.5 Flash (free)',                 provider: 'Google' },
-  { id: 'qwen/qwen3-235b-a22b:free',              name: 'Qwen3 235B (free)',                       provider: 'Alibaba' },
-  { id: 'deepseek/deepseek-chat-v3-0324:free',    name: 'DeepSeek V3 (free)',                      provider: 'DeepSeek' },
-  { id: 'openrouter/free',                        name: 'Auto Free',                               provider: 'OpenRouter' },
+  { id: 'google/gemma-4-31b-it:free',            name: '⭐ Gemma 4 31B (free) — рекомендуем',   provider: 'Google' },
+  { id: 'minimax/minimax-m3:free',                name: 'MiniMax M3 (free)',                     provider: 'MiniMax' },
+  { id: 'nvidia/nemotron-3-super-120b-a12b:free', name: 'Nemotron 3 Super 120B (free)',          provider: 'NVIDIA' },
+  { id: 'openrouter/free',                        name: 'Auto Free',                             provider: 'OpenRouter' },
   // ── Платные (если нужна максимальная надёжность) ──
   { id: 'google/gemini-flash-1.5',                name: '💎 Gemini Flash 1.5 — надёжный JSON',     provider: 'Google' },
   { id: 'openai/gpt-4o-mini',                     name: '💎 GPT-4o Mini',                         provider: 'OpenAI' },
-  { id: 'xiaomi/mimo-v2.5',                       name: 'MiMo v2.5',                               provider: 'Xiaomi' },
+  { id: 'xiaomi/mimo-v2.5',                       name: 'MiMo v2.5',                             provider: 'Xiaomi' },
 ];
 
 // Model options for Satellite (парсер намерений игрока)
 export const SATELLITE_MODELS = [
   // ── Бесплатные ──
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: '⭐ Llama 3.3 70B (free) — рекомендуем',        provider: 'Meta' },
-  { id: 'google/gemini-2.5-flash:free',           name: 'Gemini 2.5 Flash (free) — быстрый JSON',      provider: 'Google' },
-  { id: 'qwen/qwen3-235b-a22b:free',              name: 'Qwen3 235B (free) — лучше понимает намерения', provider: 'Alibaba' },
-  { id: 'deepseek/deepseek-chat-v3-0324:free',    name: 'DeepSeek V3 (free)',                          provider: 'DeepSeek' },
-  { id: 'openrouter/free',                        name: 'Auto Free',                                   provider: 'OpenRouter' },
-  // ── Платные (максимальная надёжность парсера) ──
-  { id: 'google/gemini-flash-1.5',                name: '💎 Gemini Flash 1.5 — идеальный JSON',        provider: 'Google' },
-  { id: 'openai/gpt-4o-mini',                     name: '💎 GPT-4o Mini — умеет понимать игроков',     provider: 'OpenAI' },
-  { id: 'xiaomi/mimo-v2.5',                       name: 'MiMo v2.5',                                  provider: 'Xiaomi' },
+  { id: 'google/gemma-4-31b-it:free',            name: '⭐ Gemma 4 31B (free) — рекомендуем',   provider: 'Google' },
+  { id: 'minimax/minimax-m3:free',                name: 'MiniMax M3 (free)',                     provider: 'MiniMax' },
+  { id: 'nvidia/nemotron-3-super-120b-a12b:free', name: 'Nemotron 3 Super 120B (free)',          provider: 'NVIDIA' },
+  { id: 'openrouter/free',                        name: 'Auto Free',                             provider: 'OpenRouter' },
+  // ── Платные ──
+  { id: 'google/gemini-flash-1.5',                name: '💎 Gemini Flash 1.5 — идеальный JSON',   provider: 'Google' },
+  { id: 'openai/gpt-4o-mini',                     name: '💎 GPT-4o Mini',                         provider: 'OpenAI' },
+  { id: 'xiaomi/mimo-v2.5',                       name: 'MiMo v2.5',                             provider: 'Xiaomi' },
 ];
 
 // Game Constants

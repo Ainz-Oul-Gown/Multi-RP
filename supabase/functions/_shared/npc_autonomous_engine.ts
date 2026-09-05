@@ -61,10 +61,12 @@ export async function handleCompanionInSceneAction(params: {
   if (openrouter_api_key) {
     try {
       const modelsToTry = [
-        model || "meta-llama/llama-3.3-70b-instruct:free",
-        "google/gemini-2.5-flash:free",
-        "qwen/qwen3-235b-a22b:free",
-      ];
+        model,
+        "google/gemma-4-31b-it:free",
+        "minimax/minimax-m3:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "minimax/minimax-m2.7:free",
+      ].filter(Boolean);
 
       const companionInfo = `Имя: ${companion.name}, Раса: ${companion.race || "Человек"}, Класс: ${companion.class || "Спутник"}.
 Характер/привычки: ${Array.isArray(companion.habits) ? companion.habits.join(", ") : companion.habits || "Преданный соратник"}.
@@ -413,10 +415,12 @@ export async function generateCompanionDialogue(params: {
 Сгенерируй живую, выразительную реплику (1-2 предложения), обращаясь к игроку по имени (${player_name}).`;
 
       const modelsToTry = [
-        model || "meta-llama/llama-3.3-70b-instruct:free",
-        "google/gemini-2.5-flash:free",
-        "qwen/qwen3-235b-a22b:free",
-      ];
+        model,
+        "google/gemma-4-31b-it:free",
+        "minimax/minimax-m3:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "minimax/minimax-m2.7:free",
+      ].filter(Boolean);
 
       for (const curModel of modelsToTry) {
         try {

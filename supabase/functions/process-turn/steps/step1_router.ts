@@ -358,10 +358,11 @@ export async function parsePlayerIntent(
 
       const modelList = [
         resolvedModel,
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "qwen/qwen3-235b-a22b:free",
-        "google/gemini-2.5-flash:free",
-      ];
+        "google/gemma-4-31b-it:free",
+        "minimax/minimax-m3:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "minimax/minimax-m2.7:free",
+      ].filter(Boolean);
       const currentModel = modelList[attempt % modelList.length] || resolvedModel;
 
       const requestPayload: Record<string, any> = {

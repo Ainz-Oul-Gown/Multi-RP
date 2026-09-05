@@ -27,6 +27,117 @@ import { buildSatellitePrompt, buildGpsPrompt } from "./steps/_shared_prompts.ts
 import { RouterInputContext } from "./types.ts";
 import { evaluateStoryProgress } from "../_shared/storyProgressEvaluator.ts";
 
+// ============================================
+// ТУМАН ВОЙНЫ — вспомогательные функции (Deno-совместимые, без внешних импортов)
+// ============================================
+
+/** Distance Tier — уровни расстояния */
+const DISTANCE_TIER = { SAME_ROOM: 0, CLOSE: 1, NEARBY: 2, DISTRICT: 3, FAR: 4, VERY_FAR: 5 };
+
+/** Пороги слышимости/видимости по типу события */
+const FOG_THRESHOLDS: Record<string, { audioTier: number; visualTier: number }> = {
+  whisper:       { audioTier: 0, visualTier: 0 },
+  speech:        { audioTier: 2, visualTier: 1 },
+  shout:         { audioTier: 2, visualTier: 1 },
+  combat_light:  { audioTier: 1, visualTier: 1 },
+  combat_medium: { audioTier: 2, visualTier: 1 },
+  combat_heavy:  { audioTier: 3, visualTier: 2 },
+  magic_minor:   { audioTier: 1, visualTier: 2 },
+  magic_major:   { audioTier: 3, visualTier: 3 },
+  explosion:     { audioTier: 4, visualTier: 4 },
+  cataclysm:     { audioTier: 5, visualTier: 5 },
+};
+
+/** Шаблоны дистантного восприятия */
+const FOG_TEMPLATES: Record<string, Record<number, { audio?: string[]; visual?: string[] }>> = {
+  whisper: { 1: { audio: ["За стеной едва слышен тихий шёпот."] } },
+  speech:  {
+    1: { audio: ["Через стену доносится чей-то голос."] },
+    2: { audio: ["Откуда-то неподалёку слышны голоса."] },
+  },
+  shout: {
+    1: { audio: ["Сквозь стену кто-то прокричал: «{content}»", "За стеной раздался крик: «{content}»"] },
+    2: { audio: ["Откуда-то {dir} донёсся крик.", "С {dir} долетел отчаянный возглас."] },
+  },
+  combat_light: {
+    1: { audio: ["За стеной слышен шум возни.", "По ту сторону стены что-то упало."] },
+    2: { audio: ["С {dir} доносится едва слышный шум."] },
+  },
+  combat_medium: {
+    1: { audio: ["За стеной звенит сталь и слышны грузные удары."] },
+    2: { audio: ["С {dir} доносится звон стали.", "Где-то {dir} идёт потасовка."] },
+    3: { audio: ["С {dir} долетает отдалённый шум боя."] },
+  },
+  combat_heavy: {
+    1: { audio: ["Оглушительный грохот — стены дрожат."] },
+    2: { audio: ["С {dir} мощный удар, земля дрогнула."], visual: ["В стороне {dir} взметнулось облако пыли."] },
+    3: { audio: ["На {dir} послышался взрыв."], visual: ["Над крышами {dir} поднимается дым."] },
+  },
+  magic_minor: {
+    1: { visual: ["По ту сторону стены вспыхнул необычный свет."] },
+    2: { visual: ["Откуда-то {dir} проскочила странная вспышка."] },
+  },
+  magic_major: {
+    1: { audio: ["За стеной — оглушительная вспышка."] },
+    2: { audio: ["С {dir} удар грома."], visual: ["Над {dir} вспыхнул ослепительный свет."] },
+    3: { audio: ["На {dir} что-то взорвалось с магическим грохотом."], visual: ["На горизонте {dir} расцвёл всплеск энергии."] },
+  },
+  explosion: {
+    1: { audio: ["Оглушительный взрыв! Стены дрожат."] },
+    2: { audio: ["Рядом {dir} прогремел взрыв."], visual: ["С {dir} взметнулись языки пламени."] },
+    3: { audio: ["На {dir} отдалённый взрыв, земля дрогнула."], visual: ["Над крышами {dir} клубится чёрный дым."] },
+    4: { audio: ["Издалека {dir} донёсся едва слышный гром."], visual: ["Вдали {dir} поднимается столб дыма."] },
+  },
+  cataclysm: {
+    2: { audio: ["С {dir} чудовищный грохот, земля трясётся."], visual: ["Небо {dir} окрашивается в багровый цвет."] },
+    3: { audio: ["Земля дрожит — на {dir} что-то невообразимое."], visual: ["Горизонт {dir} пылает."] },
+    4: { audio: ["Отдалённый гул и дрожание почвы с {dir}."], visual: ["На горизонте {dir} — зарево."] },
+    5: { visual: ["Вдали {dir} что-то горит — столб дыма виден даже отсюда."] },
+  },
+};
+
+const FOG_DIRS = ["севере", "юге", "востоке", "западе", "северо-востоке", "юго-западе"];
+
+function fogPickNarrative(eventType: string, tier: number, content: string): string | null {
+  const tpl = FOG_TEMPLATES[eventType]?.[tier];
+  if (!tpl) return null;
+  const lines = [...(tpl.audio || []), ...(tpl.visual || [])];
+  if (!lines.length) return null;
+  const dir = FOG_DIRS[Math.floor(Math.random() * FOG_DIRS.length)];
+  const line = lines[Math.floor(Math.random() * lines.length)];
+  return line.replace(/\{dir\}/g, dir).replace(/\{content\}/g, content || "...");
+}
+
+function fogDetectEventType(actionText: string): string {
+  const t = actionText.toLowerCase();
+  if (/взрыв.{0,20}(здани|горы|замк)|обвал горы|землетрясен/.test(t)) return "cataclysm";
+  if (/взрыв|взрываю|взорвал|бомб|порох|фугас/.test(t)) return "explosion";
+  if (/огненн.{0,10}(шар|луч)|молни|гром.{0,10}(удар|магич)|призыв.{0,15}(демон|дух)/.test(t)) return "magic_major";
+  if (/магич|заклинани|огонёк|искр|чары|руны/.test(t)) return "magic_minor";
+  if (/(разбиваю|разруша|обрушива|ломаю).{0,20}(стен|дверь|ворот|колонн)|таран|катапульт/.test(t)) return "combat_heavy";
+  if (/\bкричу\b|\bкрикнул\b|\bзакричал\b|"[^"]{0,80}"/.test(t)) return "shout";
+  if (/говорю|спрашиваю|отвечаю|произношу/.test(t)) return "speech";
+  if (/шепчу|шёпотом|тихо.{0,10}(говор|скаж)|на ухо/.test(t)) return "whisper";
+  if (/(атакую|бью|удар|рублю|колю).{0,20}(мечом|топором|кинжалом|стрел|молотом)/.test(t)) return "combat_medium";
+  if (/атакую|бью|удар|пинаю|толкаю/.test(t)) return "combat_light";
+  return "combat_medium";
+}
+
+function fogGetDistanceTier(sourceZone: string | null, targetZone: string | null, locationMap: Record<string, Record<string, number>>): number {
+  if (!sourceZone || !targetZone) return 0;
+  if (sourceZone === targetZone) return 0;
+  const direct = locationMap?.[sourceZone]?.[targetZone];
+  if (direct !== undefined) return Number(direct);
+  const reverse = locationMap?.[targetZone]?.[sourceZone];
+  if (reverse !== undefined) return Number(reverse);
+  return DISTANCE_TIER.CLOSE; // разные зоны, карты нет → считаем соседними
+}
+
+function fogExtractSpeech(actionText: string): string {
+  const m = actionText.match(/[«"]([^»"]{1,120})[»"]/);
+  return m ? m[1] : "";
+}
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
@@ -322,8 +433,11 @@ serve(async (req) => {
     const recentMessages = (recentMsgs || []).reverse().map((m) => `[${m.sender_type === "master" ? "Мастер" : "Игрок"}]: ${cleanTextForAI(m.content).slice(0, 200)}`);
 
     // Load all players in session (for router, engine and system truth context)
-    const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*)").eq("session_id", session_id);
+    const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*), current_zone").eq("session_id", session_id);
     const allPlayers = allPlayersData || [];
+
+    // Загружаем карту расстояний зон из кэша сессии (заполняется при смене локации)
+    const locationMap: Record<string, Record<string, number>> = session.location_map || {};
 
     // Load all NPCs in current location (for router, engine and system truth context)
     let allNpcs: any[] = [];
@@ -958,6 +1072,58 @@ serve(async (req) => {
         content: narratorOutput.global_narrative,
         metadata: { type: "global_log", is_global: true, initiator_player_id: player.id },
       });
+    }
+
+    // 3.5) ТУМ ВОЙНЫ — fog-сообщения для игроков в других зонах
+    // Работает только при наличии нескольких игроков в сессии
+    if (allPlayers.length > 1) {
+      try {
+        const eventType = fogDetectEventType(safeActionText);
+        const thresholds = FOG_THRESHOLDS[eventType] || FOG_THRESHOLDS.combat_medium;
+        const actorZone: string | null = player.current_zone || null;
+        const speechContent = fogExtractSpeech(safeActionText);
+
+        // Наблюдатели = все игроки, кроме автора действия
+        const observers = allPlayers.filter((p: any) => p.id !== player.id);
+
+        let fogCount = 0;
+        for (const obs of observers) {
+          const obsZone: string | null = obs.current_zone || null;
+          const tier = fogGetDistanceTier(actorZone, obsZone, locationMap);
+
+          // same_room (tier 0) — этот игрок уже получит нарратив через personal_narratives
+          if (tier === DISTANCE_TIER.SAME_ROOM) continue;
+
+          const hears  = tier <= thresholds.audioTier;
+          const sees   = tier <= thresholds.visualTier;
+          if (!hears && !sees) continue; // слишком далеко — ничего не доходит
+
+          const fogText = fogPickNarrative(eventType, tier, speechContent);
+          if (!fogText) continue;
+
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "master",
+            sender_name: "Мастер",
+            content: fogText,
+            metadata: {
+              target_player_id: obs.id,
+              type: "fog_perception",
+              fog_event_type: eventType,
+              fog_distance_tier: tier,
+              fog_filtered: true,
+              initiator_player_id: player.id,
+            },
+          });
+          fogCount++;
+          console.log(`[${requestId}] [FOG] 🌫️ ${player.name} (${eventType}) → ${obs.name} tier=${tier}: "${fogText.slice(0, 60)}..."`);
+        }
+        if (fogCount > 0) {
+          console.log(`[${requestId}] [FOG] Dispatched ${fogCount} fog message(s) for event_type="${eventType}"`);
+        }
+      } catch (fogErr) {
+        console.warn(`[${requestId}] [FOG] Fog dispatch failed (non-critical):`, fogErr);
+      }
     }
 
     // 4) Companion action message

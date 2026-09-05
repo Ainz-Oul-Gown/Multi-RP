@@ -6,7 +6,8 @@ import {
   removeInventoryItem, exportPlayer, downloadJSON, getCurrentTurn,
   getTurnQueue, initTurnQueue, passTurn, createPlayer,
   getCharacterCards, getNpcRelationships, getNpcMemories, getRelationshipTierLabelClient,
-  getPlayerSkills, allocateStatPoints
+  getPlayerSkills, allocateStatPoints,
+  updatePlayerZone, updateLocationMap, getSessionPlayersWithZones
 } from '../api/game.js';
 import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows, getItemMeta } from '../config.js';
 import { toast } from '../utils/toast.js';
@@ -60,6 +61,7 @@ export async function renderGame(container, sessionId, user) {
   // Персональные сообщения Мастера (с metadata.target_player_id)
   // видны ТОЛЬКО указанному игроку. Глобальный нарратив (без target)
   // и системные сообщения видят все.
+  // fog_perception — видит только адресат (другой игрок-наблюдатель)
   // ============================================
   function isMessageVisibleToCurrentPlayer(msg) {
     if (!msg) return false;
@@ -81,6 +83,10 @@ export async function renderGame(container, sessionId, user) {
           return false;
         }
         return true;
+      }
+      // Fog-сообщение: видит ТОЛЬКО адресат
+      if (msg.metadata?.fog_filtered === true) {
+        return currentPlayer && targetPlayerId === currentPlayer.id;
       }
       if (!targetPlayerId) {
         return true;
@@ -481,6 +487,26 @@ export async function renderGame(container, sessionId, user) {
   function renderMessage(msg) {
     if (msg.sender_type === 'master') {
       const isGlobalLog = msg.metadata?.is_global === true || msg.metadata?.type === 'global_log';
+      const isFogMsg    = msg.metadata?.fog_filtered === true || msg.metadata?.type === 'fog_perception';
+
+      if (isFogMsg) {
+        // 🌫️ Дистантное восприятие — серо-коричневый стиль, курсив
+        return `
+          <div class="message message-fog" style="
+            display: flex; gap: 0.75rem; align-items: flex-start;
+            padding: 0.6rem 0.8rem;
+            background: linear-gradient(135deg, rgba(30,23,19,0.7) 0%, rgba(20,15,12,0.8) 100%);
+            border-left: 3px solid rgba(180,140,80,0.3);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            margin: 2px 0;
+            opacity: 0.85;
+          ">
+            <div style="font-size: 1rem; flex-shrink: 0; opacity: 0.6;">🌫️</div>
+            <div style="font-style: italic; color: var(--text-muted); font-size: var(--fs-sm); line-height: 1.5;">${escapeHtml(msg.content)}</div>
+          </div>
+        `;
+      }
+
       return `
         <div class="message ${isGlobalLog ? 'message-system' : 'message-master'}">
           <div class="message-avatar">${isGlobalLog ? '📜' : '🎭'}</div>

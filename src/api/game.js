@@ -270,6 +270,57 @@ export async function deletePlayer(id) {
   if (error) throw error;
 }
 
+// ===================== FOG OF WAR =====================
+
+/**
+ * Обновить текущую подзону игрока (для системы тумана войны).
+ * Вызывается при смене зоны в рамках текущей локации.
+ * @param {string} playerId
+ * @param {string|null} zone - название подзоны, например "tavern_kitchen". null = основная зона.
+ */
+export async function updatePlayerZone(playerId, zone) {
+  const { data, error } = await supabase
+    .from('players')
+    .update({ current_zone: zone || null })
+    .eq('id', playerId)
+    .select('id, current_zone')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Сохранить сгенерированную ИИ карту расстояний между зонами локации.
+ * @param {string} sessionId
+ * @param {object} locationMap - { "zone_a": { "zone_b": 2 }, ... }
+ */
+export async function updateLocationMap(sessionId, locationMap) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .update({ location_map: locationMap })
+    .eq('id', sessionId)
+    .select('id, location_map')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Загрузить всех игроков сессии с их зонами (облегчённый запрос для fog matrix).
+ * @param {string} sessionId
+ * @returns {Array<{id, name, user_id, current_zone}>}
+ */
+export async function getSessionPlayersWithZones(sessionId) {
+  const { data, error } = await supabase
+    .from('players')
+    .select('id, name, user_id, current_zone')
+    .eq('session_id', sessionId);
+  if (error) throw error;
+  return data || [];
+}
+
+
+
 // ===================== INVENTORY =====================
 
 export async function getPlayerInventory(playerId) {

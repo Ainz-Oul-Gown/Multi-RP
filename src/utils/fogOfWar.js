@@ -49,6 +49,36 @@ export const EVENT_THRESHOLDS = {
 };
 
 /**
+ * Модификаторы расстояния в зависимости от типа местности (terrain_type)
+ */
+export const TERRAIN_MODIFIERS = {
+  open:     { audioMod: 1,  visualMod: 2 },  // открытая поляна / поле: звук +1, видимость +2
+  forest:   { audioMod: -1, visualMod: -2 }, // лес / чаща: звук -1, видимость -2
+  cave:     { audioMod: 2,  visualMod: -3 }, // пещера: эхо +2, темнота -3
+  urban:    { audioMod: 0,  visualMod: -1 }, // город / улочки: видимость -1
+  building: { audioMod: -1, visualMod: -2 }, // здание / таверна: звук -1, видимость -2
+  mountain: { audioMod: -1, visualMod: 1 },  // горы: звук -1, видимость +1
+};
+
+/**
+ * Вычислить эффективные пороги слышимости и видимости с учётом типа местности
+ * @param {string} eventType
+ * @param {string|null} terrainType
+ * @returns {{ audioTier: number, visualTier: number }}
+ */
+export function getFogThresholds(eventType = 'combat_medium', terrainType = null) {
+  const base = EVENT_THRESHOLDS[eventType] || EVENT_THRESHOLDS.combat_medium;
+  const mod = terrainType && TERRAIN_MODIFIERS[terrainType]
+    ? TERRAIN_MODIFIERS[terrainType]
+    : { audioMod: 0, visualMod: 0 };
+
+  return {
+    audioTier: Math.max(0, Math.min(5, base.audioTier + mod.audioMod)),
+    visualTier: Math.max(0, Math.min(5, base.visualTier + mod.visualMod)),
+  };
+}
+
+/**
  * Кардинальные направления для дистантных описаний
  */
 const DIRECTIONS = ['севере', 'юге', 'востоке', 'западе', 'северо-востоке', 'северо-западе', 'юго-востоке', 'юго-западе'];
@@ -158,19 +188,21 @@ export function getDistanceTier(sourceZone, targetZone, locationMap = {}) {
  * @param {string|null} params.sourceZone  — зона игрока-инициатора
  * @param {Array} params.observers         — [{id, zone, name}] наблюдателей (другие игроки/NPC)
  * @param {object} params.locationMap      — карта расстояний
+ * @param {string|null} [params.terrainType] — тип местности ('open', 'forest', 'cave' и т.д.)
  * @param {string} [params.shoutContent]   — текст крика (для подстановки)
  * @param {string} [params.actorName]      — имя инициатора (для подстановки)
  * @returns {FogMatrix}
  */
 export function calcFogMatrix({
   eventType = 'combat_medium',
+  terrainType = null,
   sourceZone = null,
   observers = [],
   locationMap = {},
   shoutContent = '',
   actorName = 'кто-то',
 }) {
-  const thresholds = EVENT_THRESHOLDS[eventType] || EVENT_THRESHOLDS.combat_medium;
+  const thresholds = getFogThresholds(eventType, terrainType);
   const results = {};
 
   for (const obs of observers) {

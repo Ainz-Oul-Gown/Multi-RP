@@ -5,7 +5,8 @@ import {
   importWorld, exportWorld, downloadJSON,
   getUserSettings, upsertUserSettings, updateSession,
   getCharacterCards, createCharacterCard, updateCharacterCard, deleteCharacterCard,
-  exportPlayer, getNpcsByWorld, updateNpc, deleteNpc, createNpc
+  exportPlayer, getNpcsByWorld, updateNpc, deleteNpc, createNpc,
+  updateLocation, createLocation, deleteLocation
 } from '../api/game.js';
 import { generateAllNPCs, generateWorldGeography, saveWorldGeography, generateIntelligentNPCs, generateCreatures, canResumeGeneration, clearWorldGenerationProgress } from '../api/openrouter.js';
 import { toast } from '../utils/toast.js';
@@ -51,6 +52,172 @@ function updateLobbyState(key, value) {
 }
 
 const lobbyState = loadLobbyState();
+
+export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдизайнер и мастер ролевых игр (D&D 5e, Pathfinder, Dark Fantasy).
+Твоя задача — взять описание вымышленного мира от пользователя и сгенерировать ПОЛНЫЙ, ВАЛИДНЫЙ JSON-файл мира для системы «Multi-RP v3.2».
+
+ОТВЕТ ДОЛЖЕН БЫТЬ СТРОГО В ВИДЕ ЕДИНОГО JSON-ОБЪЕКТА (без разметки markdown, без вступительного и заключительного текста, только чистый валидный JSON).
+
+### СТРУКТУРА JSON ОБЪЕКТА:
+{
+  "world": {
+    "name": "Название мира",
+    "description": "Глубокое атмосферное описание мира, эпохи и конфликтов",
+    "settings": {
+      "races": ["Человек", "Эльф", "Дварф", "Гном", "Зверолюд"],
+      "classes": ["Воин", "Маг", "Следопыт", "Плут", "Жрец"],
+      "max_level": 20,
+      "storyline": {
+        "title": "Основная сюжетная кампания",
+        "summary": "Краткое описание глобального конфликта",
+        "prologue": "Вводный текст, где и как начинаются приключения",
+        "current_arc_index": 0,
+        "arcs": [
+          {
+            "id": "arc_1",
+            "act": 1,
+            "title": "Акт I: Завязка",
+            "description": "Первые шаги героев, исследование угроз",
+            "goals": ["Цель 1", "Цель 2"],
+            "key_npcs": ["Имя NPC 1", "Имя NPC 2"],
+            "key_locations": ["Локация 1"]
+          },
+          {
+            "id": "arc_2",
+            "act": 2,
+            "title": "Акт II: Развитие конфликта",
+            "description": "Усугубление кризиса",
+            "goals": ["Цель 1"],
+            "key_npcs": ["Имя NPC 3"],
+            "key_locations": ["Локация 2"]
+          },
+          {
+            "id": "arc_3",
+            "act": 3,
+            "title": "Акт III: Кульминация",
+            "description": "Решающая битва или открытое противостояние",
+            "goals": ["Цель 1"],
+            "key_npcs": ["Имя NPC 4"],
+            "key_locations": ["Локация 3"]
+          },
+          {
+            "id": "arc_4",
+            "act": 4,
+            "title": "Акт IV: Развязка и Эпилог",
+            "description": "Последствия и новый баланс сил",
+            "goals": ["Цель 1"],
+            "key_npcs": ["Имя NPC 1"],
+            "key_locations": ["Локация 1"]
+          }
+        ]
+      }
+    }
+  },
+  "lore_files": [
+    {
+      "folder": "История",
+      "title": "Хроника Эпохи",
+      "content": "Детальный текст лора для ИИ-мастера игры...",
+      "tags": ["история", "летопись"]
+    },
+    {
+      "folder": "Фракции",
+      "title": "Орден или Гильдия",
+      "content": "Описание фракции, её целей и ресурсов...",
+      "tags": ["фракции", "власть"]
+    }
+  ],
+  "geography": {
+    "states": [
+      {
+        "name": "Название государства или региона",
+        "description": "Политическое устройство, климат, культура"
+      }
+    ],
+    "locations": [
+      {
+        "name": "Название локации",
+        "state_name": "Точное совпадение с одним из states[].name",
+        "type": "city",
+        "terrain_type": "urban",
+        "description": "Атмосферное описание локации",
+        "zones": [
+          { "id": "loc1_square", "name": "Центральная площадь", "type": "open" },
+          { "id": "loc1_tavern", "name": "Таверна / Таверна-постоялый двор", "type": "closed" },
+          { "id": "loc1_gates", "name": "Северные ворота", "type": "open" }
+        ],
+        "location_map": {
+          "loc1_square": { "loc1_square": 0, "loc1_tavern": 25, "loc1_gates": 50 },
+          "loc1_tavern": { "loc1_square": 25, "loc1_tavern": 0, "loc1_gates": 65 },
+          "loc1_gates": { "loc1_square": 50, "loc1_tavern": 65, "loc1_gates": 0 }
+        }
+      }
+    ]
+  },
+  "bestiary": {
+    "npcs": [
+      {
+        "name": "Имя NPC или видовое название (для зверей/монстров — без личных имён)",
+        "race": "Человек",
+        "class": "Торговец / Воин / Маг",
+        "category": "npc",
+        "role": "main",
+        "temperament": "Хитрый прагматик, ценящий выгоду и осторожность",
+        "motivation": "Накопить состояние и защитить свою семью от гнева лорда",
+        "current_mood": "calm",
+        "speech_style": "Говорит неторопливо, с легкой иронией и торговыми метафорами",
+        "secrets": "Тайно скупает контрабандные лунные кристаллы",
+        "rumors": [
+          "Поговаривают, что в подвалах старого замка видели странное свечение",
+          "Стража на тракте берет двойную пошлину с чужеземцев"
+        ],
+        "daily_routine": "Утро: обход торговых лавок; День: встречи с поставщиками; Вечер: отдых в таверне; Ночь: пересчет выручки",
+        "current_activity": "Внимательно изучает старинную карту и делает пометки",
+        "description": "Крепкий мужчина средних лет в добротном шерстяном дублете...",
+        "level": 3,
+        "tier": 1,
+        "hit_dice": 8,
+        "stats": {
+          "strength": 12,
+          "dexterity": 14,
+          "constitution": 12,
+          "intelligence": 15,
+          "wisdom": 14,
+          "charisma": 16
+        },
+        "base_attacks": ["Короткий клинок (1d6+2)"],
+        "special_attacks": ["Призыв наёмников", "Ослепляющий порошок"],
+        "habits": ["Постоянно подбрасывает медную монетку", "Смотрит прямо в глаза собеседнику"],
+        "catchphrases": ["У каждой монеты две стороны, друг мой.", "Время — самый дорогой товар."],
+        "status_tags": ["Купец", "Информатор"]
+      }
+    ]
+  }
+}
+
+### ОБЯЗАТЕЛЬНЫЕ ТРЕБОВАНИЯ К ДАННЫМ:
+1. **locations[].terrain_type**: СТРОГО одно из 6 значений:
+   - "urban" (город, крепость, поселение)
+   - "building" (внутри здания, храма, замка)
+   - "forest" (леса, рощи, чащи)
+   - "cave" (пещеры, катакомбы, рудники)
+   - "mountain" (горы, перевалы, скалы)
+   - "open" (равнины, поля, побережья, тракты)
+2. **locations[].zones и location_map**:
+   - В каждой локации должно быть от 2 до 5 подзон (zones) с уникальными строковыми id.
+   - location_map — СИММЕТРИЧНАЯ матрица расстояний в метрах (например, от 10 до 120м):
+     location_map[A][B] === location_map[B][A], а расстояние до самой себя location_map[A][A] = 0.
+3. **bestiary.npcs[].current_mood**: СТРОГО одно из:
+   - "calm", "suspicious", "cheerful", "irritated", "frightened", "impressed", "mournful"
+4. **bestiary.npcs[].category**: "npc" | "beast" | "monster" | "boss"
+5. **bestiary.npcs[].role**: "main" | "secondary" | "tertiary"
+6. **bestiary.npcs[].name**: Для разумных NPC и уникальных боссов — персональное имя ("Барон Валериан", "Верховный жрец"). Для диких зверей и рядовых монстров — ТОЛЬКО видовое имя без личных имён ("Лютый волк", "Пещерный паук", "Болотный упырь").
+7. **stats**: Значения от 1 до 30 (10 — средний человек).
+8. Сгенерируй богатый, живой мир: 2-3 государства, 4-6 локаций с зонами и матрицами расстояний, 6-12 детальных NPC со всеми психологическими полями, слухами и распорядком дня!
+
+---
+[ОПИШИТЕ ВАШ МИР ЗДЕСЬ]:
+`;
 
 export function renderLobby(container, user) {
   let { activeTab, openModal } = lobbyState;
@@ -450,10 +617,10 @@ export function renderLobby(container, user) {
     bestiaryModal.className = 'modal-overlay';
     bestiaryModal.id = 'bestiaryModal';
     bestiaryModal.innerHTML = `
-      <div class="modal" style="max-width: 700px; max-height: 85vh; overflow-y: auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="modal" style="max-width: 920px; max-height: 88vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
           <h2 class="card-title">🐉 Бестиарий: <span id="bestiaryWorldName"></span></h2>
-          <div style="display: flex; gap: 0.5rem;">
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
             <button class="btn btn-secondary btn-sm" id="openGeoBtn">🗺️ География</button>
             <button class="btn btn-warning btn-sm" id="resumeGenBtn" style="display: none;">⏳ Продолжить</button>
             <button class="btn btn-success btn-sm" id="finishGenBtn" style="display: none;">✨ Дополнить мир</button>
@@ -472,6 +639,18 @@ export function renderLobby(container, user) {
             <div class="gen-progress-fill" id="genProgressFill" style="width: 0%"></div>
           </div>
         </div>
+
+        <!-- Поиск и фильтры бестиария -->
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center;">
+          <input class="input" id="bestiarySearchInput" placeholder="🔍 Поиск по имени, расе, роли, локации, настроению, репликам..." style="flex: 1; min-width: 240px;" />
+          <select class="input" id="bestiaryRoleFilter" style="width: auto; min-width: 150px;">
+            <option value="all">⭐ Все роли</option>
+            <option value="main">⭐ Главные (main)</option>
+            <option value="secondary">○ Второстепенные (secondary)</option>
+            <option value="tertiary">· Третьи (tertiary)</option>
+          </select>
+          <span id="bestiaryCountText" class="text-muted" style="font-size: var(--fs-xs); white-space: nowrap; margin-left: auto;"></span>
+        </div>
         
         <!-- Вкладки категорий -->
         <div class="bestiary-tabs">
@@ -482,27 +661,23 @@ export function renderLobby(container, user) {
           <button class="bestiary-tab" data-category="boss">💀 Боссы</button>
         </div>
         
-        <div id="createNpcForm" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
-          <h3 style="margin-bottom: 0.5rem;">Новый NPC</h3>
+        <!-- Форма создания нового NPC -->
+        <div id="createNpcForm" style="display: none; margin-bottom: 1rem; padding: 1.25rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-gold);">
+          <h3 style="margin-bottom: 0.75rem; color: var(--accent-gold-bright);">✨ Новый персонаж / существо</h3>
+          
+          <div class="npc-section-title">📋 Основная информация</div>
           <div class="npc-form-grid">
             <div class="form-group">
-              <label class="form-label">Имя *</label>
-              <input class="input" id="new-npc-name" placeholder="Имя NPC" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Роль</label>
-              <select class="input" id="new-npc-role">
-                <option value="secondary">Второстепенный</option>
-                <option value="main">Главный</option>
-              </select>
+              <label class="form-label">Имя / Вид *</label>
+              <input class="input" id="new-npc-name" placeholder="Имя NPC или Вид существа" />
             </div>
             <div class="form-group">
               <label class="form-label">Раса</label>
-              <input class="input" id="new-npc-race" value="Человек" />
+              <input class="input" id="new-npc-race" value="Человек" placeholder="Человек, Эльф, Дварф..." />
             </div>
             <div class="form-group">
-              <label class="form-label">HP</label>
-              <input class="input" type="number" id="new-npc-hp" value="30" />
+              <label class="form-label">Класс / Профессия</label>
+              <input class="input" id="new-npc-class" placeholder="Воин, Кузнец, Трактирщик..." />
             </div>
             <div class="form-group">
               <label class="form-label">Категория</label>
@@ -514,17 +689,37 @@ export function renderLobby(container, user) {
               </select>
             </div>
             <div class="form-group">
+              <label class="form-label">Роль</label>
+              <select class="input" id="new-npc-role">
+                <option value="secondary">○ Второстепенный</option>
+                <option value="main">⭐ Главный</option>
+                <option value="tertiary">· Третьестепенный</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label class="form-label">Локация</label>
-              <input class="input" id="new-npc-location" placeholder="Название города" />
+              <input class="input" id="new-npc-location" placeholder="Название локации или города" />
             </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Внешность</label>
-            <textarea class="input" id="new-npc-appearance" rows="2" placeholder="Описание внешности..."></textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Предыстория</label>
-            <textarea class="input" id="new-npc-background" rows="2" placeholder="Предыстория NPC..."></textarea>
+
+          <div class="npc-section-title">⚔️ Боевые параметры и характеристики</div>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; min-width: 80px;">
+              <label class="form-label">Уровень</label>
+              <input class="input" type="number" id="new-npc-level" value="1" min="1" max="100" />
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 80px;">
+              <label class="form-label">HP</label>
+              <input class="input" type="number" id="new-npc-hp" value="30" min="1" />
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 80px;">
+              <label class="form-label">КД (Armor)</label>
+              <input class="input" type="number" id="new-npc-ac" value="10" min="1" max="40" />
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 80px;">
+              <label class="form-label">Инициатива</label>
+              <input class="input" type="number" id="new-npc-init" value="0" min="-10" max="20" />
+            </div>
           </div>
           <div class="stats-grid-3" style="margin-bottom: 0.75rem;">
             <div class="stat-card">
@@ -552,23 +747,78 @@ export function renderLobby(container, user) {
               <input class="stat-card-input" type="number" id="new-npc-cha" value="10" min="1" max="30" />
             </div>
           </div>
+
+          <div class="npc-section-title">🧠 Психология, Настроение и Отыгрыш</div>
+          <div class="npc-form-grid">
+            <div class="form-group">
+              <label class="form-label">Темперамент</label>
+              <input class="input" id="new-npc-temperament" placeholder="прагматик, сангвиник, холерик, осторожный..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Текущее настроение</label>
+              <select class="input" id="new-npc-current-mood">
+                <option value="calm">😌 Спокоен (calm)</option>
+                <option value="suspicious">🤨 Подозрителен (suspicious)</option>
+                <option value="cheerful">😄 Весел / благодушен (cheerful)</option>
+                <option value="irritated">😠 Раздражён / зол (irritated)</option>
+                <option value="frightened">😨 Напуган / в панике (frightened)</option>
+                <option value="impressed">🤩 Впечатлён / восхищён (impressed)</option>
+                <option value="mournful">😢 Печален / подавлен (mournful)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Мотивация / Личная цель</label>
+              <input class="input" id="new-npc-motivation" placeholder="К чему стремится персонаж..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Стиль речи / Манера говорить</label>
+              <input class="input" id="new-npc-speech-style" placeholder="жаргон, витиеватый аристократизм, хриплый бас..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Текущее занятие (сцена)</label>
+              <input class="input" id="new-npc-current-activity" placeholder="Чем занят прямо сейчас в локации..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Распорядок дня</label>
+              <input class="input" id="new-npc-daily-routine" placeholder="утром в лавке, днем на базаре, ночью спит..." />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Тайны и уязвимости (доверие >70)</label>
+            <textarea class="input" id="new-npc-secrets" rows="2" placeholder="Скрытые слабости или тайны, раскрываемые только близким друзьям..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Слухи и зацепки (каждый с новой строки)</label>
+            <textarea class="input" id="new-npc-rumors" rows="2" placeholder="Слух 1 о событиях в мире&#10;Слух 2 о сокровищах или заговорах"></textarea>
+          </div>
+
+          <div class="npc-section-title">📜 Внешность, Предыстория и Повадки</div>
+          <div class="form-group">
+            <label class="form-label">Внешность</label>
+            <textarea class="input" id="new-npc-appearance" rows="2" placeholder="Описание внешности, одежды, примет..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Предыстория</label>
+            <textarea class="input" id="new-npc-background" rows="2" placeholder="Предыстория персонажа..."></textarea>
+          </div>
           <div class="form-group">
             <label class="form-label">Привычки (через запятую)</label>
-            <input class="input" id="new-npc-habits" placeholder="читать книги, гулять по саду" />
+            <input class="input" id="new-npc-habits" placeholder="крутит монету, поправляет воротник" />
           </div>
           <div class="form-group">
             <label class="form-label">Коронные фразы (через запятую)</label>
-            <input class="input" id="new-npc-catchphrases" placeholder="Корона тяжела, Нард превыше всего" />
+            <input class="input" id="new-npc-catchphrases" placeholder="Монета не пахнет, Предки ведут меня" />
           </div>
           <div class="form-group">
             <label class="form-label">Теги статуса (через запятую)</label>
-            <input class="input" id="new-npc-status-tags" placeholder="друг, наставник" />
+            <input class="input" id="new-npc-status-tags" placeholder="торговец, наставник, стражник" />
           </div>
-          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-            <button class="btn btn-primary" id="saveNewNpcBtn">💾 Создать</button>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button class="btn btn-primary" id="saveNewNpcBtn">💾 Создать NPC</button>
             <button class="btn btn-ghost" id="cancelNewNpcBtn">Отмена</button>
           </div>
         </div>
+
         <div id="bestiaryContent">
           <p class="text-muted">Загрузка...</p>
         </div>
@@ -576,13 +826,13 @@ export function renderLobby(container, user) {
     `;
     container.appendChild(bestiaryModal);
 
-    // Модальное окно: География (Государства и Города)
+    // Модальное окно: География (Государства, Локации, Подзоны и Туман Войны)
     const geoModal = document.createElement('div');
     geoModal.className = 'modal-overlay';
     geoModal.id = 'geoModal';
     geoModal.innerHTML = `
-      <div class="modal" style="max-width: 700px; max-height: 85vh; overflow-y: auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="modal" style="max-width: 920px; max-height: 88vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
           <h2 class="card-title">🗺️ География: <span id="geoWorldName"></span></h2>
           <div style="display: flex; gap: 0.5rem;">
             <button class="btn btn-primary btn-sm" id="createStateBtn">+ Государство</button>
@@ -591,15 +841,15 @@ export function renderLobby(container, user) {
         </div>
         
         <!-- Форма создания государства -->
-        <div id="createStateForm" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
-          <h3 style="margin-bottom: 0.5rem;">Новое государство</h3>
+        <div id="createStateForm" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-gold);">
+          <h3 style="margin-bottom: 0.5rem; color: var(--accent-gold-bright);">🏰 Новое государство / Регион</h3>
           <div class="form-group">
             <label class="form-label">Название *</label>
             <input class="input" id="new-state-name" placeholder="Название государства" />
           </div>
           <div class="form-group">
             <label class="form-label">Описание</label>
-            <textarea class="input" id="new-state-desc" rows="2" placeholder="Описание государства..."></textarea>
+            <textarea class="input" id="new-state-desc" rows="2" placeholder="Описание государства, климата, политики..."></textarea>
           </div>
           <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
             <button class="btn btn-primary" id="saveNewStateBtn">💾 Создать</button>
@@ -607,16 +857,16 @@ export function renderLobby(container, user) {
           </div>
         </div>
         
-        <!-- Форма создания города -->
-        <div id="createCityForm" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
-          <h3 style="margin-bottom: 0.5rem;">Новая локация</h3>
+        <!-- Форма создания локации -->
+        <div id="createCityForm" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-gold);">
+          <h3 style="margin-bottom: 0.5rem; color: var(--accent-gold-bright);">📍 Новая локация</h3>
           <div class="npc-form-grid">
             <div class="form-group">
               <label class="form-label">Название *</label>
               <input class="input" id="new-city-name" placeholder="Название локации" />
             </div>
             <div class="form-group">
-              <label class="form-label">Тип</label>
+              <label class="form-label">Тип локации</label>
               <select class="input" id="new-city-type">
                 <option value="city">🏘️ Город</option>
                 <option value="capital">👑 Столица</option>
@@ -625,17 +875,33 @@ export function renderLobby(container, user) {
                 <option value="landmark">⛰️ Достопримечательность</option>
               </select>
             </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Государство</label>
-            <select class="input" id="new-city-state"></select>
+            <div class="form-group">
+              <label class="form-label">Тип местности (Туман Войны)</label>
+              <select class="input" id="new-city-terrain">
+                <option value="urban">🏙️ Город / Улицы (urban)</option>
+                <option value="building">🏰 Здание / Замок (building)</option>
+                <option value="forest">🌲 Лес / Джунгли (forest)</option>
+                <option value="cave">🕳️ Пещера / Подземелье (cave)</option>
+                <option value="mountain">⛰️ Горы / Скалы (mountain)</option>
+                <option value="open">🌾 Открытая равнина / Поля (open)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Государство</label>
+              <select class="input" id="new-city-state"></select>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Описание</label>
-            <textarea class="input" id="new-city-desc" rows="2" placeholder="Описание локации..."></textarea>
+            <textarea class="input" id="new-city-desc" rows="2" placeholder="Атмосферное описание локации..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Стартовые подзоны (через запятую)</label>
+            <input class="input" id="new-city-subzones" value="Вход, Центральная часть, Окрестности" placeholder="Вход, Рыночная площадь, Закоулки" />
+            <span class="form-hint">Система автоматически сформирует подзоны и свяжет их начальной матрицей расстояний</span>
           </div>
           <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-            <button class="btn btn-primary" id="saveNewCityBtn">💾 Создать</button>
+            <button class="btn btn-primary" id="saveNewCityBtn">💾 Создать локацию</button>
             <button class="btn btn-ghost" id="cancelNewCityBtn">Отмена</button>
           </div>
         </div>
@@ -647,187 +913,73 @@ export function renderLobby(container, user) {
     `;
     container.appendChild(geoModal);
 
-    // Модальное окно: Структура файла экспорта
+    // Модальное окно: Структура файла экспорта и Генератор для ИИ
     const schemaModal = document.createElement('div');
     schemaModal.className = 'modal-overlay';
     schemaModal.id = 'schemaModal';
     schemaModal.innerHTML = `
-      <div class="modal" style="max-width: 700px; max-height: 85vh; overflow-y: auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <h2 class="card-title">ℹ️ Структура файла экспорта</h2>
+      <div class="modal" style="max-width: 950px; max-height: 88vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+          <h2 class="card-title">ℹ️ Справка и Генератор Мира для ИИ</h2>
           <button class="btn btn-ghost btn-sm" id="closeSchemaBtn">✕</button>
         </div>
         <div class="schema-content">
-          <p class="form-hint" style="margin-bottom: 1rem;">Файл экспорта мира содержит все данные для полного восстановления:</p>
-          
-          <div class="schema-section">
-            <h4>📁 Основные данные</h4>
-            <ul>
-              <li><strong>world</strong> — название, настройки (races, classes, max_level), описание</li>
-              <li><strong>lore_files</strong> — файлы лора (папка, заголовок, содержимое, теги)</li>
-              <li><strong>folders</strong> — структура папок</li>
-            </ul>
+
+          <!-- Блок прямого копирования мастер-промпта для внешней нейросети -->
+          <div class="prompt-copy-card">
+            <div class="prompt-copy-header">
+              <div>
+                <h3 style="color: var(--accent-gold-bright); margin-bottom: 2px;">🤖 Мастер-промпт для нейросетей (ChatGPT / Claude / DeepSeek)</h3>
+                <p class="form-hint" style="margin: 0;">Скопируйте текст в один клик, отправьте любой нейросети вместе с описанием вашего мира — она создаст 100% валидный JSON для Multi-RP со всеми подзонами, матрицами расстояний и живой психологией NPC!</p>
+              </div>
+              <button class="btn btn-success btn-sm" id="copyMasterPromptBtn" style="white-space: nowrap;">📋 Скопировать промпт для ИИ</button>
+            </div>
+            <textarea class="prompt-textarea" id="masterPromptTextarea" rows="9" readonly></textarea>
           </div>
           
           <div class="schema-section">
-            <h4>🗺️ География (geography)</h4>
+            <h4>📁 Основные данные и Сюжет (Storyline)</h4>
             <ul>
-              <li><strong>states[]</strong> — государства (name, description, ruler_id)</li>
-              <li><strong>locations[]</strong> — локации (name, type: capital/city/village/ruins/landmark, description)</li>
-            </ul>
-          </div>
-          
-          <div class="schema-section">
-            <h4>🐉 Бестиарий (bestiary)</h4>
-            <ul>
-              <li><strong>npcs[]</strong> — все NPC и существа</li>
-              <li style="margin-left: 1rem;">name (имя/название вида), race, category (npc/beast/monster/boss)</li>
-              <li style="margin-left: 1rem;">role (main/secondary/tertiary), appearance, background</li>
-              <li style="margin-left: 1rem;">stats (STR/DEX/CON/INT/WIS/CHA), hp, max_hp</li>
-              <li style="margin-left: 1rem;"><strong>Боевые характеристики:</strong> level, armor_class (КД), initiative, saving_throws</li>
-              <li style="margin-left: 1rem;">status_tags[], habits[], catchphrases[]</li>
-              <li style="margin-left: 1rem;">location_id (только NPC), state_id</li>
-            </ul>
-          </div>
-          
-          <div class="schema-section" style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; margin-top: 1rem;">
-            <h4>🤖 Критерии ИИ для генерации</h4>
-            <p class="form-hint" style="margin-bottom: 0.5rem;">При генерации контента ИИ следует этим правилам:</p>
-            
-            <h5 style="margin-top: 0.75rem;">📐 Унификация сущностей</h5>
-            <ul>
-              <li>Все имена на русском языке (транслитерация запрещена)</li>
-              <li>Расы и классы из настроек мира (world.settings)</li>
-              <li>Статы в диапазоне 1-30, сумма: 50 (слабые) до 200 (легендарные)</li>
-              <li>Игрок начинает с 72 — существа могут быть слабее или сильнее</li>
-            </ul>
-            
-            <h5 style="margin-top: 0.75rem;">👥 Стироля персонажей</h5>
-            <ul>
-              <li><strong>main</strong> — главные (протагонисты, антагонисты)</li>
-              <li><strong>secondary</strong> — второстепенные (спутники, торговцы)</li>
-              <li><strong>tertiary</strong> — третьестепенные (звери, монстры)</li>
-            </ul>
-            
-            <h5 style="margin-top: 0.75rem;">📝 Правила именования</h5>
-            <ul>
-              <li>Звери/монстры: имя НЕ ДАВАТЬ! Только вид: "Волк", "Гоблин"</li>
-              <li>Исключение: уникальные боссы (is_unique: true) получают имя</li>
-              <li>Все NPC-люди/эльфы/гномы: всегда дают имя</li>
-              <li>Стаи (is_pack: true) — группа существ без имени</li>
-            </ul>
-            
-            <h5 style="margin-top: 0.75rem;">⚔️ Потенциал (Tier) vs Уровень (Level)</h5>
-            <ul>
-              <li><strong>Tier (1-5)</strong> = потенциал, определяет количество спецатак</li>
-              <li><strong>Level (1-100)</strong> = текущая сила</li>
-              <li>Детеныш дракона: Tier 5, Level 1 (слаб, но 5 спецатак)</li>
-              <li>Взрослый дракон: Tier 5, Level 80 (могуществен)</li>
-            </ul>
-            
-            <h5 style="margin-top: 0.75rem;">📊 Диапазоны уровней по видам</h5>
-            <ul>
-              <li>Слизь: 1-10 | Волк: 5-15 | Орк: 10-25</li>
-              <li>Тролль: 15-35 | Демон: 30-80 | Дракон: 50-100</li>
-            </ul>
-            
-            <h5 style="margin-top: 0.75rem;">🎲 Кости хитов (Hit Dice)</h5>
-            <ul>
-              <li><strong>d6 (среднее 4):</strong> волшебник, чародей, маг</li>
-              <li><strong>d8 (среднее 5):</strong> бард, жрец, друид, монах, плут, шаман</li>
-              <li><strong>d10 (среднее 6):</strong> воин, паладин, следопыт, наемник, рыцарь</li>
-              <li><strong>d12 (среднее 7):</strong> варвар, берсерк</li>
-              <li><strong>Звери/монстры:</strong> d8, боссы: d10</li>
-            </ul>
-            
-            <h5 style="margin-top: 0.75rem;">❤️ Расчёт HP (D&D система)</h5>
-            <ul>
-              <li><strong>Уровень 1:</strong> макс кости + CON mod + 10</li>
-              <li><strong>Каждый следующий:</strong> среднее кости + CON mod</li>
-              <li><strong>Пример:</strong> Воин (d10), CON 18 (+4), уровень 5 = 10+4+10 + 4×(6+4) = 24 + 40 = 64 HP</li>
-            </ul>
-            
-            <h5 style="margin-top: 0.75rem;">⚔️ Типы урона (D&D)</h5>
-            <ul>
-              <li><strong>Физические:</strong> slashing (режущий), piercing (колющий), bludgeoning (дробящий)</li>
-              <li><strong>Стихийные:</strong> fire (огонь, DoT), cold (холод), lightning (молния), thunder (звук)</li>
-              <li><strong>Магические:</strong> acid (кислота, DoT), poison (яд, DoT), necrotic (некроз), radiant (свет), psychic (психический), force (силовой)</li>
-              <li><strong>DoT (урон каждый ход):</strong> fire (2-3), acid (2), poison (3)</li>
-              <li><strong>Спасброски:</strong> DEX (fire, lightning, acid), CON (cold, poison), WIS (psychic), STR (force)</li>
-            </ul>
-            
-            <h5 style="margin-top: 0.75rem;">📊 Диапазон уровней (для неуникальных)</h5>
-            <ul>
-              <li><strong>level_min / level_max:</strong> диапазон уровней при спавне</li>
-              <li><strong>Примеры:</strong> Волк 5-15, Орк 10-25, Дракон 50-100</li>
-              <li><strong>Уникальные:</strong> level_min = level_max = level</li>
+              <li><strong>world.name</strong> — название сеттинга/мира</li>
+              <li><strong>world.description</strong> — общее атмосферное описание эпохи</li>
+              <li><strong>world.settings</strong> — расы (races[]), классы (classes[]), макс. уровень (max_level: 20)</li>
+              <li><strong>world.settings.storyline</strong> — 4 сюжетных акта (act_1 .. act_4) с полями <code>title</code>, <code>description</code>, <code>key_npcs[]</code>, <code>key_locations[]</code></li>
+              <li><strong>lore_files[]</strong> — файлы лора (folder, title, content, tags[])</li>
             </ul>
           </div>
           
           <div class="schema-section">
-            <h4>📋 Пример JSON</h4>
-            <p class="form-hint" style="margin-bottom: 0.5rem;">Расчётные поля (hp, max_hp, armor_class, initiative, saving_throws) рассчитываются автоматически:</p>
-            <pre class="code-example">{
-  "version": "3.1",
-  "world": { "name": "...", "settings": { "races": [...] }, "description": "..." },
-  "geography": {
-    "states": [{
-      "name": "Королевство",
-      "locations": [{ "name": "Столица", "type": "capital" }]
-    }]
-  },
-  "bestiary": {
-    "npcs": [
-      {
-        "name": "Король",
-        "class": "Рыцарь",
-        "category": "npc",
-        "role": "main",
-        "tier": 3,
-        "level": 15,
-        "hit_dice": 10,
-        "stats": {"STR": 14, "DEX": 10, "CON": 12, "INT": 14, "WIS": 13, "CHA": 16},
-        "special_attacks": [{
-          "name": "Королевский приказ",
-          "description": "Призывает стражу",
-          "damage_type": "force",
-          "damage_dice": "2d6",
-          "is_dot": false
-        }],
-        "base_attacks": [{
-          "name": "Меч",
-          "description": "Удар мечом",
-          "damage_type": "slashing",
-          "damage_dice": "1d8+2"
-        }]
-      },
-      {
-        "name": "Волк",
-        "category": "beast",
-        "role": "tertiary",
-        "tier": 2,
-        "level": 8,
-        "hit_dice": 8,
-        "stats": {"STR": 12, "DEX": 14, "CON": 10, "INT": 3, "WIS": 8, "CHA": 4},
-        "is_pack": true,
-        "special_attacks": [{
-          "name": "Укус",
-          "description": "Проникающий укус",
-          "damage_type": "piercing",
-          "damage_dice": "1d6",
-          "is_dot": false
-        }],
-        "base_attacks": [{
-          "name": "Когти",
-          "description": "Царапина когтями",
-          "damage_type": "slashing",
-          "damage_dice": "1d4"
-        }]
-      }
-    ]
-  }
-}</pre>
+            <h4>🗺️ География и Навигация (geography)</h4>
+            <ul>
+              <li><strong>states[]</strong> — государства и регионы (name, description, ruler_id)</li>
+              <li><strong>locations[]</strong> — города, деревни, руины:</li>
+              <li style="margin-left: 1rem;"><code>name</code>, <code>type</code> (capital / city / village / ruins / landmark)</li>
+              <li style="margin-left: 1rem;"><code>terrain_type</code> (<strong>urban</strong> | <strong>building</strong> | <strong>forest</strong> | <strong>cave</strong> | <strong>mountain</strong> | <strong>open</strong>) — определяет Туман Войны, обзор и модификаторы движения</li>
+              <li style="margin-left: 1rem;"><code>zones[]</code> — подзоны локации (id, name, type: "open" | "closed")</li>
+              <li style="margin-left: 1rem;"><code>location_map</code> — симметричная матрица расстояний в метрах между всеми подзонами: <code>location_map[A][B] === location_map[B][A]</code>, <code>location_map[A][A] = 0</code></li>
+            </ul>
           </div>
+          
+          <div class="schema-section">
+            <h4>🐉 Бестиарий, Психология и Отыгрыш (bestiary)</h4>
+            <ul>
+              <li><strong>npcs[]</strong> — все разумные жители и существа мира:</li>
+              <li style="margin-left: 1rem;"><code>name</code> (имя для NPC и уникальных боссов; для диких зверей — только вид: "Волк", "Пещерный медведь")</li>
+              <li style="margin-left: 1rem;"><code>race</code>, <code>class</code>, <code>category</code> (npc / beast / monster / boss), <code>role</code> (main / secondary / tertiary)</li>
+              <li style="margin-left: 1rem;"><strong>Психология и Речь:</strong></li>
+              <li style="margin-left: 2rem;"><code>temperament</code> — темперамент (прагматик, сангвиник, холерик, меланхолик, осторожный, фанатик...)</li>
+              <li style="margin-left: 2rem;"><code>motivation</code> — личная скрытая или явная цель персонажа (богатство, защита семьи, власть, спасение)</li>
+              <li style="margin-left: 2rem;"><code>current_mood</code> — строго одно из: <strong>calm</strong> | <strong>suspicious</strong> | <strong>cheerful</strong> | <strong>irritated</strong> | <strong>frightened</strong> | <strong>impressed</strong> | <strong>mournful</strong></li>
+              <li style="margin-left: 2rem;"><code>speech_style</code> — манера речи (жаргон наёмников, витиеватый слог, хрипота, лаконичные фразы)</li>
+              <li style="margin-left: 2rem;"><code>secrets</code> — тайна персонажа, раскрываемая ИИ только при доверии >70</li>
+              <li style="margin-left: 2rem;"><code>rumors[]</code> — массив слухов о мире, заговорах и сокровищах</li>
+              <li style="margin-left: 2rem;"><code>daily_routine</code> — распорядок дня (утро, день, вечер, ночь)</li>
+              <li style="margin-left: 2rem;"><code>current_activity</code> — чем занят персонаж при встрече в локации</li>
+              <li style="margin-left: 1rem;"><code>stats</code> (STR, DEX, CON, INT, WIS, CHA 1-30), <code>level</code> (1-100), <code>tier</code> (1-5), <code>hit_dice</code> (6, 8, 10, 12)</li>
+              <li style="margin-left: 1rem;"><code>special_attacks[]</code>, <code>base_attacks[]</code>, <code>habits[]</code>, <code>catchphrases[]</code>, <code>status_tags[]</code></li>
+            </ul>
+          </div>
+          
         </div>
       </div>
     `;
@@ -919,6 +1071,7 @@ export function renderLobby(container, user) {
             <pre class="world-settings-preview">${JSON.stringify(w.settings || {}, null, 2).slice(0, 200)}</pre>
             <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button class="btn btn-secondary btn-sm" data-action="bestiary" data-id="${w.id}" data-name="${w.name}">🐉 Бестиарий</button>
+              <button class="btn btn-secondary btn-sm" data-action="geography" data-id="${w.id}" data-name="${w.name}">🗺️ География</button>
               ${canResume ? `<button class="btn btn-primary btn-sm" data-action="resume-gen" data-id="${w.id}" data-name="${w.name}">⏳ Продолжить</button>` : ''}
               <button class="btn btn-secondary btn-sm" data-action="edit-world" data-id="${w.id}">✏️</button>
               <button class="btn btn-secondary btn-sm" data-action="export" data-id="${w.id}">📤</button>
@@ -991,48 +1144,131 @@ export function renderLobby(container, user) {
   }
 
   function bindEvents() {
-    // Load bestiary for a world
-    async function loadBestiary(worldId) {
+    const MOOD_OPTIONS = [
+      { value: 'calm', label: '😌 Спокоен (calm)' },
+      { value: 'suspicious', label: '🤨 Подозрителен (suspicious)' },
+      { value: 'cheerful', label: '😄 Весел (cheerful)' },
+      { value: 'irritated', label: '😠 Раздражён (irritated)' },
+      { value: 'frightened', label: '😨 Напуган (frightened)' },
+      { value: 'impressed', label: '🤩 Впечатлён (impressed)' },
+      { value: 'mournful', label: '😢 Печален (mournful)' },
+    ];
+
+    const MOOD_LABELS = {
+      calm: '😌 Спокоен',
+      suspicious: '🤨 Подозрителен',
+      cheerful: '😄 Весел',
+      irritated: '😠 Раздражён',
+      frightened: '😨 Напуган',
+      impressed: '🤩 Впечатлён',
+      mournful: '😢 Печален',
+    };
+
+    const TERRAIN_LABELS = {
+      urban: '🏙️ Улицы / Город',
+      building: '🏰 Здание / Интерьер',
+      forest: '🌲 Лес / Заросли',
+      cave: '🕳️ Пещера / Подземелье',
+      mountain: '⛰️ Горы / Скалы',
+      open: '🌾 Открытая равнина',
+    };
+
+    let cachedBestiaryNpcs = [];
+    let bestiaryFilterState = {
+      category: 'all',
+      role: 'all',
+      search: ''
+    };
+
+    function renderBestiaryList() {
       const content = document.getElementById('bestiaryContent');
-      content.innerHTML = '<p class="text-muted">Загрузка NPC...</p>';
-      try {
-        const npcs = await getNpcsByWorld(worldId);
-        if (!npcs.length) {
-          content.innerHTML = '<p class="text-muted">NPC не найдены. Создайте мир с описанием для автоматической генерации.</p>';
-          return;
+      if (!content) return;
+
+      const filtered = cachedBestiaryNpcs.filter((npc) => {
+        const cat = npc.category || 'npc';
+        const role = npc.role || 'secondary';
+        if (bestiaryFilterState.category !== 'all' && cat !== bestiaryFilterState.category) return false;
+        if (bestiaryFilterState.role !== 'all' && role !== bestiaryFilterState.role) return false;
+        if (bestiaryFilterState.search) {
+          const q = bestiaryFilterState.search;
+          const searchTarget = [
+            npc.name,
+            npc.race,
+            npc.class,
+            npc.location_name,
+            npc.temperament,
+            npc.current_mood,
+            npc.speech_style,
+            npc.motivation,
+            npc.current_activity,
+            npc.secrets
+          ].filter(Boolean).join(' ').toLowerCase();
+          if (!searchTarget.includes(q)) return false;
         }
-        content.innerHTML = npcs.map((npc) => {
-          const categoryLabels = { npc: '🧠 NPC', beast: '🐾 Зверь', monster: '👹 Монстр', boss: '💀 Босс' };
-          const categoryColors = { npc: 'badge-info', beast: 'badge-success', monster: 'badge-warning', boss: 'badge-danger' };
-          const roleLabels = { main: '⭐ Главный', secondary: '○ Второстепенный', tertiary: '· Третий' };
-          const roleColors = { main: 'npc-role-main', secondary: 'npc-role-secondary', tertiary: 'npc-role-tertiary' };
-          const category = npc.category || 'npc';
-          const role = npc.role || 'secondary';
-          const level = npc.level || 1;
-          const ac = npc.armor_class || 10;
-          const init = npc.initiative || 0;
-          return `
+        return true;
+      });
+
+      const countEl = document.getElementById('bestiaryCountText');
+      if (countEl) {
+        countEl.textContent = `Показано: ${filtered.length} из ${cachedBestiaryNpcs.length}`;
+      }
+
+      if (!filtered.length) {
+        content.innerHTML = '<p class="text-muted" style="padding: 1.5rem; text-align: center;">Ничего не найдено по заданным фильтрам.</p>';
+        return;
+      }
+
+      const categoryLabels = { npc: '🧠 NPC', beast: '🐾 Зверь', monster: '👹 Монстр', boss: '💀 Босс' };
+      const categoryColors = { npc: 'badge-info', beast: 'badge-success', monster: 'badge-warning', boss: 'badge-danger' };
+      const roleLabels = { main: '⭐ Главный', secondary: '○ Второстепенный', tertiary: '· Третий' };
+      const roleColors = { main: 'npc-role-main', secondary: 'npc-role-secondary', tertiary: 'npc-role-tertiary' };
+
+      content.innerHTML = filtered.map((npc) => {
+        const category = npc.category || 'npc';
+        const role = npc.role || 'secondary';
+        const level = npc.level || 1;
+        const ac = npc.armor_class || 10;
+        const init = npc.initiative || 0;
+        const mood = npc.current_mood || 'calm';
+        const hp = npc.hp || 30;
+        const maxHp = npc.max_hp || hp;
+
+        return `
           <div class="card npc-card" data-category="${category}" style="margin-bottom: 0.75rem;">
             <div class="npc-header" data-npc-toggle="${npc.id}">
-              <div class="npc-header-info">
+              <div class="npc-header-info" style="flex-wrap: wrap; gap: 6px;">
                 <span class="npc-role-badge ${roleColors[role] || 'npc-role-secondary'}">${roleLabels[role] || '○ Второстепенный'}</span>
-                <strong class="npc-name">${npc.name}</strong>
+                <strong class="npc-name" style="font-size: 1.05rem;">${npc.name}</strong>
                 <span class="npc-category ${categoryColors[category]}">${categoryLabels[category]}</span>
-                <span class="npc-race">${npc.race}</span>
-                <span class="npc-combat-stats">Ур.${level} КД${ac} Иниц.${init >= 0 ? '+' : ''}${init}</span>
+                <span class="npc-race">${npc.race}${npc.class ? ` · ${npc.class}` : ''}</span>
+                <span class="npc-combat-stats">Ур.${level} | HP ${hp}/${maxHp} | КД ${ac} | Иниц. ${init >= 0 ? '+' : ''}${init}</span>
                 ${npc.location_name ? `<span class="npc-location">📍 ${npc.location_name}</span>` : ''}
+                <span class="npc-mood-badge mood-${mood}">${MOOD_LABELS[mood] || '😌 Спокоен'}</span>
+                ${npc.temperament ? `<span class="npc-temperament-badge">⚡ ${npc.temperament}</span>` : ''}
+                
+                ${npc.current_activity ? `<div class="npc-header-meta-row" style="width: 100%;"><span class="npc-subline-text" style="color: #81c784;">⏳ Занят: ${npc.current_activity}</span></div>` : ''}
+                ${npc.speech_style ? `<div class="npc-header-meta-row" style="width: 100%;"><span class="npc-subline-text" style="color: #90caf9;">💬 Речь: ${npc.speech_style}</span></div>` : ''}
+                ${npc.motivation ? `<div class="npc-header-meta-row" style="width: 100%;"><span class="npc-subline-text" style="color: #ffb74d;">🎯 Цель: ${npc.motivation}</span></div>` : ''}
               </div>
               <span class="npc-toggle-icon">▼</span>
             </div>
+            
             <div id="npc-edit-${npc.id}" class="npc-edit-form" style="display: none;">
+              
+              <!-- Раздел 1: Основные данные -->
+              <div class="npc-section-title">📋 Основная информация</div>
               <div class="npc-form-grid">
                 <div class="form-group">
-                  <label class="form-label">Имя / Название вида</label>
-                  <input class="input" id="npc-name-${npc.id}" value="${npc.name}" />
+                  <label class="form-label">Имя / Вид</label>
+                  <input class="input" id="npc-name-${npc.id}" value="${npc.name || ''}" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Раса</label>
-                  <input class="input" id="npc-race-${npc.id}" value="${npc.race}" />
+                  <input class="input" id="npc-race-${npc.id}" value="${npc.race || ''}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Класс / Профессия</label>
+                  <input class="input" id="npc-class-${npc.id}" value="${npc.class || ''}" placeholder="Воин, Маг, Трактирщик..." />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Категория</label>
@@ -1053,9 +1289,84 @@ export function renderLobby(container, user) {
                 </div>
                 <div class="form-group">
                   <label class="form-label">Локация</label>
-                  <input class="input" id="npc-location-${npc.id}" value="${npc.location_name || ''}" placeholder="Город или пусто" />
+                  <input class="input" id="npc-location-${npc.id}" value="${npc.location_name || ''}" placeholder="Город или локация" />
                 </div>
               </div>
+
+              <!-- Раздел 2: Боевые параметры и характеристики -->
+              <div class="npc-section-title">⚔️ Боевые параметры и характеристики D&D</div>
+              <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 75px;">
+                  <label class="form-label">Уровень</label>
+                  <input class="input" type="number" id="npc-level-${npc.id}" value="${level}" min="1" max="100" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 75px;">
+                  <label class="form-label">HP</label>
+                  <input class="input" type="number" id="npc-hp-${npc.id}" value="${hp}" min="1" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 75px;">
+                  <label class="form-label">Max HP</label>
+                  <input class="input" type="number" id="npc-maxhp-${npc.id}" value="${maxHp}" min="1" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 75px;">
+                  <label class="form-label">КД (Armor)</label>
+                  <input class="input" type="number" id="npc-ac-${npc.id}" value="${ac}" min="1" max="40" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 75px;">
+                  <label class="form-label">Инициатива</label>
+                  <input class="input" type="number" id="npc-initiative-${npc.id}" value="${init}" min="-10" max="20" />
+                </div>
+              </div>
+              <div class="stats-grid-3" style="margin-bottom: 0.75rem;">
+                ${['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map(stat => `
+                  <div class="stat-card">
+                    <div class="stat-card-label">${stat}</div>
+                    <input class="stat-card-input" type="number" id="npc-${stat.toLowerCase()}-${npc.id}" value="${npc.stats?.[stat] ?? 10}" min="1" max="30" />
+                  </div>
+                `).join('')}
+              </div>
+
+              <!-- Раздел 3: Психология, Настроение и Отыгрыш -->
+              <div class="npc-section-title">🧠 Психология, Настроение и Отыгрыш</div>
+              <div class="npc-form-grid">
+                <div class="form-group">
+                  <label class="form-label">Темперамент</label>
+                  <input class="input" id="npc-temperament-${npc.id}" value="${npc.temperament || ''}" placeholder="холерик, сангвиник, прагматик..." />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Текущее настроение</label>
+                  <select class="input" id="npc-mood-${npc.id}">
+                    ${MOOD_OPTIONS.map(opt => `<option value="${opt.value}" ${mood === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Мотивация / Личная цель</label>
+                  <input class="input" id="npc-motivation-${npc.id}" value="${npc.motivation || ''}" placeholder="К чему стремится персонаж..." />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Стиль речи / Манера говорить</label>
+                  <input class="input" id="npc-speech-${npc.id}" value="${npc.speech_style || ''}" placeholder="жаргон, витиеватый слог, хрипота..." />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Текущее занятие (сцена)</label>
+                  <input class="input" id="npc-activity-${npc.id}" value="${npc.current_activity || ''}" placeholder="Чем занят прямо сейчас в локации..." />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Распорядок дня</label>
+                  <input class="input" id="npc-routine-${npc.id}" value="${npc.daily_routine || ''}" placeholder="утром в лавке, днем на площади, ночью спит..." />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Тайны и уязвимости (доверие >70)</label>
+                <textarea class="input" id="npc-secrets-${npc.id}" rows="2" placeholder="Секрет или слабость, которую персонаж раскроет только близким друзьям...">${npc.secrets || ''}</textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Слухи и сплетни о мире (каждый с новой строки)</label>
+                <textarea class="input" id="npc-rumors-${npc.id}" rows="2" placeholder="Слух 1&#10;Слух 2">${Array.isArray(npc.rumors) ? npc.rumors.join('\n') : (npc.rumors || '')}</textarea>
+              </div>
+
+              <!-- Раздел 4: Внешность, Предыстория и Детали -->
+              <div class="npc-section-title">📜 Внешность, Предыстория и Детали</div>
               <div class="form-group">
                 <label class="form-label">Внешность</label>
                 <textarea class="input" id="npc-appearance-${npc.id}" rows="2">${npc.appearance || ''}</textarea>
@@ -1064,107 +1375,212 @@ export function renderLobby(container, user) {
                 <label class="form-label">Предыстория</label>
                 <textarea class="input" id="npc-background-${npc.id}" rows="2">${npc.background || ''}</textarea>
               </div>
-              <div class="stats-grid-3">
-                ${['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map(stat => `
-                  <div class="stat-card">
-                    <div class="stat-card-label">${stat}</div>
-                    <input class="stat-card-input" type="number" id="npc-${stat.toLowerCase()}-${npc.id}" value="${npc.stats?.[stat] ?? 10}" min="1" max="30" />
-                  </div>
-                `).join('')}
+              <div class="form-group">
+                <label class="form-label">Привычки (через запятую)</label>
+                <input class="input" id="npc-habits-${npc.id}" value="${Array.isArray(npc.habits) ? npc.habits.join(', ') : (npc.habits || '')}" />
               </div>
-              <div class="npc-combat-stats-form" style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
-                <div class="form-group" style="flex: 1; min-width: 80px;">
-                  <label class="form-label">Уровень</label>
-                  <input class="input" type="number" id="npc-level-${npc.id}" value="${level}" min="1" max="20" />
-                </div>
-                <div class="form-group" style="flex: 1; min-width: 80px;">
-                  <label class="form-label">КД</label>
-                  <input class="input" type="number" id="npc-ac-${npc.id}" value="${ac}" min="1" max="40" />
-                </div>
-                <div class="form-group" style="flex: 1; min-width: 80px;">
-                  <label class="form-label">Инициатива</label>
-                  <input class="input" type="number" id="npc-initiative-${npc.id}" value="${init}" min="-10" max="20" />
-                </div>
+              <div class="form-group">
+                <label class="form-label">Коронные фразы (через запятую)</label>
+                <input class="input" id="npc-catchphrases-${npc.id}" value="${Array.isArray(npc.catchphrases) ? npc.catchphrases.join(', ') : (npc.catchphrases || '')}" />
               </div>
+              <div class="form-group">
+                <label class="form-label">Теги статуса (через запятую)</label>
+                <input class="input" id="npc-status-tags-${npc.id}" value="${Array.isArray(npc.status_tags) ? npc.status_tags.join(', ') : (npc.status_tags || '')}" />
+              </div>
+
               <div class="npc-actions">
-                <button class="btn btn-primary" data-npc-save="${npc.id}">💾 Сохранить</button>
+                <button class="btn btn-primary" data-npc-save="${npc.id}">💾 Сохранить изменения</button>
+                <button class="btn btn-secondary" data-npc-duplicate="${npc.id}">📋 Дублировать</button>
                 <button class="btn btn-ghost" data-npc-delete="${npc.id}">🗑️ Удалить</button>
               </div>
             </div>
           </div>
-        `}).join('');
+        `;
+      }).join('');
 
-        // Toggle NPC edit form
-        content.querySelectorAll('[data-npc-toggle]').forEach((header) => {
-          header.addEventListener('click', () => {
-            const npcId = header.dataset.npcToggle;
-            const editDiv = document.getElementById(`npc-edit-${npcId}`);
-            const card = header.closest('.npc-card');
-            const isOpen = editDiv.style.display !== 'none';
-            editDiv.style.display = isOpen ? 'none' : 'block';
-            card.classList.toggle('open', !isOpen);
-          });
+      // Toggle NPC edit form
+      content.querySelectorAll('[data-npc-toggle]').forEach((header) => {
+        header.addEventListener('click', () => {
+          const npcId = header.dataset.npcToggle;
+          const editDiv = document.getElementById(`npc-edit-${npcId}`);
+          const card = header.closest('.npc-card');
+          const isOpen = editDiv.style.display !== 'none';
+          editDiv.style.display = isOpen ? 'none' : 'block';
+          card.classList.toggle('open', !isOpen);
         });
+      });
 
-        // Save NPC
-        content.querySelectorAll('[data-npc-save]').forEach((btn) => {
-          btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const npcId = btn.dataset.npcSave;
-            const locationName = document.getElementById(`npc-location-${npcId}`)?.value || '';
-            const updates = {
-              name: document.getElementById(`npc-name-${npcId}`).value,
-              race: document.getElementById(`npc-race-${npcId}`).value,
-              category: document.getElementById(`npc-category-${npcId}`).value || 'npc',
-              role: document.getElementById(`npc-role-${npcId}`).value || 'secondary',
-              appearance: document.getElementById(`npc-appearance-${npcId}`).value,
-              background: document.getElementById(`npc-background-${npcId}`).value,
-              location_name: locationName,
-              stats: {
-                STR: Number(document.getElementById(`npc-str-${npcId}`).value) || 10,
-                DEX: Number(document.getElementById(`npc-dex-${npcId}`).value) || 10,
-                CON: Number(document.getElementById(`npc-con-${npcId}`).value) || 10,
-                INT: Number(document.getElementById(`npc-int-${npcId}`).value) || 10,
-                WIS: Number(document.getElementById(`npc-wis-${npcId}`).value) || 10,
-                CHA: Number(document.getElementById(`npc-cha-${npcId}`).value) || 10,
-              },
-              level: Number(document.getElementById(`npc-level-${npcId}`).value) || 1,
-              armor_class: Number(document.getElementById(`npc-ac-${npcId}`).value) || 10,
-              initiative: Number(document.getElementById(`npc-initiative-${npcId}`).value) || 0,
-            };
-            try {
-              await updateNpc(npcId, updates);
-              toast.success('NPC обновлён!');
-            } catch (err) {
-              toast.error('Ошибка: ' + err.message);
+      // Save NPC handler
+      content.querySelectorAll('[data-npc-save]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const npcId = btn.dataset.npcSave;
+          const locationName = document.getElementById(`npc-location-${npcId}`)?.value?.trim() || '';
+          
+          const rawRumors = document.getElementById(`npc-rumors-${npcId}`)?.value || '';
+          const rumors = rawRumors.split('\n').map(s => s.trim()).filter(Boolean);
+
+          const parseComma = (val) => (val || '').split(',').map(s => s.trim()).filter(Boolean);
+
+          const updates = {
+            name: document.getElementById(`npc-name-${npcId}`)?.value?.trim() || 'Без имени',
+            race: document.getElementById(`npc-race-${npcId}`)?.value?.trim() || 'Человек',
+            class: document.getElementById(`npc-class-${npcId}`)?.value?.trim() || '',
+            category: document.getElementById(`npc-category-${npcId}`)?.value || 'npc',
+            role: document.getElementById(`npc-role-${npcId}`)?.value || 'secondary',
+            location_name: locationName,
+            appearance: document.getElementById(`npc-appearance-${npcId}`)?.value?.trim() || '',
+            background: document.getElementById(`npc-background-${npcId}`)?.value?.trim() || '',
+            stats: {
+              STR: Number(document.getElementById(`npc-str-${npcId}`)?.value) || 10,
+              DEX: Number(document.getElementById(`npc-dex-${npcId}`)?.value) || 10,
+              CON: Number(document.getElementById(`npc-con-${npcId}`)?.value) || 10,
+              INT: Number(document.getElementById(`npc-int-${npcId}`)?.value) || 10,
+              WIS: Number(document.getElementById(`npc-wis-${npcId}`)?.value) || 10,
+              CHA: Number(document.getElementById(`npc-cha-${npcId}`)?.value) || 10,
+            },
+            level: Number(document.getElementById(`npc-level-${npcId}`)?.value) || 1,
+            hp: Number(document.getElementById(`npc-hp-${npcId}`)?.value) || 30,
+            max_hp: Number(document.getElementById(`npc-maxhp-${npcId}`)?.value) || 30,
+            armor_class: Number(document.getElementById(`npc-ac-${npcId}`)?.value) || 10,
+            initiative: Number(document.getElementById(`npc-initiative-${npcId}`)?.value) || 0,
+            temperament: document.getElementById(`npc-temperament-${npcId}`)?.value?.trim() || '',
+            current_mood: document.getElementById(`npc-mood-${npcId}`)?.value || 'calm',
+            motivation: document.getElementById(`npc-motivation-${npcId}`)?.value?.trim() || '',
+            speech_style: document.getElementById(`npc-speech-${npcId}`)?.value?.trim() || '',
+            current_activity: document.getElementById(`npc-activity-${npcId}`)?.value?.trim() || '',
+            daily_routine: document.getElementById(`npc-routine-${npcId}`)?.value?.trim() || '',
+            secrets: document.getElementById(`npc-secrets-${npcId}`)?.value?.trim() || '',
+            rumors,
+            habits: parseComma(document.getElementById(`npc-habits-${npcId}`)?.value),
+            catchphrases: parseComma(document.getElementById(`npc-catchphrases-${npcId}`)?.value),
+            status_tags: parseComma(document.getElementById(`npc-status-tags-${npcId}`)?.value),
+          };
+
+          try {
+            await updateNpc(npcId, updates);
+            toast.success(`NPC «${updates.name}» успешно сохранён!`);
+            const targetIdx = cachedBestiaryNpcs.findIndex(n => n.id === npcId);
+            if (targetIdx !== -1) {
+              cachedBestiaryNpcs[targetIdx] = { ...cachedBestiaryNpcs[targetIdx], ...updates };
+              renderBestiaryList();
             }
-          });
+          } catch (err) {
+            toast.error('Ошибка сохранения: ' + err.message);
+          }
         });
+      });
 
-        // Delete NPC
-        content.querySelectorAll('[data-npc-delete]').forEach((btn) => {
-          btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const npcId = btn.dataset.npcDelete;
-            if (!confirm('Удалить этого NPC?')) return;
-            try {
-              await deleteNpc(npcId);
-              toast.success('NPC удалён');
-              await loadBestiary(worldId);
-            } catch (err) {
-              toast.error('Ошибка: ' + err.message);
-            }
-          });
+      // Duplicate NPC handler
+      content.querySelectorAll('[data-npc-duplicate]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const npcId = btn.dataset.npcDuplicate;
+          const npc = cachedBestiaryNpcs.find(n => n.id === npcId);
+          if (!npc) return;
+
+          document.getElementById('new-npc-name').value = `${npc.name} (копия)`;
+          document.getElementById('new-npc-race').value = npc.race || 'Человек';
+          document.getElementById('new-npc-class').value = npc.class || '';
+          document.getElementById('new-npc-category').value = npc.category || 'npc';
+          document.getElementById('new-npc-role').value = npc.role || 'secondary';
+          document.getElementById('new-npc-location').value = npc.location_name || '';
+          document.getElementById('new-npc-level').value = npc.level || 1;
+          document.getElementById('new-npc-hp').value = npc.hp || 30;
+          document.getElementById('new-npc-ac').value = npc.armor_class || 10;
+          document.getElementById('new-npc-init').value = npc.initiative || 0;
+          document.getElementById('new-npc-str').value = npc.stats?.STR || 10;
+          document.getElementById('new-npc-dex').value = npc.stats?.DEX || 10;
+          document.getElementById('new-npc-con').value = npc.stats?.CON || 10;
+          document.getElementById('new-npc-int').value = npc.stats?.INT || 10;
+          document.getElementById('new-npc-wis').value = npc.stats?.WIS || 10;
+          document.getElementById('new-npc-cha').value = npc.stats?.CHA || 10;
+          document.getElementById('new-npc-temperament').value = npc.temperament || '';
+          document.getElementById('new-npc-current-mood').value = npc.current_mood || 'calm';
+          document.getElementById('new-npc-motivation').value = npc.motivation || '';
+          document.getElementById('new-npc-speech-style').value = npc.speech_style || '';
+          document.getElementById('new-npc-current-activity').value = npc.current_activity || '';
+          document.getElementById('new-npc-daily-routine').value = npc.daily_routine || '';
+          document.getElementById('new-npc-secrets').value = npc.secrets || '';
+          document.getElementById('new-npc-rumors').value = Array.isArray(npc.rumors) ? npc.rumors.join('\n') : (npc.rumors || '');
+          document.getElementById('new-npc-appearance').value = npc.appearance || '';
+          document.getElementById('new-npc-background').value = npc.background || '';
+          document.getElementById('new-npc-habits').value = Array.isArray(npc.habits) ? npc.habits.join(', ') : (npc.habits || '');
+          document.getElementById('new-npc-catchphrases').value = Array.isArray(npc.catchphrases) ? npc.catchphrases.join(', ') : (npc.catchphrases || '');
+          document.getElementById('new-npc-status-tags').value = Array.isArray(npc.status_tags) ? npc.status_tags.join(', ') : (npc.status_tags || '');
+
+          const form = document.getElementById('createNpcForm');
+          form.style.display = 'block';
+          form.scrollIntoView({ behavior: 'smooth' });
+          toast.info(`Данные «${npc.name}» скопированы в форму создания нового NPC`);
         });
+      });
+
+      // Delete NPC handler
+      content.querySelectorAll('[data-npc-delete]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const npcId = btn.dataset.npcDelete;
+          if (!confirm('Удалить этого персонажа/существо?')) return;
+          try {
+            await deleteNpc(npcId);
+            toast.success('NPC удалён');
+            cachedBestiaryNpcs = cachedBestiaryNpcs.filter(n => n.id !== npcId);
+            renderBestiaryList();
+          } catch (err) {
+            toast.error('Ошибка удаления: ' + err.message);
+          }
+        });
+      });
+    }
+
+    // Load bestiary for a world
+    async function loadBestiary(worldId) {
+      const content = document.getElementById('bestiaryContent');
+      content.innerHTML = '<p class="text-muted">Загрузка NPC и существ...</p>';
+      try {
+        const npcs = await getNpcsByWorld(worldId);
+        cachedBestiaryNpcs = npcs || [];
+        if (!cachedBestiaryNpcs.length) {
+          content.innerHTML = '<p class="text-muted">В этом мире пока нет NPC. Создайте первого вручную или сгенерируйте ИИ.</p>';
+          const countEl = document.getElementById('bestiaryCountText');
+          if (countEl) countEl.textContent = '0 существ';
+          return;
+        }
+        renderBestiaryList();
       } catch (err) {
         content.innerHTML = `<p class="text-muted">Ошибка загрузки: ${err.message}</p>`;
       }
     }
 
+    // Search and filter input events for bestiary
+    document.getElementById('bestiarySearchInput')?.addEventListener('input', (e) => {
+      bestiaryFilterState.search = e.target.value.trim().toLowerCase();
+      renderBestiaryList();
+    });
+
+    document.getElementById('bestiaryRoleFilter')?.addEventListener('change', (e) => {
+      bestiaryFilterState.role = e.target.value;
+      renderBestiaryList();
+    });
+
+    // Bestiary Tab filtering
+    container.querySelectorAll('.bestiary-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        container.querySelectorAll('.bestiary-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        bestiaryFilterState.category = tab.dataset.category || 'all';
+        renderBestiaryList();
+      });
+    });
+
     // Create NPC form toggle
     document.getElementById('createNpcBtn')?.addEventListener('click', () => {
       const form = document.getElementById('createNpcForm');
       form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      if (form.style.display === 'block') {
+        form.scrollIntoView({ behavior: 'smooth' });
+      }
     });
 
     document.getElementById('cancelNewNpcBtn')?.addEventListener('click', () => {
@@ -1175,12 +1591,17 @@ export function renderLobby(container, user) {
     document.getElementById('saveNewNpcBtn')?.addEventListener('click', async () => {
       const name = document.getElementById('new-npc-name').value.trim();
       if (!name) {
-        toast.error('Введите имя NPC');
+        toast.error('Введите имя NPC или название вида');
         return;
       }
 
+      const parseComma = (str) => (str || '').split(',').map(s => s.trim()).filter(Boolean);
+      const rawRumors = document.getElementById('new-npc-rumors')?.value || '';
+      const rumors = rawRumors.split('\n').map(s => s.trim()).filter(Boolean);
+
       const role = document.getElementById('new-npc-role').value;
       const race = document.getElementById('new-npc-race').value.trim() || 'Человек';
+      const className = document.getElementById('new-npc-class')?.value?.trim() || '';
       const hp = Number(document.getElementById('new-npc-hp').value) || 30;
       const category = document.getElementById('new-npc-category')?.value || 'npc';
       const locationName = document.getElementById('new-npc-location')?.value?.trim() || '';
@@ -1195,11 +1616,21 @@ export function renderLobby(container, user) {
         CHA: Number(document.getElementById('new-npc-cha').value) || 10,
       };
 
-      // Parse comma-separated values into arrays
-      const parseArray = (str) => str.split(',').map(s => s.trim()).filter(Boolean);
-      const habits = parseArray(document.getElementById('new-npc-habits').value);
-      const catchphrases = parseArray(document.getElementById('new-npc-catchphrases').value);
-      const statusTags = parseArray(document.getElementById('new-npc-status-tags').value);
+      const temperament = document.getElementById('new-npc-temperament')?.value?.trim() || '';
+      const currentMood = document.getElementById('new-npc-current-mood')?.value || 'calm';
+      const motivation = document.getElementById('new-npc-motivation')?.value?.trim() || '';
+      const speechStyle = document.getElementById('new-npc-speech-style')?.value?.trim() || '';
+      const currentActivity = document.getElementById('new-npc-current-activity')?.value?.trim() || '';
+      const dailyRoutine = document.getElementById('new-npc-daily-routine')?.value?.trim() || '';
+      const secrets = document.getElementById('new-npc-secrets')?.value?.trim() || '';
+
+      const habits = parseComma(document.getElementById('new-npc-habits').value);
+      const catchphrases = parseComma(document.getElementById('new-npc-catchphrases').value);
+      const statusTags = parseComma(document.getElementById('new-npc-status-tags').value);
+
+      const level = Number(document.getElementById('new-npc-level')?.value) || 1;
+      const ac = Number(document.getElementById('new-npc-ac')?.value) || 10;
+      const init = Number(document.getElementById('new-npc-init')?.value) || 0;
 
       const saveBtn = document.getElementById('saveNewNpcBtn');
       saveBtn.disabled = true;
@@ -1211,32 +1642,45 @@ export function renderLobby(container, user) {
           name,
           role,
           race,
+          class: className,
           category,
           location_name: locationName || null,
           hp,
           max_hp: hp,
+          level,
+          armor_class: ac,
+          initiative: init,
           appearance,
           background,
           stats,
+          temperament,
+          current_mood: currentMood,
+          motivation,
+          speech_style: speechStyle,
+          current_activity: currentActivity,
+          daily_routine: dailyRoutine,
+          secrets,
+          rumors,
           habits,
           catchphrases,
           status_tags: statusTags,
         });
-        toast.success('NPC создан!');
+        toast.success(`Персонаж «${name}» успешно создан!`);
         document.getElementById('createNpcForm').style.display = 'none';
-        // Clear form
         document.getElementById('new-npc-name').value = '';
         document.getElementById('new-npc-appearance').value = '';
         document.getElementById('new-npc-background').value = '';
         document.getElementById('new-npc-habits').value = '';
         document.getElementById('new-npc-catchphrases').value = '';
         document.getElementById('new-npc-status-tags').value = '';
+        document.getElementById('new-npc-secrets').value = '';
+        document.getElementById('new-npc-rumors').value = '';
         await loadBestiary(currentBestiaryWorldId);
       } catch (err) {
         toast.error('Ошибка: ' + err.message);
       } finally {
         saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Создать';
+        saveBtn.textContent = '💾 Создать NPC';
       }
     });
 
@@ -1246,7 +1690,7 @@ export function renderLobby(container, user) {
     async function loadGeography(worldId) {
       const content = document.getElementById('geoContent');
       const stateSelect = document.getElementById('new-city-state');
-      content.innerHTML = '<p class="text-muted">Загрузка географии...</p>';
+      content.innerHTML = '<p class="text-muted">Загрузка географии и локаций...</p>';
       
       try {
         const { data: states, error: statesError } = await supabase
@@ -1261,7 +1705,7 @@ export function renderLobby(container, user) {
         stateSelect.innerHTML = states.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
         
         if (!states.length) {
-          content.innerHTML = '<p class="text-muted">Государства не созданы. Создайте новое или сгенерируйте при создании мира.</p>';
+          content.innerHTML = '<p class="text-muted">Государства не созданы. Нажмите «+ Государство», чтобы начать.</p>';
           return;
         }
         
@@ -1273,14 +1717,14 @@ export function renderLobby(container, user) {
                 <span class="state-locations-count">${state.locations?.length || 0} локаций</span>
               </div>
               <div class="state-actions">
-                <button class="btn btn-secondary btn-sm" data-add-city="${state.id}" data-state-name="${state.name}">+ Город</button>
+                <button class="btn btn-secondary btn-sm" data-add-city="${state.id}" data-state-name="${state.name}">+ Локация</button>
                 <button class="btn btn-ghost btn-sm" data-delete-state="${state.id}">🗑️</button>
                 <span class="npc-toggle-icon">▼</span>
               </div>
             </div>
             <div id="state-edit-${state.id}" class="state-edit-form" style="display: none;">
               <div class="form-group">
-                <label class="form-label">Название</label>
+                <label class="form-label">Название государства</label>
                 <input class="input" id="state-name-${state.id}" value="${state.name}" />
               </div>
               <div class="form-group">
@@ -1291,15 +1735,72 @@ export function renderLobby(container, user) {
             </div>
             <div id="cities-${state.id}" class="cities-list" style="display: none;">
               ${state.locations?.map(loc => `
-                <div class="city-item" data-city-id="${loc.id}">
-                  <div class="city-info">
+                <div class="city-item" data-city-id="${loc.id}" style="margin-bottom: 0.5rem;">
+                  <div class="city-info" style="flex: 1; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
                     <span class="city-type-icon">${loc.type === 'capital' ? '👑' : loc.type === 'city' ? '🏘️' : loc.type === 'village' ? '🏡' : loc.type === 'ruins' ? '🏚️' : '⛰️'}</span>
-                    <span class="city-name">${loc.name}</span>
+                    <strong class="city-name">${loc.name}</strong>
                     <span class="city-type">${loc.type}</span>
+                    <span class="terrain-badge terrain-${loc.terrain_type || 'open'}">${TERRAIN_LABELS[loc.terrain_type] || '🌾 Равнина'}</span>
+                    <span class="zone-count-badge">🎯 ${Array.isArray(loc.zones) ? loc.zones.length : 0} подзон</span>
+                    ${loc.location_map && Object.keys(loc.location_map).length ? '<span style="font-size:0.7rem; color:#81c784;">🗺️ Дистанции OK</span>' : '<span style="font-size:0.7rem; color:#e57373;">⚠️ Без матрицы</span>'}
                   </div>
                   <div class="city-actions">
-                    <button class="btn btn-ghost btn-sm" data-edit-city="${loc.id}" data-city-name="${loc.name}" data-city-type="${loc.type}" data-city-desc="${(loc.description || '').replace(/"/g, '&quot;')}">✏️</button>
+                    <button class="btn btn-secondary btn-sm" data-edit-city="${loc.id}">✏️ Настроить</button>
                     <button class="btn btn-ghost btn-sm" data-delete-city="${loc.id}">🗑️</button>
+                  </div>
+                </div>
+
+                <!-- Блок полного редактирования локации -->
+                <div id="city-edit-${loc.id}" style="display: none; padding: 1.25rem; margin-bottom: 0.75rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-gold);">
+                  <h4 style="margin-bottom: 0.75rem; color: var(--accent-gold-bright);">✏️ Настройка локации: ${loc.name}</h4>
+                  <div class="npc-form-grid">
+                    <div class="form-group">
+                      <label class="form-label">Название *</label>
+                      <input class="input" id="edit-loc-name-${loc.id}" value="${loc.name || ''}" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Тип локации</label>
+                      <select class="input" id="edit-loc-type-${loc.id}">
+                        <option value="city" ${loc.type === 'city' ? 'selected' : ''}>🏘️ Город</option>
+                        <option value="capital" ${loc.type === 'capital' ? 'selected' : ''}>👑 Столица</option>
+                        <option value="village" ${loc.type === 'village' ? 'selected' : ''}>🏡 Деревня</option>
+                        <option value="ruins" ${loc.type === 'ruins' ? 'selected' : ''}>🏚️ Руины</option>
+                        <option value="landmark" ${loc.type === 'landmark' ? 'selected' : ''}>⛰️ Достопримечательность</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Тип местности (Туман Войны)</label>
+                      <select class="input" id="edit-loc-terrain-${loc.id}">
+                        <option value="urban" ${loc.terrain_type === 'urban' ? 'selected' : ''}>🏙️ Город / Улицы (urban)</option>
+                        <option value="building" ${loc.terrain_type === 'building' ? 'selected' : ''}>🏰 Здание / Замок (building)</option>
+                        <option value="forest" ${loc.terrain_type === 'forest' ? 'selected' : ''}>🌲 Лес / Джунгли (forest)</option>
+                        <option value="cave" ${loc.terrain_type === 'cave' ? 'selected' : ''}>🕳️ Пещера / Катакомбы (cave)</option>
+                        <option value="mountain" ${loc.terrain_type === 'mountain' ? 'selected' : ''}>⛰️ Горы / Скалы (mountain)</option>
+                        <option value="open" ${loc.terrain_type === 'open' ? 'selected' : ''}>🌾 Открытая равнина / Поля (open)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Описание</label>
+                    <textarea class="input" id="edit-loc-desc-${loc.id}" rows="2">${loc.description || ''}</textarea>
+                  </div>
+                  <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                      <label class="form-label" style="margin: 0;">Подзоны локации (JSON-массив)</label>
+                      <button type="button" class="btn btn-ghost btn-sm" data-helper-zones="${loc.id}">✨ Задать 3 зоны (Вход, Центр, Глубины)</button>
+                    </div>
+                    <textarea class="input" id="edit-loc-zones-${loc.id}" rows="4" style="font-family: var(--font-mono); font-size: 0.8rem;">${JSON.stringify(loc.zones || [], null, 2)}</textarea>
+                  </div>
+                  <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                      <label class="form-label" style="margin: 0;">Матрица расстояний в метрах (JSON-объект)</label>
+                      <button type="button" class="btn btn-ghost btn-sm" data-helper-matrix="${loc.id}">⚡ Рассчитать матрицу расстояний</button>
+                    </div>
+                    <textarea class="input" id="edit-loc-map-${loc.id}" rows="5" style="font-family: var(--font-mono); font-size: 0.8rem;">${JSON.stringify(loc.location_map || {}, null, 2)}</textarea>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                    <button class="btn btn-primary" data-save-city="${loc.id}">💾 Сохранить локацию</button>
+                    <button class="btn btn-ghost" data-cancel-city="${loc.id}">✕ Отмена</button>
                   </div>
                 </div>
               `).join('') || '<p class="text-muted">Нет локаций</p>'}
@@ -1317,6 +1818,123 @@ export function renderLobby(container, user) {
             citiesDiv.style.display = isOpen ? 'none' : 'block';
             editDiv.style.display = isOpen ? 'none' : 'block';
             header.closest('.state-card').classList.toggle('open', !isOpen);
+          });
+        });
+
+        // Edit location toggle handler
+        content.querySelectorAll('[data-edit-city]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const locId = btn.dataset.editCity;
+            const editBox = document.getElementById(`city-edit-${locId}`);
+            if (editBox) {
+              const isOpen = editBox.style.display !== 'none';
+              editBox.style.display = isOpen ? 'none' : 'block';
+            }
+          });
+        });
+
+        // Cancel location edit
+        content.querySelectorAll('[data-cancel-city]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const locId = btn.dataset.cancelCity;
+            const editBox = document.getElementById(`city-edit-${locId}`);
+            if (editBox) editBox.style.display = 'none';
+          });
+        });
+
+        // Helper: populate default zones
+        content.querySelectorAll('[data-helper-zones]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const locId = btn.dataset.helperZones;
+            const textarea = document.getElementById(`edit-loc-zones-${locId}`);
+            if (textarea) {
+              const defaultZones = [
+                { id: `zone_${locId}_entrance`, name: "Вход / Окрестности", type: "open" },
+                { id: `zone_${locId}_center`, name: "Центральная часть", type: "open" },
+                { id: `zone_${locId}_deep`, name: "Глубины / Закоулки", type: "closed" }
+              ];
+              textarea.value = JSON.stringify(defaultZones, null, 2);
+              toast.info('Подзоны сформированы. Нажмите «Рассчитать матрицу», чтобы связать их.');
+            }
+          });
+        });
+
+        // Helper: calculate symmetric distance matrix
+        content.querySelectorAll('[data-helper-matrix]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const locId = btn.dataset.helperMatrix;
+            const zonesText = document.getElementById(`edit-loc-zones-${locId}`)?.value || '[]';
+            const mapTextarea = document.getElementById(`edit-loc-map-${locId}`);
+            try {
+              const zones = JSON.parse(zonesText);
+              if (!Array.isArray(zones) || !zones.length) {
+                toast.warning('Сначала задайте список подзон в поле выше');
+                return;
+              }
+              const map = {};
+              zones.forEach((z1, i) => {
+                map[z1.id] = {};
+                zones.forEach((z2, j) => {
+                  if (z1.id === z2.id) {
+                    map[z1.id][z2.id] = 0;
+                  } else {
+                    const dist = Math.abs(i - j) * 15;
+                    map[z1.id][z2.id] = dist;
+                  }
+                });
+              });
+              if (mapTextarea) {
+                mapTextarea.value = JSON.stringify(map, null, 2);
+                toast.success('Симметричная матрица расстояний рассчитана!');
+              }
+            } catch (err) {
+              toast.error('Некорректный JSON подзон: ' + err.message);
+            }
+          });
+        });
+
+        // Save location updates
+        content.querySelectorAll('[data-save-city]').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const locId = btn.dataset.saveCity;
+            const name = document.getElementById(`edit-loc-name-${locId}`)?.value?.trim();
+            if (!name) { toast.error('Введите название локации'); return; }
+
+            const type = document.getElementById(`edit-loc-type-${locId}`)?.value || 'city';
+            const terrain_type = document.getElementById(`edit-loc-terrain-${locId}`)?.value || 'open';
+            const description = document.getElementById(`edit-loc-desc-${locId}`)?.value?.trim() || '';
+
+            let zones = [];
+            try {
+              const zonesRaw = document.getElementById(`edit-loc-zones-${locId}`)?.value;
+              if (zonesRaw) zones = JSON.parse(zonesRaw);
+            } catch { toast.error('Ошибка в JSON подзон'); return; }
+
+            let location_map = {};
+            try {
+              const mapRaw = document.getElementById(`edit-loc-map-${locId}`)?.value;
+              if (mapRaw) location_map = JSON.parse(mapRaw);
+            } catch { toast.error('Ошибка в JSON матрицы расстояний'); return; }
+
+            try {
+              await updateLocation(locId, {
+                name,
+                type,
+                terrain_type,
+                description,
+                zones,
+                location_map,
+              });
+              toast.success(`Локация «${name}» сохранена!`);
+              await loadGeography(worldId);
+            } catch (err) {
+              toast.error('Ошибка сохранения: ' + err.message);
+            }
           });
         });
         
@@ -1369,7 +1987,7 @@ export function renderLobby(container, user) {
             e.stopPropagation();
             if (!confirm('Удалить эту локацию?')) return;
             try {
-              await supabase.from('locations').delete().eq('id', btn.dataset.deleteCity);
+              await deleteLocation(btn.dataset.deleteCity);
               toast.success('Локация удалена');
               await loadGeography(worldId);
             } catch (err) {
@@ -1383,7 +2001,7 @@ export function renderLobby(container, user) {
       }
     }
     
-    // Open geography modal
+    // Open geography modal from Bestiary
     document.getElementById('openGeoBtn')?.addEventListener('click', () => {
       document.getElementById('geoModal').classList.add('open');
       document.getElementById('geoWorldName').textContent = document.getElementById('bestiaryWorldName').textContent;
@@ -1424,52 +2042,54 @@ export function renderLobby(container, user) {
       }
     });
     
-    // Create city form toggle
-    document.getElementById('createCityForm')?.addEventListener('click', (e) => {
-      if (e.target.id === 'createCityForm') return;
-    });
-    
     document.getElementById('cancelNewCityBtn')?.addEventListener('click', () => {
       document.getElementById('createCityForm').style.display = 'none';
     });
     
-    // Save new city
+    // Save new city / location
     document.getElementById('saveNewCityBtn')?.addEventListener('click', async () => {
       const name = document.getElementById('new-city-name').value.trim();
-      if (!name) { toast.error('Введите название'); return; }
-      try {
-        await supabase.from('locations').insert({
-          state_id: document.getElementById('new-city-state').value,
-          name,
-          type: document.getElementById('new-city-type').value,
-          description: document.getElementById('new-city-desc').value.trim(),
+      if (!name) { toast.error('Введите название локации'); return; }
+      const stateId = document.getElementById('new-city-state').value;
+      const type = document.getElementById('new-city-type').value;
+      const terrain_type = document.getElementById('new-city-terrain')?.value || 'open';
+      const description = document.getElementById('new-city-desc').value.trim();
+
+      // Build default zones and distance matrix from subzone input
+      const subzonesRaw = document.getElementById('new-city-subzones')?.value || 'Вход, Центр, Окрестности';
+      const subzoneNames = subzonesRaw.split(',').map(s => s.trim()).filter(Boolean);
+      const zones = subzoneNames.map((zName, idx) => ({
+        id: `zone_${Date.now()}_${idx + 1}`,
+        name: zName,
+        type: idx === 0 ? 'open' : (idx === subzoneNames.length - 1 ? 'closed' : 'open')
+      }));
+
+      const location_map = {};
+      zones.forEach((z1, i) => {
+        location_map[z1.id] = {};
+        zones.forEach((z2, j) => {
+          location_map[z1.id][z2.id] = (z1.id === z2.id) ? 0 : Math.abs(i - j) * 15;
         });
-        toast.success('Локация создана!');
+      });
+
+      try {
+        await createLocation({
+          state_id: stateId,
+          name,
+          type,
+          terrain_type,
+          description,
+          zones,
+          location_map,
+        });
+        toast.success(`Локация «${name}» создана с ${zones.length} подзонами!`);
         document.getElementById('createCityForm').style.display = 'none';
         document.getElementById('new-city-name').value = '';
         document.getElementById('new-city-desc').value = '';
         await loadGeography(currentBestiaryWorldId);
       } catch (err) {
-        toast.error('Ошибка: ' + err.message);
+        toast.error('Ошибка создания локации: ' + err.message);
       }
-    });
-
-    // ===================== BESTIARY TABS =====================
-    
-    // Tab filtering
-    container.querySelectorAll('.bestiary-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        container.querySelectorAll('.bestiary-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        const category = tab.dataset.category;
-        container.querySelectorAll('.npc-card').forEach(card => {
-          if (category === 'all' || card.dataset.category === category) {
-            card.style.display = '';
-          } else {
-            card.style.display = 'none';
-          }
-        });
-      });
     });
 
     // Tab switching
@@ -1863,6 +2483,20 @@ export function renderLobby(container, user) {
         await checkGenerationStatus(worldId);
         
         await loadBestiary(worldId);
+      });
+    });
+
+    // Geography button (from world card)
+    container.querySelectorAll('[data-action="geography"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const worldId = btn.dataset.id;
+        const worldName = btn.dataset.name;
+        currentBestiaryWorldId = worldId;
+        updateLobbyState('currentBestiaryWorldId', worldId);
+        document.getElementById('geoWorldName').textContent = worldName;
+        document.getElementById('geoModal').classList.add('open');
+        document.getElementById('createCityForm').style.display = 'none';
+        await loadGeography(worldId);
       });
     });
 
@@ -2630,9 +3264,34 @@ export function renderLobby(container, user) {
       });
     });
 
+    // Initialize Master AI World Prompt in Schema Modal
+    const masterPromptTextarea = document.getElementById('masterPromptTextarea');
+    if (masterPromptTextarea) {
+      masterPromptTextarea.value = MASTER_AI_WORLD_PROMPT;
+    }
+
+    // Copy Master Prompt Button
+    document.getElementById('copyMasterPromptBtn')?.addEventListener('click', async () => {
+      const text = masterPromptTextarea ? masterPromptTextarea.value : MASTER_AI_WORLD_PROMPT;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else if (masterPromptTextarea) {
+          masterPromptTextarea.select();
+          document.execCommand('copy');
+        }
+        toast.success('Мастер-промпт скопирован! Отправьте его нейросети вместе с описанием вашего мира.');
+      } catch (err) {
+        toast.error('Не удалось скопировать в буфер: ' + err.message);
+      }
+    });
+
     // Schema info button
     container.querySelectorAll('[data-action="schema-info"]').forEach((btn) => {
       btn.addEventListener('click', () => {
+        if (masterPromptTextarea) {
+          masterPromptTextarea.value = MASTER_AI_WORLD_PROMPT;
+        }
         document.getElementById('schemaModal').classList.add('open');
       });
     });
@@ -2685,13 +3344,22 @@ export function renderLobby(container, user) {
     // Delete world
     container.querySelectorAll('[data-action="delete-world"]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        if (!confirm('Удалить мир и все связанные данные?')) return;
+        const worldId = btn.dataset.id;
+        const targetWorld = worlds.find((w) => w.id === worldId);
+        const worldName = targetWorld?.name || 'этого мира';
+        const confirmed = window.confirm(
+          `Удалить карточку мира «${worldName}»?\n\n` +
+          `• Все данные мира (государства, локации, бестиарий NPC, файлы лора) будут безвозвратно удалены.\n` +
+          `• Ваши игровые сессии (сообщения, персонажи игроков, инвентарь и прогресс) сохранятся в безопасности.`
+        );
+        if (!confirmed) return;
         try {
-          await deleteWorld(btn.dataset.id);
-          toast.success('Мир удалён');
+          toast.info('Удаление мира...');
+          const res = await deleteWorld(worldId);
+          toast.success(`Мир «${worldName}» и все его данные успешно удалены`);
           loadData();
         } catch (err) {
-          toast.error('Ошибка: ' + err.message);
+          toast.error('Ошибка удаления мира: ' + (err.message || err));
         }
       });
     });

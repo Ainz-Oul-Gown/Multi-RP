@@ -89,6 +89,21 @@ function buildRouterSystemPrompt(): string {
    - stat_to_check: "none"
    - ai_custom_dc: null
 
+13. **Туман войны — физический масштаб события (event_type)**:
+   Определи, какой масштаб звука или визуального эффекта производит действие игрока для наблюдателей вдалеке:
+   - "whisper": шёпот, тихое слово, разговор на ухо (слышно только в одной комнате).
+   - "speech": обычный разговор, диалог, негромкая фраза (слышно через стену/в коридоре).
+   - "shout": крик, зов, громкий боевой клич (слышно в соседних комнатах/на улице).
+   - "combat_light": лёгкая потасовка, удар кулаком, падение стула, шаги.
+   - "combat_medium": удар стального оружия, выстрел из лука/арбалета, слом деревянной мебели.
+   - "combat_heavy": разрушение стены/двери, таран, обвал балок, звон катапульты.
+   - "magic_minor": малая магия (огонёк, искры, руны, тихое заклинание).
+   - "magic_major": мощная магия (огненный шар, удар молнии, телекинез, призыв духа).
+   - "explosion": мощный взрыв, бочка с порохом, бомба, разрушение здания.
+   - "cataclysm": масштабная катастрофа (обвал горы, извержение вулкана, землетрясение).
+   - null: действие бесшумное и скрытое (осмотр, медитация, чтение, созерцание).
+   ВАЖНО: оценивай действие по реальному размаху фантазии игрока без искусственных ограничений.
+
 ## ФОРМАТ ОТВЕТА
 
 Отвечай ТОЛЬКО валидным JSON без markdown-разметки (без \`\`\`json).
@@ -97,6 +112,7 @@ function buildRouterSystemPrompt(): string {
   "status": "success" | "clarification_needed" | "impossible",
   "clarification_msg": "string или null",
   "skill_hint": "swordsmanship" | "gathering" | "stealth" | "crafting" | "persuasion" | null,
+  "event_type": "whisper" | "speech" | "shout" | "combat_light" | "combat_medium" | "combat_heavy" | "magic_minor" | "magic_major" | "explosion" | "cataclysm" | null,
   "actions": [
     {
       "action_type": "attack" | "stealth_attack" | "move" | "loot" | "craft_recipe" | "craft_custom" | "transfer" | "drop" | "talk" | "search" | "harvest_ambient",
@@ -313,6 +329,7 @@ function normalizeRouterOutput(parsed: any): RouterOutputPayload {
     status: parsed.status,
     clarification_msg: parsed.clarification_msg ?? null,
     skill_hint: parsed.skill_hint ?? null,
+    event_type: parsed.event_type ?? null,
     actions: rawActions.map((a: any): RouterAction => ({
       action_type: a.action_type,
       target_entity_id: a.target_entity_id ?? null,
@@ -643,6 +660,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     status: "success",
     clarification_msg: null,
     skill_hint: skillHint as any,
+    event_type: "combat_medium",
     actions,
     time_estimate_minutes: timeEstimate,
     atmosphere: { sounds, visuals },

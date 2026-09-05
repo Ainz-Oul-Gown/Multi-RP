@@ -49,6 +49,13 @@ export interface NpcContextSummary {
   catchphrases?: string[];
   current_activity?: string | null;
   status_tags?: string[];
+  temperament?: string | null;
+  motivation?: string | null;
+  current_mood?: string | null;
+  secrets?: string | null;
+  rumors?: string[] | null;
+  speech_style?: string | null;
+  daily_routine?: string | null;
   relationship_score?: number;
   relationship_tier?: string;
   relationship_tier_label?: string;
@@ -90,6 +97,9 @@ export interface SystemTruthDto {
     appearance?: string | null;
     current_activity?: string | null;
     catchphrases?: string[];
+    temperament?: string | null;
+    current_mood?: string | null;
+    speech_style?: string | null;
   }>;
   npc_context: Record<string, NpcContextSummary>;
   encounter_alert: {
@@ -156,6 +166,13 @@ export interface SystemTruthInputContext {
     habits?: string | null;
     catchphrases?: string[];
     current_activity?: string | null;
+    temperament?: string | null;
+    motivation?: string | null;
+    current_mood?: string | null;
+    secrets?: string | null;
+    rumors?: string[] | null;
+    speech_style?: string | null;
+    daily_routine?: string | null;
   }>;
   // Атмосфера
   atmosphere: { sounds: string[]; visuals: string[] };
@@ -634,6 +651,13 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         habits: (npc as any)?.habits || null,
         catchphrases: Array.isArray((npc as any)?.catchphrases) ? (npc as any).catchphrases : [],
         current_activity: (npc as any)?.current_activity || null,
+        temperament: (npc as any)?.temperament || null,
+        motivation: (npc as any)?.motivation || null,
+        current_mood: (npc as any)?.current_mood || null,
+        secrets: (npc as any)?.secrets || null,
+        rumors: (npc as any)?.rumors || null,
+        speech_style: (npc as any)?.speech_style || null,
+        daily_routine: (npc as any)?.daily_routine || null,
         status_tags: statusTags,
         relationship_score: score,
         relationship_tier: tier,
@@ -662,6 +686,9 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
       appearance: (n as any).appearance || null,
       current_activity: (n as any).current_activity || null,
       catchphrases: Array.isArray((n as any).catchphrases) ? (n as any).catchphrases : [],
+      temperament: (n as any).temperament || null,
+      current_mood: (n as any).current_mood || null,
+      speech_style: (n as any).speech_style || null,
     }));
 
   return {

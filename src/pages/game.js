@@ -77,9 +77,15 @@ export async function renderGame(container, sessionId, user) {
     // Сообщения Мастера: проверяем target_player_id
     if (msg.sender_type === 'master') {
       const targetPlayerId = msg.metadata?.target_player_id;
-      // Глобальный лог: виден всем, кроме автора действия (автор уже видит подробный личный нарратив)
+      // Глобальный лог: виден игрокам в той же зоне, кроме автора действия (автор уже видит личный нарратив)
+      // Игроки в других зонах не видят детали чужих действий — события доходят только через fog_perception
       if (msg.metadata?.is_global === true) {
         if (msg.metadata?.initiator_player_id && currentPlayer && msg.metadata.initiator_player_id === currentPlayer.id) {
+          return false;
+        }
+        const initiatorZone = msg.metadata?.initiator_zone;
+        const currentZone = currentPlayer?.current_zone;
+        if (initiatorZone && currentZone && initiatorZone !== currentZone) {
           return false;
         }
         return true;
@@ -519,9 +525,66 @@ export async function renderGame(container, sessionId, user) {
     }
 
     if (msg.sender_type === 'system') {
+      if (msg.metadata?.type === 'world_cycle_log') {
+        const roundNum = msg.metadata.round_number || '';
+        const rawLines = (msg.content || '').split('\n').map(l => l.trim()).filter(Boolean);
+        const header = rawLines[0] || `🌍 Хроника мира | Раунд ${roundNum}`;
+        const items = rawLines.slice(1);
+        return `
+          <div class="message message-world-chronicle" style="
+            padding: 0.85rem 1.1rem;
+            margin: 0.6rem 0;
+            background: linear-gradient(135deg, rgba(20, 24, 34, 0.95) 0%, rgba(12, 16, 26, 0.98) 100%);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            border-left: 4px solid #f59e0b;
+            border-radius: var(--radius-sm);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+          ">
+            <div style="font-size: 0.88rem; font-weight: 700; color: #fbbf24; margin-bottom: 0.45rem; display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 1.1rem;">🌍</span>
+              <span>${escapeHtml(header.replace(/^[🌍*#\s]+/, ''))}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); line-height: 1.5; color: #e2e8f0;">
+              ${items.length > 0
+                ? items.map(it => `<div style="padding-left: 6px; border-left: 2px solid rgba(245, 158, 11, 0.25);">${escapeHtml(it.replace(/^[•*\-\s]+/, ''))}</div>`).join('')
+                : `<div style="color: var(--text-muted); font-style: italic;">В дальних краях день прошёл спокойно.</div>`
+              }
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <div class="message message-system">
           <div class="message-text">${escapeHtml(msg.content)}</div>
+        </div>
+      `;
+    }
+
+    // Сообщения от NPC / спутников
+    if (msg.sender_type === 'npc') {
+      const npcName = msg.sender_name || 'Персонаж';
+      const isCompanion = msg.metadata?.is_companion === true;
+      return `
+        <div class="message message-npc" style="
+          display: flex; gap: 0.75rem; align-items: flex-start;
+          padding: 0.75rem 1rem;
+          background: linear-gradient(135deg, rgba(28, 22, 40, 0.85) 0%, rgba(18, 15, 28, 0.95) 100%);
+          border-left: 3px solid ${isCompanion ? '#10b981' : '#8b5cf6'};
+          border-radius: 0 var(--radius-md) var(--radius-md) 0;
+          margin: 4px 0;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        ">
+          <div class="message-avatar" style="font-size: 1.25rem; flex-shrink: 0; background: ${isCompanion ? 'rgba(16, 185, 129, 0.15)' : 'rgba(139, 92, 246, 0.15)'}; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid ${isCompanion ? 'rgba(16, 185, 129, 0.3)' : 'rgba(139, 92, 246, 0.3)'};">
+            ${isCompanion ? '🤝' : '👤'}
+          </div>
+          <div class="message-body" style="flex: 1;">
+            <div class="message-sender" style="font-size: var(--fs-xs); font-weight: 600; color: ${isCompanion ? '#34d399' : '#a78bfa'}; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
+              <span>${escapeHtml(npcName)}</span>
+              ${isCompanion ? '<span style="font-size: 0.7rem; padding: 1px 5px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #6ee7b7;">Спутник</span>' : ''}
+            </div>
+            <div class="message-text" style="color: var(--text-primary); font-size: var(--fs-sm); line-height: 1.5;">${escapeHtml(msg.content)}</div>
+          </div>
         </div>
       `;
     }
@@ -928,6 +991,16 @@ export async function renderGame(container, sessionId, user) {
         ${relationship.status_tags?.length ? `
           <div class="npc-status-tags">
             ${relationship.status_tags.map((t) => `<span class="npc-tag">#${escapeHtml(t)}</span>`).join('')}
+          </div>
+        ` : ''}
+
+        ${(npc.current_activity || npc.current_mood || npc.temperament) ? `
+          <div class="npc-personality-info" style="margin: 6px 0; padding: 6px 8px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.72rem; line-height: 1.4; border: 1px solid rgba(255,255,255,0.06);">
+            ${npc.current_activity ? `<div style="color: #c084fc; margin-bottom: 2px;">📍 <strong>Занят:</strong> ${escapeHtml(npc.current_activity)}</div>` : ''}
+            <div style="color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap;">
+              ${npc.current_mood ? `<span>Настроение: <strong style="color: var(--text-secondary);">${escapeHtml(npc.current_mood)}</strong></span>` : ''}
+              ${npc.temperament ? `<span>Темперамент: <strong style="color: var(--text-secondary);">${escapeHtml(npc.temperament)}</strong></span>` : ''}
+            </div>
           </div>
         ` : ''}
 

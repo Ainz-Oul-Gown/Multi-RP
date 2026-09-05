@@ -154,6 +154,7 @@ export interface RouterOutputPayload {
   time_estimate_minutes: number;
   atmosphere: Atmosphere;
   skill_hint?: string | null;
+  event_type?: string | null;
 }
 
 // ============================================

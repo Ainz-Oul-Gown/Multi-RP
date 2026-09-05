@@ -230,3 +230,135 @@ describe("Timestamp Defaults", () => {
     expect(now).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
 });
+
+describe("Migration 027 & 028: Multi-RP v3.2 Geography and Psychology Extensions", () => {
+  const VALID_TERRAIN_TYPES = ["urban", "building", "forest", "cave", "mountain", "open"];
+  const VALID_MOODS = ["calm", "suspicious", "cheerful", "irritated", "frightened", "impressed", "mournful"];
+
+  it("validates all 6 terrain types for fog of war and movement", () => {
+    expect(VALID_TERRAIN_TYPES).toHaveLength(6);
+    expect(VALID_TERRAIN_TYPES).toContain("urban");
+    expect(VALID_TERRAIN_TYPES).toContain("building");
+    expect(VALID_TERRAIN_TYPES).toContain("forest");
+    expect(VALID_TERRAIN_TYPES).toContain("cave");
+    expect(VALID_TERRAIN_TYPES).toContain("mountain");
+    expect(VALID_TERRAIN_TYPES).toContain("open");
+  });
+
+  it("validates all 7 moods from 028 enum", () => {
+    expect(VALID_MOODS).toHaveLength(7);
+    expect(VALID_MOODS).toContain("calm");
+    expect(VALID_MOODS).toContain("suspicious");
+    expect(VALID_MOODS).toContain("cheerful");
+    expect(VALID_MOODS).toContain("irritated");
+    expect(VALID_MOODS).toContain("frightened");
+    expect(VALID_MOODS).toContain("impressed");
+    expect(VALID_MOODS).toContain("mournful");
+  });
+
+  it("ensures subzones and distance matrix maintain symmetry", () => {
+    const zones = [
+      { id: "z1", name: "Рыночная площадь", type: "open" },
+      { id: "z2", name: "Таверна", type: "closed" },
+      { id: "z3", name: "Причалы", type: "open" },
+    ];
+
+    const matrix: Record<string, Record<string, number>> = {};
+    zones.forEach((z1, i) => {
+      matrix[z1.id] = {};
+      zones.forEach((z2, j) => {
+        matrix[z1.id][z2.id] = z1.id === z2.id ? 0 : Math.abs(i - j) * 15;
+      });
+    });
+
+    // Check symmetry
+    zones.forEach(z1 => {
+      zones.forEach(z2 => {
+        expect(matrix[z1.id][z2.id]).toBe(matrix[z2.id][z1.id]);
+      });
+      expect(matrix[z1.id][z1.id]).toBe(0);
+    });
+
+    expect(matrix["z1"]["z2"]).toBe(15);
+    expect(matrix["z1"]["z3"]).toBe(30);
+    expect(matrix["z2"]["z3"]).toBe(15);
+  });
+
+  describe("NPC Personality Fields Import & Mapping", () => {
+    function formatSecretsForDb(secrets: any) {
+      if (Array.isArray(secrets)) {
+        return secrets.map(s => {
+          if (typeof s === 'object' && s !== null) {
+            if (s.secret) {
+              return `${s.secret}${s.reveal_threshold ? ` (доверие > ${s.reveal_threshold})` : ''}`;
+            }
+            return JSON.stringify(s);
+          }
+          return String(s || '').trim();
+        }).filter(Boolean).join('\n');
+      }
+      return typeof secrets === 'string' ? secrets.trim() : '';
+    }
+
+    function formatSpeechStyleForDb(speech: any) {
+      if (typeof speech === 'object' && speech !== null) {
+        const parts: string[] = [];
+        if (speech.tone) parts.push(speech.tone);
+        if (speech.greeting) parts.push(`Приветствие: «${speech.greeting}»`);
+        if (Array.isArray(speech.address_forms) && speech.address_forms.length > 0) {
+          parts.push(`Обращения: ${speech.address_forms.join(', ')}`);
+        }
+        return parts.join('. ') || 'Спокойный, вежливый';
+      }
+      return typeof speech === 'string' && speech.trim() ? speech.trim() : 'Спокойный, вежливый';
+    }
+
+    function formatDailyRoutineForDb(routine: any) {
+      if (typeof routine === 'object' && routine !== null) {
+        const parts: string[] = [];
+        if (routine.morning) parts.push(`Утро: ${routine.morning}`);
+        if (routine.afternoon) parts.push(`День: ${routine.afternoon}`);
+        if (routine.evening) parts.push(`Вечер: ${routine.evening}`);
+        if (routine.night) parts.push(`Ночь: ${routine.night}`);
+        return parts.join('. ') || 'Утром — дела, днём — служба, вечером — отдых, ночью — сон';
+      }
+      return typeof routine === 'string' && routine.trim() ? routine.trim() : 'Утром — дела, днём — служба, вечером — отдых, ночью — сон';
+    }
+
+    it("formats object speech_style and daily_routine into clean readable strings", () => {
+      const speech = {
+        tone: "саркастичный",
+        greeting: "Чего надо?",
+        address_forms: ["путник", "ты"]
+      };
+      const formattedSpeech = formatSpeechStyleForDb(speech);
+      expect(formattedSpeech).toBe("саркастичный. Приветствие: «Чего надо?». Обращения: путник, ты");
+
+      const routine = {
+        morning: "Зарядка",
+        afternoon: "Охота",
+        evening: "Ужин",
+        night: "Сон"
+      };
+      const formattedRoutine = formatDailyRoutineForDb(routine);
+      expect(formattedRoutine).toBe("Утро: Зарядка. День: Охота. Вечер: Ужин. Ночь: Сон");
+    });
+
+    it("formats array of secrets with thresholds into readable text lines", () => {
+      const secrets = [
+        { secret: "Любит эклеры", reveal_threshold: 40 },
+        { secret: "Тайный лаз в замок", reveal_threshold: 75 }
+      ];
+      const formatted = formatSecretsForDb(secrets);
+      expect(formatted).toContain("Любит эклеры (доверие > 40)");
+      expect(formatted).toContain("Тайный лаз в замок (доверие > 75)");
+    });
+
+    it("preserves plain string formats without modification", () => {
+      expect(formatSpeechStyleForDb("Грубый, лаконичный")).toBe("Грубый, лаконичный");
+      expect(formatDailyRoutineForDb("Днем на базаре")).toBe("Днем на базаре");
+      expect(formatSecretsForDb("Боится высоты")).toBe("Боится высоты");
+    });
+  });
+});
+

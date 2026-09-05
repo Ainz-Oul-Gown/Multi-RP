@@ -1354,6 +1354,130 @@
   background: linear-gradient(180deg, #241c16 0%, #1c1511 100%);
 }
 
+.npc-section-title {
+  font-family: var(--font-heading);
+  font-size: var(--fs-sm);
+  color: var(--accent-gold-bright);
+  border-bottom: 1px solid rgba(212, 163, 89, 0.2);
+  padding-bottom: 4px;
+  margin: var(--space-md) 0 var(--space-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.npc-header-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+}
+
+.npc-mood-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.npc-mood-badge.mood-calm { background: rgba(46, 125, 50, 0.25); color: #81c784; border: 1px solid rgba(76, 175, 80, 0.4); }
+.npc-mood-badge.mood-suspicious { background: rgba(230, 81, 0, 0.25); color: #ffb74d; border: 1px solid rgba(255, 152, 0, 0.4); }
+.npc-mood-badge.mood-cheerful { background: rgba(249, 168, 37, 0.25); color: #fff176; border: 1px solid rgba(253, 216, 53, 0.4); }
+.npc-mood-badge.mood-irritated { background: rgba(198, 40, 40, 0.25); color: #ef9a9a; border: 1px solid rgba(244, 67, 54, 0.4); }
+.npc-mood-badge.mood-frightened { background: rgba(106, 27, 154, 0.25); color: #ce93d8; border: 1px solid rgba(171, 71, 188, 0.4); }
+.npc-mood-badge.mood-impressed { background: rgba(2, 136, 209, 0.25); color: #81d4fa; border: 1px solid rgba(3, 169, 244, 0.4); }
+.npc-mood-badge.mood-mournful { background: rgba(55, 71, 79, 0.35); color: #b0bec5; border: 1px solid rgba(120, 144, 156, 0.4); }
+
+.npc-temperament-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  background: rgba(212, 163, 89, 0.12);
+  color: var(--accent-gold);
+  border: 1px solid rgba(212, 163, 89, 0.3);
+  white-space: nowrap;
+}
+
+.npc-subline-text {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.terrain-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.terrain-badge.terrain-urban { background: rgba(96, 125, 139, 0.25); color: #b0bec5; border: 1px solid rgba(96, 125, 139, 0.4); }
+.terrain-badge.terrain-building { background: rgba(141, 110, 99, 0.25); color: #d7ccc8; border: 1px solid rgba(141, 110, 99, 0.4); }
+.terrain-badge.terrain-forest { background: rgba(46, 125, 50, 0.25); color: #a5d6a7; border: 1px solid rgba(76, 175, 80, 0.4); }
+.terrain-badge.terrain-cave { background: rgba(62, 39, 35, 0.4); color: #bcaaa4; border: 1px solid rgba(109, 76, 65, 0.5); }
+.terrain-badge.terrain-mountain { background: rgba(55, 71, 79, 0.3); color: #cfd8dc; border: 1px solid rgba(120, 144, 156, 0.4); }
+.terrain-badge.terrain-open { background: rgba(255, 179, 0, 0.2); color: #ffe082; border: 1px solid rgba(255, 193, 7, 0.4); }
+
+.zone-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  background: rgba(33, 150, 243, 0.15);
+  color: #90caf9;
+  border: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+.prompt-copy-card {
+  background: linear-gradient(180deg, #2b1e15 0%, #1c140e 100%);
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.prompt-copy-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-sm);
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.prompt-textarea {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  background: #110d0a;
+  color: #e6dfd5;
+  border: 1px solid rgba(212, 163, 89, 0.25);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  resize: vertical;
+  min-height: 140px;
+}
+
+
 .session-players-preview {
   display: flex;
   flex-direction: column;

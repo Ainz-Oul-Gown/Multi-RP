@@ -26,6 +26,8 @@ import { evaluatePetTamingAttempt, evaluatePetLoyaltyCheck, awardPetCombatXp } f
 import { buildSatellitePrompt, buildGpsPrompt } from "./steps/_shared_prompts.ts";
 import { RouterInputContext } from "./types.ts";
 import { evaluateStoryProgress } from "../_shared/storyProgressEvaluator.ts";
+import { ensureLocationMapAndTerrain, TERRAIN_MODIFIERS, TerrainType } from "../_shared/fog_location_generator.ts";
+import { executeRoundCycleNpcSimulation } from "../_shared/npc_world_simulator.ts";
 
 // ============================================
 // ТУМАН ВОЙНЫ — вспомогательные функции (Deno-совместимые, без внешних импортов)
@@ -108,19 +110,20 @@ function fogPickNarrative(eventType: string, tier: number, content: string): str
   return line.replace(/\{dir\}/g, dir).replace(/\{content\}/g, content || "...");
 }
 
-function fogDetectEventType(actionText: string): string {
-  const t = actionText.toLowerCase();
-  if (/взрыв.{0,20}(здани|горы|замк)|обвал горы|землетрясен/.test(t)) return "cataclysm";
-  if (/взрыв|взрываю|взорвал|бомб|порох|фугас/.test(t)) return "explosion";
-  if (/огненн.{0,10}(шар|луч)|молни|гром.{0,10}(удар|магич)|призыв.{0,15}(демон|дух)/.test(t)) return "magic_major";
-  if (/магич|заклинани|огонёк|искр|чары|руны/.test(t)) return "magic_minor";
-  if (/(разбиваю|разруша|обрушива|ломаю).{0,20}(стен|дверь|ворот|колонн)|таран|катапульт/.test(t)) return "combat_heavy";
-  if (/\bкричу\b|\bкрикнул\b|\bзакричал\b|"[^"]{0,80}"/.test(t)) return "shout";
-  if (/говорю|спрашиваю|отвечаю|произношу/.test(t)) return "speech";
-  if (/шепчу|шёпотом|тихо.{0,10}(говор|скаж)|на ухо/.test(t)) return "whisper";
-  if (/(атакую|бью|удар|рублю|колю).{0,20}(мечом|топором|кинжалом|стрел|молотом)/.test(t)) return "combat_medium";
-  if (/атакую|бью|удар|пинаю|толкаю/.test(t)) return "combat_light";
-  return "combat_medium";
+/**
+ * Расчёт эффективных порогов слышимости и видимости с учётом типа местности (terrain_type).
+ * Никаких эвристик — тип события передаётся напрямую из решения ИИ (Router).
+ */
+function fogGetEffectiveThresholds(eventType: string, terrainType?: string | null): { audioTier: number; visualTier: number } {
+  const base = FOG_THRESHOLDS[eventType] || FOG_THRESHOLDS.combat_medium;
+  const mod = terrainType && (TERRAIN_MODIFIERS as any)[terrainType]
+    ? (TERRAIN_MODIFIERS as any)[terrainType]
+    : { audioMod: 0, visualMod: 0 };
+
+  return {
+    audioTier: Math.max(0, Math.min(5, base.audioTier + mod.audioMod)),
+    visualTier: Math.max(0, Math.min(5, base.visualTier + mod.visualMod)),
+  };
 }
 
 function fogGetDistanceTier(sourceZone: string | null, targetZone: string | null, locationMap: Record<string, Record<string, number>>): number {
@@ -436,14 +439,15 @@ serve(async (req) => {
     const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*), current_zone").eq("session_id", session_id);
     const allPlayers = allPlayersData || [];
 
-    // Загружаем карту расстояний зон из кэша сессии (заполняется при смене локации)
-    const locationMap: Record<string, Record<string, number>> = session.location_map || {};
+    // Загружаем карту расстояний зон и тип местности из кэша сессии (заполняется при создании/смене локации)
+    let locationMap: Record<string, Record<string, number>> = session.location_map || {};
+    let currentTerrain: string | null = session.current_terrain_type || null;
 
     // Load all NPCs in current location (for router, engine and system truth context)
     let allNpcs: any[] = [];
     if (session.current_location_id) {
       const { data: npcData, error: npcErr } = await supabase.from("npcs")
-        .select("id, name, race, class, role, category, hp, max_hp, armor_class, level, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time")
+        .select("id, name, race, class, role, category, hp, max_hp, armor_class, level, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time, temperament, motivation, current_mood, secrets, rumors, speech_style, daily_routine")
         .eq("location_id", session.current_location_id);
       if (!npcErr) {
         // Derive is_alive from hp (column might not exist yet in all environments)
@@ -516,9 +520,48 @@ serve(async (req) => {
             allNpcs = startLoc.initial_npcs;
           }
           console.log(`[${requestId}] [STARTING_LOCATION] Created start location "${currentLocationName}" (${currentStateName}) for ${player.name}`);
+
+          try {
+            const startMap = await ensureLocationMapAndTerrain({
+              supabase,
+              sessionId: session_id,
+              locationId: startLoc.location_id,
+              locationName: startLoc.location_name,
+              locationType: startLoc.location_type,
+              openrouterApiKey,
+              model: satelliteModel,
+            });
+            locationMap = startMap.location_map;
+            currentTerrain = startMap.terrain_type;
+            session.location_map = locationMap;
+            session.current_terrain_type = currentTerrain;
+          } catch (startMapErr) {
+            console.warn(`[${requestId}] [STARTING_LOCATION] Failed to generate location_map:`, startMapErr);
+          }
         }
       } catch (locGenErr) {
         console.warn(`[${requestId}] [STARTING_LOCATION] Generation error:`, locGenErr);
+      }
+    }
+
+    // Если карта расстояний или тип местности ещё не созданы — генерируем через ИИ
+    if (Object.keys(locationMap).length === 0 && (session.current_location_id || currentWildZone || currentLocationName)) {
+      try {
+        const initLocMap = await ensureLocationMapAndTerrain({
+          supabase,
+          sessionId: session_id,
+          locationId: session.current_location_id,
+          locationName: currentLocationName || "Локация",
+          isWildZone: Boolean(currentWildZone),
+          openrouterApiKey,
+          model: satelliteModel,
+        });
+        locationMap = initLocMap.location_map;
+        currentTerrain = initLocMap.terrain_type;
+        session.location_map = locationMap;
+        session.current_terrain_type = currentTerrain;
+      } catch (locMapInitErr) {
+        console.warn(`[${requestId}] [FOG] Failed to ensure initial location_map:`, locMapInitErr);
       }
     }
 
@@ -796,6 +839,24 @@ serve(async (req) => {
         current_wild_zone_description: null,
       }).eq("id", session_id);
 
+      // Сгенерировать карту расстояний зон и тип местности для новой локации через ИИ
+      try {
+        const newLocMap = await ensureLocationMapAndTerrain({
+          supabase,
+          sessionId: session_id,
+          locationId: new_location_id,
+          locationName: currentLocationName,
+          openrouterApiKey,
+          model: satelliteModel,
+        });
+        locationMap = newLocMap.location_map;
+        currentTerrain = newLocMap.terrain_type;
+        session.location_map = locationMap;
+        session.current_terrain_type = currentTerrain;
+      } catch (locChangeMapErr) {
+        console.warn(`[${requestId}] [FOG] Failed to generate location_map on location change:`, locChangeMapErr);
+      }
+
       // Спутники и члены отряда перемещаются вместе с игроком в новую локацию
       try {
         const { data: compNpcs } = await supabase
@@ -825,6 +886,27 @@ serve(async (req) => {
       }).eq("id", session_id);
       currentLocationName = new_wild_zone;
       session.current_wild_zone = new_wild_zone;
+
+      // Сгенерировать карту расстояний зон и тип местности для дикой зоны через ИИ
+      try {
+        const wildLocMap = await ensureLocationMapAndTerrain({
+          supabase,
+          sessionId: session_id,
+          locationId: null,
+          locationName: new_wild_zone,
+          locationDescription: travel_description,
+          isWildZone: true,
+          openrouterApiKey,
+          model: satelliteModel,
+        });
+        locationMap = wildLocMap.location_map;
+        currentTerrain = wildLocMap.terrain_type;
+        session.location_map = locationMap;
+        session.current_terrain_type = currentTerrain;
+      } catch (wildChangeMapErr) {
+        console.warn(`[${requestId}] [FOG] Failed to generate location_map on wild zone change:`, wildChangeMapErr);
+      }
+
       allNpcs = allNpcs.filter((n: any) =>
         isCompanionNpc(n) ||
         n.is_hostile === true ||
@@ -1011,6 +1093,13 @@ serve(async (req) => {
         habits: n.habits || null,
         catchphrases: Array.isArray(n.catchphrases) ? n.catchphrases : [],
         current_activity: n.current_activity || null,
+        temperament: n.temperament || null,
+        motivation: n.motivation || null,
+        current_mood: n.current_mood || null,
+        secrets: n.secrets || null,
+        rumors: n.rumors || null,
+        speech_style: n.speech_style || null,
+        daily_routine: n.daily_routine || null,
       })),
       atmosphere: routerResult.atmosphere || { sounds: [], visuals: [] },
       time_passed_minutes,
@@ -1070,56 +1159,65 @@ serve(async (req) => {
       await supabase.from("messages").insert({
         session_id, sender_type: "master", sender_name: "Лог",
         content: narratorOutput.global_narrative,
-        metadata: { type: "global_log", is_global: true, initiator_player_id: player.id },
+        metadata: {
+          type: "global_log",
+          is_global: true,
+          initiator_player_id: player.id,
+          initiator_zone: player.current_zone || null,
+        },
       });
     }
 
-    // 3.5) ТУМ ВОЙНЫ — fog-сообщения для игроков в других зонах
+    // 3.5) ТУМАН ВОЙНЫ — fog-сообщения для игроков в других зонах
     // Работает только при наличии нескольких игроков в сессии
     if (allPlayers.length > 1) {
       try {
-        const eventType = fogDetectEventType(safeActionText);
-        const thresholds = FOG_THRESHOLDS[eventType] || FOG_THRESHOLDS.combat_medium;
-        const actorZone: string | null = player.current_zone || null;
-        const speechContent = fogExtractSpeech(safeActionText);
+        // AI определяет event_type в Router — никаких regex-эвристик!
+        const eventType = routerResult.event_type || null;
+        if (eventType) {
+          const thresholds = fogGetEffectiveThresholds(eventType, currentTerrain);
+          const actorZone: string | null = player.current_zone || null;
+          const speechContent = fogExtractSpeech(safeActionText);
 
-        // Наблюдатели = все игроки, кроме автора действия
-        const observers = allPlayers.filter((p: any) => p.id !== player.id);
+          // Наблюдатели = все игроки, кроме автора действия
+          const observers = allPlayers.filter((p: any) => p.id !== player.id);
 
-        let fogCount = 0;
-        for (const obs of observers) {
-          const obsZone: string | null = obs.current_zone || null;
-          const tier = fogGetDistanceTier(actorZone, obsZone, locationMap);
+          let fogCount = 0;
+          for (const obs of observers) {
+            const obsZone: string | null = obs.current_zone || null;
+            const tier = fogGetDistanceTier(actorZone, obsZone, locationMap);
 
-          // same_room (tier 0) — этот игрок уже получит нарратив через personal_narratives
-          if (tier === DISTANCE_TIER.SAME_ROOM) continue;
+            // same_room (tier 0) — этот игрок уже находится в той же зоне/комнате
+            if (tier === DISTANCE_TIER.SAME_ROOM) continue;
 
-          const hears  = tier <= thresholds.audioTier;
-          const sees   = tier <= thresholds.visualTier;
-          if (!hears && !sees) continue; // слишком далеко — ничего не доходит
+            const hears  = tier <= thresholds.audioTier;
+            const sees   = tier <= thresholds.visualTier;
+            if (!hears && !sees) continue; // слишком далеко — ничего не доходит
 
-          const fogText = fogPickNarrative(eventType, tier, speechContent);
-          if (!fogText) continue;
+            const fogText = fogPickNarrative(eventType, tier, speechContent);
+            if (!fogText) continue;
 
-          await supabase.from("messages").insert({
-            session_id,
-            sender_type: "master",
-            sender_name: "Мастер",
-            content: fogText,
-            metadata: {
-              target_player_id: obs.id,
-              type: "fog_perception",
-              fog_event_type: eventType,
-              fog_distance_tier: tier,
-              fog_filtered: true,
-              initiator_player_id: player.id,
-            },
-          });
-          fogCount++;
-          console.log(`[${requestId}] [FOG] 🌫️ ${player.name} (${eventType}) → ${obs.name} tier=${tier}: "${fogText.slice(0, 60)}..."`);
-        }
-        if (fogCount > 0) {
-          console.log(`[${requestId}] [FOG] Dispatched ${fogCount} fog message(s) for event_type="${eventType}"`);
+            await supabase.from("messages").insert({
+              session_id,
+              sender_type: "master",
+              sender_name: "Мастер",
+              content: fogText,
+              metadata: {
+                target_player_id: obs.id,
+                type: "fog_perception",
+                fog_event_type: eventType,
+                fog_distance_tier: tier,
+                fog_terrain_type: currentTerrain,
+                fog_filtered: true,
+                initiator_player_id: player.id,
+              },
+            });
+            fogCount++;
+            console.log(`[${requestId}] [FOG] 🌫️ ${player.name} (${eventType}, terrain=${currentTerrain || 'default'}) → ${obs.name} tier=${tier}: "${fogText.slice(0, 60)}..."`);
+          }
+          if (fogCount > 0) {
+            console.log(`[${requestId}] [FOG] Dispatched ${fogCount} fog message(s) for AI event_type="${eventType}", terrain="${currentTerrain || 'default'}"`);
+          }
         }
       } catch (fogErr) {
         console.warn(`[${requestId}] [FOG] Fog dispatch failed (non-critical):`, fogErr);
@@ -1335,6 +1433,7 @@ serve(async (req) => {
     // D&D БОЕВАЯ ОЧЕРЕДЬ ХОДОВ (TURN QUEUE С ИНИЦИАТИВОЙ NPC, СПУТНИКОВ И ПИТОМЦЕВ)
     // ============================================
     let npcCombatTurns: any[] = [];
+    let isRoundCompleted = (!allPlayers || allPlayers.length <= 1);
     try {
       const isCombat = routerResult.actions.some((a: any) => a.type === "attack") ||
         allNpcs.some((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
@@ -1394,6 +1493,7 @@ serve(async (req) => {
       if (!existingTurns || existingTurns.length === 0) {
         // Очереди ещё нет — создаём для игроков сессии
         if (allPlayers && allPlayers.length > 1) {
+          isRoundCompleted = false;
           const nextPlayer = allPlayers.find((p: any) => p.id !== player.id) || allPlayers[0];
           for (const p of allPlayers) {
             const isActor = p.id === player.id;
@@ -1607,8 +1707,12 @@ serve(async (req) => {
 
         if (nextTurn) {
           await supabase.from("turn_queue").update({ status: "active" }).eq("id", nextTurn.id);
+          if (allPlayers && allPlayers.length > 1) {
+            isRoundCompleted = false;
+          }
         } else {
           // Раунд завершен! Перезапускаем очередь
+          isRoundCompleted = true;
           const { data: allSessionTurns } = await supabase.from("turn_queue")
             .select("id, entity_type, initiative")
             .eq("session_id", session_id)
@@ -1625,6 +1729,33 @@ serve(async (req) => {
         }
       }
     } catch (queueErr) { console.warn(`[${requestId}] [SAVE] turn_queue update failed:`, queueErr); }
+
+    // ============================================
+    // ФОНОВЫЙ ПРОЦЕСС СИМУЛЯЦИИ ЖИЗНИ МИРА ПОСЛЕ КРУГА ХОДОВ
+    // (Ровно 1 запрос к ИИ на всех удаленных NPC, контактировавших с игроками)
+    // ============================================
+    let worldSimResult: any = null;
+    if (isRoundCompleted) {
+      try {
+        const nextRound = (session.current_round || 1) + 1;
+        await supabase.from("sessions").update({ current_round: nextRound }).eq("id", session_id);
+
+        worldSimResult = await executeRoundCycleNpcSimulation({
+          supabase,
+          sessionId: session_id,
+          roundNumber: nextRound,
+          currentLocationId: session.current_location_id,
+          worldId: session.world_id,
+          loreContext,
+          storyline: sessionStoryline,
+          openrouterApiKey,
+          model: dmModel,
+        });
+        console.log(`[${requestId}] [WORLD_SIM] 🌍 Round ${nextRound} simulated: ${worldSimResult?.simulated_count || 0} distant NPC(s) acted.`);
+      } catch (simErr) {
+        console.warn(`[${requestId}] [WORLD_SIM] executeRoundCycleNpcSimulation failed:`, simErr);
+      }
+    }
 
     return new Response(JSON.stringify({
       success: true,
@@ -1643,6 +1774,7 @@ serve(async (req) => {
       skill_progress: skillProgress,
       level_up: playerLevelUp,
       npc_combat_turns: npcCombatTurns,
+      world_simulation: worldSimResult,
       game_time: systemTruth.environment.time,
       time_minutes: time_passed_minutes,
       location_changed: location_changed || wild_zone_changed,

@@ -46,8 +46,23 @@ export async function updateWorld(id, updates) {
 }
 
 export async function deleteWorld(id) {
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('delete_world', { p_world_id: id });
+    if (!rpcErr && rpcData?.success) {
+      return rpcData;
+    }
+    if (rpcData && rpcData.success === false && rpcData.message) {
+      throw new Error(rpcData.message);
+    }
+  } catch (err) {
+    if (err.message && !err.message.includes('Could not find')) {
+      throw err;
+    }
+  }
+
   const { error } = await supabase.from('worlds').delete().eq('id', id);
   if (error) throw error;
+  return { success: true, deleted_world_id: id };
 }
 
 // ===================== LORE FILES =====================
@@ -132,7 +147,7 @@ export async function getSessions() {
 
   return sessions.map((s) => ({
     ...s,
-    worlds: worldMap[s.world_id] || null,
+    worlds: worldMap[s.world_id] || (s.world_name ? { id: s.world_id, name: s.world_name } : null),
     players: playersBySession[s.id] || [],
   }));
 }
@@ -171,12 +186,25 @@ export async function getSession(id) {
 }
 
 export async function createSession(session) {
+  let worldName = session.world_name || null;
+  if (!worldName && session.world_id) {
+    try {
+      const { data: w } = await supabase
+        .from('worlds')
+        .select('name')
+        .eq('id', session.world_id)
+        .maybeSingle();
+      if (w?.name) worldName = w.name;
+    } catch {}
+  }
+
   const sessionData = {
     game_year: 1248,
     game_month: 5,
     game_day: 14,
     game_hour: 10,
     game_minute: 0,
+    world_name: worldName,
     ...session,
   };
   const { data, error } = await supabase
@@ -649,7 +677,10 @@ export async function exportWorld(worldId) {
           id: l.id,
           name: l.name,
           type: l.type,
+          terrain_type: l.terrain_type || 'open',
           description: l.description,
+          zones: l.zones || [],
+          location_map: l.location_map || {},
         })) || [],
       })) || [],
     },
@@ -664,6 +695,14 @@ export async function exportWorld(worldId) {
         appearance: n.appearance,
         background: n.background,
         stats: n.stats,
+        temperament: n.temperament || '',
+        motivation: n.motivation || '',
+        current_mood: n.current_mood || 'calm',
+        speech_style: n.speech_style || '',
+        secrets: n.secrets || '',
+        rumors: n.rumors || [],
+        daily_routine: n.daily_routine || '',
+        current_activity: n.current_activity || '',
         // Расчётные поля (hp, max_hp, armor_class, initiative, saving_throws) исключаены — рассчитываются автоматически
         level: n.level,
         tier: n.tier,
@@ -823,6 +862,46 @@ export function getWorldSchema() {
   };
 }
 
+function formatSecretsForDb(secrets) {
+  if (Array.isArray(secrets)) {
+    return secrets.map(s => {
+      if (typeof s === 'object' && s !== null) {
+        if (s.secret) {
+          return `${s.secret}${s.reveal_threshold ? ` (доверие > ${s.reveal_threshold})` : ''}`;
+        }
+        return JSON.stringify(s);
+      }
+      return String(s || '').trim();
+    }).filter(Boolean).join('\n');
+  }
+  return typeof secrets === 'string' ? secrets.trim() : '';
+}
+
+function formatSpeechStyleForDb(speech) {
+  if (typeof speech === 'object' && speech !== null) {
+    const parts = [];
+    if (speech.tone) parts.push(speech.tone);
+    if (speech.greeting) parts.push(`Приветствие: «${speech.greeting}»`);
+    if (Array.isArray(speech.address_forms) && speech.address_forms.length > 0) {
+      parts.push(`Обращения: ${speech.address_forms.join(', ')}`);
+    }
+    return parts.join('. ') || 'Спокойный, вежливый';
+  }
+  return typeof speech === 'string' && speech.trim() ? speech.trim() : 'Спокойный, вежливый';
+}
+
+function formatDailyRoutineForDb(routine) {
+  if (typeof routine === 'object' && routine !== null) {
+    const parts = [];
+    if (routine.morning) parts.push(`Утро: ${routine.morning}`);
+    if (routine.afternoon) parts.push(`День: ${routine.afternoon}`);
+    if (routine.evening) parts.push(`Вечер: ${routine.evening}`);
+    if (routine.night) parts.push(`Ночь: ${routine.night}`);
+    return parts.join('. ') || 'Утром — дела, днём — служба, вечером — отдых, ночью — сон';
+  }
+  return typeof routine === 'string' && routine.trim() ? routine.trim() : 'Утром — дела, днём — служба, вечером — отдых, ночью — сон';
+}
+
 export async function importWorld(jsonData, ownerId) {
   const worldData = JSON.parse(jsonData);
   
@@ -884,6 +963,7 @@ export async function importWorld(jsonData, ownerId) {
           state_id: newState.id,
           name: l.name,
           type: l.type || 'city',
+          terrain_type: l.terrain_type || null,
           description: l.description || '',
         }));
         
@@ -1029,12 +1109,28 @@ export async function importWorld(jsonData, ownerId) {
         catchphrases: n.catchphrases || [],
         location_id: locationId,
         state_id: stateId,
+        // Новые поля психологии и отыгрыша NPC
+        temperament: (typeof n.temperament === 'string' && n.temperament.trim()) ? n.temperament.trim() : 'pragmatist',
+        motivation: (typeof n.motivation === 'string' && n.motivation.trim()) ? n.motivation.trim() : 'Жить в безопасности и достатке',
+        current_mood: ['calm', 'suspicious', 'cheerful', 'irritated', 'frightened', 'impressed', 'mournful'].includes(n.current_mood)
+          ? n.current_mood
+          : 'calm',
+        secrets: formatSecretsForDb(n.secrets),
+        rumors: Array.isArray(n.rumors)
+          ? n.rumors.map(r => typeof r === 'string' ? r : JSON.stringify(r))
+          : (typeof n.rumors === 'string' && n.rumors.trim() ? [n.rumors.trim()] : []),
+        speech_style: formatSpeechStyleForDb(n.speech_style),
+        daily_routine: formatDailyRoutineForDb(n.daily_routine),
+        current_activity: (typeof n.current_activity === 'string' && n.current_activity.trim())
+          ? n.current_activity.trim()
+          : ((Array.isArray(n.habits) && n.habits[0]) || 'Занят своими делами'),
         // Combat fields
         special_attacks: Array.isArray(n.special_attacks) ? n.special_attacks : [],
         base_attacks: Array.isArray(n.base_attacks) ? n.base_attacks : [],
         is_pack_instance: n.is_pack === true,
         pack_size: n.is_pack ? (n.pack_size || 2) : 1,
         is_unique: n.is_unique === true,
+        is_hostile: n.is_hostile === true,
       };
     });
     
@@ -1142,6 +1238,32 @@ export async function deleteNpc(id) {
   if (error) throw error;
 }
 
+export async function updateLocation(id, updates) {
+  const { data, error } = await supabase
+    .from('locations')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createLocation(location) {
+  const { data, error } = await supabase
+    .from('locations')
+    .insert(location)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteLocation(id) {
+  const { error } = await supabase.from('locations').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function exportPlayer(playerId) {
   const player = await getPlayer(playerId);
   const inventory = await getPlayerInventory(playerId);
@@ -1201,7 +1323,7 @@ export async function getNpcRelationships(sessionId, playerId) {
   // Получаем NPC в локации
   const { data: npcs, error: npcsError } = await supabase
     .from('npcs')
-    .select('id, name, race, role, status_tags, appearance, background')
+    .select('id, name, race, role, status_tags, appearance, background, temperament, current_mood, current_activity')
     .eq('location_id', session.current_location_id);
 
   if (npcsError) throw npcsError;

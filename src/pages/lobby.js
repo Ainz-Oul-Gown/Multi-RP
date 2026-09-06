@@ -313,6 +313,17 @@ export function renderLobby(container, user) {
               <span class="form-hint" id="pvpLabel">Выкл</span>
             </div>
 
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label">Оплата ИИ и выбор моделей (OpenRouter)</label>
+              <select class="input select" id="sessionAiKeyMode">
+                <option value="host" selected>👑 Ключ и модели Хоста (общий для всех игроков)</option>
+                <option value="individual">👤 У каждого игрока свой ключ и свои модели</option>
+              </select>
+              <span class="form-hint" style="font-size: var(--fs-xs);">
+                В режиме «Хост» приглашённым друзьям не нужен ключ OpenRouter — ИИ будет работать на моделях создателя.
+              </span>
+            </div>
+
             <!-- Сюжет (необязательно) -->
             <details class="plot-details" style="margin-bottom: 1rem;">
               <summary class="plot-summary">
@@ -3025,6 +3036,7 @@ export function renderLobby(container, user) {
       e.preventDefault();
       const worldId = document.getElementById('sessionWorld').value;
       const difficulty = document.getElementById('sessionDifficulty').value;
+      const aiKeyMode = document.getElementById('sessionAiKeyMode')?.value || 'host';
       let plotText = document.getElementById('sessionPlotText')?.value?.trim() || '';
 
       // If file uploaded, read its content
@@ -3037,6 +3049,7 @@ export function renderLobby(container, user) {
           world_id: worldId,
           difficulty,
           is_pvp_enabled: pvpEnabled,
+          ai_key_mode: aiKeyMode,
         });
 
         // Save plot to lore_files if provided

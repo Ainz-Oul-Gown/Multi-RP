@@ -330,7 +330,7 @@ serve(async (req) => {
 
     const { data: session } = await supabase
       .from("sessions")
-      .select("*, worlds(settings)")
+      .select("*, worlds(owner_id, settings)")
       .eq("id", session_id)
       .single();
     if (!session) {
@@ -339,20 +339,58 @@ serve(async (req) => {
 
     const sessionStoryline = session.storyline || session.worlds?.settings?.storyline || null;
 
-    // Resolve API key + models
+    // Resolve API key + models:
+    // Поддержка режима общего ключа хоста (ai_key_mode: 'host' | 'individual')
+    // По умолчанию 'host': ходы всех игроков используют ключ и модели создателя сессии/мира,
+    // если не выбран режим 'individual' (каждый со своим).
+    const aiKeyMode = session.ai_key_mode || 'host';
+    const hostUserId = session.worlds?.owner_id || null;
+
     let openrouterApiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
     let satelliteModel = AI_MODEL, gpsModel = AI_MODEL, dmModel = AI_MODEL;
+
+    // 1. Загрузка настроек текущего игрока (если есть)
+    let playerSettings: any = null;
     if (player.user_id) {
       const { data: us } = await supabase.from("user_settings")
         .select("openrouter_key, satellite_model, gps_model, dm_model")
         .eq("id", player.user_id).maybeSingle();
-      if (us?.openrouter_key) openrouterApiKey = sanitizeKey(us.openrouter_key);
-      if (us?.satellite_model) satelliteModel = us.satellite_model;
-      if (us?.gps_model) gpsModel = us.gps_model;
-      if (us?.dm_model) dmModel = us.dm_model;
+      playerSettings = us;
     }
+
+    // 2. Загрузка настроек хоста (создателя мира/сессии)
+    let hostSettings: any = null;
+    if (hostUserId && hostUserId !== player.user_id) {
+      const { data: hs } = await supabase.from("user_settings")
+        .select("openrouter_key, satellite_model, gps_model, dm_model")
+        .eq("id", hostUserId).maybeSingle();
+      hostSettings = hs;
+    } else if (hostUserId && hostUserId === player.user_id) {
+      hostSettings = playerSettings;
+    }
+
+    // 3. Выбор источника ключа и моделей в зависимости от ai_key_mode
+    if (aiKeyMode === 'host') {
+      // Приоритет Хоста: сначала ключ и модели создателя сессии
+      const targetSettings = hostSettings?.openrouter_key ? hostSettings : playerSettings;
+      if (targetSettings?.openrouter_key) openrouterApiKey = sanitizeKey(targetSettings.openrouter_key);
+      if (targetSettings?.satellite_model) satelliteModel = targetSettings.satellite_model;
+      if (targetSettings?.gps_model) gpsModel = targetSettings.gps_model;
+      if (targetSettings?.dm_model) dmModel = targetSettings.dm_model;
+    } else {
+      // Режим 'individual': каждый игрок использует свой ключ; если у игрока нет ключа — фоллбэк на ключ хоста
+      const targetSettings = playerSettings?.openrouter_key ? playerSettings : hostSettings;
+      if (targetSettings?.openrouter_key) openrouterApiKey = sanitizeKey(targetSettings.openrouter_key);
+      if (targetSettings?.satellite_model) satelliteModel = targetSettings.satellite_model;
+      if (targetSettings?.gps_model) gpsModel = targetSettings.gps_model;
+      if (targetSettings?.dm_model) dmModel = targetSettings.dm_model;
+    }
+
     if (!openrouterApiKey) {
-      return new Response(JSON.stringify({ error: "Укажите ваш OpenRouter API Key в настройках.", code: "MISSING_API_KEY" }), {
+      const errorMsg = aiKeyMode === 'host'
+        ? "Не задан OpenRouter API Key создателя сессии. Хост должен указать ключ в настройках аккаунта."
+        : "Укажите ваш OpenRouter API Key в настройках аккаунта.";
+      return new Response(JSON.stringify({ error: errorMsg, code: "MISSING_API_KEY" }), {
         status: 402, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }

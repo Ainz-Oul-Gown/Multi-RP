@@ -92,6 +92,29 @@ export async function renderSessionSettings(container, sessionId, user) {
             </div>
           </section>
 
+          <!-- Распределение ИИ (OpenRouter) -->
+          <section class="card">
+            <h2 class="card-title">🤖 Оплата ИИ и Модели (OpenRouter)</h2>
+            <p class="form-hint" style="margin-top: 0.25rem;">
+              Определяет, чей ключ OpenRouter и выбранные модели используются для ходов в этой сессии
+            </p>
+            <div class="form-group" style="margin-top: 1rem;">
+              <select class="input select" id="aiKeyModeSelect">
+                <option value="host" ${session.ai_key_mode !== 'individual' ? 'selected' : ''}>
+                  👑 Ключ и модели Хоста (общий для всех игроков)
+                </option>
+                <option value="individual" ${session.ai_key_mode === 'individual' ? 'selected' : ''}>
+                  👤 У каждого игрока свой ключ и свои модели
+                </option>
+              </select>
+              <span class="form-hint" style="font-size: var(--fs-xs); margin-top: 0.5rem; display: block;">
+                ${session.ai_key_mode !== 'individual' 
+                  ? 'Все ходы и ответы ДМ оплачиваются ключом Хоста на его выбранных моделях. Друзьям не нужно настраивать OpenRouter!' 
+                  : 'Каждый игрок совершает ход за счёт своего личного ключа OpenRouter и настроенных им моделей.'}
+              </span>
+            </div>
+          </section>
+
           <!-- Управление сюжетом -->
           <section class="card">
             <h2 class="card-title">📖 Управление сюжетной линией</h2>
@@ -277,6 +300,22 @@ export async function renderSessionSettings(container, sessionId, user) {
         toast.success(`PvP: ${newPvp ? 'Включено' : 'Выключено'}`);
       } catch (err) {
         toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // AI Key Mode change
+    document.getElementById('aiKeyModeSelect')?.addEventListener('change', async (e) => {
+      const mode = e.target.value;
+      try {
+        await updateSession(sessionId, { ai_key_mode: mode });
+        session.ai_key_mode = mode;
+        render();
+        toast.success(mode === 'host' 
+          ? 'Включен общий ключ Хоста для всех участников' 
+          : 'Каждый игрок использует свой личный ключ OpenRouter'
+        );
+      } catch (err) {
+        toast.error('Ошибка сохранения режима ИИ: ' + err.message);
       }
     });
 

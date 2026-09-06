@@ -904,6 +904,14 @@ export async function renderGame(container, sessionId, user) {
           <label class="form-label">Режим</label>
           <p>${session.current_plot_stage ? `📖 Сюжет (${session.current_plot_stage})` : '🎭 Песочница'}</p>
         </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">Оплата и модели ИИ</label>
+          <p style="font-size: var(--fs-xs); color: var(--accent-gold);">
+            ${session.ai_key_mode === 'individual' 
+              ? '👤 У каждого игрока свой ключ' 
+              : '👑 Общий ключ и модели Хоста'}
+          </p>
+        </div>
         <div class="form-group">
           <label class="form-label" id="participantsCount">Участники (${allPlayers.length})</label>
           <div id="sessionPlayersList" style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.5rem;">

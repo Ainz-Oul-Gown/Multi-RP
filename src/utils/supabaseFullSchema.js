@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   current_terrain_type TEXT DEFAULT 'open',
   location_map JSONB DEFAULT NULL,
   round_counter INT DEFAULT 1,
+  ai_key_mode TEXT DEFAULT 'host' CHECK (ai_key_mode IN ('host', 'individual')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -259,6 +260,9 @@ CREATE TABLE IF NOT EXISTS player_injuries (
   turns_remaining INT DEFAULT 3,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Миграция колонок для существующих БД:
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS ai_key_mode TEXT DEFAULT 'host';
 
 -- 2. СЛУЖЕБНЫЕ ФУНКЦИИ БЕЗОПАСНОСТИ
 CREATE OR REPLACE FUNCTION public.get_user_session_ids(p_user_id UUID)

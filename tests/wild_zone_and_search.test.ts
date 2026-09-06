@@ -50,6 +50,7 @@ describe("SearchHandler & LootSearchHandler: No dummy 'находка' items", (
     const actionKey: any = {
       action_type: "search",
       target_item_name: "древний ключ",
+      ai_custom_dc: 2,
     };
     const res = handler.handle(actionKey, context);
     expect(res.result.success).toBe(true);

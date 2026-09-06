@@ -193,20 +193,93 @@ export async function deployDatabaseSchema(url, accessToken, options = {}) {
   try {
     onProgress?.('Развёртывание таблиц, триггеров и правил безопасности...');
 
-    const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${cleanToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: SUPABASE_FULL_SCHEMA_SQL }),
-    });
+    let res = null;
+    let lastError = null;
 
-    const data = await res.json().catch(() => null);
+    // 1. Через Edge Function deploy-schema (серверный вызов без ограничений CORS)
+    try {
+      const edgeUrl = `${SUPABASE_URL}/functions/v1/deploy-schema`;
+      const edgeRes = await fetch(edgeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectRef,
+          accessToken: cleanToken,
+          query: SUPABASE_FULL_SCHEMA_SQL,
+        }),
+      });
 
-    if (!res.ok) {
-      const errMsg = data?.message || data?.error || (typeof data === 'string' ? data : `HTTP ${res.status}`);
-      return { success: false, error: `Ошибка Supabase API: ${errMsg}` };
+      const edgeData = await edgeRes.json().catch(() => null);
+
+      if (edgeRes.ok) {
+        res = edgeRes;
+      } else {
+        const errMsg = edgeData?.error || edgeData?.message || `HTTP ${edgeRes.status}`;
+        // Если это ошибка аутентификации или запроса Supabase — возвращаем точный текст
+        if (edgeRes.status === 400 || edgeRes.status === 401 || edgeRes.status === 404) {
+          return { success: false, error: `Ошибка Supabase API: ${errMsg}` };
+        }
+        lastError = new Error(errMsg);
+      }
+    } catch (edgeErr) {
+      lastError = edgeErr;
+    }
+
+    // 2. Fallback: локальный Vite-прокси (/api/supabase-mgmt) при разработке
+    if (!res && typeof window !== 'undefined' && window.location?.hostname === 'localhost') {
+      try {
+        const proxyRes = await fetch(`/api/supabase-mgmt/projects/${projectRef}/database/query`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${cleanToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: SUPABASE_FULL_SCHEMA_SQL }),
+        });
+
+        const proxyData = await proxyRes.json().catch(() => null);
+
+        if (proxyRes.ok) {
+          res = proxyRes;
+        } else {
+          const errMsg = proxyData?.message || proxyData?.error || `HTTP ${proxyRes.status}`;
+          return { success: false, error: `Ошибка Supabase API: ${errMsg}` };
+        }
+      } catch (proxyErr) {
+        lastError = proxyErr;
+      }
+    }
+
+    // 3. Fallback: прямой запрос к api.supabase.com (для сред без ограничений CORS)
+    if (!res) {
+      try {
+        const directRes = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${cleanToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: SUPABASE_FULL_SCHEMA_SQL }),
+        });
+
+        const directData = await directRes.json().catch(() => null);
+
+        if (directRes.ok) {
+          res = directRes;
+        } else {
+          const errMsg = directData?.message || directData?.error || `HTTP ${directRes.status}`;
+          return { success: false, error: `Ошибка Supabase API: ${errMsg}` };
+        }
+      } catch (directErr) {
+        lastError = directErr;
+      }
+    }
+
+    if (!res) {
+      return {
+        success: false,
+        error: `Не удалось связаться с API: ${lastError?.message || 'CORS / Network Error'}. Воспользуйтесь кнопкой «📋 SQL» для ручной вставки в Supabase SQL Editor.`,
+      };
     }
 
     onProgress?.('Проверка готовности созданной схемы базы данных...');
@@ -217,7 +290,7 @@ export async function deployDatabaseSchema(url, accessToken, options = {}) {
   } catch (err) {
     return {
       success: false,
-      error: `Ошибка соединения с api.supabase.com: ${err.message || err}`,
+      error: `Ошибка развёртывания базы данных: ${err.message || err}`,
     };
   }
 }

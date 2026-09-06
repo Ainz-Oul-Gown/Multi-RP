@@ -171,8 +171,9 @@ describe('Custom Supabase Database (BYOD)', () => {
       });
 
       expect(res.success).toBe(true);
-      expect(capturedUrl).toBe('https://api.supabase.com/v1/projects/abcdefghijkl/database/query');
-      expect(capturedHeaders['Authorization']).toBe('Bearer sbp_test_token_123');
+      expect(capturedUrl).toContain('/functions/v1/deploy-schema');
+      expect(capturedBody.projectRef).toBe('abcdefghijkl');
+      expect(capturedBody.accessToken).toBe('sbp_test_token_123');
       expect(capturedBody.query).toContain('CREATE TABLE IF NOT EXISTS worlds');
       expect(progressList.length).toBeGreaterThan(0);
 

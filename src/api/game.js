@@ -227,6 +227,21 @@ export async function getSession(id) {
   return data;
 }
 
+export function extractMissingColumn(error) {
+  if (!error) return null;
+  const msg = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`;
+  // PostgREST: could not find the 'xyz' column of 'table' in the schema cache
+  const m1 = msg.match(/['"]([a-zA-Z0-9_]+)['"]\s+column\s+of/i);
+  if (m1) return m1[1];
+  // PostgreSQL: column "xyz" of relation "table" does not exist
+  const m2 = msg.match(/column\s+['"]([a-zA-Z0-9_]+)['"]/i);
+  if (m2) return m2[1];
+  // PostgREST alternate: column 'xyz' does not exist
+  const m3 = msg.match(/['"]([a-zA-Z0-9_]+)['"]\s+does not exist/i);
+  if (m3) return m3[1];
+  return null;
+}
+
 export async function createSession(session) {
   let worldName = session.world_name || null;
   if (!worldName && session.world_id) {
@@ -249,31 +264,26 @@ export async function createSession(session) {
     world_name: worldName,
     ...session,
   };
-  let { data, error } = await supabase
-    .from('sessions')
-    .insert(sessionData)
-    .select()
-    .single();
 
-  // Graceful fallback if database schema cache does not yet have ai_key_mode
-  if (error && (
-    error.message?.includes('ai_key_mode') ||
-    error.details?.includes('ai_key_mode') ||
-    error.hint?.includes('ai_key_mode') ||
-    error.code === 'PGRST204'
-  )) {
-    console.warn('[createSession] Retrying insert without ai_key_mode:', error.message);
-    const { ai_key_mode, ...fallbackData } = sessionData;
-    const retry = await supabase
+  let insertData = { ...sessionData };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let { data, error } = await supabase
       .from('sessions')
-      .insert(fallbackData)
+      .insert(insertData)
       .select()
       .single();
-    if (!retry.error) return retry.data;
-  }
 
-  if (error) throw error;
-  return data;
+    if (!error) return data;
+
+    const missingCol = extractMissingColumn(error);
+    if (missingCol && insertData[missingCol] !== undefined) {
+      console.warn(`[createSession] Column '${missingCol}' not in schema cache, retrying without it...`);
+      delete insertData[missingCol];
+      continue;
+    }
+
+    throw error;
+  }
 }
 
 export async function updateSession(id, updates) {
@@ -354,29 +364,28 @@ export async function getPlayer(id) {
 }
 
 export async function createPlayer(player) {
-  let { data, error } = await supabase
-    .from('players')
-    .insert(player)
-    .select()
-    .single();
+  // race_ac_bonus is derived from race and not needed in the database table
+  const { race_ac_bonus, ...playerData } = player;
+  let insertData = { ...playerData };
 
-  if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
-    console.warn('[createPlayer] Error inserting player, attempting fallback:', error.message);
-    const safePlayer = { ...player };
-    const missingColMatch = error.message?.match(/column ['"]?([a-zA-Z0-9_]+)['"]?/i);
-    if (missingColMatch && missingColMatch[1] && safePlayer[missingColMatch[1]] !== undefined) {
-      delete safePlayer[missingColMatch[1]];
-      const retry = await supabase
-        .from('players')
-        .insert(safePlayer)
-        .select()
-        .single();
-      if (!retry.error) return retry.data;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let { data, error } = await supabase
+      .from('players')
+      .insert(insertData)
+      .select()
+      .single();
+
+    if (!error) return data;
+
+    const missingCol = extractMissingColumn(error);
+    if (missingCol && insertData[missingCol] !== undefined) {
+      console.warn(`[createPlayer] Column '${missingCol}' not in schema cache, retrying without it...`);
+      delete insertData[missingCol];
+      continue;
     }
-  }
 
-  if (error) throw error;
-  return data;
+    throw error;
+  }
 }
 
 export async function updatePlayer(id, updates) {
@@ -676,29 +685,27 @@ export async function getCharacterCard(id) {
 }
 
 export async function createCharacterCard(card) {
-  let { data, error } = await supabase
-    .from('character_cards')
-    .insert(card)
-    .select()
-    .single();
+  const { race_ac_bonus, ...cardData } = card;
+  let insertData = { ...cardData };
 
-  if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
-    console.warn('[createCharacterCard] Error inserting card, attempting fallback:', error.message);
-    const safeCard = { ...card };
-    const missingColMatch = error.message?.match(/column ['"]?([a-zA-Z0-9_]+)['"]?/i);
-    if (missingColMatch && missingColMatch[1] && safeCard[missingColMatch[1]] !== undefined) {
-      delete safeCard[missingColMatch[1]];
-      const retry = await supabase
-        .from('character_cards')
-        .insert(safeCard)
-        .select()
-        .single();
-      if (!retry.error) return retry.data;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let { data, error } = await supabase
+      .from('character_cards')
+      .insert(insertData)
+      .select()
+      .single();
+
+    if (!error) return data;
+
+    const missingCol = extractMissingColumn(error);
+    if (missingCol && insertData[missingCol] !== undefined) {
+      console.warn(`[createCharacterCard] Column '${missingCol}' not in schema cache, retrying without it...`);
+      delete insertData[missingCol];
+      continue;
     }
-  }
 
-  if (error) throw error;
-  return data;
+    throw error;
+  }
 }
 
 export async function updateCharacterCard(id, updates) {

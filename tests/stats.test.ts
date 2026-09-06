@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { validateAndFixStats } from "../supabase/functions/_shared/utils.ts";
 import { calculateHpFromStats, calculateInitiative, calculateArmorClass, calculateSavingThrows, calculateDerivedStats, getRaceAcBonus, validateAndFixStats as validateAndFixStatsFrontend } from "../src/config.js";
+import { extractMissingColumn } from "../src/api/game.js";
 
 describe("validateAndFixStats", () => {
   it("returns default stats when input is empty", () => {
@@ -194,6 +195,28 @@ describe("Migration 033 & Schema Integrity", () => {
     expect(content).toContain("ai_key_mode");
     expect(content).toContain("allocate_stat_points");
     expect(content).toContain("NOTIFY pgrst, 'reload schema'");
+  });
+});
+
+describe("extractMissingColumn", () => {
+  it("extracts column name from PostgREST schema cache error (could not find 'col' column of 'table')", () => {
+    const err = { message: "could not find the 'race_ac_bonus' column of 'players' in the schema cache" };
+    expect(extractMissingColumn(err)).toBe("race_ac_bonus");
+  });
+
+  it("extracts column name from Postgres relation error (column 'col' of relation 'table' does not exist)", () => {
+    const err = { message: 'column "stat_points" of relation "players" does not exist' };
+    expect(extractMissingColumn(err)).toBe("stat_points");
+  });
+
+  it("extracts column name from details or hint if message is generic", () => {
+    const err = { message: "PGRST204", details: "could not find the 'ai_key_mode' column of 'sessions' in the schema cache" };
+    expect(extractMissingColumn(err)).toBe("ai_key_mode");
+  });
+
+  it("returns null for non-column errors", () => {
+    const err = { message: "JWT expired" };
+    expect(extractMissingColumn(err)).toBe(null);
   });
 });
 

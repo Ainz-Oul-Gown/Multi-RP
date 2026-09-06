@@ -2042,7 +2042,6 @@ export async function renderGame(container, sessionId, user) {
                   max_mp: 50,
                   money: card.money || 50,
                   current_zone: spawnTarget.zone,
-                  race_ac_bonus: cardRaceAcBonus,
                   ...calculateDerivedStats(card.stats, cardRace, [], cardRaceAcBonus),
                 });
 
@@ -2117,7 +2116,6 @@ export async function renderGame(container, sessionId, user) {
         max_mp: 50,
         money: 50,
         current_zone: spawnTarget.zone,
-        race_ac_bonus: raceAcBonus,
         ...derived,
       };
       console.log('[create-character] request:', requestPayload);

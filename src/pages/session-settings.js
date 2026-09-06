@@ -505,9 +505,9 @@ export async function renderSessionSettings(container, sessionId, user) {
           bio: 'NPC-персонаж, управляемый ИИ',
           power_level: 10,
           stats: { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-          hp: calculateHpFromStats({ CON: 10 }),
-          max_hp: calculateHpFromStats({ CON: 10 }),
-          ...calculateDerivedStats({ CON: 10 }, 'Человек', [], getRaceAcBonus('Человек')),
+          hp: 18,
+          max_hp: 18,
+          ...calculateDerivedStats({ STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 }, 'Человек'),
           money: 0,
         });
         toast.success(`Бот ${botName} добавлен!`);

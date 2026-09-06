@@ -494,7 +494,7 @@ serve(async (req) => {
     const recentMessages = (recentMsgs || []).reverse().map((m) => `[${m.sender_type === "master" ? "Мастер" : "Игрок"}]: ${cleanTextForAI(m.content).slice(0, 200)}`);
 
     // Load all players in session (for router, engine and system truth context)
-    const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*), current_zone").eq("session_id", session_id);
+    const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*), current_zone").eq("session_id", session_id).order("created_at", { ascending: true });
     const allPlayers = allPlayersData || [];
 
     // Загружаем карту расстояний зон и тип местности из кэша сессии (заполняется при создании/смене локации)
@@ -1811,10 +1811,20 @@ serve(async (req) => {
         // Очереди ещё нет — создаём для игроков сессии
         if (allPlayers && allPlayers.length > 1) {
           isRoundCompleted = false;
-          const nextPlayer = (!isCombat && targetedOtherPlayer)
-            ? targetedOtherPlayer
-            : (allPlayers.find((p: any) => p.id !== player.id) || allPlayers[0]);
-          for (const p of allPlayers) {
+          // Сортируем игроков: в бою по инициативе, в мирном режиме — строго по порядку входа в мир (created_at ASC)
+          const sortedPlayers = [...allPlayers].sort((a: any, b: any) => {
+            if (isCombat) {
+              const diff = (b.initiative || 10) - (a.initiative || 10);
+              if (diff !== 0) return diff;
+            }
+            return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+          });
+
+          const actorIndex = sortedPlayers.findIndex((p: any) => p.id === player.id);
+          const nextIndex = actorIndex >= 0 ? (actorIndex + 1) % sortedPlayers.length : 0;
+          const nextPlayer = sortedPlayers[nextIndex];
+
+          for (const p of sortedPlayers) {
             const isActor = p.id === player.id;
             const isNext = p.id === nextPlayer.id && !isActor;
             await supabase.from("turn_queue").insert({
@@ -1830,19 +1840,20 @@ serve(async (req) => {
           }
         }
       } else {
-        // Добавляем игроков, которых ещё нет в очереди
+        // Добавляем игроков, которых ещё нет в очереди (в порядке их входа created_at ASC)
         if (allPlayers && allPlayers.length > 1) {
           const existingPids = new Set(existingTurns.filter((t: any) => t.player_id).map((t: any) => t.player_id));
-          for (const p of allPlayers) {
-            if (!existingPids.has(p.id)) {
-              await supabase.from("turn_queue").insert({
-                session_id,
-                player_id: p.id,
-                entity_type: "player",
-                initiative: p.initiative || 10,
-                status: "waiting",
-              });
-            }
+          const missingPlayers = allPlayers
+            .filter((p: any) => !existingPids.has(p.id))
+            .sort((a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+          for (const p of missingPlayers) {
+            await supabase.from("turn_queue").insert({
+              session_id,
+              player_id: p.id,
+              entity_type: "player",
+              initiative: p.initiative || 10,
+              status: "waiting",
+            });
           }
         }
 
@@ -1855,31 +1866,21 @@ serve(async (req) => {
         }).eq("session_id", session_id).eq("player_id", player.id);
 
         // Ищем следующий ход со статусом 'waiting'
-        // В мирном режиме, если игрок обратился к сопартийцу — передаём ход адресату
-        let nextTurn: any = null;
-        if (!isCombat && targetedOtherPlayer) {
-          const targetedTurnQuery = await supabase.from("turn_queue")
-            .select("id, player_id, npc_id, entity_type, status, initiative")
-            .eq("session_id", session_id)
-            .eq("player_id", targetedOtherPlayer.id)
-            .eq("status", "waiting")
-            .maybeSingle();
-          if (targetedTurnQuery.data) {
-            nextTurn = targetedTurnQuery.data;
-          }
+        // При isCombat = false ходы передаются строго по очереди входа в мир (created_at ASC) от одного игрока другому.
+        // При isCombat = true ходы упорядочены по боевой инициативе (initiative DESC, created_at ASC).
+        let nextQuery = supabase.from("turn_queue")
+          .select("id, player_id, npc_id, entity_type, status, initiative, created_at")
+          .eq("session_id", session_id)
+          .eq("status", "waiting");
+
+        if (isCombat) {
+          nextQuery = nextQuery.order("initiative", { ascending: false }).order("created_at", { ascending: true });
+        } else {
+          nextQuery = nextQuery.order("created_at", { ascending: true });
         }
 
-        if (!nextTurn) {
-          const defaultNextQuery = await supabase.from("turn_queue")
-            .select("id, player_id, npc_id, entity_type, status, initiative")
-            .eq("session_id", session_id)
-            .eq("status", "waiting")
-            .order("initiative", { ascending: false })
-            .order("created_at", { ascending: true })
-            .limit(1)
-            .maybeSingle();
-          nextTurn = defaultNextQuery.data;
-        }
+        const { data: nextTurnData } = await nextQuery.limit(1).maybeSingle();
+        let nextTurn = nextTurnData;
 
         // Если следующий ход принадлежит NPC — выполняем боевые ходы NPC
         while (nextTurn && nextTurn.entity_type === "npc" && nextTurn.npc_id) {
@@ -2049,10 +2050,17 @@ serve(async (req) => {
         } else {
           // Раунд завершен! Перезапускаем очередь
           isRoundCompleted = true;
-          const { data: allSessionTurns } = await supabase.from("turn_queue")
-            .select("id, entity_type, initiative")
-            .eq("session_id", session_id)
-            .order("initiative", { ascending: false });
+          let queueOrderQuery = supabase.from("turn_queue")
+            .select("id, entity_type, initiative, created_at")
+            .eq("session_id", session_id);
+
+          if (isCombat) {
+            queueOrderQuery = queueOrderQuery.order("initiative", { ascending: false }).order("created_at", { ascending: true });
+          } else {
+            queueOrderQuery = queueOrderQuery.order("created_at", { ascending: true });
+          }
+
+          const { data: allSessionTurns } = await queueOrderQuery;
 
           if (allSessionTurns && allSessionTurns.length > 0) {
             const firstTurn = allSessionTurns[0];

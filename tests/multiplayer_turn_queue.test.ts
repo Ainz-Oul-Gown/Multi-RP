@@ -237,6 +237,48 @@ describe("Multiplayer: Turn Queue Lifecycle", () => {
     expect(t1?.status).toBe("waiting");
     expect(t2?.status).toBe("active");
   });
+
+  it("initTurnQueue упорядочивает очередь строго по created_at (порядок входа в мир), независимо от порядка массива и инициативы", async () => {
+    // player-2 вошел в 10:00 (раньше), но имеет низкую инициативу
+    // player-1 вошел в 10:05 (позже), но имеет высокую инициативу
+    const players = [
+      { id: "player-1", name: "Арагорн", initiative: 20, created_at: "2026-09-01T10:05:00Z" },
+      { id: "player-2", name: "Леголас", initiative: 5, created_at: "2026-09-01T10:00:00Z" },
+    ];
+
+    const activeTurn = await initTurnQueue("session-1", players);
+
+    expect(activeTurn).toBeTruthy();
+    // Первым должен ходить Леголас, так как он вошел раньше (10:00 < 10:05)
+    expect(activeTurn.player_id).toBe("player-2");
+    expect(activeTurn.status).toBe("active");
+
+    const queue = await getTurnQueue("session-1");
+    expect(queue.length).toBe(2);
+    expect(queue[0].player_id).toBe("player-2");
+    expect(queue[0].status).toBe("active");
+    expect(queue[1].player_id).toBe("player-1");
+    expect(queue[1].status).toBe("waiting");
+  });
+
+  it("initTurnQueue активирует следующего waiting по порядку входа (created_at ASC), если активного хода нет", async () => {
+    // Активного хода нет. В очереди два ожидающих хода
+    dbState.turnQueue = [
+      { id: "t2", session_id: "session-1", player_id: "player-2", status: "waiting", created_at: "2026-09-01T10:05:00Z" },
+      { id: "t1", session_id: "session-1", player_id: "player-1", status: "waiting", created_at: "2026-09-01T10:00:00Z" },
+    ];
+
+    const players = [
+      { id: "player-1", name: "Арагорн", created_at: "2026-09-01T10:00:00Z" },
+      { id: "player-2", name: "Леголас", created_at: "2026-09-01T10:05:00Z" },
+    ];
+
+    const activatedTurn = await initTurnQueue("session-1", players);
+
+    // Должен активироваться t1, так как его created_at раньше
+    expect(activatedTurn.id).toBe("t1");
+    expect(activatedTurn.status).toBe("active");
+  });
 });
 
 describe("Multiplayer: Fog of War Visibility", () => {

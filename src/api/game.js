@@ -625,9 +625,9 @@ export async function initTurnQueue(sessionId, players = []) {
     return null;
   }
 
-  // 2. Если очереди ещё нет — создаём для каждого игрока с учётом инициативы
+  // 2. Если очереди ещё нет — создаём для каждого игрока по порядку входа в мир (created_at ASC)
   if (!existing || existing.length === 0) {
-    const sortedPlayers = [...players].sort((a, b) => (b.initiative || 10) - (a.initiative || 10));
+    const sortedPlayers = [...players].sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
     const toInsert = sortedPlayers.map((p, idx) => ({
       session_id: sessionId,
       player_id: p.id,
@@ -648,7 +648,9 @@ export async function initTurnQueue(sessionId, players = []) {
 
   // 3. Проверяем, есть ли игроки, которых ещё нет в очереди (зашли позже)
   const existingPlayerIds = new Set(existing.map((t) => t.player_id));
-  const missingPlayers = players.filter((p) => !existingPlayerIds.has(p.id));
+  const missingPlayers = players
+    .filter((p) => !existingPlayerIds.has(p.id))
+    .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
   if (missingPlayers.length > 0) {
     const toInsert = missingPlayers.map((p) => ({
       session_id: sessionId,
@@ -666,9 +668,12 @@ export async function initTurnQueue(sessionId, players = []) {
     return activeTurn;
   }
 
-  // Если активного хода нет, но есть ожидающие — активируем первый waiting
-  const waitingTurn = existing.find((t) => t.status === 'waiting');
-  if (waitingTurn) {
+  // Если активного хода нет, но есть ожидающие — активируем первый waiting по порядку входа (created_at ASC)
+  const waitingTurns = existing
+    .filter((t) => t.status === 'waiting')
+    .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+  if (waitingTurns.length > 0) {
+    const waitingTurn = waitingTurns[0];
     const { data: updated } = await supabase
       .from('turn_queue')
       .update({ status: 'active' })
@@ -678,9 +683,10 @@ export async function initTurnQueue(sessionId, players = []) {
     return updated || waitingTurn;
   }
 
-  // Если все ходы завершены (completed) — перезапускаем раунд
-  const firstTurn = existing[0];
-  const otherIds = existing.slice(1).map((t) => t.id);
+  // Если все ходы завершены (completed) — перезапускаем раунд по порядку входа (created_at ASC)
+  const sortedExisting = [...existing].sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+  const firstTurn = sortedExisting[0];
+  const otherIds = sortedExisting.slice(1).map((t) => t.id);
   if (otherIds.length > 0) {
     await supabase.from('turn_queue').update({ status: 'waiting', resolved_at: null }).in('id', otherIds);
   }

@@ -700,114 +700,126 @@ export async function renderGame(container, sessionId, user) {
 
     return `
       <div class="profile-card">
-        <div class="profile-avatar">⚔️</div>
-        <h3 class="profile-name">${escapeHtml(player?.name || 'Герой')}</h3>
-        <p class="profile-meta">${escapeHtml(player?.race || '')} / ${escapeHtml(player?.class || '')}</p>
-
-        <!-- Track 1: Уровень и Опыт -->
-        <div class="profile-section" style="width: 100%; background: var(--bg-card); border-radius: var(--radius-md); padding: 10px; border: 1px solid var(--border-color);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <span style="font-weight: 700; color: var(--accent-gold); font-size: var(--fs-base);">🎖️ Уровень ${currentLvl}</span>
-            <span style="font-size: var(--fs-xs); color: var(--text-muted);">${currentXp} / ${xpNeeded} XP</span>
+        <!-- Компактный заголовок: слева имя, уровень, мета, опыт; справа аватарка -->
+        <div class="profile-header-compact">
+          <div class="profile-header-info">
+            <div class="profile-name-row">
+              <h3 class="profile-name">${escapeHtml(player?.name || 'Герой')}</h3>
+              <span class="profile-lvl-badge">🎖️ Ур. ${currentLvl}</span>
+            </div>
+            <div class="profile-sub-row">
+              <span class="profile-meta-tag">${escapeHtml(player?.race || 'Человек')}</span>
+              <span class="profile-meta-separator">•</span>
+              <span class="profile-meta-tag">${escapeHtml(player?.class || 'Воин')}</span>
+              <span class="profile-meta-separator">•</span>
+              <span class="profile-money-chip">💰 ${player.money || 0} з.</span>
+            </div>
+            <!-- Компактная полоса опыта -->
+            <div class="profile-xp-block">
+              <div class="profile-xp-labels">
+                <span>Опыт</span>
+                <span>${currentXp} / ${xpNeeded} XP</span>
+              </div>
+              <div class="profile-bar-track xp-track">
+                <div class="profile-bar-fill xp-fill" style="width: ${xpPct}%;"></div>
+              </div>
+            </div>
           </div>
-          <div class="hp-bar-container" style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-            <div style="height: 100%; width: ${xpPct}%; background: linear-gradient(90deg, #f59e0b, #fbbf24); border-radius: 4px;"></div>
-          </div>
+          <div class="profile-avatar">⚔️</div>
         </div>
 
-        <!-- HP & MP -->
-        <div class="profile-section" style="width: 100%;">
+        <!-- HP & MP (на всю ширину, доходят до правого края) -->
+        <div class="profile-vitals-group">
           <!-- HP Bar -->
-          <div style="margin-bottom: 8px;">
-            <div style="display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: 600; margin-bottom: 2px;">
-              <span>❤️ Здоровье (HP)</span>
-              <span>${player.hp} / ${player.max_hp}</span>
+          <div class="vital-bar-item">
+            <div class="vital-bar-labels">
+              <span class="vital-label-hp">❤️ Здоровье (HP)</span>
+              <span class="vital-val">${player.hp} / ${player.max_hp}</span>
             </div>
-            <div class="hp-bar-container" style="height: 12px;">
-              <div class="hp-bar ${hpClass}" style="width: ${hpPct}%"></div>
+            <div class="profile-bar-track hp-track">
+              <div class="hp-bar ${hpClass}" style="width: ${hpPct}%;"></div>
             </div>
           </div>
 
           <!-- MP Bar -->
-          <div style="margin-bottom: 8px;">
-            <div style="display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: 600; margin-bottom: 2px;">
-              <span>💙 Мана (MP)</span>
-              <span>${player.mp ?? 50} / ${player.max_mp ?? 50}</span>
+          <div class="vital-bar-item">
+            <div class="vital-bar-labels">
+              <span class="vital-label-mp">💙 Мана (MP)</span>
+              <span class="vital-val">${player.mp ?? 50} / ${player.max_mp ?? 50}</span>
             </div>
-            <div class="hp-bar-container" style="height: 12px; background: rgba(255,255,255,0.1);">
-              <div style="height: 100%; width: ${mpPct}%; background: #3b82f6; border-radius: var(--radius-sm); transition: width 0.3s ease;"></div>
+            <div class="profile-bar-track mp-track">
+              <div class="profile-bar-fill mp-fill" style="width: ${mpPct}%;"></div>
             </div>
           </div>
+        </div>
 
-          <p style="text-align: center; margin-top: 0.25rem; font-size: var(--fs-sm); color: var(--accent-gold);">
-            💰 ${player.money || 0} золота
-          </p>
+        <!-- Боевые характеристики (AC и Инициатива компактно в одну строку) -->
+        <div class="profile-combat-row">
+          <div class="combat-stat-pill">
+            <span class="combat-stat-icon">🛡️</span>
+            <span class="combat-stat-label">Класс брони (AC)</span>
+            <span class="combat-stat-value">${armorClass}</span>
+          </div>
+          <div class="combat-stat-pill">
+            <span class="combat-stat-icon">⚡</span>
+            <span class="combat-stat-label">Инициатива</span>
+            <span class="combat-stat-value">${initiative >= 0 ? '+' : ''}${initiative}</span>
+          </div>
         </div>
 
         ${freeStatPoints > 0 ? `
-          <div style="width: 100%; background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-gold); border-radius: var(--radius-md); padding: 8px 12px; text-align: center;">
-            <div style="color: var(--accent-gold); font-weight: 700; font-size: var(--fs-sm);">⭐ Свободных очков характеристик (ОХ): ${freeStatPoints}</div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Развитие БЕЗ ограничения в 20 (до 30, 40+). Нажмите [+1] у нужного параметра.</div>
+          <div class="profile-free-points-banner">
+            <span>⭐ Свободных очков (ОХ): <strong>${freeStatPoints}</strong></span>
+            <span style="font-size: 10px; opacity: 0.85;">(нажмите +1 у нужного параметра)</span>
           </div>
         ` : ''}
 
-        <div class="profile-section" style="width: 100%;">
+        <!-- Характеристики -->
+        <div class="profile-section">
           <h4 class="profile-section-title">Характеристики</h4>
           <div class="stats-grid-3">
             ${statsHtml}
           </div>
         </div>
 
-        <div class="profile-section" style="width: 100%;">
-          <div class="stats-grid-3">
-            <div class="stat-card">
-              <div class="stat-card-label">Инициатива</div>
-              <div class="stat-card-value">${initiative >= 0 ? '+' : ''}${initiative}</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-card-label">AC</div>
-              <div class="stat-card-value">${armorClass}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="profile-section" style="width: 100%;">
+        <!-- Спасброски -->
+        <div class="profile-section">
           <h4 class="profile-section-title">Спасброски</h4>
           <div class="stats-grid-3">
             ${savingThrowsHtml}
           </div>
         </div>
 
-        <!-- Track 2: Динамические навыки игрока (1..100) -->
-        <div class="profile-section" style="width: 100%;">
+        <!-- Навыки -->
+        <div class="profile-section">
           <h4 class="profile-section-title">🗡️ Навыки (1..100)</h4>
           ${playerSkills && playerSkills.length > 0 ? `
-            <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; flex-direction: column; gap: 5px;">
               ${playerSkills.map((s) => {
                 const sLvl = s.level || 1;
                 const sXp = s.xp || 0;
                 const sNext = s.xp_to_next_level || (sLvl * 100);
                 const sPct = Math.min(100, Math.floor((sXp / sNext) * 100));
                 return `
-                  <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                      <span style="font-weight: 600; font-size: var(--fs-sm);">${escapeHtml(s.name || s.skill_key)}</span>
-                      <span class="badge badge-primary" style="font-size: var(--fs-xs); font-weight: 700;">Ур. ${sLvl}</span>
+                  <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 5px 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                      <span style="font-weight: 600; font-size: var(--fs-xs);">${escapeHtml(s.name || s.skill_key)}</span>
+                      <span class="badge badge-primary" style="font-size: 10px; font-weight: 700; padding: 1px 5px;">Ур. ${sLvl}</span>
                     </div>
-                    <div class="hp-bar-container" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
-                      <div style="height: 100%; width: ${sPct}%; background: #3b82f6; border-radius: 3px;"></div>
+                    <div class="profile-bar-track" style="height: 4px; margin-bottom: 2px;">
+                      <div class="profile-bar-fill" style="width: ${sPct}%; background: #3b82f6; height: 100%; border-radius: var(--radius-full);"></div>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted);">
-                      <span>Опыт: ${sXp} / ${sNext} XP</span>
-                      <span>+${sLvl}% к эффективности</span>
+                      <span>${sXp} / ${sNext} XP</span>
+                      <span>+${sLvl}% к эфф.</span>
                     </div>
                   </div>
                 `;
               }).join('')}
             </div>
           ` : `
-            <p style="font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.4;">
-              Навыки открываются и растут автоматически от ваших действий в мире (рубка дерева, сбор трав, стрельба из лука, фехтование, кожевничество, скрытность).
+            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.35; margin: 0;">
+              Навыки растут от ваших действий в мире (крафт, сбор трав, бой, скрытность).
             </p>
           `}
         </div>
@@ -815,14 +827,14 @@ export async function renderGame(container, sessionId, user) {
         ${injuriesHtml}
 
         ${player.appearance ? `
-          <div class="profile-section" style="width: 100%;">
+          <div class="profile-section">
             <h4 class="profile-section-title">Внешность</h4>
             <p class="profile-bio">${escapeHtml(player.appearance)}</p>
           </div>
         ` : ''}
 
         ${player.bio ? `
-          <div class="profile-section" style="width: 100%;">
+          <div class="profile-section">
             <h4 class="profile-section-title">Биография</h4>
             <p class="profile-bio">${escapeHtml(player.bio)}</p>
           </div>

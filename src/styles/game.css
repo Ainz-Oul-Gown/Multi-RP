@@ -910,77 +910,277 @@
   padding: var(--space-lg);
 }
 
-/* Profile (Грамота авантюриста) */
+/* Profile (Компактная грамота героя) */
+#profilePanel .side-panel-content {
+  padding: 0.75rem 0.85rem;
+}
+
 .profile-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-md);
+  align-items: stretch;
+  gap: 0.65rem;
+  width: 100%;
 }
 
-.profile-avatar {
-  width: 84px;
-  height: 84px;
-  border-radius: var(--radius-lg);
+.profile-card .hp-bar-container,
+.profile-section .hp-bar-container {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Компактный заголовок: имя и уровень слева, аватарка справа */
+.profile-header-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(212, 163, 89, 0.18);
+}
+
+.profile-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-header-compact .profile-name {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent-gold-bright);
+  text-align: left;
+  margin: 0;
+  line-height: 1.2;
+  word-break: break-word;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.profile-lvl-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #120e0b;
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+.profile-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.profile-meta-tag {
+  color: var(--text-secondary);
+}
+
+.profile-meta-separator {
+  color: rgba(212, 163, 89, 0.4);
+  font-size: 0.65rem;
+}
+
+.profile-money-chip {
+  color: var(--accent-gold-bright);
+  font-weight: 600;
+}
+
+.profile-xp-block {
+  margin-top: 2px;
+  width: 100%;
+}
+
+.profile-xp-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.profile-bar-track {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 10px;
+  background: rgba(14, 10, 8, 0.95);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  border: 1px solid rgba(212, 163, 89, 0.35);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+  position: relative;
+}
+
+.profile-bar-track .hp-bar {
+  max-width: 100% !important;
+  height: 100%;
+}
+
+.profile-bar-track.xp-track {
+  height: 5px;
+  border-color: rgba(212, 163, 89, 0.2);
+}
+
+.profile-bar-fill.xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #d97706, #fbbf24);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-base);
+}
+
+.profile-bar-fill.mp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+  transition: width var(--transition-base);
+}
+
+.profile-header-compact .profile-avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: var(--radius-md);
   background: linear-gradient(135deg, #c85a32, #5a3825);
   border: 2px solid var(--border-gold);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.6rem;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), 0 0 15px rgba(212, 163, 89, 0.25);
+  font-size: 1.8rem;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 10px rgba(212, 163, 89, 0.25);
 }
 
-.profile-name {
-  font-family: var(--font-heading);
-  font-size: var(--fs-2xl);
-  font-weight: 700;
-  color: var(--accent-gold-bright);
-  text-align: center;
-  word-break: break-word;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+/* Vitals & Combat */
+.profile-vitals-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
 }
 
-.profile-meta {
-  color: var(--text-secondary);
-  font-size: var(--fs-base);
-  text-align: center;
+.vital-bar-item {
+  width: 100%;
+}
+
+.vital-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.vital-label-hp { color: #4ade80; }
+.vital-label-mp { color: #60a5fa; }
+.vital-val { color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; }
+
+.profile-combat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+}
+
+.combat-stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: linear-gradient(180deg, #251c16 0%, #1a130e 100%);
+  border: 1px solid rgba(212, 163, 89, 0.22);
+  border-radius: var(--radius-sm);
+}
+
+.combat-stat-icon { font-size: 0.85rem; }
+.combat-stat-label { font-size: 11px; color: var(--text-muted); flex: 1; }
+.combat-stat-value { font-size: 0.95rem; font-weight: 700; font-family: var(--font-mono); color: var(--accent-gold); }
+
+.profile-free-points-banner {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  color: var(--accent-gold);
+  font-size: 11px;
 }
 
 .profile-section {
-  margin-top: var(--space-lg);
-  padding-top: var(--space-lg);
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
   border-top: 1px solid rgba(212, 163, 89, 0.15);
+  width: 100%;
 }
 
 .profile-section-title {
   font-family: var(--font-heading);
-  font-size: var(--fs-sm);
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--accent-gold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: var(--space-md);
+  margin-bottom: 0.35rem;
+}
+
+.profile-card .stats-grid-3 {
+  gap: 5px;
+}
+
+.profile-card .stat-card {
+  padding: 4px 6px;
+}
+
+.profile-card .stat-card-label {
+  font-size: 10px;
+}
+
+.profile-card .stat-card-value {
+  font-size: 1.05rem;
+}
+
+.profile-card .stat-card-modifier {
+  font-size: 10px;
 }
 
 .profile-bio {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   color: var(--text-secondary);
-  line-height: 1.7;
+  line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
   background: rgba(18, 14, 11, 0.5);
-  padding: var(--space-md);
-  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid rgba(212, 163, 89, 0.12);
 }
 
 .profile-injuries {
   background: rgba(169, 50, 38, 0.15);
   border: 1px solid rgba(169, 50, 38, 0.4);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: var(--fs-xs);
   color: #f1948a;
 }
 

@@ -79,7 +79,9 @@ export async function renderGame(container, sessionId, user) {
   let unsubTurnQueue = null;
   let realtimeSubscribed = false;
   let isInitialRender = true;
-  const instanceId = Date.now().toString(36); // unique per render call
+  let isCancelled = false;
+  let isSelectingCharacter = false;
+  const instanceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5); // unique per render call
 
   // ============================================
   // ТУМАН ВОЙНЫ: фильтр видимости сообщений
@@ -94,9 +96,11 @@ export async function renderGame(container, sessionId, user) {
     // Системные сообщения — все
     if (msg.sender_type === 'system') return true;
 
-    // Свои действия видит только автор
+    // Свои действия видит только автор (проверяем как auth user.id, так и player.id)
     if (msg.sender_type === 'player') {
-      return msg.sender_id === user.id;
+      const myUserId = user?.id;
+      const myPlayerId = currentPlayer?.id;
+      return (myUserId && msg.sender_id === myUserId) || (myPlayerId && msg.sender_id === myPlayerId);
     }
 
     // Сообщения Мастера: проверяем target_player_id
@@ -135,20 +139,26 @@ export async function renderGame(container, sessionId, user) {
   }
 
   async function load() {
+    if (isCancelled) return;
     try {
       session = await getSession(sessionId);
+      if (isCancelled) return;
       if (!session) {
         toast.error('Сессия не найдена');
         router.navigate('/');
         return;
       }
       allPlayers = await getSessionPlayers(sessionId);
-      // Определяем текущего игрока для данного пользователя
-      currentPlayer = user?.id ? allPlayers.find((p) => p.user_id === user.id) : null;
+      if (isCancelled) return;
+
+      // Определяем текущего игрока для данного пользователя (с fallback на getUser)
+      const currentUserId = user?.id || (await supabase.auth.getUser().catch(() => null))?.data?.user?.id;
+      currentPlayer = currentUserId ? allPlayers.find((p) => p.user_id === currentUserId) : null;
       if (!currentPlayer && allPlayers.length === 1 && !allPlayers[0].user_id) {
         currentPlayer = allPlayers[0];
       }
       messages = await getSessionMessages(sessionId);
+      if (isCancelled) return;
 
       // Если персонаж уже есть, проверяем очередь ходов и загружаем навыки
       if (currentPlayer) {
@@ -160,11 +170,13 @@ export async function renderGame(container, sessionId, user) {
         await checkTurnQueue();
       }
     } catch (err) {
+      if (isCancelled) return;
       toast.error('Ошибка загрузки: ' + err.message);
       router.navigate('/');
       return;
     }
 
+    if (isCancelled) return;
     if (!currentPlayer) {
       renderCharacterCreation();
       return;
@@ -218,7 +230,11 @@ export async function renderGame(container, sessionId, user) {
     unsubMessages = subscribeToSessionMessages(sessionId, (payload) => {
       if (payload.eventType === 'INSERT') {
         const msg = payload.new;
-        // Добавляем в массив (для истории), но рисуем только то, что видно
+        if (!msg) return;
+        // Защита от дублирования сообщений в массиве истории
+        if (msg.id && messages.some((m) => m.id === msg.id)) {
+          return;
+        }
         messages.push(msg);
         if (isMessageVisibleToCurrentPlayer(msg)) {
           appendMessage(msg);
@@ -532,9 +548,12 @@ export async function renderGame(container, sessionId, user) {
     bindEvents();
     if (isInitialRender) {
       scrollToBottom();
+      setTimeout(scrollToBottom, 50);
+      setTimeout(scrollToBottom, 150);
       isInitialRender = false;
     } else if (wasNearBottom) {
       scrollToBottom();
+      setTimeout(scrollToBottom, 50);
     } else if (prevScrollTop !== null) {
       const newChat = document.getElementById('gameChat');
       if (newChat) {
@@ -544,6 +563,7 @@ export async function renderGame(container, sessionId, user) {
   }
 
   function renderMessage(msg) {
+    const safeMsgId = escapeHtml(msg.id || '');
     if (msg.sender_type === 'master') {
       const isGlobalLog = msg.metadata?.is_global === true || msg.metadata?.type === 'global_log';
       const isFogMsg    = msg.metadata?.fog_filtered === true || msg.metadata?.type === 'fog_perception';
@@ -551,7 +571,7 @@ export async function renderGame(container, sessionId, user) {
       if (isFogMsg) {
         // 🌫️ Дистантное восприятие — серо-коричневый стиль, курсив
         return `
-          <div class="message message-fog" style="
+          <div class="message message-fog" data-message-id="${safeMsgId}" style="
             display: flex; gap: 0.75rem; align-items: flex-start;
             padding: 0.6rem 0.8rem;
             background: linear-gradient(135deg, rgba(30,23,19,0.7) 0%, rgba(20,15,12,0.8) 100%);
@@ -567,7 +587,7 @@ export async function renderGame(container, sessionId, user) {
       }
 
       return `
-        <div class="message ${isGlobalLog ? 'message-system' : 'message-master'}">
+        <div class="message ${isGlobalLog ? 'message-system' : 'message-master'}" data-message-id="${safeMsgId}">
           <div class="message-avatar">${isGlobalLog ? '📜' : '🎭'}</div>
           <div class="message-body">
             ${isGlobalLog ? '<div class="message-sender" style="font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: 2px;">Общий лог комнаты</div>' : ''}
@@ -584,7 +604,7 @@ export async function renderGame(container, sessionId, user) {
         const header = rawLines[0] || `🌍 Хроника мира | Раунд ${roundNum}`;
         const items = rawLines.slice(1);
         return `
-          <div class="message message-world-chronicle" style="
+          <div class="message message-world-chronicle" data-message-id="${safeMsgId}" style="
             padding: 0.85rem 1.1rem;
             margin: 0.6rem 0;
             background: linear-gradient(135deg, rgba(20, 24, 34, 0.95) 0%, rgba(12, 16, 26, 0.98) 100%);
@@ -608,7 +628,7 @@ export async function renderGame(container, sessionId, user) {
       }
 
       return `
-        <div class="message message-system">
+        <div class="message message-system" data-message-id="${safeMsgId}">
           <div class="message-text">${formatRpText(msg.content)}</div>
         </div>
       `;
@@ -619,7 +639,7 @@ export async function renderGame(container, sessionId, user) {
       const npcName = msg.sender_name || 'Персонаж';
       const isCompanion = msg.metadata?.is_companion === true;
       return `
-        <div class="message message-npc" style="
+        <div class="message message-npc" data-message-id="${safeMsgId}" style="
           display: flex; gap: 0.75rem; align-items: flex-start;
           padding: 0.75rem 1rem;
           background: linear-gradient(135deg, rgba(28, 22, 40, 0.85) 0%, rgba(18, 15, 28, 0.95) 100%);
@@ -642,11 +662,14 @@ export async function renderGame(container, sessionId, user) {
       `;
     }
 
-    // Сообщения игроков: показываем ТОЛЬКО свои
+    // Сообщения игроков: показываем свои
     if (msg.sender_type === 'player') {
-      if (msg.sender_id === user.id) {
+      const myUserId = user?.id;
+      const myPlayerId = currentPlayer?.id;
+      const isMine = (myUserId && msg.sender_id === myUserId) || (myPlayerId && msg.sender_id === myPlayerId);
+      if (isMine) {
         return `
-          <div class="message message-self">
+          <div class="message message-self" data-message-id="${safeMsgId}">
             <div class="message-body">
               <div class="message-text">${formatRpText(msg.content)}</div>
             </div>
@@ -654,7 +677,7 @@ export async function renderGame(container, sessionId, user) {
           </div>
         `;
       }
-      return ''; // Чужие сообщения скрыты
+      return ''; // Чужие сообщения скрыты (события приходят через общий лог)
     }
 
     return '';
@@ -1846,6 +1869,11 @@ export async function renderGame(container, sessionId, user) {
     const chatMessages = document.getElementById('chatMessages');
     if (!chatMessages) return;
 
+    // Защита от дубликатов в DOM
+    if (msg.id && chatMessages.querySelector(`[data-message-id="${msg.id}"]`)) {
+      return;
+    }
+
     // Remove empty state if present
     const empty = chatMessages.querySelector('.chat-empty');
     if (empty) empty.remove();
@@ -2092,10 +2120,31 @@ export async function renderGame(container, sessionId, user) {
 
           cardsEl.querySelectorAll('.char-select-btn').forEach((btn) => {
             btn.addEventListener('click', async () => {
+              if (isSelectingCharacter) return;
               const cardId = btn.dataset.cardId;
+              const card = cards.find((c) => c.id === cardId);
+              if (!card) return;
+
+              isSelectingCharacter = true;
+              cardsEl.querySelectorAll('.char-select-btn').forEach((b) => {
+                b.disabled = true;
+                b.style.opacity = '0.6';
+              });
+              btn.textContent = '⏳ Выбор героя...';
+
               try {
-                const card = cards.find((c) => c.id === cardId);
-                if (!card) return;
+                // Защита от задвоения: проверяем, не был ли персонаж уже создан (в другой вкладке или гонке запросов)
+                const activeUserId = user?.id || (await supabase.auth.getUser().catch(() => null))?.data?.user?.id;
+                const freshPlayers = await getSessionPlayers(sessionId);
+                const existingPlayer = activeUserId ? freshPlayers.find((p) => p.user_id === activeUserId) : null;
+                if (existingPlayer) {
+                  currentPlayer = existingPlayer;
+                  allPlayers = freshPlayers;
+                  toast.info(`Персонаж «${existingPlayer.name}» уже участвует в игре!`);
+                  render();
+                  subscribeRealtime();
+                  return;
+                }
 
                 console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
 
@@ -2104,7 +2153,7 @@ export async function renderGame(container, sessionId, user) {
                 const spawnTarget = getSelectedSpawnTarget();
                 currentPlayer = await createPlayer({
                   session_id: sessionId,
-                  user_id: user.id,
+                  user_id: activeUserId || user.id,
                   name: card.name,
                   race: cardRace,
                   class: card.class,
@@ -2148,6 +2197,12 @@ export async function renderGame(container, sessionId, user) {
               } catch (err) {
                 console.error('[character-card] select error:', err);
                 toast.error('Ошибка: ' + err.message);
+                isSelectingCharacter = false;
+                cardsEl.querySelectorAll('.char-select-btn').forEach((b) => {
+                  b.disabled = false;
+                  b.style.opacity = '1';
+                });
+                btn.textContent = 'Выбрать этого героя';
               }
             });
           });
@@ -2166,41 +2221,61 @@ export async function renderGame(container, sessionId, user) {
     // Create new character
     document.getElementById('createCharacterForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (isSelectingCharacter) return;
 
-      const stats = {};
-      STATS.forEach((stat) => {
-        stats[stat] = parseInt(document.getElementById(`stat_${stat}`).value) || 10;
-      });
-
-      const charRace = document.getElementById('charRace').value || 'Человек';
-      const raceAcBonus = getRaceAcBonus(charRace);
-      const derived = calculateDerivedStats(stats, charRace, [], raceAcBonus);
-      const spawnTarget = getSelectedSpawnTarget();
-      const requestPayload = {
-        session_id: sessionId,
-        user_id: user.id,
-        name: document.getElementById('charName').value,
-        race: charRace,
-        class: document.getElementById('charClass').value,
-        appearance: document.getElementById('charAppearance').value,
-        bio: document.getElementById('charBio').value,
-        personality: { ideals: [], bonds: [], flaws: [] },
-        power_level: 10,
-        level: 1,
-        xp: 0,
-        stats,
-        stat_points: 0,
-        hp: calculateHpFromStats(stats),
-        max_hp: calculateHpFromStats(stats),
-        mp: 50,
-        max_mp: 50,
-        money: 50,
-        current_zone: spawnTarget.zone,
-        ...derived,
-      };
-      console.log('[create-character] request:', requestPayload);
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      isSelectingCharacter = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Создание героя...';
+      }
 
       try {
+        const activeUserId = user?.id || (await supabase.auth.getUser().catch(() => null))?.data?.user?.id;
+        const freshPlayers = await getSessionPlayers(sessionId);
+        const existingPlayer = activeUserId ? freshPlayers.find((p) => p.user_id === activeUserId) : null;
+        if (existingPlayer) {
+          currentPlayer = existingPlayer;
+          allPlayers = freshPlayers;
+          toast.info(`Персонаж «${existingPlayer.name}» уже участвует в игре!`);
+          render();
+          subscribeRealtime();
+          return;
+        }
+
+        const stats = {};
+        STATS.forEach((stat) => {
+          stats[stat] = parseInt(document.getElementById(`stat_${stat}`).value) || 10;
+        });
+
+        const charRace = document.getElementById('charRace').value || 'Человек';
+        const raceAcBonus = getRaceAcBonus(charRace);
+        const derived = calculateDerivedStats(stats, charRace, [], raceAcBonus);
+        const spawnTarget = getSelectedSpawnTarget();
+        const requestPayload = {
+          session_id: sessionId,
+          user_id: activeUserId || user.id,
+          name: document.getElementById('charName').value,
+          race: charRace,
+          class: document.getElementById('charClass').value,
+          appearance: document.getElementById('charAppearance').value,
+          bio: document.getElementById('charBio').value,
+          personality: { ideals: [], bonds: [], flaws: [] },
+          power_level: 10,
+          level: 1,
+          xp: 0,
+          stats,
+          stat_points: 0,
+          hp: calculateHpFromStats(stats),
+          max_hp: calculateHpFromStats(stats),
+          mp: 50,
+          max_mp: 50,
+          money: 50,
+          current_zone: spawnTarget.zone,
+          ...derived,
+        };
+        console.log('[create-character] request:', requestPayload);
+
         currentPlayer = await createPlayer(requestPayload);
 
         console.log('[create-character] player created:', currentPlayer.id);
@@ -2226,6 +2301,11 @@ export async function renderGame(container, sessionId, user) {
       } catch (err) {
         console.error('[create-character] error:', err);
         toast.error('Ошибка создания: ' + err.message);
+        isSelectingCharacter = false;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Начать приключение';
+        }
       }
     });
 
@@ -2307,6 +2387,7 @@ export async function renderGame(container, sessionId, user) {
 
   // Cleanup on unmount
   function cleanup() {
+    isCancelled = true;
     if (unsubMessages) unsubMessages();
     if (unsubPlayers) unsubPlayers();
     if (unsubTurnQueue) {

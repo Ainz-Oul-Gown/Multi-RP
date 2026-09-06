@@ -31,6 +31,7 @@ class Router {
       paramNames.push(name);
       return '([^/]+)';
     });
+    this.routes = this.routes.filter((r) => r.pattern !== pattern);
     this.routes.push({
       pattern,
       regex: new RegExp(`^${regexStr}$`),

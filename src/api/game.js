@@ -563,15 +563,16 @@ export async function removeInventoryItem(id) {
 
 // ===================== MESSAGES =====================
 
-export async function getSessionMessages(sessionId, limit = 50) {
+export async function getSessionMessages(sessionId, limit = 100) {
   const { data, error } = await supabase
     .from('messages')
     .select('*')
     .eq('session_id', sessionId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return data;
+  // Сортируем в хронологическом порядке от старых к новым для правильного отображения в чате
+  return (data || []).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
 
 export async function sendMessage(message) {

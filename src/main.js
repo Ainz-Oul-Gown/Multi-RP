@@ -26,6 +26,12 @@ async function bootstrap() {
 
   // Auth state listener — handles both initial check AND OAuth callback
   onAuthStateChange((user) => {
+    // Если пользователь не изменился (тот же ID), не перемонтируем заново роутер и активную страницу
+    if (currentUser && user && currentUser.id === user.id) {
+      currentUser = user;
+      return;
+    }
+
     currentUser = user;
     if (cleanupFn) {
       cleanupFn();

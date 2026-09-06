@@ -625,11 +625,14 @@ export async function initTurnQueue(sessionId, players = []) {
     return null;
   }
 
-  // 2. Если очереди ещё нет — создаём для каждого игрока
+  // 2. Если очереди ещё нет — создаём для каждого игрока с учётом инициативы
   if (!existing || existing.length === 0) {
-    const toInsert = players.map((p, idx) => ({
+    const sortedPlayers = [...players].sort((a, b) => (b.initiative || 10) - (a.initiative || 10));
+    const toInsert = sortedPlayers.map((p, idx) => ({
       session_id: sessionId,
       player_id: p.id,
+      entity_type: 'player',
+      initiative: p.initiative || 10,
       status: idx === 0 ? 'active' : 'waiting',
     }));
     const { data: created, error: insertErr } = await supabase
@@ -650,6 +653,8 @@ export async function initTurnQueue(sessionId, players = []) {
     const toInsert = missingPlayers.map((p) => ({
       session_id: sessionId,
       player_id: p.id,
+      entity_type: 'player',
+      initiative: p.initiative || 10,
       status: 'waiting',
     }));
     await supabase.from('turn_queue').insert(toInsert);

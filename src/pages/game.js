@@ -215,9 +215,15 @@ export async function renderGame(container, sessionId, user) {
         currentTurn = await initTurnQueue(sessionId, allPlayers);
       }
       if (currentTurn) {
-        isMyTurn = currentTurn.player_id === currentPlayer.id;
-        const activeP = allPlayers.find((p) => p.id === currentTurn.player_id);
-        activePlayerName = activeP ? (activeP.name || 'Герой') : 'Напарник';
+        activeTurnEntityType = currentTurn.entity_type || (currentTurn.npc_id ? 'npc' : 'player');
+        if (activeTurnEntityType === 'npc') {
+          isMyTurn = false;
+          activePlayerName = 'Враг / NPC';
+        } else {
+          isMyTurn = currentTurn.player_id === currentPlayer.id;
+          const activeP = allPlayers.find((p) => p.id === currentTurn.player_id);
+          activePlayerName = activeP ? (activeP.name || 'Герой') : 'Напарник';
+        }
       } else {
         // Нет активного хода — разрешаем ввод
         isMyTurn = true;

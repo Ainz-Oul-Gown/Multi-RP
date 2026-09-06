@@ -1811,7 +1811,9 @@ serve(async (req) => {
         // Очереди ещё нет — создаём для игроков сессии
         if (allPlayers && allPlayers.length > 1) {
           isRoundCompleted = false;
-          const nextPlayer = allPlayers.find((p: any) => p.id !== player.id) || allPlayers[0];
+          const nextPlayer = (!isCombat && targetedOtherPlayer)
+            ? targetedOtherPlayer
+            : (allPlayers.find((p: any) => p.id !== player.id) || allPlayers[0]);
           for (const p of allPlayers) {
             const isActor = p.id === player.id;
             const isNext = p.id === nextPlayer.id && !isActor;
@@ -1853,14 +1855,31 @@ serve(async (req) => {
         }).eq("session_id", session_id).eq("player_id", player.id);
 
         // Ищем следующий ход со статусом 'waiting'
-        let { data: nextTurn } = await supabase.from("turn_queue")
-          .select("id, player_id, npc_id, entity_type, status, initiative")
-          .eq("session_id", session_id)
-          .eq("status", "waiting")
-          .order("initiative", { ascending: false })
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle();
+        // В мирном режиме, если игрок обратился к сопартийцу — передаём ход адресату
+        let nextTurn: any = null;
+        if (!isCombat && targetedOtherPlayer) {
+          const targetedTurnQuery = await supabase.from("turn_queue")
+            .select("id, player_id, npc_id, entity_type, status, initiative")
+            .eq("session_id", session_id)
+            .eq("player_id", targetedOtherPlayer.id)
+            .eq("status", "waiting")
+            .maybeSingle();
+          if (targetedTurnQuery.data) {
+            nextTurn = targetedTurnQuery.data;
+          }
+        }
+
+        if (!nextTurn) {
+          const defaultNextQuery = await supabase.from("turn_queue")
+            .select("id, player_id, npc_id, entity_type, status, initiative")
+            .eq("session_id", session_id)
+            .eq("status", "waiting")
+            .order("initiative", { ascending: false })
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          nextTurn = defaultNextQuery.data;
+        }
 
         // Если следующий ход принадлежит NPC — выполняем боевые ходы NPC
         while (nextTurn && nextTurn.entity_type === "npc" && nextTurn.npc_id) {

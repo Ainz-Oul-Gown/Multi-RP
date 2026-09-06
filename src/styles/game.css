@@ -2509,3 +2509,17 @@
     font-size: var(--fs-xs);
   }
 }
+
+/* Roleplay Notation Styling */
+.rp-speech {
+  color: #34d399;
+  font-weight: 500;
+  text-shadow: 0 0 10px rgba(52, 211, 153, 0.2);
+}
+
+.rp-action {
+  color: #94a3b8;
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+

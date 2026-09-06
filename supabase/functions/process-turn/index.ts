@@ -141,6 +141,24 @@ function fogExtractSpeech(actionText: string): string {
   return m ? m[1] : "";
 }
 
+function getPlayerPartyId(p: any, session: any): string | null {
+  if (p?.party_id) return String(p.party_id);
+  const groups = Array.isArray(session?.party_groups) ? session.party_groups : [];
+  for (const g of groups) {
+    if (Array.isArray(g.members) && g.members.includes(p?.id)) {
+      return g.id;
+    }
+  }
+  return null;
+}
+
+function arePlayersInSameParty(p1: any, p2: any, session: any): boolean {
+  if (!p1 || !p2 || p1.id === p2.id) return false;
+  const party1 = getPlayerPartyId(p1, session);
+  const party2 = getPlayerPartyId(p2, session);
+  return !!party1 && party1 === party2;
+}
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
@@ -813,6 +831,84 @@ serve(async (req) => {
 
 
     // ============================================
+    // УПРАВЛЕНИЕ ОТРЯДОМ (Party System)
+    // ============================================
+    let partyEventFact: string | null = null;
+    const lowerAct = safeActionText.toLowerCase();
+    const isPartyInviteOrJoin = /(?:объедини(?:ться|мся)|созда(?:ть|дим) отряд|пойд[её]м вместе|ид[её]м вместе|держимся вместе|в отряд|возьми в отряд|беру за руку|предлагаю.*отряд)/i.test(lowerAct);
+    const isPartyLeave = /(?:покидаю отряд|выхожу из отряда|отделяюсь от отряда|иду один|пойду один|разделяемся)/i.test(lowerAct);
+
+    if (isPartyLeave) {
+      const priorPartyId = getPlayerPartyId(player, session);
+      if (priorPartyId) {
+        let groups = Array.isArray(session.party_groups) ? [...session.party_groups] : [];
+        groups = groups.map((g: any) => ({
+          ...g,
+          members: (g.members || []).filter((m: string) => m !== player.id),
+        })).filter((g: any) => (g.members || []).length > 1);
+
+        session.party_groups = groups;
+        try {
+          await supabase.from("sessions").update({ party_groups: groups }).eq("id", session_id);
+          await supabase.from("players").update({ party_id: null }).eq("id", player.id);
+          player.party_id = null;
+        } catch {}
+
+        partyEventFact = `${player.name} отделился от отряда и теперь действует самостоятельно.`;
+        try {
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "system",
+            sender_name: "Система",
+            content: `🚶‍♂️ ${partyEventFact}`,
+          });
+        } catch {}
+      }
+    } else if (isPartyInviteOrJoin) {
+      const otherPlayersInZone = (allPlayers || []).filter((p: any) => p.id !== player.id && (!player.current_zone || !p.current_zone || p.current_zone === player.current_zone));
+      let partner = otherPlayersInZone.find((p: any) => lowerAct.includes(p.name.toLowerCase()));
+      if (!partner && otherPlayersInZone.length === 1) {
+        partner = otherPlayersInZone[0];
+      }
+
+      if (partner && !arePlayersInSameParty(player, partner, session)) {
+        let groups = Array.isArray(session.party_groups) ? [...session.party_groups] : [];
+        let existingParty = groups.find((g: any) => g.members?.includes(partner.id) || g.members?.includes(player.id));
+        let partyId = existingParty?.id || crypto.randomUUID();
+
+        if (existingParty) {
+          if (!existingParty.members.includes(player.id)) existingParty.members.push(player.id);
+          if (!existingParty.members.includes(partner.id)) existingParty.members.push(partner.id);
+        } else {
+          groups.push({
+            id: partyId,
+            name: `Отряд ${player.name} и ${partner.name}`,
+            leader_id: player.id,
+            members: [player.id, partner.id],
+          });
+        }
+
+        session.party_groups = groups;
+        try {
+          await supabase.from("sessions").update({ party_groups: groups }).eq("id", session_id);
+          await supabase.from("players").update({ party_id: partyId }).in("id", [player.id, partner.id]);
+          player.party_id = partyId;
+          partner.party_id = partyId;
+        } catch {}
+
+        partyEventFact = `Сформирован отряд: ${player.name} и ${partner.name} теперь путешествуют вместе!`;
+        try {
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "system",
+            sender_name: "Система",
+            content: `⚔️ ${partyEventFact}`,
+          });
+        } catch {}
+      }
+    }
+
+    // ============================================
     // ШАГ 2: Game Engine
     // ============================================
     console.log(`[${requestId}] [STEP 2] Game Engine...`);
@@ -881,6 +977,12 @@ serve(async (req) => {
       if (!engineResult.system_facts) engineResult.system_facts = engineResult.raw_system_facts;
       else engineResult.system_facts.push(statAllocatedFact);
     }
+    if (partyEventFact) {
+      if (!engineResult.raw_system_facts) engineResult.raw_system_facts = [];
+      engineResult.raw_system_facts.push(partyEventFact);
+      if (!engineResult.system_facts) engineResult.system_facts = engineResult.raw_system_facts;
+      else engineResult.system_facts.push(partyEventFact);
+    }
     console.log(`[${requestId}] [STEP 2] ⚙️ Engine: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${JSON.stringify(engineResult.raw_system_facts)}`);
 
     // ============================================
@@ -909,6 +1011,9 @@ serve(async (req) => {
       session.game_hour = nt.hour;
       session.game_minute = nt.minute;
     }
+
+    const playerStartingZone = player.current_zone || null;
+
     if (location_changed && new_location_id) {
       await supabase.from("sessions").update({
         current_location_id: new_location_id,
@@ -916,12 +1021,31 @@ serve(async (req) => {
         current_wild_zone_description: null,
       }).eq("id", session_id);
 
-      // Игроки двигаются независимо: сбрасываем подзону переместившегося игрока
+      // Игроки двигаются: сбрасываем подзону переместившегося игрока
       try {
         await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
         player.current_zone = null;
       } catch (pzErr) {
         console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
+      }
+
+      // Члены одного отряда, находившиеся в той же зоне/локации, перемещаются вместе!
+      const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
+        p.id !== player.id &&
+        arePlayersInSameParty(player, p, session) &&
+        (p.current_zone || null) === playerStartingZone
+      );
+      if (partyFellowsInSameZone.length > 0) {
+        const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
+        try {
+          await supabase.from("players").update({ current_zone: null }).in("id", fellowIds);
+          for (const fellow of partyFellowsInSameZone) {
+            fellow.current_zone = null;
+          }
+          console.log(`[${requestId}] [PARTY] Fellows ${partyFellowsInSameZone.map((p: any) => p.name).join(", ")} followed ${player.name} to new location ${new_location_id}`);
+        } catch (fErr) {
+          console.warn(`[${requestId}] Failed to reset party fellows current_zone:`, fErr);
+        }
       }
 
       // Сгенерировать карту расстояний зон и тип местности для новой локации через ИИ
@@ -972,12 +1096,31 @@ serve(async (req) => {
       currentLocationName = new_wild_zone;
       session.current_wild_zone = new_wild_zone;
 
-      // Игроки двигаются независимо: сбрасываем подзону переместившегося игрока
+      // Игроки двигаются: сбрасываем подзону переместившегося игрока
       try {
         await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
         player.current_zone = null;
       } catch (pzErr) {
         console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
+      }
+
+      // Члены отряда переходят в дикую зону вместе
+      const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
+        p.id !== player.id &&
+        arePlayersInSameParty(player, p, session) &&
+        (p.current_zone || null) === playerStartingZone
+      );
+      if (partyFellowsInSameZone.length > 0) {
+        const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
+        try {
+          await supabase.from("players").update({ current_zone: null }).in("id", fellowIds);
+          for (const fellow of partyFellowsInSameZone) {
+            fellow.current_zone = null;
+          }
+          console.log(`[${requestId}] [PARTY] Fellows ${partyFellowsInSameZone.map((p: any) => p.name).join(", ")} followed ${player.name} to wild zone ${new_wild_zone}`);
+        } catch (fErr) {
+          console.warn(`[${requestId}] Failed to reset party fellows current_zone:`, fErr);
+        }
       }
 
       // Сгенерировать карту расстояний зон и тип местности для дикой зоны через ИИ
@@ -1020,12 +1163,32 @@ serve(async (req) => {
       });
 
       if (matchedZone && matchedZone !== (player.current_zone || "")) {
+        const prevZone = player.current_zone || null;
         console.log(`[${requestId}] [ZONE] Player ${player.name} moved to subzone "${matchedZone}" (was: "${player.current_zone || 'основная'}")`);
         player.current_zone = matchedZone;
         try {
           await supabase.from("players").update({ current_zone: matchedZone }).eq("id", player.id);
         } catch (zErr) {
           console.warn(`[${requestId}] Failed to update player current_zone:`, zErr);
+        }
+
+        // Члены отряда, находившиеся в той же зоне, перемещаются вместе!
+        const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
+          p.id !== player.id &&
+          arePlayersInSameParty(player, p, session) &&
+          (p.current_zone || null) === prevZone
+        );
+        if (partyFellowsInSameZone.length > 0) {
+          const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
+          try {
+            await supabase.from("players").update({ current_zone: matchedZone }).in("id", fellowIds);
+            for (const fellow of partyFellowsInSameZone) {
+              fellow.current_zone = matchedZone;
+            }
+            console.log(`[${requestId}] [PARTY] Fellows ${partyFellowsInSameZone.map((p: any) => p.name).join(", ")} moved together to "${matchedZone}"`);
+          } catch (fErr) {
+            console.warn(`[${requestId}] Failed to update party fellows current_zone:`, fErr);
+          }
         }
       }
     }

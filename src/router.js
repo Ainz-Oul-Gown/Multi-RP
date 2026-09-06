@@ -7,18 +7,22 @@ class Router {
     this.currentRoute = null;
     this.onNavigate = null;
 
-    window.addEventListener('hashchange', () => this.resolve());
-    document.addEventListener('click', (e) => {
-      const link = e.target.closest('a[href]');
-      if (link) {
-        const href = link.getAttribute('href');
-        // Обрабатываем внутренние ссылки (начинаются с /)
-        if (href && href.startsWith('/') && !href.startsWith('//')) {
-          e.preventDefault();
-          this.navigate(href);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('hashchange', () => this.resolve());
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('click', (e) => {
+        const link = e.target.closest('a[href]');
+        if (link) {
+          const href = link.getAttribute('href');
+          // Обрабатываем внутренние ссылки (начинаются с /)
+          if (href && href.startsWith('/') && !href.startsWith('//')) {
+            e.preventDefault();
+            this.navigate(href);
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   add(pattern, handler) {

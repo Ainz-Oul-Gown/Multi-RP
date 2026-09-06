@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   current_wild_zone_description TEXT DEFAULT NULL,
   current_terrain_type TEXT DEFAULT 'open',
   location_map JSONB DEFAULT NULL,
+  party_groups JSONB DEFAULT '[]',
   round_counter INT DEFAULT 1,
   ai_key_mode TEXT DEFAULT 'host' CHECK (ai_key_mode IN ('host', 'individual')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -85,6 +86,7 @@ CREATE TABLE IF NOT EXISTS players (
   money INT DEFAULT 50,
   is_active BOOLEAN DEFAULT TRUE,
   current_zone TEXT DEFAULT NULL,
+  party_id UUID DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -38,6 +38,29 @@ function sanitizeAIText(raw) {
 import { formatGameCalendarDate } from '../utils/gameDate.js';
 export { formatGameCalendarDate };
 
+export function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+export function formatRpText(text) {
+  if (!text) return '';
+  let escaped = escapeHtml(text);
+  // 1. Direct spoken speech in quotes FIRST, before any HTML attributes are added:
+  escaped = escaped.replace(/&quot;([^&]+?)&quot;/g, "<span class='rp-speech'>«$1»</span>");
+  escaped = escaped.replace(/«([^»]+?)»/g, "<span class='rp-speech'>«$1»</span>");
+  escaped = escaped.replace(/[“”]([^“”]+?)[“”]/g, "<span class='rp-speech'>«$1»</span>");
+  // 2. Actions / physical acts / thoughts in **...** or *...*
+  escaped = escaped.replace(/\*\*([^*]+?)\*\*/g, "<span class='rp-action'>*$1*</span>");
+  escaped = escaped.replace(/\*([^*]+?)\*/g, "<span class='rp-action'>*$1*</span>");
+  return escaped;
+}
+
 export async function renderGame(container, sessionId, user) {
   let session = null;
   let currentPlayer = null;
@@ -538,7 +561,7 @@ export async function renderGame(container, sessionId, user) {
             opacity: 0.85;
           ">
             <div style="font-size: 1rem; flex-shrink: 0; opacity: 0.6;">🌫️</div>
-            <div style="font-style: italic; color: var(--text-muted); font-size: var(--fs-sm); line-height: 1.5;">${escapeHtml(msg.content)}</div>
+            <div style="font-style: italic; color: var(--text-muted); font-size: var(--fs-sm); line-height: 1.5;">${formatRpText(msg.content)}</div>
           </div>
         `;
       }
@@ -548,7 +571,7 @@ export async function renderGame(container, sessionId, user) {
           <div class="message-avatar">${isGlobalLog ? '📜' : '🎭'}</div>
           <div class="message-body">
             ${isGlobalLog ? '<div class="message-sender" style="font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: 2px;">Общий лог комнаты</div>' : ''}
-            <div class="message-text">${escapeHtml(msg.content)}</div>
+            <div class="message-text">${formatRpText(msg.content)}</div>
           </div>
         </div>
       `;
@@ -576,7 +599,7 @@ export async function renderGame(container, sessionId, user) {
             </div>
             <div style="display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); line-height: 1.5; color: #e2e8f0;">
               ${items.length > 0
-                ? items.map(it => `<div style="padding-left: 6px; border-left: 2px solid rgba(245, 158, 11, 0.25);">${escapeHtml(it.replace(/^[•*\-\s]+/, ''))}</div>`).join('')
+                ? items.map(it => `<div style="padding-left: 6px; border-left: 2px solid rgba(245, 158, 11, 0.25);">${formatRpText(it.replace(/^[•*\-\s]+/, ''))}</div>`).join('')
                 : `<div style="color: var(--text-muted); font-style: italic;">В дальних краях день прошёл спокойно.</div>`
               }
             </div>
@@ -586,7 +609,7 @@ export async function renderGame(container, sessionId, user) {
 
       return `
         <div class="message message-system">
-          <div class="message-text">${escapeHtml(msg.content)}</div>
+          <div class="message-text">${formatRpText(msg.content)}</div>
         </div>
       `;
     }
@@ -613,7 +636,7 @@ export async function renderGame(container, sessionId, user) {
               <span>${escapeHtml(npcName)}</span>
               ${isCompanion ? '<span style="font-size: 0.7rem; padding: 1px 5px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #6ee7b7;">Спутник</span>' : ''}
             </div>
-            <div class="message-text" style="color: var(--text-primary); font-size: var(--fs-sm); line-height: 1.5;">${escapeHtml(msg.content)}</div>
+            <div class="message-text" style="color: var(--text-primary); font-size: var(--fs-sm); line-height: 1.5;">${formatRpText(msg.content)}</div>
           </div>
         </div>
       `;
@@ -625,7 +648,7 @@ export async function renderGame(container, sessionId, user) {
         return `
           <div class="message message-self">
             <div class="message-body">
-              <div class="message-text">${escapeHtml(msg.content)}</div>
+              <div class="message-text">${formatRpText(msg.content)}</div>
             </div>
             <div class="message-avatar">⚔️</div>
           </div>
@@ -902,16 +925,22 @@ export async function renderGame(container, sessionId, user) {
     const isCreator = Boolean(user?.id && (!session?.worlds?.owner_id || session.worlds.owner_id === user.id));
     return players.map((p) => {
       const isCurrent = currentPlayer && p.id === currentPlayer.id;
+      const isInParty = Boolean(
+        p?.party_id ||
+        (Array.isArray(session?.party_groups) && session.party_groups.some((g) => Array.isArray(g.members) && g.members.includes(p.id)))
+      );
       return `
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-success);"></span>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-success); flex-shrink: 0;"></span>
             <span style="font-size: var(--fs-sm); font-weight: ${isCurrent ? '700' : '400'};">
               ${escapeHtml(p?.name || 'Герой')}${isCurrent ? ' (Вы)' : ''}
             </span>
             <span class="text-muted" style="font-size: var(--fs-xs);">${escapeHtml(p?.race || '')}/${escapeHtml(p?.class || '')}</span>
+            ${isInParty ? `<span class="badge" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35);">🤝 В отряде</span>` : ''}
+            ${p?.current_zone ? `<span style="font-size: 10px; color: var(--text-muted); opacity: 0.85;">[${escapeHtml(p.current_zone)}]</span>` : ''}
           </div>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
             <span style="font-size: var(--fs-xs); color: var(--accent-gold);">❤️ ${p?.hp || 0}/${p?.max_hp || 0}</span>
             ${isCreator && !isCurrent ? `
               <button class="btn btn-danger btn-xs remove-participant-btn" data-player-id="${p.id}" data-player-name="${escapeHtml(p?.name || 'Игрок')}" style="padding: 1px 6px; font-size: 10px; line-height: 1.2;" title="Удалить участника из сессии">❌</button>

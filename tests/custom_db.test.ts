@@ -6,6 +6,7 @@ import {
   setDatabaseConfig,
   generateDbInviteUrl,
   testDatabaseConnection,
+  deployDatabaseSchema,
 } from '../src/api/supabase.js';
 import { saveCustomDbConfig, loadCustomDbConfig, clearCustomDbConfig } from '../src/utils/indexedDB.js';
 
@@ -131,6 +132,66 @@ describe('Custom Supabase Database (BYOD)', () => {
 
       expect(res.success).toBe(true);
       expect(res.emptySchema).toBe(false);
+
+      fetchSpy.mockRestore();
+    });
+  });
+
+  describe('deployDatabaseSchema (1-click automatic setup)', () => {
+    it('should return error if URL or access token is missing', async () => {
+      const res1 = await deployDatabaseSchema('', 'sbp_123');
+      expect(res1.success).toBe(false);
+      expect(res1.error).toContain('Project URL');
+
+      const res2 = await deployDatabaseSchema('https://myproject.supabase.co', '');
+      expect(res2.success).toBe(false);
+      expect(res2.error).toContain('Access Token');
+    });
+
+    it('should successfully deploy schema via Supabase Management API', async () => {
+      let capturedUrl = '';
+      let capturedBody: any = null;
+      let capturedHeaders: any = null;
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input: any, init: any) => {
+        capturedUrl = String(input);
+        capturedBody = JSON.parse(init.body);
+        capturedHeaders = init.headers;
+        return Promise.resolve(
+          new Response(JSON.stringify([{ message: 'Query executed' }]), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      });
+
+      const progressList: string[] = [];
+      const res = await deployDatabaseSchema('https://abcdefghijkl.supabase.co', 'sbp_test_token_123', {
+        onProgress: (m: string) => progressList.push(m),
+      });
+
+      expect(res.success).toBe(true);
+      expect(capturedUrl).toBe('https://api.supabase.com/v1/projects/abcdefghijkl/database/query');
+      expect(capturedHeaders['Authorization']).toBe('Bearer sbp_test_token_123');
+      expect(capturedBody.query).toContain('CREATE TABLE IF NOT EXISTS worlds');
+      expect(progressList.length).toBeGreaterThan(0);
+
+      fetchSpy.mockRestore();
+    });
+
+    it('should handle API errors from Supabase Management API', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ message: 'Project not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      );
+
+      const res = await deployDatabaseSchema('https://invalid.supabase.co', 'sbp_bad_token');
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('Project not found');
 
       fetchSpy.mockRestore();
     });

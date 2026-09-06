@@ -364,26 +364,38 @@ CREATE POLICY "UserSettings: owner update" ON user_settings FOR UPDATE USING (au
 CREATE POLICY "UserSettings: service read" ON user_settings FOR SELECT USING (true);
 
 ALTER TABLE states ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "States: read for authenticated" ON states;
+DROP POLICY IF EXISTS "States: owner write" ON states;
 CREATE POLICY "States: read for authenticated" ON states FOR SELECT TO authenticated USING (true);
 CREATE POLICY "States: owner write" ON states FOR ALL USING (world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid()));
 
 ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Locations: read for authenticated" ON locations;
+DROP POLICY IF EXISTS "Locations: owner write" ON locations;
 CREATE POLICY "Locations: read for authenticated" ON locations FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Locations: owner write" ON locations FOR ALL USING (world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid()));
 
 ALTER TABLE npcs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "NPCs: read for authenticated" ON npcs;
+DROP POLICY IF EXISTS "NPCs: owner write" ON npcs;
 CREATE POLICY "NPCs: read for authenticated" ON npcs FOR SELECT TO authenticated USING (true);
 CREATE POLICY "NPCs: owner write" ON npcs FOR ALL USING (world_id IN (SELECT id FROM worlds WHERE owner_id = auth.uid()));
 
 ALTER TABLE npc_memories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Memories: read for authenticated" ON npc_memories;
+DROP POLICY IF EXISTS "Memories: system manage" ON npc_memories;
 CREATE POLICY "Memories: read for authenticated" ON npc_memories FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Memories: system manage" ON npc_memories FOR ALL USING (true);
 
 ALTER TABLE npc_relationships ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Relationships: read for authenticated" ON npc_relationships;
+DROP POLICY IF EXISTS "Relationships: system manage" ON npc_relationships;
 CREATE POLICY "Relationships: read for authenticated" ON npc_relationships FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Relationships: system manage" ON npc_relationships FOR ALL USING (true);
 
 ALTER TABLE player_skills ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Player skills: read for session players" ON player_skills;
+DROP POLICY IF EXISTS "Player skills: system manage" ON player_skills;
 CREATE POLICY "Player skills: read for session players" ON player_skills FOR SELECT TO authenticated USING (
   player_id IN (SELECT id FROM players WHERE session_id IN (SELECT session_id FROM public.get_user_session_ids(auth.uid())))
   OR player_id IN (SELECT id FROM players WHERE user_id = auth.uid())

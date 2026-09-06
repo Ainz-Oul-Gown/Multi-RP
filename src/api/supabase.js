@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 import { saveCustomDbConfig, loadCustomDbConfig, clearCustomDbConfig } from '../utils/indexedDB.js';
+import { SUPABASE_FULL_SCHEMA_SQL } from '../utils/supabaseFullSchema.js';
 
 let activeUrl = SUPABASE_URL;
 let activeAnonKey = SUPABASE_ANON_KEY;
@@ -157,6 +158,67 @@ export async function testDatabaseConnection(url, anonKey, options = {}) {
     };
   } catch (err) {
     return { success: false, error: err.message || 'Не удалось связаться с сервером' };
+  }
+}
+
+/**
+ * Автоматическое развёртывание SQL схемы через Supabase Management API
+ * @param {string} url - Project URL или project-ref
+ * @param {string} accessToken - Supabase Personal Access Token (sbp_...)
+ * @param {Object} options - { onProgress?: (msg: string) => void }
+ */
+export async function deployDatabaseSchema(url, accessToken, options = {}) {
+  const { onProgress = null } = options;
+  const cleanUrl = String(url || '').trim();
+  const cleanToken = String(accessToken || '').trim();
+
+  if (!cleanUrl) {
+    return { success: false, error: 'Укажите Project URL' };
+  }
+  if (!cleanToken) {
+    return { success: false, error: 'Укажите Supabase Access Token (начинается с sbp_)' };
+  }
+
+  // Извлекаем project ref
+  let projectRef = cleanUrl;
+  const match = cleanUrl.match(/https?:\/\/([^.]+)\.supabase\.co/i);
+  if (match && match[1]) {
+    projectRef = match[1];
+  } else {
+    projectRef = cleanUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  }
+
+  onProgress?.('Подключение к Supabase Management API...');
+
+  try {
+    onProgress?.('Развёртывание таблиц, триггеров и правил безопасности...');
+
+    const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cleanToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: SUPABASE_FULL_SCHEMA_SQL }),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const errMsg = data?.message || data?.error || (typeof data === 'string' ? data : `HTTP ${res.status}`);
+      return { success: false, error: `Ошибка Supabase API: ${errMsg}` };
+    }
+
+    onProgress?.('Проверка готовности созданной схемы базы данных...');
+    return {
+      success: true,
+      message: 'Все таблицы, триггеры и политики безопасности успешно развёрнуты!',
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: `Ошибка соединения с api.supabase.com: ${err.message || err}`,
+    };
   }
 }
 

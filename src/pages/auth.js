@@ -2,7 +2,7 @@
 import {
   signIn, signUp, signInWithGoogle,
   getActiveDatabaseConfig, setDatabaseConfig,
-  testDatabaseConnection, generateDbInviteUrl,
+  testDatabaseConnection, deployDatabaseSchema, generateDbInviteUrl,
 } from '../api/supabase.js';
 import { SUPABASE_FULL_SCHEMA_SQL } from '../utils/supabaseFullSchema.js';
 import { toast } from '../utils/toast.js';
@@ -108,15 +108,29 @@ export function renderAuth(container) {
                 <input class="input" id="customDbKeyInput" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." value="${dbConfig.isCustom ? dbConfig.anonKey : ''}" style="font-size: var(--fs-xs);" />
               </div>
 
-              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem;">
-                <button type="button" class="btn btn-primary btn-sm" id="saveCustomDbBtn" style="flex: 1; min-width: 130px;">
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label class="form-label" style="font-size: var(--fs-xs); margin: 0;">Access Token (для авто-развёртывания в 1 клик)</label>
+                  <a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: var(--accent-gold); text-decoration: underline;">Где взять токен? ↗</a>
+                </div>
+                <input class="input" id="customDbTokenInput" type="password" placeholder="sbp_xxxxxxxxxxxxxxxxxxxx (нужен только для авто-создания)" style="font-size: var(--fs-xs);" />
+              </div>
+
+              <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.75rem;">
+                <button type="button" class="btn btn-primary btn-sm" id="autoDeployDbBtn" style="flex: 1; min-width: 170px; background: linear-gradient(135deg, #d4a359 0%, #b8860b 100%); color: #120e0b; font-weight: 700; border: none;" title="Автоматически создаст все таблицы через Supabase API">
+                  🚀 Развернуть в 1 клик
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" id="saveCustomDbBtn" style="min-width: 95px;">
                   💾 Подключить
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" id="testCustomDbBtn">
                   ⚡ Проверить
                 </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="copySchemaBtn" title="Скопировать SQL для создания таблиц в Supabase">
-                  📋 Схема SQL
+                <button type="button" class="btn btn-ghost btn-sm" id="infoCustomDbBtn" title="Пошаговая инструкция со ссылками">
+                  ℹ️ Инструкция
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm" id="copySchemaBtn" title="Скопировать SQL для ручного создания">
+                  📋 SQL
                 </button>
               </div>
 
@@ -153,6 +167,100 @@ export function renderAuth(container) {
           </div>
         </div>
       </div>
+
+      <!-- Модальное окно: Инструкция по созданию своей БД Supabase -->
+      <div class="modal-overlay" id="authDbGuideModal">
+        <div class="modal" style="max-width: 680px; max-height: 88vh; display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(212, 163, 89, 0.2); padding-bottom: 0.5rem;">
+            <h2 class="card-title" style="font-size: var(--fs-lg); margin: 0; color: var(--accent-gold);">
+              📖 Инструкция: Как создать свою БД Supabase
+            </h2>
+            <button class="btn btn-ghost btn-sm" id="closeAuthDbGuideModal">✕</button>
+          </div>
+
+          <div style="flex: 1; overflow-y: auto; padding-right: 0.5rem; font-size: var(--fs-sm); line-height: 1.6;">
+            <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+              Своя база данных даёт <strong>полную независимость</strong>: персонажи, миры и сессии принадлежат только вам, не расходуют чужие лимиты и защищены от любых внешних сбоев.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+              <!-- Шаг 1 -->
+              <div style="padding: 0.85rem; background: rgba(0,0,0,0.3); border-radius: var(--radius-md); border-left: 3px solid var(--accent-gold);">
+                <div style="font-weight: 700; color: var(--accent-gold-bright); margin-bottom: 0.3rem;">
+                  1. Создайте проект в Supabase (бесплатно)
+                </div>
+                <div style="color: var(--text-secondary); margin-bottom: 0.5rem;">
+                  Перейдите в панель управления Supabase и нажмите <strong>«New Project»</strong>. Придумайте название (например, <code>Multi-RP</code>), пароль базы и регион (любой, например Frankfurt).
+                </div>
+                <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.3rem;">
+                  🔗 Открыть Supabase Dashboard ↗
+                </a>
+              </div>
+
+              <!-- Шаг 2 -->
+              <div style="padding: 0.85rem; background: rgba(0,0,0,0.3); border-radius: var(--radius-md); border-left: 3px solid var(--accent-info);">
+                <div style="font-weight: 700; color: var(--accent-gold-bright); margin-bottom: 0.3rem;">
+                  2. Скопируйте Project URL и Anon Key
+                </div>
+                <div style="color: var(--text-secondary); margin-bottom: 0.5rem;">
+                  В левом меню вашего проекта откройте <strong>Project Settings → API</strong>. Скопируйте:
+                  <ul style="margin: 0.4rem 0 0.4rem 1.2rem; padding: 0;">
+                    <li><strong>Project URL</strong> (например, <code>https://abcdefghijkl.supabase.co</code>)</li>
+                    <li><strong>Project API Keys → anon / public</strong> (длинный JWT-ключ)</li>
+                  </ul>
+                  Вставьте их в поля формы на этой странице.
+                </div>
+                <a href="https://supabase.com/dashboard/project/_/settings/api" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.3rem;">
+                  🔗 Перейти в Settings → API ↗
+                </a>
+              </div>
+
+              <!-- Шаг 3 -->
+              <div style="padding: 0.85rem; background: rgba(212, 163, 89, 0.08); border-radius: var(--radius-md); border-left: 3px solid var(--accent-gold);">
+                <div style="font-weight: 700; color: var(--accent-gold-bright); margin-bottom: 0.3rem;">
+                  3. Авто-развёртывание в 1 клик (Рекомендуется! 🚀)
+                </div>
+                <div style="color: var(--text-secondary); margin-bottom: 0.5rem;">
+                  Чтобы <strong>не возиться со скриптами вручную</strong>, получите токен управления:
+                  <ol style="margin: 0.4rem 0 0.4rem 1.2rem; padding: 0;">
+                    <li>Откройте раздел <strong>Access Tokens</strong> в вашем аккаунте Supabase.</li>
+                    <li>Нажмите <strong>«Generate new token»</strong>, задайте имя (например, <code>Multi-RP</code>) и скопируйте полученный токен (начинается с <code>sbp_</code>).</li>
+                    <li>Вставьте токен в поле <strong>Access Token</strong> и нажмите <strong>«🚀 Развернуть в 1 клик»</strong>.</li>
+                  </ol>
+                  Все таблицы, триггеры и политики безопасности создадутся автоматически за 3 секунды!
+                </div>
+                <a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 0.3rem;">
+                  🔑 Получить Access Token (sbp_...) ↗
+                </a>
+              </div>
+
+              <!-- Шаг 4 -->
+              <div style="padding: 0.85rem; background: rgba(0,0,0,0.3); border-radius: var(--radius-md); border-left: 3px solid var(--border-color);">
+                <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.3rem;">
+                  4. Ручной способ (без токена управления)
+                </div>
+                <div style="color: var(--text-secondary);">
+                  Если вы не хотите создавать токен, нажмите <strong>📋 SQL</strong>, скопируйте весь скрипт и вставьте его в раздел <strong>SQL Editor</strong> на сайте Supabase, затем нажмите <strong>Run</strong>.
+                </div>
+              </div>
+
+              <!-- Шаг 5 -->
+              <div style="padding: 0.85rem; background: rgba(0,0,0,0.3); border-radius: var(--radius-md); border-left: 3px solid var(--accent-success);">
+                <div style="font-weight: 700; color: var(--accent-gold-bright); margin-bottom: 0.3rem;">
+                  5. Приглашение друзей в вашу БД 👥
+                </div>
+                <div style="color: var(--text-secondary);">
+                  После подключения нажмите <strong>«🔗 Ссылка для друзей»</strong> и отправьте её другу. Друг откроет ссылку, и его браузер моментально подключится к вашей базе без каких-либо настроек!
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; border-top: 1px solid rgba(212, 163, 89, 0.2); padding-top: 0.5rem;">
+            <button type="button" class="btn btn-primary btn-sm" id="closeAuthDbGuideModal2">Понятно, к настройке!</button>
+          </div>
+        </div>
+      </div>
     `;
 
     bindEvents();
@@ -166,6 +274,17 @@ export function renderAuth(container) {
       if (textarea) textarea.value = SUPABASE_FULL_SCHEMA_SQL;
       if (modal) modal.classList.add('open');
     };
+
+    // Модальное окно Инструкции
+    const openGuideModal = () => {
+      document.getElementById('authDbGuideModal')?.classList.add('open');
+    };
+    const closeGuideModal = () => {
+      document.getElementById('authDbGuideModal')?.classList.remove('open');
+    };
+    document.getElementById('infoCustomDbBtn')?.addEventListener('click', openGuideModal);
+    document.getElementById('closeAuthDbGuideModal')?.addEventListener('click', closeGuideModal);
+    document.getElementById('closeAuthDbGuideModal2')?.addEventListener('click', closeGuideModal);
 
     // Переключение между Входом и Регистрацией
     document.getElementById('authToggle')?.addEventListener('click', (e) => {
@@ -208,6 +327,89 @@ export function renderAuth(container) {
       const chevron = document.getElementById('customDbChevron');
       if (chevron) {
         chevron.textContent = isCustomDbOpen ? '▲' : '▼';
+      }
+    });
+
+    // Автоматическое развёртывание базы данных в 1 клик
+    document.getElementById('autoDeployDbBtn')?.addEventListener('click', async () => {
+      const urlInput = document.getElementById('customDbUrlInput')?.value?.trim();
+      const keyInput = document.getElementById('customDbKeyInput')?.value?.trim();
+      const tokenInput = document.getElementById('customDbTokenInput')?.value?.trim();
+
+      if (!urlInput || !keyInput) {
+        toast.error('Укажите Project URL и Anon Key');
+        return;
+      }
+
+      if (!urlInput.startsWith('http://') && !urlInput.startsWith('https://')) {
+        toast.error('URL должен начинаться с https://');
+        return;
+      }
+
+      if (!tokenInput) {
+        toast.warning('Для авто-развёртывания укажите Access Token (sbp_...) или нажмите ℹ️ Инструкция');
+        document.getElementById('customDbTokenInput')?.focus();
+        return;
+      }
+
+      const autoBtn = document.getElementById('autoDeployDbBtn');
+      const saveBtn = document.getElementById('saveCustomDbBtn');
+      const testBtn = document.getElementById('testCustomDbBtn');
+      const statusEl = document.getElementById('customDbStatus');
+
+      if (autoBtn) {
+        autoBtn.disabled = true;
+        autoBtn.innerHTML = '<span class="spinner-inline"></span> Развёртывание...';
+      }
+      if (saveBtn) saveBtn.disabled = true;
+      if (testBtn) testBtn.disabled = true;
+
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = 'var(--text-secondary)';
+        statusEl.innerHTML = '<span class="spinner-inline"></span> Подключение к Supabase API...';
+      }
+
+      try {
+        const deployRes = await deployDatabaseSchema(urlInput, tokenInput, {
+          onProgress: (msg) => {
+            if (statusEl) {
+              statusEl.innerHTML = `<span class="spinner-inline"></span> ${msg}`;
+            }
+          },
+        });
+
+        if (!deployRes.success) {
+          toast.error(deployRes.error);
+          if (statusEl) {
+            statusEl.style.color = 'var(--accent-danger)';
+            statusEl.innerHTML = `❌ ${deployRes.error}`;
+          }
+          return;
+        }
+
+        // Сохраняем и подключаем
+        await setDatabaseConfig({ isCustom: true, url: urlInput, anonKey: keyInput });
+
+        if (statusEl) {
+          statusEl.style.color = 'var(--accent-success)';
+          statusEl.innerHTML = '✅ База данных успешно создана и подключена! Все таблицы готовы.';
+        }
+        toast.success('🎉 База данных Supabase успешно развёрнута и подключена!');
+        render();
+      } catch (err) {
+        toast.error('Ошибка авто-развёртывания: ' + (err.message || err));
+        if (statusEl) {
+          statusEl.style.color = 'var(--accent-danger)';
+          statusEl.innerHTML = `❌ ${err.message || err}`;
+        }
+      } finally {
+        if (autoBtn) {
+          autoBtn.disabled = false;
+          autoBtn.innerHTML = '🚀 Развернуть в 1 клик';
+        }
+        if (saveBtn) saveBtn.disabled = false;
+        if (testBtn) testBtn.disabled = false;
       }
     });
 

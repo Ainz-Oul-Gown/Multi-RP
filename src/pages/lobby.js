@@ -54,102 +54,117 @@ function updateLobbyState(key, value) {
 const lobbyState = loadLobbyState();
 
 export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдизайнер и мастер ролевых игр (D&D 5e, Pathfinder, Dark Fantasy).
-Твоя задача — взять описание вымышленного мира от пользователя и сгенерировать ПОЛНЫЙ, ВАЛИДНЫЙ JSON-файл мира для системы «Multi-RP v3.2».
+Твоя задача — взять описание вымышленного мира от пользователя и сгенерировать ПОЛНЫЙ, 100% ВАЛИДНЫЙ JSON-файл мира для ролевой платформы «Multi-RP v3.2».
 
-ОТВЕТ ДОЛЖЕН БЫТЬ СТРОГО В ВИДЕ ЕДИНОГО JSON-ОБЪЕКТА (без разметки markdown, без вступительного и заключительного текста, только чистый валидный JSON).
+ОТВЕТ ДОЛЖЕН БЫТЬ СТРОГО В ВИДЕ ЕДИНОГО JSON-ОБЪЕКТА (без разметки markdown, без \`\`\`json, без вступительного и заключительного текста, только чистый валидный JSON).
 
-### СТРУКТУРА JSON ОБЪЕКТА:
+### ПОЛНЫЙ ЭТАЛОННЫЙ ШАБЛОН JSON:
 {
+  "version": "3.2",
   "world": {
     "name": "Название мира",
-    "description": "Глубокое атмосферное описание мира, эпохи и конфликтов",
+    "description": "Глубокое атмосферное описание эпохи, глобального конфликта, магии и законов мироздания",
     "settings": {
       "races": ["Человек", "Эльф", "Дварф", "Гном", "Зверолюд"],
-      "classes": ["Воин", "Маг", "Следопыт", "Плут", "Жрец"],
+      "classes": ["Воин", "Маг", "Следопыт", "Плут", "Жрец", "Паладин"],
       "max_level": 20,
+      "difficulty": "normal",
       "storyline": {
         "title": "Основная сюжетная кампания",
-        "summary": "Краткое описание глобального конфликта",
-        "prologue": "Вводный текст, где и как начинаются приключения",
+        "summary": "Краткая суть глобального конфликта в 1-2 предложениях",
+        "prologue": "Вводная сцена: где и при каких обстоятельствах собираются герои, первые загадки и угрозы",
         "current_arc_index": 0,
         "arcs": [
           {
             "id": "arc_1",
             "act": 1,
-            "title": "Акт I: Завязка",
-            "description": "Первые шаги героев, исследование угроз",
-            "goals": ["Цель 1", "Цель 2"],
-            "key_npcs": ["Имя NPC 1", "Имя NPC 2"],
-            "key_locations": ["Локация 1"]
+            "title": "Акт I: Завязка и Первые тени",
+            "description": "Герои сталкиваются с первыми симптомами беды, расследуют зацепки в стартовой локации",
+            "goals": ["Выяснить причину нападений на тракте", "Найти контакт с информатором в таверне"],
+            "key_npcs": ["Барон Валериан", "Трактирщик Брок"],
+            "key_locations": ["Город Ривервуд"]
           },
           {
             "id": "arc_2",
             "act": 2,
             "title": "Акт II: Развитие конфликта",
-            "description": "Усугубление кризиса",
-            "goals": ["Цель 1"],
-            "key_npcs": ["Имя NPC 3"],
-            "key_locations": ["Локация 2"]
+            "description": "Масштаб угрозы раскрывается, конфликт выходит на уровень государств и фракций",
+            "goals": ["Проникнуть в лагерь сектантов в Темнолесье", "Заручиться поддержкой Совета Старейшин"],
+            "key_npcs": ["Верховная жрица Элира"],
+            "key_locations": ["Темнолесье", "Цитадель Зари"]
           },
           {
             "id": "arc_3",
             "act": 3,
-            "title": "Акт III: Кульминация",
-            "description": "Решающая битва или открытое противостояние",
-            "goals": ["Цель 1"],
-            "key_npcs": ["Имя NPC 4"],
-            "key_locations": ["Локация 3"]
+            "title": "Акт III: Кульминация и Битва",
+            "description": "Решающее столкновение с антагонистом, битва за судьбу региона",
+            "goals": ["Остановить ритуал Пробуждения", "Победить древнего стража подземелья"],
+            "key_npcs": ["Магистр Мордред"],
+            "key_locations": ["Забытые Катакомбы"]
           },
           {
             "id": "arc_4",
             "act": 4,
             "title": "Акт IV: Развязка и Эпилог",
-            "description": "Последствия и новый баланс сил",
-            "goals": ["Цель 1"],
-            "key_npcs": ["Имя NPC 1"],
-            "key_locations": ["Локация 1"]
+            "description": "Последствия выбора героев, награды, восстановление мира или начало новой эпохи",
+            "goals": ["Заключить мирный договор между фракциями", "Определить дальнейшую судьбу реликвии"],
+            "key_npcs": ["Барон Валериан"],
+            "key_locations": ["Город Ривервуд"]
           }
         ]
       }
     }
   },
-  "lore_files": [
-    {
-      "folder": "История",
-      "title": "Хроника Эпохи",
-      "content": "Детальный текст лора для ИИ-мастера игры...",
-      "tags": ["история", "летопись"]
-    },
-    {
-      "folder": "Фракции",
-      "title": "Орден или Гильдия",
-      "content": "Описание фракции, её целей и ресурсов...",
-      "tags": ["фракции", "власть"]
-    }
-  ],
   "geography": {
     "states": [
       {
-        "name": "Название государства или региона",
-        "description": "Политическое устройство, климат, культура"
+        "id": "state_north",
+        "name": "Северный Предел",
+        "description": "Суровое королевство фьордов и хвойных лесов. Феодальная раздробленность, суровые законы, развитая добыча руды и морская торговля."
+      },
+      {
+        "id": "state_south",
+        "name": "Солнечный Султанат",
+        "description": "Богатые торговые оазисы, золотые купола, академии магии и алхимии среди бескрайних барханов."
       }
     ],
     "locations": [
       {
-        "name": "Название локации",
-        "state_name": "Точное совпадение с одним из states[].name",
+        "id": "loc_riverwood",
+        "name": "Город Ривервуд",
+        "state_name": "Северный Предел",
         "type": "city",
         "terrain_type": "urban",
-        "description": "Атмосферное описание локации",
+        "description": "Укреплённый торговый город на слиянии рек. Высокие каменные стены, скрип водяных мельниц, запах печёного хлеба и речной рыбы.",
         "zones": [
-          { "id": "loc1_square", "name": "Центральная площадь", "type": "open" },
-          { "id": "loc1_tavern", "name": "Таверна / Таверна-постоялый двор", "type": "closed" },
-          { "id": "loc1_gates", "name": "Северные ворота", "type": "open" }
+          { "id": "loc1_square", "name": "Рыночная площадь", "type": "open" },
+          { "id": "loc1_tavern", "name": "Таверна «Хромой Вепрь»", "type": "closed" },
+          { "id": "loc1_gates", "name": "Северные крепостные ворота", "type": "open" },
+          { "id": "loc1_docks", "name": "Речной причал", "type": "open" }
         ],
         "location_map": {
-          "loc1_square": { "loc1_square": 0, "loc1_tavern": 25, "loc1_gates": 50 },
-          "loc1_tavern": { "loc1_square": 25, "loc1_tavern": 0, "loc1_gates": 65 },
-          "loc1_gates": { "loc1_square": 50, "loc1_tavern": 65, "loc1_gates": 0 }
+          "loc1_square": { "loc1_square": 0, "loc1_tavern": 30, "loc1_gates": 80, "loc1_docks": 60 },
+          "loc1_tavern": { "loc1_square": 30, "loc1_tavern": 0, "loc1_gates": 95, "loc1_docks": 70 },
+          "loc1_gates": { "loc1_square": 80, "loc1_tavern": 95, "loc1_gates": 0, "loc1_docks": 120 },
+          "loc1_docks": { "loc1_square": 60, "loc1_tavern": 70, "loc1_gates": 120, "loc1_docks": 0 }
+        }
+      },
+      {
+        "id": "loc_darkwood",
+        "name": "Темнолесье",
+        "state_name": "Северный Предел",
+        "type": "landmark",
+        "terrain_type": "forest",
+        "description": "Древний угрюмый бор, окутанный вечным туманом. Вековые сосны закрывают солнце, повсюду мхи и следы диких зверей.",
+        "zones": [
+          { "id": "loc2_edge", "name": "Опушка и старый тракт", "type": "open" },
+          { "id": "loc2_shrine", "name": "Заброшенное святилище", "type": "open" },
+          { "id": "loc2_cave", "name": "Вход в пещеру волков", "type": "closed" }
+        ],
+        "location_map": {
+          "loc2_edge": { "loc2_edge": 0, "loc2_shrine": 150, "loc2_cave": 220 },
+          "loc2_shrine": { "loc2_edge": 150, "loc2_shrine": 0, "loc2_cave": 90 },
+          "loc2_cave": { "loc2_edge": 220, "loc2_shrine": 90, "loc2_cave": 0 }
         }
       }
     ]
@@ -157,63 +172,219 @@ export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдиза�
   "bestiary": {
     "npcs": [
       {
-        "name": "Имя NPC или видовое название (для зверей/монстров — без личных имён)",
+        "name": "Барон Валериан",
         "race": "Человек",
-        "class": "Торговец / Воин / Маг",
+        "class": "Торговец / Дворянин",
         "category": "npc",
         "role": "main",
-        "temperament": "Хитрый прагматик, ценящий выгоду и осторожность",
-        "motivation": "Накопить состояние и защитить свою семью от гнева лорда",
+        "is_unique": true,
+        "is_hostile": false,
+        "is_pack": false,
+        "pack_size": 1,
+        "state_name": "Северный Предел",
+        "location_name": "Город Ривервуд",
+        "temperament": "Хитрый прагматик, ценящий выгоду, порядок и осторожность",
+        "motivation": "Укрепить семейное богатство и защитить город от разорения культистами",
         "current_mood": "calm",
-        "speech_style": "Говорит неторопливо, с легкой иронией и торговыми метафорами",
-        "secrets": "Тайно скупает контрабандные лунные кристаллы",
-        "rumors": [
-          "Поговаривают, что в подвалах старого замка видели странное свечение",
-          "Стража на тракте берет двойную пошлину с чужеземцев"
+        "speech_style": "Говорит неторопливо, с лёгкой иронией, купеческими поговорками и вежливой твердостью",
+        "secrets": [
+          { "secret": "Тайно финансировал экспедицию к запретным руинам и скрывает древний перстень", "reveal_threshold": 65 }
         ],
-        "daily_routine": "Утро: обход торговых лавок; День: встречи с поставщиками; Вечер: отдых в таверне; Ночь: пересчет выручки",
-        "current_activity": "Внимательно изучает старинную карту и делает пометки",
-        "description": "Крепкий мужчина средних лет в добротном шерстяном дублете...",
-        "level": 3,
-        "tier": 1,
+        "rumors": [
+          "Поговаривают, что в шахтах на севере рабочие наткнулись на пустоты с поющими кристаллами",
+          "Городская стража подкуплена гильдией контрабандистов"
+        ],
+        "daily_routine": "Утро: обход ратуши и доков; День: торговые переговоры в особняке; Вечер: ужин в таверне; Ночь: переписка в кабинете",
+        "current_activity": "Внимательно изучает старинную торговую карту с пометками",
+        "habits": ["Постоянно подбрасывает золотую монету", "Смотрит собеседнику прямо в переносицу"],
+        "catchphrases": ["У каждой монеты две стороны, друг мой.", "Честь стоит дорого, но доверие — бесценно."],
+        "status_tags": ["Купец", "Барон", "Информатор"],
+        "description": "Мужчина около 45 лет в добротном камзоле из темно-синего сукна с серебряной вышивкой, внимательный проницательный взгляд.",
+        "background": "Унаследовал разорённое торговое дело отца и превратил его в крупнейшую купеческую гильдию перевала.",
+        "level": 4,
+        "level_min": 4,
+        "level_max": 4,
+        "tier": 2,
         "hit_dice": 8,
         "stats": {
-          "strength": 12,
-          "dexterity": 14,
-          "constitution": 12,
-          "intelligence": 15,
-          "wisdom": 14,
-          "charisma": 16
+          "STR": 12,
+          "DEX": 14,
+          "CON": 12,
+          "INT": 16,
+          "WIS": 14,
+          "CHA": 16
         },
-        "base_attacks": ["Короткий клинок (1d6+2)"],
-        "special_attacks": ["Призыв наёмников", "Ослепляющий порошок"],
-        "habits": ["Постоянно подбрасывает медную монетку", "Смотрит прямо в глаза собеседнику"],
-        "catchphrases": ["У каждой монеты две стороны, друг мой.", "Время — самый дорогой товар."],
-        "status_tags": ["Купец", "Информатор"]
+        "base_attacks": [
+          {
+            "name": "Выпад дуэльной рапирой",
+            "description": "Точный фехтовальный укол в уязвимое место",
+            "damage_type": "piercing",
+            "damage_dice": "1d8+2"
+          }
+        ],
+        "special_attacks": [
+          {
+            "name": "Призыв телохранителей",
+            "description": "Барон зовёт двух наёмников в латах, отвлекая внимание",
+            "damage_type": "bludgeoning",
+            "damage_dice": "1d6+2",
+            "is_dot": false
+          },
+          {
+            "name": "Ослепляющий порошок",
+            "description": "Бросок смеси серы и песка в лицо противника",
+            "damage_type": "poison",
+            "damage_dice": "1d4",
+            "is_dot": true,
+            "dot_duration": 1
+          }
+        ]
+      },
+      {
+        "name": "Лютый волк",
+        "race": "Зверь",
+        "class": "Хищник",
+        "category": "beast",
+        "role": "tertiary",
+        "is_unique": false,
+        "is_hostile": true,
+        "is_pack": true,
+        "pack_size": 3,
+        "state_name": "Северный Предел",
+        "location_name": "Темнолесье",
+        "temperament": "Агрессивный хищный инстинкт, яростная защита территории стаи",
+        "motivation": "Прокормить стаю и защитить волчат в логове",
+        "current_mood": "suspicious",
+        "speech_style": "Угрожающий низкий рык, оскал клыков и прижатые уши",
+        "secrets": "В волчьем логове лежат кости пропавшего гонца лорда с запечатанным депешным тубусом",
+        "rumors": [
+          "В полнолуние волки не охотятся, а собираются на Кургане Скорби и воют хором"
+        ],
+        "daily_routine": "День: сон в прохладе логова; Сумерки: выход на тропы; Ночь: охота по опушкам",
+        "current_activity": "Крадучись выслеживает добычу из густого подлеска",
+        "habits": ["Ходит кругами вокруг жертвы перед атакой", "Щёлкает челюстями при волнении"],
+        "catchphrases": [],
+        "status_tags": ["Хищник", "Стайный"],
+        "description": "Крупный матёрый зверь размером с пони. Густая серо-пепельная шерсть, боевые шрамы на морде, горящие янтарные глаза.",
+        "background": "Коренной обитатель древних чащ Темнолесья, вытесненный на тракт вырубкой леса.",
+        "level": 2,
+        "level_min": 1,
+        "level_max": 4,
+        "tier": 1,
+        "hit_dice": 10,
+        "stats": {
+          "STR": 14,
+          "DEX": 15,
+          "CON": 14,
+          "INT": 4,
+          "WIS": 12,
+          "CHA": 6
+        },
+        "base_attacks": [
+          {
+            "name": "Разрывающий укус",
+            "description": "Мощный захват челюстями за конечность",
+            "damage_type": "piercing",
+            "damage_dice": "1d6+2"
+          }
+        ],
+        "special_attacks": [
+          {
+            "name": "Сбивающий прыжок",
+            "description": "Прыжок на грудь жертвы всей массой тела",
+            "damage_type": "bludgeoning",
+            "damage_dice": "1d8+2",
+            "is_dot": false
+          }
+        ]
       }
     ]
-  }
+  },
+  "lore_files": [
+    {
+      "folder": "История",
+      "title": "Хроника Падения Цитадели",
+      "content": "Триста лет назад Цитадель пала под натиском Теневого Разлома. Древний союз магов и королей был разрушен...",
+      "tags": ["история", "война", "катастрофа"]
+    },
+    {
+      "folder": "Фракции",
+      "title": "Купеческая Гильдия Серебряного Перевала",
+      "content": "Влиятельный синдикат торговцев, контролирующий все речные и горные пути. Имеет собственную армию наёмников...",
+      "tags": ["фракции", "торговля", "политика"]
+    },
+    {
+      "folder": "Религия и Магия",
+      "title": "Культ Полярного Пламени",
+      "content": "Монашеский орден, поклоняющийся вечному огню в ледниках. Верят, что тепло душ сдерживает ледяное безумие...",
+      "tags": ["религия", "магия", "орден"]
+    }
+  ]
 }
 
-### ОБЯЗАТЕЛЬНЫЕ ТРЕБОВАНИЯ К ДАННЫМ:
-1. **locations[].terrain_type**: СТРОГО одно из 6 значений:
-   - "urban" (город, крепость, поселение)
-   - "building" (внутри здания, храма, замка)
-   - "forest" (леса, рощи, чащи)
-   - "cave" (пещеры, катакомбы, рудники)
-   - "mountain" (горы, перевалы, скалы)
-   - "open" (равнины, поля, побережья, тракты)
-2. **locations[].zones и location_map**:
-   - В каждой локации должно быть от 2 до 5 подзон (zones) с уникальными строковыми id.
-   - location_map — СИММЕТРИЧНАЯ матрица расстояний в метрах (например, от 10 до 120м):
-     location_map[A][B] === location_map[B][A], а расстояние до самой себя location_map[A][A] = 0.
-3. **bestiary.npcs[].current_mood**: СТРОГО одно из:
-   - "calm", "suspicious", "cheerful", "irritated", "frightened", "impressed", "mournful"
-4. **bestiary.npcs[].category**: "npc" | "beast" | "monster" | "boss"
-5. **bestiary.npcs[].role**: "main" | "secondary" | "tertiary"
-6. **bestiary.npcs[].name**: Для разумных NPC и уникальных боссов — персональное имя ("Барон Валериан", "Верховный жрец"). Для диких зверей и рядовых монстров — ТОЛЬКО видовое имя без личных имён ("Лютый волк", "Пещерный паук", "Болотный упырь").
-7. **stats**: Значения от 1 до 30 (10 — средний человек).
-8. Сгенерируй богатый, живой мир: 2-3 государства, 4-6 локаций с зонами и матрицами расстояний, 6-12 детальных NPC со всеми психологическими полями, слухами и распорядком дня!
+### ПОЛНОЕ НАЗНАЧЕНИЕ КАЖДОГО ПОЛЯ В СИСТЕМЕ MULTI-RP:
+
+1. **ОБЩИЕ ПОЛЯ МИРА:**
+   - \`version\`: "3.2" — СТРОГО обязательно для прохождения валидации при импорте в Multi-RP.
+   - \`world.name\`: Имя мира (отображается в лобби, списке карточек и в шапке сессии).
+   - \`world.description\`: Контекст эпохи, который подаётся в системный промпт нейросети-Мастера.
+   - \`world.settings.races[]\` / \`classes[]\`: Списки рас и классов, доступные игрокам при создании героя.
+   - \`world.settings.max_level\`: Максимальный уровень персонажей (обычно 20 или 100).
+   - \`world.settings.difficulty\`: "easy" | "normal" | "hard" — базовая сложность проверок навыков D20 и урона.
+
+2. **СЮЖЕТНАЯ КАМПАНИЯ (Storyline — «Лыжи, но не правило»):**
+   - \`title\` / \`summary\` / \`prologue\`: Задают сюжетную канву и стартовую сцену.
+   - \`arcs[]\` (Акты 1-4): Структурированная 4-актная кампания (Завязка → Развитие → Кульминация → Развязка).
+   - \`arcs[].goals[]\`: Конкретные задачи. ИИ-пайплайн игры анализирует действия игроков и автоматически отмечает выполненные цели, продвигая сюжет к следующему акту!
+   - \`arcs[].key_npcs[]\` и \`key_locations[]\`: Подсказывают ИИ-Мастеру, вокруг кого строить события акта.
+
+3. **ГЕОГРАФИЯ, НАВИГАЦИЯ И ТУМАН ВОЙНЫ (geography):**
+   - \`states[].name\` / \`description\`: Государства мира. Служат контекстом для законов, культуры и политики.
+   - \`locations[].state_name\`: Привязка локации к государству (должно точно совпадать с \`states[].name\`).
+   - \`locations[].type\`: "capital" | "city" | "village" | "ruins" | "landmark" | "camp" | "dungeon".
+   - \`locations[].terrain_type\`: СТРОГО одно из:
+     • "urban" (город, крепость) — средний обзор, высокая плотность NPC.
+     • "building" (внутри здания/замка) — ближний бой, закрытые зоны, слышимость шагов.
+     • "forest" (леса, чащи) — ограниченный обзор Тумана Войны (дистанция слуха > видимости).
+     • "cave" (пещеры, подземелья) — темнота, звуковое эхо, штрафы на открытый огонь.
+     • "mountain" (горы, скалы) — перепады высот, замедленное перемещение.
+     • "open" (поля, равнины, побережья) — максимальная дальность видимости и дальнего боя.
+   - \`locations[].zones[]\`: Внутренние зоны локации (от 2 до 5 шт.) с уникальными ID (\`open\` / \`closed\`).
+   - \`locations[].location_map\`: **Симметричная матрица расстояний в метрах** между всеми зонами (\`map[A][B] === map[B][A]\`, \`map[A][A] = 0\`). По ней GPS-движок Multi-RP с точностью до минуты рассчитывает время пешего перехода между зонами и дальность стрельбы/магии!
+
+4. **БЕСТИАРИЙ, ПСИХОЛОГИЯ И СИМУЛЯТОР ЖИВОГО МИРА (bestiary.npcs):**
+   - **Имена и Виды:**
+     • Для разумных NPC и уникальных боссов — личные имена ("Барон Валериан", "Верховный жрец").
+     • Для рядовых диких зверей и монстров — ТОЛЬКО вид без личных имён ("Лютый волк", "Пещерный паук").
+   - \`category\`: "npc" | "beast" | "monster" | "boss".
+   - \`role\`: "main" (ключевой сюжетный NPC) | "secondary" (спутник, торговец, страж) | "tertiary" (рядовое существо).
+   - \`is_unique\`: true для уникальных боссов и NPC; false для рядовых врагов/зверей.
+   - \`is_pack\` / \`pack_size\`: true для стайных существ (волки, гоблины) — движок запускает групповой энкаунтер.
+   - \`is_hostile\`: true, если существо враждебно к героям по умолчанию.
+   - \`location_name\`: Точное имя локации из \`geography.locations[].name\`, где обитает персонаж.
+   - **Психология и Отыгрыш (управляют поведением NPC в раундах):**
+     • \`temperament\`: Характер ("Хитрый прагматик", "Вспыльчивый задира") — определяет решения NPC.
+     • \`motivation\`: Главная жизненная цель — мотивирует NPC на сделки или предательство.
+     • \`current_mood\`: Одно из 7 состояний: "calm", "suspicious", "cheerful", "irritated", "frightened", "impressed", "mournful".
+     • \`speech_style\`: Уникальный стиль речи, жаргон, тон, акцент.
+     • \`secrets\`: Личные тайны. ИИ раскрывает их в диалоге ТОЛЬКО при достижении порога доверия (\`reveal_threshold\`).
+     • \`rumors[]\`: Слухи и зацепки о сокровищах/мире, которыми NPC делится при общении.
+     • \`daily_routine\`: Распорядок дня ("Утро:... День:... Вечер:... Ночь:..."). Симулятор Живого Мира перемещает NPC в реальном времени при смене внутриигрового часа!
+     • \`current_activity\`: Чем занят персонаж при первой встрече ("Изучает карту", "Точит меч").
+     • \`habits[]\` / \`catchphrases[]\` / \`status_tags[]\`: Привычки, коронные фразы и социальные теги.
+   - **Боевые параметры (D&D 5e):**
+     • \`stats\`: STR, DEX, CON, INT, WIS, CHA (значения от 1 до 30; 10 — средний человек).
+     • \`tier\` (1-5): Врождённый потенциал опасности (Tier 1 = мирный/волк, Tier 5 = архимаг/дракон).
+     • \`level\`: Конкретный уровень существа (1-100).
+     • \`level_min\` / \`level_max\`: Диапазон уровней для авто-масштабирования сложности под отряд игроков.
+     • \`hit_dice\`: Кость здоровья (6, 8, 10 или 12).
+     • \`base_attacks[]\` / \`special_attacks[]\`: Атаки существа с указанием \`damage_type\` и \`damage_dice\`. Поддерживают периодический урон (\`is_dot: true\`, \`dot_duration\`).
+     • Допустимые \`damage_type\`: "slashing", "piercing", "bludgeoning", "fire", "cold", "lightning", "thunder", "acid", "poison", "necrotic", "radiant", "psychic", "force".
+
+5. **ФАЙЛЫ ЛОРА (lore_files):**
+   - \`folder\` / \`title\` / \`content\` / \`tags[]\`: Энциклопедическая база знаний мира (история, пантеон богов, фракции, артефакты). Нейросеть-Мастер обращается к ней при любых вопросах игроков и формировании нарратива.
+
+Сгенерируй богатый, живой, глубокий мир: минимум 2 государства, 3-5 детальных локаций с подзонами и матрицами расстояний, 6-10 разноплановых NPC и монстров со всеми психологическими полями, слухами и распорядком дня!
 
 ---
 [ОПИШИТЕ ВАШ МИР ЗДЕСЬ]:
@@ -977,45 +1148,74 @@ export function renderLobby(container, user) {
           </div>
           
           <div class="schema-section">
-            <h4>📁 Основные данные и Сюжет (Storyline)</h4>
+            <h4>📁 1. Основные данные мира и Сюжетная кампания (Storyline)</h4>
+            <p class="form-hint" style="margin-bottom: 0.5rem;">Задают каркас вселенной и адаптивный сюжет («лыжи, но не правило»):</p>
             <ul>
-              <li><strong>world.name</strong> — название сеттинга/мира</li>
-              <li><strong>world.description</strong> — общее атмосферное описание эпохи</li>
-              <li><strong>world.settings</strong> — расы (races[]), классы (classes[]), макс. уровень (max_level: 20)</li>
-              <li><strong>world.settings.storyline</strong> — 4 сюжетных акта (act_1 .. act_4) с полями <code>title</code>, <code>description</code>, <code>key_npcs[]</code>, <code>key_locations[]</code></li>
-              <li><strong>lore_files[]</strong> — файлы лора (folder, title, content, tags[])</li>
+              <li><strong>version: "3.2"</strong> — обязательное поле версии для валидации импорта файла.</li>
+              <li><strong>world.name</strong> — название вселенной/мира (отображается в лобби и карточках).</li>
+              <li><strong>world.description</strong> — глубокое атмосферное описание эпохи, магии и конфликта для ИИ-Мастера.</li>
+              <li><strong>world.settings.races[] / classes[]</strong> — списки доступных игрокам рас и классов.</li>
+              <li><strong>world.settings.max_level</strong> — максимальный уровень развития (обычно 20 или 100).</li>
+              <li><strong>world.settings.difficulty</strong> — базовая сложность проверок ("easy" | "normal" | "hard").</li>
+              <li><strong>world.settings.storyline</strong> — 4-актная кампания (Завязка → Развитие → Кульминация → Развязка):</li>
+              <li style="margin-left: 1rem;"><code>title</code>, <code>summary</code>, <code>prologue</code> — название, суть и стартовая сцена.</li>
+              <li style="margin-left: 1rem;"><code>arcs[].goals[]</code> — <strong>цели акта</strong>. ИИ автоматически отмечает их при действиях игроков и продвигает сюжет!</li>
+              <li style="margin-left: 1rem;"><code>arcs[].key_npcs[]</code> и <code>arcs[].key_locations[]</code> — ключевые персонажи и места данного акта.</li>
             </ul>
           </div>
           
           <div class="schema-section">
-            <h4>🗺️ География и Навигация (geography)</h4>
+            <h4>🗺️ 2. География, Навигация и Туман Войны (geography)</h4>
+            <p class="form-hint" style="margin-bottom: 0.5rem;">Определяют пространственную структуру, видимость и расчет времени в пути:</p>
             <ul>
-              <li><strong>states[]</strong> — государства и регионы (name, description, ruler_id)</li>
-              <li><strong>locations[]</strong> — города, деревни, руины:</li>
-              <li style="margin-left: 1rem;"><code>name</code>, <code>type</code> (capital / city / village / ruins / landmark)</li>
-              <li style="margin-left: 1rem;"><code>terrain_type</code> (<strong>urban</strong> | <strong>building</strong> | <strong>forest</strong> | <strong>cave</strong> | <strong>mountain</strong> | <strong>open</strong>) — определяет Туман Войны, обзор и модификаторы движения</li>
-              <li style="margin-left: 1rem;"><code>zones[]</code> — подзоны локации (id, name, type: "open" | "closed")</li>
-              <li style="margin-left: 1rem;"><code>location_map</code> — симметричная матрица расстояний в метрах между всеми подзонами: <code>location_map[A][B] === location_map[B][A]</code>, <code>location_map[A][A] = 0</code></li>
+              <li><strong>states[]</strong> — государства и регионы (<code>name</code>, <code>description</code>, законы, культура).</li>
+              <li><strong>locations[]</strong> — поселения, руины, подземелья, замки:</li>
+              <li style="margin-left: 1rem;"><code>name</code>, <code>state_name</code> (точное совпадение со states), <code>type</code> (capital / city / village / ruins / landmark / camp / dungeon).</li>
+              <li style="margin-left: 1rem;"><code>terrain_type</code> — <strong>тип местности</strong> (СТРОГО: <strong>urban</strong> | <strong>building</strong> | <strong>forest</strong> | <strong>cave</strong> | <strong>mountain</strong> | <strong>open</strong>). Определяет дальность Тумана Войны, звуки окружения, скрытность и модификатор шагов!</li>
+              <li style="margin-left: 1rem;"><code>zones[]</code> — внутренние зоны локации (2-5 шт.) с типами <strong>open</strong> (улица, площадь) / <strong>closed</strong> (таверна, подвал).</li>
+              <li style="margin-left: 1rem;"><code>location_map</code> — <strong>симметричная матрица расстояний в метрах</strong> (<code>map[A][B] === map[B][A]</code>, <code>map[A][A] = 0</code>). По ней GPS-движок с точностью до минуты рассчитывает время перемещения героев и дальность атак!</li>
             </ul>
           </div>
           
           <div class="schema-section">
-            <h4>🐉 Бестиарий, Психология и Отыгрыш (bestiary)</h4>
+            <h4>🐉 3. Бестиарий, Психология и Симулятор Живого Мира (bestiary.npcs)</h4>
+            <p class="form-hint" style="margin-bottom: 0.5rem;">NPC, напарники, монстры и звери со сложным поведением:</p>
             <ul>
-              <li><strong>npcs[]</strong> — все разумные жители и существа мира:</li>
-              <li style="margin-left: 1rem;"><code>name</code> (имя для NPC и уникальных боссов; для диких зверей — только вид: "Волк", "Пещерный медведь")</li>
-              <li style="margin-left: 1rem;"><code>race</code>, <code>class</code>, <code>category</code> (npc / beast / monster / boss), <code>role</code> (main / secondary / tertiary)</li>
-              <li style="margin-left: 1rem;"><strong>Психология и Речь:</strong></li>
-              <li style="margin-left: 2rem;"><code>temperament</code> — темперамент (прагматик, сангвиник, холерик, меланхолик, осторожный, фанатик...)</li>
-              <li style="margin-left: 2rem;"><code>motivation</code> — личная скрытая или явная цель персонажа (богатство, защита семьи, власть, спасение)</li>
-              <li style="margin-left: 2rem;"><code>current_mood</code> — строго одно из: <strong>calm</strong> | <strong>suspicious</strong> | <strong>cheerful</strong> | <strong>irritated</strong> | <strong>frightened</strong> | <strong>impressed</strong> | <strong>mournful</strong></li>
-              <li style="margin-left: 2rem;"><code>speech_style</code> — манера речи (жаргон наёмников, витиеватый слог, хрипота, лаконичные фразы)</li>
-              <li style="margin-left: 2rem;"><code>secrets</code> — тайна персонажа, раскрываемая ИИ только при доверии >70</li>
-              <li style="margin-left: 2rem;"><code>rumors[]</code> — массив слухов о мире, заговорах и сокровищах</li>
-              <li style="margin-left: 2rem;"><code>daily_routine</code> — распорядок дня (утро, день, вечер, ночь)</li>
-              <li style="margin-left: 2rem;"><code>current_activity</code> — чем занят персонаж при встрече в локации</li>
-              <li style="margin-left: 1rem;"><code>stats</code> (STR, DEX, CON, INT, WIS, CHA 1-30), <code>level</code> (1-100), <code>tier</code> (1-5), <code>hit_dice</code> (6, 8, 10, 12)</li>
-              <li style="margin-left: 1rem;"><code>special_attacks[]</code>, <code>base_attacks[]</code>, <code>habits[]</code>, <code>catchphrases[]</code>, <code>status_tags[]</code></li>
+              <li><strong>Имена и Классификация:</strong></li>
+              <li style="margin-left: 1rem;"><code>name</code> — личное имя для людей/боссов ("Барон Валериан"); для диких зверей/рядовых монстров — ТОЛЬКО вид ("Лютый волк").</li>
+              <li style="margin-left: 1rem;"><code>category</code> (npc / beast / monster / boss), <code>role</code> (main / secondary / tertiary).</li>
+              <li style="margin-left: 1rem;"><code>is_unique</code> — true для уникальных именованных NPC/боссов; false для рядовых особей.</li>
+              <li style="margin-left: 1rem;"><code>is_pack</code> / <code>pack_size</code> — стайное нападение группы существ.</li>
+              <li style="margin-left: 1rem;"><code>is_hostile</code> — враждебность к игрокам по умолчанию.</li>
+              <li style="margin-left: 1rem;"><code>location_name</code> — привязка к локации обитания/спавна.</li>
+              <li><strong>Психология и Реплики (управляют поведением в раундах):</strong></li>
+              <li style="margin-left: 1rem;"><code>temperament</code> — склад характера (хитрый прагматик, фанатик, вспыльчивый задира).</li>
+              <li style="margin-left: 1rem;"><code>motivation</code> — личная цель, ради которой NPC пойдёт на сделку или конфликт.</li>
+              <li style="margin-left: 1rem;"><code>current_mood</code> — стартовое настроение: <strong>calm</strong> | <strong>suspicious</strong> | <strong>cheerful</strong> | <strong>irritated</strong> | <strong>frightened</strong> | <strong>impressed</strong> | <strong>mournful</strong>.</li>
+              <li style="margin-left: 1rem;"><code>speech_style</code> — тембр, жаргон, фирменные обороты речи.</li>
+              <li style="margin-left: 1rem;"><code>secrets</code> — личные тайны (раскрываются ИИ только при доверии &gt; 60..70).</li>
+              <li style="margin-left: 1rem;"><code>rumors[]</code> — слухи, зацепки и сплетни, которые персонаж может рассказать в диалоге.</li>
+              <li style="margin-left: 1rem;"><code>daily_routine</code> — распорядок дня (утро/день/вечер/ночь). Симулятор Живого Мира перемещает NPC по локации в зависимости от времени суток!</li>
+              <li style="margin-left: 1rem;"><code>current_activity</code> — чем занят персонаж при первой встрече ("Точит меч", "Изучает карту").</li>
+              <li style="margin-left: 1rem;"><code>habits[]</code>, <code>catchphrases[]</code>, <code>status_tags[]</code> — привычки, коронные фразы и социальные теги.</li>
+              <li><strong>Боевые параметры (D&amp;D 5e):</strong></li>
+              <li style="margin-left: 1rem;"><code>stats</code> — STR, DEX, CON, INT, WIS, CHA (1..30).</li>
+              <li style="margin-left: 1rem;"><code>tier</code> (1-5) — <strong>врождённый потенциал</strong> (1 = мирный/волк, 5 = архимаг/дракон; задаёт количество спецатак).</li>
+              <li style="margin-left: 1rem;"><code>level</code>, <code>level_min</code>, <code>level_max</code> — текущий уровень и рамки для масштабирования энкаунтеров.</li>
+              <li style="margin-left: 1rem;"><code>hit_dice</code> — кость хитов (6, 8, 10, 12).</li>
+              <li style="margin-left: 1rem;"><code>base_attacks[]</code> и <code>special_attacks[]</code> — список ударов и способностей с типами урона и DoT (периодический урон).</li>
+              <li style="margin-left: 1rem;"><code>damage_type</code>: slashing, piercing, bludgeoning, fire, cold, lightning, thunder, acid, poison, necrotic, radiant, psychic, force.</li>
+            </ul>
+          </div>
+
+          <div class="schema-section">
+            <h4>📜 4. База Знаний и Энциклопедия (lore_files)</h4>
+            <p class="form-hint" style="margin-bottom: 0.5rem;">Файлы лора, из которых ИИ черпает факты о мироустройстве:</p>
+            <ul>
+              <li><strong>folder</strong> — рубрика («История», «Фракции», «Религия и Пантеон», «Магия и Артефакты», «Обычаи»).</li>
+              <li><strong>title</strong> — название статьи/документа.</li>
+              <li><strong>content</strong> — глубокий текст с историческими событиями, персоналиями и тайнами для ИИ-Мастера.</li>
+              <li><strong>tags[]</strong> — теги для индексации и быстрого связывания с ситуацией в чате.</li>
             </ul>
           </div>
           

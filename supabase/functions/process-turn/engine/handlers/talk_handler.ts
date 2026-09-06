@@ -10,40 +10,39 @@ export class TalkHandler extends BaseActionHandler {
 
   handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     const player = context.acting_player;
-    let targetNpc = this.findNpcById(context, action.target_entity_id || "");
-    let targetPlayer = this.findPlayerById(context, action.target_entity_id || "");
+    const rawText = (context as any)?.raw_action_text || (action as any)?.speech || "";
+    const rawLower = rawText.toLowerCase();
+    const hint = (((action as any).target_entity_name || (action as any).target_name || action.target_item_name || "") as string).toLowerCase().trim();
 
-    // Резолв по подсказке имени, если ID не сопоставлен напрямую
-    if (!targetNpc && !targetPlayer) {
-      const hint = (((action as any).target_entity_name || (action as any).target_name || action.target_item_name || "") as string).toLowerCase().trim();
-      if (hint) {
-        for (const [id, p] of context.targets.players.entries()) {
-          if (id !== player.id && (p.name.toLowerCase().includes(hint) || hint.includes(p.name.toLowerCase()))) {
-            targetPlayer = p;
-            break;
-          }
-        }
-        if (!targetPlayer) {
-          for (const [id, n] of context.targets.npcs.entries()) {
-            if (n.name.toLowerCase().includes(hint) || hint.includes(n.name.toLowerCase())) {
-              targetNpc = n;
-              break;
-            }
-          }
+    // 1. ПРИОРИТЕТ: Проверяем, обращается ли игрок по имени к другому игроку сессии (в тексте или в hint)
+    let targetPlayer: any = null;
+    for (const [id, p] of context.targets.players.entries()) {
+      if (id !== player.id && p.name) {
+        const pNameLower = p.name.trim().toLowerCase();
+        const nameRegex = new RegExp(`(^|[\\s,."«*!?])${pNameLower}[а-я]*([\\s,."»*!?]|$)`, 'i');
+        if (
+          nameRegex.test(rawLower) ||
+          rawLower.includes(pNameLower) ||
+          (hint && (pNameLower.includes(hint) || hint.includes(pNameLower)))
+        ) {
+          targetPlayer = p;
+          break;
         }
       }
     }
 
-    // ============================================
-    // Диалог с другим игроком (Party Roleplay)
-    // ============================================
+    // 2. Если по тексту/hint не нашли, проверяем target_entity_id среди игроков
+    if (!targetPlayer && action.target_entity_id) {
+      targetPlayer = this.findPlayerById(context, action.target_entity_id);
+    }
+
+    // 3. Если это диалог с другим живым игроком — НИКОГДА не ищем NPC и не бросаем кубики!
     if (targetPlayer) {
-      const rawText = (context as any)?.raw_action_text || (action as any)?.speech || "";
       const speechMatch = rawText.match(/[«"]([^»"]{1,120})[»"]/);
-      const speechContent = speechMatch ? speechMatch[1] : "";
+      const speechContent = speechMatch ? speechMatch[1] : rawText.trim();
       const fact = speechContent
         ? `${player.name} обращается к ${targetPlayer.name}: «${speechContent}».`
-        : `${player.name} заводит разговор с ${targetPlayer.name}.`;
+        : `${player.name} обращается к ${targetPlayer.name}.`;
 
       return {
         result: {
@@ -57,6 +56,22 @@ export class TalkHandler extends BaseActionHandler {
         mutations: [],
         system_facts: [fact],
       };
+    }
+
+    // 4. Только если цель точно не живой игрок — ищем NPC
+    let targetNpc = this.findNpcById(context, action.target_entity_id || "");
+
+    // Резолв по подсказке имени среди NPC
+    if (!targetNpc) {
+      const hint = (((action as any).target_entity_name || (action as any).target_name || action.target_item_name || "") as string).toLowerCase().trim();
+      if (hint) {
+        for (const [id, n] of context.targets.npcs.entries()) {
+          if (n.name.toLowerCase().includes(hint) || hint.includes(n.name.toLowerCase())) {
+            targetNpc = n;
+            break;
+          }
+        }
+      }
     }
 
     if (!targetNpc) {

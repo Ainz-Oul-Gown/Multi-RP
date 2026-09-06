@@ -34,6 +34,7 @@ import { formatRpText, escapeHtml } from "../src/pages/game.js";
 import { buildRouterSystemPrompt } from "../supabase/functions/process-turn/steps/step1_router.ts";
 import { buildNarratorSystemPrompt } from "../supabase/functions/process-turn/steps/step5_narrator.ts";
 import { SUPABASE_FULL_SCHEMA_SQL } from "../src/utils/supabaseFullSchema.js";
+import { TalkHandler } from "../supabase/functions/process-turn/engine/handlers/talk_handler.ts";
 
 describe("Roleplay Notation System & Client Formatting", () => {
   it("correctly escapes html while preserving safe content", () => {
@@ -150,4 +151,66 @@ describe("Party System & Schema Verification", () => {
     // p3 stays in "зал"
     expect(p3.current_zone).toBe("зал");
   });
+
+  it("matches party invite phrase 'Ирис, давай путешествовать вместе?' and resolves player target", () => {
+    const actionText = "Ирис, давай путешествовать вместе?";
+    const lowerAct = actionText.toLowerCase();
+
+    const isPartyInviteOrJoin = /(?:объедини(?:ться|мся)|созда(?:ть|дим) отряд|пойд[её]м вместе|ид[её]м вместе|давай(?:те)?.*(?:вместе|путешеств|отряд)|будем вместе|путешеств(?:овать|уем).*вместе|вместе.*путешеств|держимся вместе|в отряд|возьми в отряд|беру за руку|предлагаю.*(?:отряд|вместе))/i.test(lowerAct);
+    expect(isPartyInviteOrJoin).toBe(true);
+
+    const allPlayers = [
+      { id: "p-actor", name: "Артур" },
+      { id: "p-iris", name: "Ирис" },
+    ];
+
+    const targetedOtherPlayer = allPlayers.filter((p) => p.id !== "p-actor").find((p) => {
+      const pNameLower = p.name.trim().toLowerCase();
+      const nameRegex = new RegExp(`(^|[\\s,."«*!?])${pNameLower}[а-я]*([\\s,."»*!?]|$)`, 'i');
+      return nameRegex.test(lowerAct) || lowerAct.includes(pNameLower);
+    });
+
+    expect(targetedOtherPlayer).toBeDefined();
+    expect(targetedOtherPlayer?.id).toBe("p-iris");
+  });
+
+  it("TalkHandler strictly targets player 'Ирис' and does NOT target NPC 'Бран' when addressing player", () => {
+    const handler = new TalkHandler();
+
+    const dummyContext: any = {
+      acting_player: {
+        id: "p-actor",
+        name: "Артур",
+        stats: { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        level: 1,
+      },
+      raw_action_text: "Ирис, давай путешествовать вместе?",
+      targets: {
+        players: new Map([
+          ["p-actor", { id: "p-actor", name: "Артур", stats: {} }],
+          ["p-iris", { id: "p-iris", name: "Ирис", stats: {} }],
+        ]),
+        npcs: new Map([
+          ["npc-bran", { id: "npc-bran", name: "Бран", is_hostile: false }],
+        ]),
+      },
+      session: { difficulty: "normal" },
+    };
+
+    // Even if router erroneously set target_entity_id to npc-bran:
+    const action: any = {
+      action_type: "talk",
+      target_entity_id: "npc-bran", // Router mistake
+    };
+
+    const res = handler.handle(action, dummyContext);
+
+    // Should override and target player Ирис!
+    expect(res.result.target_type).toBe("player");
+    expect(res.result.target_entity_id).toBe("p-iris");
+    expect(res.result.success).toBe(true);
+    expect(res.system_facts[0]).toContain("Артур обращается к Ирис");
+    expect(res.system_facts[0]).not.toContain("Бран");
+  });
 });
+

@@ -564,10 +564,9 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
     if (typeof targetEntityId === "string" && npcs.some((n) => n.id === targetEntityId)) {
       interactedNpcIds.add(targetEntityId);
     }
-    // talk-действия всегда требуют памяти
+    // talk-действия требуют памяти только если цель — NPC (а не живой игрок!)
     if (ar.action_type === "talk" || ar.action_type === "talk_free_action") {
-      // target_entity_id должен быть в списке npcs
-      if (typeof targetEntityId === "string") {
+      if (typeof targetEntityId === "string" && (ar as any).target_type !== "player" && npcs.some((n) => n.id === targetEntityId)) {
         interactedNpcIds.add(targetEntityId);
       }
     }

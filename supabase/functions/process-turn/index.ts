@@ -831,11 +831,46 @@ serve(async (req) => {
 
 
     // ============================================
-    // УПРАВЛЕНИЕ ОТРЯДОМ (Party System)
+    // УПРАВЛЕНИЕ ОТРЯДОМ И СОПОСТАВЛЕНИЕ ИГРОКОВ (Party & Player Resolution)
     // ============================================
     let partyEventFact: string | null = null;
     const lowerAct = safeActionText.toLowerCase();
-    const isPartyInviteOrJoin = /(?:объедини(?:ться|мся)|созда(?:ть|дим) отряд|пойд[её]м вместе|ид[её]м вместе|держимся вместе|в отряд|возьми в отряд|беру за руку|предлагаю.*отряд)/i.test(lowerAct);
+
+    // Детерминированное сопоставление цели с живыми игроками по имени в тексте
+    const targetedOtherPlayer = (allPlayers || []).filter((p: any) => p.id !== player.id).find((p: any) => {
+      if (!p.name) return false;
+      const pNameLower = p.name.trim().toLowerCase();
+      const nameRegex = new RegExp(`(^|[\\s,."«*!?])${pNameLower}[а-я]*([\\s,."»*!?]|$)`, 'i');
+      return nameRegex.test(lowerAct) || lowerAct.includes(pNameLower);
+    });
+
+    if (targetedOtherPlayer) {
+      console.log(`[${requestId}] [PLAYER_TARGET] Detected player "${targetedOtherPlayer.name}" (${targetedOtherPlayer.id}) in action text`);
+      let hasTargetedAction = false;
+      if (routerResult.actions && routerResult.actions.length > 0) {
+        for (const act of routerResult.actions) {
+          if (act.action_type === "talk" || act.action_type === "transfer" || act.action_type === "attack") {
+            act.target_entity_id = targetedOtherPlayer.id;
+            (act as any).target_name = targetedOtherPlayer.name;
+            (act as any).target_type = "player";
+            hasTargetedAction = true;
+          }
+        }
+      }
+      if (!hasTargetedAction) {
+        if (!routerResult.actions) routerResult.actions = [];
+        routerResult.actions.push({
+          action_type: "talk",
+          target_entity_id: targetedOtherPlayer.id,
+          target_item_name: null,
+          stat_to_check: "none",
+          ai_custom_dc: null,
+          improper_tool_usage: null,
+        });
+      }
+    }
+
+    const isPartyInviteOrJoin = /(?:объедини(?:ться|мся)|созда(?:ть|дим) отряд|пойд[её]м вместе|ид[её]м вместе|давай(?:те)?.*(?:вместе|путешеств|отряд)|будем вместе|путешеств(?:овать|уем).*вместе|вместе.*путешеств|держимся вместе|в отряд|возьми в отряд|беру за руку|предлагаю.*(?:отряд|вместе))/i.test(lowerAct);
     const isPartyLeave = /(?:покидаю отряд|выхожу из отряда|отделяюсь от отряда|иду один|пойду один|разделяемся)/i.test(lowerAct);
 
     if (isPartyLeave) {
@@ -865,10 +900,12 @@ serve(async (req) => {
         } catch {}
       }
     } else if (isPartyInviteOrJoin) {
-      const otherPlayersInZone = (allPlayers || []).filter((p: any) => p.id !== player.id && (!player.current_zone || !p.current_zone || p.current_zone === player.current_zone));
-      let partner = otherPlayersInZone.find((p: any) => lowerAct.includes(p.name.toLowerCase()));
-      if (!partner && otherPlayersInZone.length === 1) {
-        partner = otherPlayersInZone[0];
+      let partner = targetedOtherPlayer;
+      if (!partner) {
+        const otherPlayersInZone = (allPlayers || []).filter((p: any) => p.id !== player.id && (!player.current_zone || !p.current_zone || p.current_zone === player.current_zone));
+        if (otherPlayersInZone.length === 1) {
+          partner = otherPlayersInZone[0];
+        }
       }
 
       if (partner && !arePlayersInSameParty(player, partner, session)) {

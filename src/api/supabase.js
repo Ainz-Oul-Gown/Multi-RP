@@ -196,37 +196,8 @@ export async function deployDatabaseSchema(url, accessToken, options = {}) {
     let res = null;
     let lastError = null;
 
-    // 1. Через Edge Function deploy-schema (серверный вызов без ограничений CORS)
-    try {
-      const edgeUrl = `${SUPABASE_URL}/functions/v1/deploy-schema`;
-      const edgeRes = await fetch(edgeUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectRef,
-          accessToken: cleanToken,
-          query: SUPABASE_FULL_SCHEMA_SQL,
-        }),
-      });
-
-      const edgeData = await edgeRes.json().catch(() => null);
-
-      if (edgeRes.ok) {
-        res = edgeRes;
-      } else {
-        const errMsg = edgeData?.error || edgeData?.message || `HTTP ${edgeRes.status}`;
-        // Если это ошибка аутентификации или запроса Supabase — возвращаем точный текст
-        if (edgeRes.status === 400 || edgeRes.status === 401 || edgeRes.status === 404) {
-          return { success: false, error: `Ошибка Supabase API: ${errMsg}` };
-        }
-        lastError = new Error(errMsg);
-      }
-    } catch (edgeErr) {
-      lastError = edgeErr;
-    }
-
-    // 2. Fallback: локальный Vite-прокси (/api/supabase-mgmt) при разработке
-    if (!res && typeof window !== 'undefined' && window.location?.hostname === 'localhost') {
+    // 1. Приоритет: локальный автономный прокси (/api/supabase-mgmt) — работает напрямую через Node.js без зависимости от каких-либо баз
+    if (typeof window !== 'undefined') {
       try {
         const proxyRes = await fetch(`/api/supabase-mgmt/projects/${projectRef}/database/query`, {
           method: 'POST',
@@ -237,16 +208,48 @@ export async function deployDatabaseSchema(url, accessToken, options = {}) {
           body: JSON.stringify({ query: SUPABASE_FULL_SCHEMA_SQL }),
         });
 
-        const proxyData = await proxyRes.json().catch(() => null);
-
         if (proxyRes.ok) {
           res = proxyRes;
         } else {
-          const errMsg = proxyData?.message || proxyData?.error || `HTTP ${proxyRes.status}`;
-          return { success: false, error: `Ошибка Supabase API: ${errMsg}` };
+          const proxyData = await proxyRes.json().catch(() => null);
+          // Если это ответ от самого Supabase API (ошибка токена, проекта, прав и т.д.)
+          if (proxyData && (proxyData.message || proxyData.error)) {
+            return { success: false, error: `Ошибка Supabase API: ${proxyData.message || proxyData.error}` };
+          }
+          lastError = new Error(proxyData?.error || `Proxy HTTP ${proxyRes.status}`);
         }
       } catch (proxyErr) {
         lastError = proxyErr;
+      }
+    }
+
+    // 2. Резерв: через Edge Function deploy-schema (если запущено на удалённом хостинге)
+    if (!res) {
+      try {
+        const edgeUrl = `${SUPABASE_URL}/functions/v1/deploy-schema`;
+        const edgeRes = await fetch(edgeUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectRef,
+            accessToken: cleanToken,
+            query: SUPABASE_FULL_SCHEMA_SQL,
+          }),
+        });
+
+        const edgeData = await edgeRes.json().catch(() => null);
+
+        if (edgeRes.ok) {
+          res = edgeRes;
+        } else {
+          const errMsg = edgeData?.error || edgeData?.message || `HTTP ${edgeRes.status}`;
+          if (edgeRes.status === 400 || edgeRes.status === 401 || edgeRes.status === 404) {
+            return { success: false, error: `Ошибка Supabase API: ${errMsg}` };
+          }
+          lastError = new Error(errMsg);
+        }
+      } catch (edgeErr) {
+        lastError = edgeErr;
       }
     }
 

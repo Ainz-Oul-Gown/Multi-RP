@@ -7,7 +7,8 @@ import {
   getTurnQueue, initTurnQueue, passTurn, createPlayer,
   getCharacterCards, getNpcRelationships, getNpcMemories, getRelationshipTierLabelClient,
   getPlayerSkills, allocateStatPoints,
-  updatePlayerZone, updateLocationMap, getSessionPlayersWithZones
+  updatePlayerZone, updateLocationMap, getSessionPlayersWithZones,
+  removeSessionPlayer
 } from '../api/game.js';
 import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows, getItemMeta } from '../config.js';
 import { toast } from '../utils/toast.js';
@@ -223,8 +224,22 @@ export async function renderGame(container, sessionId, user) {
           updatePlayerUI();
         }
       } else if (payload.eventType === 'DELETE') {
-        allPlayers = allPlayers.filter((p) => p.id !== payload.old.id);
-        await checkTurnQueue();
+        const deletedId = payload.old?.id;
+        if (deletedId) {
+          allPlayers = allPlayers.filter((p) => p.id !== deletedId);
+          const countEl = document.getElementById('participantsCount');
+          if (countEl) countEl.textContent = `Участники (${allPlayers.length})`;
+          const listEl = document.getElementById('sessionPlayersList');
+          if (listEl) listEl.innerHTML = renderSessionParticipants(allPlayers);
+          bindParticipantEvents();
+
+          if (currentPlayer && currentPlayer.id === deletedId) {
+            toast.warning('Вы были исключены из сессии');
+            router.navigate('/');
+            return;
+          }
+          await checkTurnQueue();
+        }
       }
     });
 
@@ -884,10 +899,11 @@ export async function renderGame(container, sessionId, user) {
   }
 
   function renderSessionParticipants(players) {
+    const isCreator = Boolean(user?.id && (!session?.worlds?.owner_id || session.worlds.owner_id === user.id));
     return players.map((p) => {
       const isCurrent = currentPlayer && p.id === currentPlayer.id;
       return `
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-success);"></span>
             <span style="font-size: var(--fs-sm); font-weight: ${isCurrent ? '700' : '400'};">
@@ -895,7 +911,12 @@ export async function renderGame(container, sessionId, user) {
             </span>
             <span class="text-muted" style="font-size: var(--fs-xs);">${escapeHtml(p?.race || '')}/${escapeHtml(p?.class || '')}</span>
           </div>
-          <span style="font-size: var(--fs-xs); color: var(--accent-gold);">❤️ ${p?.hp || 0}/${p?.max_hp || 0}</span>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: var(--fs-xs); color: var(--accent-gold);">❤️ ${p?.hp || 0}/${p?.max_hp || 0}</span>
+            ${isCreator && !isCurrent ? `
+              <button class="btn btn-danger btn-xs remove-participant-btn" data-player-id="${p.id}" data-player-name="${escapeHtml(p?.name || 'Игрок')}" style="padding: 1px 6px; font-size: 10px; line-height: 1.2;" title="Удалить участника из сессии">❌</button>
+            ` : ''}
+          </div>
         </div>
       `;
     }).join('');
@@ -1515,6 +1536,36 @@ export async function renderGame(container, sessionId, user) {
 
     bindNpcCardEvents();
     bindProfileEvents();
+    bindParticipantEvents();
+  }
+
+  function bindParticipantEvents() {
+    document.querySelectorAll('.remove-participant-btn').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const playerId = btn.dataset.playerId;
+        const playerName = btn.dataset.playerName || 'Игрок';
+        if (!playerId) return;
+
+        if (!window.confirm(`Удалить участника «${playerName}» из этой сессии?`)) return;
+
+        try {
+          btn.disabled = true;
+          await removeSessionPlayer(sessionId, playerId);
+          toast.success(`Участник «${playerName}» удален из сессии`);
+          allPlayers = allPlayers.filter((p) => p.id !== playerId);
+          const countEl = document.getElementById('participantsCount');
+          if (countEl) countEl.textContent = `Участники (${allPlayers.length})`;
+          const listEl = document.getElementById('sessionPlayersList');
+          if (listEl) listEl.innerHTML = renderSessionParticipants(allPlayers);
+          bindParticipantEvents();
+          await checkTurnQueue();
+        } catch (err) {
+          toast.error('Ошибка удаления участника: ' + (err.message || err));
+          btn.disabled = false;
+        }
+      });
+    });
   }
 
   function bindProfileEvents() {

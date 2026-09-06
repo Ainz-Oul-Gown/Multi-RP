@@ -404,6 +404,36 @@ export async function deletePlayer(id) {
   if (error) throw error;
 }
 
+export async function removeSessionPlayer(sessionId, playerId) {
+  try {
+    const { data, error } = await supabase.rpc('remove_session_player', {
+      p_session_id: sessionId,
+      p_player_id: playerId,
+    });
+    if (!error && data?.success) {
+      return data;
+    }
+    if (data && data.success === false && data.error) {
+      throw new Error(data.error);
+    }
+    if (error && !error.message?.includes('function') && !error.message?.includes('not found')) {
+      throw error;
+    }
+  } catch (rpcErr) {
+    if (rpcErr.message && !rpcErr.message.includes('function remove_session_player') && !rpcErr.message.includes('not found')) {
+      throw rpcErr;
+    }
+  }
+
+  // Fallback: direct delete from turn_queue then players table
+  try {
+    await supabase.from('turn_queue').delete().eq('player_id', playerId);
+  } catch {}
+  const { error } = await supabase.from('players').delete().eq('id', playerId);
+  if (error) throw error;
+  return { success: true, player_id: playerId };
+}
+
 // ===================== FOG OF WAR =====================
 
 /**

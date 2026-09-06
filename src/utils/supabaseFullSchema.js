@@ -348,6 +348,8 @@ DROP POLICY IF EXISTS "Players: join session" ON players;
 DROP POLICY IF EXISTS "Players: update own" ON players;
 DROP POLICY IF EXISTS "Players: system update" ON players;
 DROP POLICY IF EXISTS "Players: delete own" ON players;
+DROP POLICY IF EXISTS "Players: delete own or session host" ON players;
+
 CREATE POLICY "Players: read in same session" ON players FOR SELECT TO authenticated USING (
   session_id IN (SELECT session_id FROM public.get_user_session_ids(auth.uid()))
   OR user_id = auth.uid()
@@ -355,7 +357,15 @@ CREATE POLICY "Players: read in same session" ON players FOR SELECT TO authentic
 CREATE POLICY "Players: join session" ON players FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
 CREATE POLICY "Players: update own" ON players FOR UPDATE TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Players: system update" ON players FOR UPDATE USING (true);
-CREATE POLICY "Players: delete own" ON players FOR DELETE TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Players: delete own or session host" ON players FOR DELETE TO authenticated USING (
+  auth.uid() = user_id
+  OR session_id IN (
+    SELECT s.id 
+    FROM public.sessions s
+    JOIN public.worlds w ON s.world_id = w.id
+    WHERE w.owner_id = auth.uid()
+  )
+);
 
 ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Inventory: read for owner" ON inventory;
@@ -566,6 +576,57 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.allocate_stat_points(UUID, TEXT, INT) TO authenticated, anon, service_role;
 
--- 6. ОБНОВЛЕНИЕ КЭША POSTGREST
+-- 6. RPC ДЛЯ УДАЛЕНИЯ УЧАСТНИКА СЕССИИ СОЗДАТЕЛЕМ
+CREATE OR REPLACE FUNCTION public.remove_session_player(
+  p_session_id UUID,
+  p_player_id UUID
+) RETURNS JSONB AS $$
+DECLARE
+  v_world_owner UUID;
+  v_player_name TEXT;
+  v_player_user_id UUID;
+BEGIN
+  SELECT w.owner_id INTO v_world_owner
+  FROM public.sessions s
+  JOIN public.worlds w ON s.world_id = w.id
+  WHERE s.id = p_session_id;
+
+  SELECT name, user_id INTO v_player_name, v_player_user_id
+  FROM public.players
+  WHERE id = p_player_id AND session_id = p_session_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Игрок не найден в этой сессии');
+  END IF;
+
+  IF auth.uid() IS NOT NULL AND auth.uid() != v_world_owner AND auth.uid() != v_player_user_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'У вас нет прав на удаление этого участника');
+  END IF;
+
+  DELETE FROM public.turn_queue WHERE player_id = p_player_id;
+  DELETE FROM public.player_injuries WHERE player_id = p_player_id;
+  DELETE FROM public.player_skills WHERE player_id = p_player_id;
+  DELETE FROM public.inventory WHERE player_id = p_player_id;
+  DELETE FROM public.players WHERE id = p_player_id;
+
+  INSERT INTO public.messages (
+    session_id,
+    sender_type,
+    sender_name,
+    content
+  ) VALUES (
+    p_session_id,
+    'system',
+    'Система',
+    '🚪 Участник «' || COALESCE(v_player_name, 'Неизвестный') || '» был исключен из сессии Создателем.'
+  );
+
+  RETURN jsonb_build_object('success', true, 'player_id', p_player_id, 'player_name', v_player_name);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.remove_session_player(UUID, UUID) TO authenticated, anon, service_role;
+
+-- 7. ОБНОВЛЕНИЕ КЭША POSTGREST
 NOTIFY pgrst, 'reload schema';
 `;

@@ -2,7 +2,7 @@
 import { supabase, invokeFunction } from '../api/supabase.js';
 import {
   getSession, updateSession, deleteSession, getSessionPlayers, createPlayer,
-  getWorlds, getLoreFiles
+  getWorlds, getLoreFiles, removeSessionPlayer
 } from '../api/game.js';
 import { STATS, DIFFICULTY_PRESETS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus } from '../config.js';
 import { toast } from '../utils/toast.js';
@@ -13,6 +13,13 @@ import {
   updateStoryline,
   deleteStoryline,
 } from '../api/storyline.js';
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 export async function renderSessionSettings(container, sessionId, user) {
   let session = null;
@@ -221,14 +228,15 @@ export async function renderSessionSettings(container, sessionId, user) {
             <h2 class="card-title">👥 Игроки (${players.length})</h2>
             <div class="players-list" style="margin-top: 1rem;">
               ${players.length ? players.map((p) => `
-                <div class="player-row">
-                  <div class="player-info">
-                    <strong>${p?.name || 'Игрок'}</strong>
-                    <span class="text-muted" style="font-size: var(--fs-sm);">${p?.race || ''} / ${p?.class || ''}</span>
+                <div class="player-row" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                  <div class="player-info" style="flex: 1;">
+                    <strong>${escapeHtml(p?.name || 'Игрок')}</strong>
+                    <span class="text-muted" style="font-size: var(--fs-sm);">${escapeHtml(p?.race || '')} / ${escapeHtml(p?.class || '')}</span>
                   </div>
-                  <div class="player-stats">
+                  <div class="player-stats" style="display: flex; align-items: center; gap: 0.5rem;">
                     <span class="badge badge-success">❤️ ${p.hp}/${p.max_hp}</span>
                     <span class="badge badge-gold">💰 ${p.money}</span>
+                    <button class="btn btn-danger btn-xs kick-player-btn" data-player-id="${p.id}" data-player-name="${escapeHtml(p?.name || 'Игрок')}" style="padding: 3px 8px; font-size: 11px; margin-left: 0.25rem;" title="Удалить участника из сессии">🗑️ Удалить</button>
                   </div>
                 </div>
               `).join('') : '<p class="text-muted">Пока нет игроков. Пригласите по ID сессии.</p>'}
@@ -515,6 +523,28 @@ export async function renderSessionSettings(container, sessionId, user) {
       } catch (err) {
         toast.error('Ошибка: ' + err.message);
       }
+    });
+
+    // Kick / remove player
+    container.querySelectorAll('.kick-player-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const playerId = btn.dataset.playerId;
+        const playerName = btn.dataset.playerName || 'Игрок';
+        if (!playerId) return;
+
+        const confirmed = window.confirm(`Удалить участника «${playerName}» из этой сессии?`);
+        if (!confirmed) return;
+
+        try {
+          btn.disabled = true;
+          await removeSessionPlayer(sessionId, playerId);
+          toast.success(`Участник «${playerName}» удален из сессии`);
+          await load();
+        } catch (err) {
+          toast.error('Ошибка удаления участника: ' + (err.message || err));
+          btn.disabled = false;
+        }
+      });
     });
 
     // Delete session

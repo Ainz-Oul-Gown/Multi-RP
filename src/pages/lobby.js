@@ -1,12 +1,12 @@
 // src/pages/lobby.js — Глобальное Лобби (Dashboard)
-import { supabase, signOut, invokeFunction } from '../api/supabase.js';
+import { supabase, signOut, invokeFunction, getActiveDatabaseConfig, generateDbInviteUrl } from '../api/supabase.js';
 import {
   getSessions, createSession, deleteSession, getWorlds, createWorld, updateWorld, deleteWorld,
   importWorld, exportWorld, downloadJSON,
   getUserSettings, upsertUserSettings, updateSession,
   getCharacterCards, createCharacterCard, updateCharacterCard, deleteCharacterCard,
   exportPlayer, getNpcsByWorld, updateNpc, deleteNpc, createNpc,
-  updateLocation, createLocation, deleteLocation
+  updateLocation, createLocation, deleteLocation, deletePlayer
 } from '../api/game.js';
 import { generateAllNPCs, generateWorldGeography, saveWorldGeography, generateIntelligentNPCs, generateCreatures, canResumeGeneration, clearWorldGenerationProgress } from '../api/openrouter.js';
 import { toast } from '../utils/toast.js';
@@ -236,7 +236,7 @@ export function renderLobby(container, user) {
   async function loadData() {
     try {
       [sessions, worlds, userSettings, characterCards] = await Promise.all([
-        getSessions(), getWorlds(), getUserSettings(user.id),
+        getSessions(user.id), getWorlds(user.id), getUserSettings(user.id),
         getCharacterCards(user.id)
       ]);
     } catch (err) {
@@ -250,12 +250,19 @@ export function renderLobby(container, user) {
       ? userSettings.openrouter_key.slice(0, 8) + '...' + userSettings.openrouter_key.slice(-4)
       : '';
 
+    const dbConfig = getActiveDatabaseConfig();
+
     container.innerHTML = `
       <div class="page">
         <header class="lobby-header">
           <div class="lobby-header-left">
             <h1 class="lobby-title">🕯️ Зал Гильдии Приключенцев</h1>
             <span class="badge badge-gold" title="Странник">${user.email}</span>
+            ${dbConfig.isCustom ? `
+              <span class="badge badge-info" id="lobbyCustomDbBadge" style="cursor: pointer;" title="Пользовательская БД. Нажмите, чтобы скопировать инвайт-ссылку для друзей">
+                🔌 Своя БД
+              </span>
+            ` : ''}
           </div>
           <div class="lobby-header-right">
             <button class="btn btn-ghost" id="accountSettingsBtn">⚙️ Настройки</button>
@@ -542,6 +549,18 @@ export function renderLobby(container, user) {
           <div class="form-group" style="margin-bottom: 1.5rem;">
             <label class="form-label">Email</label>
             <input class="input" value="${user.email}" disabled style="opacity: 0.6;" />
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(0,0,0,0.25); border-radius: var(--radius-md); border: 1px solid rgba(212, 163, 89, 0.2);">
+            <label class="form-label" style="font-size: var(--fs-xs);">База данных Supabase</label>
+            <div style="font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: 0.5rem; word-break: break-all;">
+              ${dbConfig.isCustom ? `Подключена ваша БД: <code>${dbConfig.url}</code>` : 'Стандартная база данных Multi-RP'}
+            </div>
+            ${dbConfig.isCustom ? `
+              <button type="button" class="btn btn-secondary btn-sm" id="lobbyCopyDbInviteBtn" style="width: 100%;">
+                🔗 Скопировать ссылку-приглашение в эту БД
+              </button>
+            ` : ''}
           </div>
 
            <div class="form-group" style="margin-bottom: 1rem;">
@@ -1012,6 +1031,8 @@ export function renderLobby(container, user) {
         ${sessions.map((s) => {
           const players = s.players || [];
           const hasChar = players.some((p) => p.user_id === user.id);
+          const isHost = !s.worlds?.owner_id || s.worlds?.owner_id === user.id;
+          const myPlayer = players.find((p) => p.user_id === user.id);
           return `
           <div class="card session-card" data-id="${s.id}">
             <div class="card-header">
@@ -1019,6 +1040,7 @@ export function renderLobby(container, user) {
                 ${s.difficulty === 'easy' ? 'Легко' : s.difficulty === 'hard' ? 'Хардкор' : 'Нормально'}
               </span>
               ${s.is_pvp_enabled ? '<span class="badge badge-gold">PvP</span>' : ''}
+              ${isHost ? '<span class="badge badge-gold" style="margin-left: auto;">👑 Хост</span>' : '<span class="badge badge-info" style="margin-left: auto;">⚔️ Участник</span>'}
             </div>
             <h3 class="card-title">${s.worlds?.name || 'Неизвестный мир'}</h3>
             <p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.25rem;">${s.current_plot_stage ? '📖 Сюжет' : '🎭 Песочница'}</p>
@@ -1034,13 +1056,17 @@ export function renderLobby(container, user) {
                 </div>
               </div>
             ` : '<p class="text-muted" style="font-size: var(--fs-xs); margin-top: 0.5rem;">Пока нет игроков</p>'}
-            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
               <button class="btn btn-primary btn-sm" data-action="join" data-id="${s.id}">
                 ${hasChar ? '🎮 Войти' : '⚔️ Создать героя'}
               </button>
-              <button class="btn btn-secondary btn-sm" data-action="settings" data-id="${s.id}">⚙️</button>
+              ${isHost ? `<button class="btn btn-secondary btn-sm" data-action="settings" data-id="${s.id}" title="Настройки сессии">⚙️</button>` : ''}
               <button class="btn btn-ghost btn-sm" data-action="invite" data-id="${s.id}" title="Копировать инвайт-ссылку">🔗</button>
-              <button class="btn btn-ghost btn-sm" data-action="delete-session" data-id="${s.id}" title="Удалить сессию" style="margin-left: auto; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);">🗑️</button>
+              ${isHost ? `
+                <button class="btn btn-ghost btn-sm" data-action="delete-session" data-id="${s.id}" title="Удалить сессию" style="margin-left: auto; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);">🗑️</button>
+              ` : (myPlayer ? `
+                <button class="btn btn-ghost btn-sm" data-action="leave-session" data-id="${s.id}" data-player-id="${myPlayer.id}" title="Покинуть сессию" style="margin-left: auto; color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2);">🚪 Покинуть</button>
+              ` : '')}
             </div>
           </div>
         `}).join('')}
@@ -2119,6 +2145,18 @@ export function renderLobby(container, user) {
       navigator.clipboard.writeText(user.id);
       toast.success('ID скопирован!');
     });
+
+    // Copy DB invite link from lobby
+    const copyDbInviteHandler = () => {
+      const currentConfig = getActiveDatabaseConfig();
+      if (!currentConfig.isCustom) return;
+      const inviteLink = generateDbInviteUrl(currentConfig.url, currentConfig.anonKey);
+      navigator.clipboard.writeText(inviteLink);
+      toast.success('Инвайт-ссылка в вашу БД скопирована! Отправьте её друзьям, чтобы играть в одной БД.');
+    };
+
+    document.getElementById('lobbyCustomDbBadge')?.addEventListener('click', copyDbInviteHandler);
+    document.getElementById('lobbyCopyDbInviteBtn')?.addEventListener('click', copyDbInviteHandler);
 
     // Preset buttons for model selection
     document.getElementById('presetFreeBtn')?.addEventListener('click', () => {
@@ -3242,10 +3280,37 @@ export function renderLobby(container, user) {
           toast.info('Удаление сессии...');
           await deleteSession(sessionId);
           toast.success('Сессия успешно удалена');
-          sessions = await getSessions();
+          sessions = await getSessions(user.id);
           render();
         } catch (err) {
           toast.error('Ошибка удаления сессии: ' + (err.message || err));
+        }
+      });
+    });
+
+    // Leave session (for guest participants)
+    container.querySelectorAll('[data-action="leave-session"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const sessionId = btn.dataset.id;
+        const playerId = btn.dataset.playerId;
+        const targetSession = sessions.find((s) => s.id === sessionId);
+        const worldName = targetSession?.worlds?.name || 'этой сессии';
+        const confirmed = window.confirm(
+          `Покинуть игровую сессию в мире «${worldName}»?\n\n` +
+          `• Ваш персонаж будет удален из этой партии.\n` +
+          `• Сама сессия и игровой прогресс других участников останутся без изменений.\n` +
+          `• Карточка вашего персонажа сохранится в безопасности во вкладке «Персонажи».`
+        );
+        if (!confirmed) return;
+
+        try {
+          toast.info('Выход из сессии...');
+          await deletePlayer(playerId);
+          toast.success('Вы успешно покинули сессию');
+          sessions = await getSessions(user.id);
+          render();
+        } catch (err) {
+          toast.error('Ошибка при выходе из сессии: ' + (err.message || err));
         }
       });
     });

@@ -1,5 +1,5 @@
 // src/main.js — Точка входа приложения
-import { onAuthStateChange } from './api/supabase.js';
+import { onAuthStateChange, initDatabaseFromStorageOrUrl } from './api/supabase.js';
 import { renderAuth } from './pages/auth.js';
 import { renderLobby } from './pages/lobby.js';
 import { renderSessionSettings } from './pages/session-settings.js';
@@ -20,36 +20,45 @@ if ('serviceWorker' in navigator) {
 // Show loading state while Supabase resolves auth
 app.innerHTML = '<div class="page page-centered"><p style="color: var(--text-muted);">Загрузка...</p></div>';
 
-// Auth state listener — handles both initial check AND OAuth callback
-// Supabase client automatically processes tokens from URL hash
-onAuthStateChange((user) => {
-  currentUser = user;
-  if (cleanupFn) {
-    cleanupFn();
-    cleanupFn = null;
-  }
+async function bootstrap() {
+  // Асинхронно считываем конфигурацию БД (URL-инвайт или сохраненную в IndexedDB)
+  await initDatabaseFromStorageOrUrl();
 
-  if (!user) {
-    renderAuth(app);
-    return;
-  }
+  // Auth state listener — handles both initial check AND OAuth callback
+  onAuthStateChange((user) => {
+    currentUser = user;
+    if (cleanupFn) {
+      cleanupFn();
+      cleanupFn = null;
+    }
 
-  // Define routes
-  router
-    .add('/', () => {
-      renderLobby(app, user);
-    })
-    .add('/auth', () => {
+    if (!user) {
       renderAuth(app);
-    })
-    .add('/session/:id/settings', (params) => {
-      renderSessionSettings(app, params.id, user);
-    })
-    .add('/session/:id', (params) => {
-      renderGame(app, params.id, user).then((cleanup) => {
-        cleanupFn = cleanup;
-      });
-    });
+      return;
+    }
 
-  router.resolve();
+    // Define routes
+    router
+      .add('/', () => {
+        renderLobby(app, user);
+      })
+      .add('/auth', () => {
+        renderAuth(app);
+      })
+      .add('/session/:id/settings', (params) => {
+        renderSessionSettings(app, params.id, user);
+      })
+      .add('/session/:id', (params) => {
+        renderGame(app, params.id, user).then((cleanup) => {
+          cleanupFn = cleanup;
+        });
+      });
+
+    router.resolve();
+  });
+}
+
+bootstrap().catch((err) => {
+  console.error('Bootstrap error:', err);
+  renderAuth(app);
 });

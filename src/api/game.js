@@ -5,11 +5,17 @@ import { getRaceAcBonus } from '../config.js';
 
 // ===================== WORLDS =====================
 
-export async function getWorlds() {
-  const { data, error } = await supabase
+export async function getWorlds(ownerId = null) {
+  let query = supabase
     .from('worlds')
     .select('*')
     .order('created_at', { ascending: false });
+
+  if (ownerId) {
+    query = query.eq('owner_id', ownerId);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return data;
 }
@@ -119,20 +125,56 @@ export async function deleteLoreFile(id) {
 
 // ===================== SESSIONS =====================
 
-export async function getSessions() {
-  const { data: sessions, error: sessErr } = await supabase
+export async function getSessions(userId = null) {
+  let filterParts = [];
+
+  if (userId) {
+    // 1. Получаем сессии, в которых пользователь участвует как игрок
+    const { data: userPlayers } = await supabase
+      .from('players')
+      .select('session_id')
+      .eq('user_id', userId);
+    const playerSessionIds = [...new Set((userPlayers || []).map((p) => p.session_id).filter(Boolean))];
+
+    // 2. Получаем миры пользователя (сессии, которые созданы на базе его миров)
+    const { data: userWorlds } = await supabase
+      .from('worlds')
+      .select('id')
+      .eq('owner_id', userId);
+    const userWorldIds = [...new Set((userWorlds || []).map((w) => w.id).filter(Boolean))];
+
+    // Если нет ни персонажей в сессиях, ни собственных миров — сессий у пользователя нет
+    if (playerSessionIds.length === 0 && userWorldIds.length === 0) {
+      return [];
+    }
+
+    if (playerSessionIds.length > 0) {
+      filterParts.push(`id.in.(${playerSessionIds.join(',')})`);
+    }
+    if (userWorldIds.length > 0) {
+      filterParts.push(`world_id.in.(${userWorldIds.join(',')})`);
+    }
+  }
+
+  let query = supabase
     .from('sessions')
     .select('*')
     .order('created_at', { ascending: false });
+
+  if (filterParts.length > 0) {
+    query = query.or(filterParts.join(','));
+  }
+
+  const { data: sessions, error: sessErr } = await query;
   if (sessErr) throw sessErr;
   if (!sessions || sessions.length === 0) return [];
 
   const worldIds = [...new Set(sessions.map((s) => s.world_id).filter(Boolean))];
   const sessionIds = sessions.map((s) => s.id);
 
-  // Параллельно забираем миры и всех участников всех сессий за 2 запроса
+  // Параллельно забираем миры (включая owner_id для проверки прав) и всех участников всех сессий за 2 запроса
   const [{ data: worlds }, { data: allPlayers }] = await Promise.all([
-    supabase.from('worlds').select('id, name').in('id', worldIds.length ? worldIds : ['00000000-0000-0000-0000-000000000000']),
+    supabase.from('worlds').select('id, name, owner_id').in('id', worldIds.length ? worldIds : ['00000000-0000-0000-0000-000000000000']),
     supabase.from('players').select('id, session_id, name, user_id, hp, max_hp, is_active').in('session_id', sessionIds),
   ]);
 
@@ -155,7 +197,7 @@ export async function getSessions() {
 export async function getSession(id) {
   const { data, error } = await supabase
     .from('sessions')
-    .select('*, worlds(settings)')
+    .select('*, worlds(id, name, owner_id, settings)')
     .eq('id', id)
     .single();
   if (error) throw error;

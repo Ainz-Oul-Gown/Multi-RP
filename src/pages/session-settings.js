@@ -22,6 +22,14 @@ export async function renderSessionSettings(container, sessionId, user) {
   async function load() {
     try {
       session = await getSession(sessionId);
+
+      // Проверка прав: настройки кампании (сюжет, сложность, PvP) доступны только создателю мира (Хосту)
+      if (session?.worlds?.owner_id && user?.id && session.worlds.owner_id !== user.id) {
+        toast.warning('Настройки сессии может изменять только создатель мира (Хост)');
+        router.navigate(`/session/${sessionId}`);
+        return;
+      }
+
       if (session.world_id) {
         loreFiles = await getLoreFiles(session.world_id);
       }

@@ -84,6 +84,56 @@ describe('Custom Supabase Database (BYOD)', () => {
       expect(res.success).toBe(false);
       expect(res.error).toContain('должен начинаться');
     });
+
+    it('should call onProgress and return emptySchema: true when worlds table is missing from schema cache', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              code: 'PGRST205',
+              details: null,
+              hint: null,
+              message: "could not find the table 'public.worlds' in the schema cache",
+            }),
+            { status: 404, headers: { 'Content-Type': 'application/json' } }
+          )
+        )
+      );
+
+      const progressSteps: string[] = [];
+      const res = await testDatabaseConnection('https://mock-custom.supabase.co', 'mock-anon-key', {
+        retries: 2,
+        retryDelayMs: 10,
+        onProgress: (msg: string) => progressSteps.push(msg),
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.emptySchema).toBe(true);
+      expect(progressSteps.length).toBeGreaterThanOrEqual(2);
+      expect(progressSteps[0]).toContain('Проверка подключения');
+
+      fetchSpy.mockRestore();
+    });
+
+    it('should return emptySchema: false when worlds table exists and responds', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([{ id: 'world-1' }]),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        )
+      );
+
+      const res = await testDatabaseConnection('https://mock-custom.supabase.co', 'mock-anon-key', {
+        retries: 1,
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.emptySchema).toBe(false);
+
+      fetchSpy.mockRestore();
+    });
   });
 
   describe('IndexedDB config storage', () => {

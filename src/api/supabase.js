@@ -70,8 +70,12 @@ export function getActiveDatabaseConfig() {
 
 /**
  * Проверить подключение к указанной базе Supabase
+ * @param {string} url
+ * @param {string} anonKey
+ * @param {Object} options - { onProgress?: (msg: string) => void, retries?: number, retryDelayMs?: number }
  */
-export async function testDatabaseConnection(url, anonKey) {
+export async function testDatabaseConnection(url, anonKey, options = {}) {
+  const { onProgress = null, retries = 3, retryDelayMs = 1500 } = options;
   try {
     const cleanUrl = String(url || '').trim().replace(/\/+$/, '');
     const cleanKey = String(anonKey || '').trim();
@@ -82,17 +86,75 @@ export async function testDatabaseConnection(url, anonKey) {
       return { success: false, error: 'URL должен начинаться с https:// или http://' };
     }
 
+    onProgress?.('Проверка подключения к серверу Supabase...');
+
     const testClient = createClient(cleanUrl, cleanKey);
-    // Делаем легкий запрос к REST API Supabase
-    const { error } = await testClient.from('worlds').select('id').limit(1);
-    if (error && error.code !== 'PGRST116') {
-      // Если таблицы worlds еще нет — это нормально для чистой БД, проверяем доступность auth
-      if (error.message && error.message.includes('relation "worlds" does not exist')) {
-        return { success: true, emptySchema: true };
+
+    // Функция проверки, является ли ошибка признаком отсутствия таблиц / обновления schema cache
+    const isSchemaMissingError = (err) => {
+      if (!err) return false;
+      const msg = String(err.message || '').toLowerCase();
+      const code = String(err.code || '');
+      return (
+        msg.includes('could not find the table') ||
+        msg.includes('schema cache') ||
+        msg.includes('does not exist') ||
+        msg.includes('relation') ||
+        code === 'PGRST205' ||
+        code === 'PGRST204'
+      );
+    };
+
+    let attempt = 0;
+    while (attempt < retries) {
+      attempt++;
+      if (attempt > 1) {
+        onProgress?.(`Ожидание обновления кэша схемы PostgREST (попытка ${attempt}/${retries})...`);
+      } else {
+        onProgress?.('Проверка готовности таблиц в базе данных...');
       }
-      return { success: false, error: error.message || 'Ошибка подключения к базе' };
+
+      const { error } = await testClient.from('worlds').select('id').limit(1);
+
+      // Если таблица отвечает штатно
+      if (!error || error.code === 'PGRST116') {
+        return {
+          success: true,
+          emptySchema: false,
+          message: 'Связь с базой данных установлена, таблицы готовы!',
+        };
+      }
+
+      // Если таблица отсутствует в schema cache
+      if (isSchemaMissingError(error)) {
+        // Если это не последняя попытка — даём паузу на случай, если пользователь только запустил DDL
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+          continue;
+        }
+
+        // Если после всех попыток таблица не появилась:
+        // Подключение к Supabase полностью валидно, но таблицы ещё не развёрнуты
+        return {
+          success: true,
+          emptySchema: true,
+          message: 'Подключение к Supabase успешно, но таблицы ещё не созданы. Скопируйте и выполните SQL-схему.',
+        };
+      }
+
+      // Реальная ошибка авторизации или сети (401, Invalid API key, network timeout и т.д.)
+      return {
+        success: false,
+        error: error.message || 'Ошибка подключения к базе',
+        details: error,
+      };
     }
-    return { success: true, emptySchema: false };
+
+    return {
+      success: true,
+      emptySchema: true,
+      message: 'Подключение к Supabase успешно, но схема базы ещё не готова.',
+    };
   } catch (err) {
     return { success: false, error: err.message || 'Не удалось связаться с сервером' };
   }

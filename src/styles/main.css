@@ -524,6 +524,22 @@ code {
   to { transform: translateX(0); opacity: 1; }
 }
 
+/* ===================== Spinners & Loading ===================== */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner-inline {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(212, 163, 89, 0.3);
+  border-top-color: var(--accent-gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
 /* ===================== HP Bar (Vitality Vial) ===================== */
 .hp-bar-container {
   width: 100%;

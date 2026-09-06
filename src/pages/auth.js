@@ -112,13 +112,15 @@ export function renderAuth(container) {
                 <button type="button" class="btn btn-primary btn-sm" id="saveCustomDbBtn" style="flex: 1; min-width: 130px;">
                   💾 Подключить
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm" id="testCustomDbBtn" ${isTestingDb ? 'disabled' : ''}>
+                <button type="button" class="btn btn-secondary btn-sm" id="testCustomDbBtn">
                   ⚡ Проверить
                 </button>
                 <button type="button" class="btn btn-ghost btn-sm" id="copySchemaBtn" title="Скопировать SQL для создания таблиц в Supabase">
                   📋 Схема SQL
                 </button>
               </div>
+
+              <div id="customDbStatus" style="margin-top: 0.6rem; font-size: var(--fs-xs); display: none; padding: 0.45rem 0.65rem; border-radius: var(--radius-sm); background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 163, 89, 0.2);"></div>
 
               ${dbConfig.isCustom ? `
                 <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed rgba(212, 163, 89, 0.2); display: flex; justify-content: space-between; align-items: center;">
@@ -157,6 +159,14 @@ export function renderAuth(container) {
   }
 
   function bindEvents() {
+    // Модальное окно SQL Схемы
+    const openSqlModal = () => {
+      const modal = document.getElementById('authSchemaModal');
+      const textarea = document.getElementById('authSqlTextarea');
+      if (textarea) textarea.value = SUPABASE_FULL_SCHEMA_SQL;
+      if (modal) modal.classList.add('open');
+    };
+
     // Переключение между Входом и Регистрацией
     document.getElementById('authToggle')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -216,19 +226,62 @@ export function renderAuth(container) {
         return;
       }
 
+      const saveBtn = document.getElementById('saveCustomDbBtn');
+      const testBtn = document.getElementById('testCustomDbBtn');
+      const statusEl = document.getElementById('customDbStatus');
+
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-inline"></span> Подключение...';
+      }
+      if (testBtn) testBtn.disabled = true;
+
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = 'var(--text-secondary)';
+        statusEl.innerHTML = '<span class="spinner-inline"></span> Проверка подключения к серверу Supabase...';
+      }
+
       try {
-        toast.info('Проверка и сохранение подключения...');
-        const check = await testDatabaseConnection(urlInput, keyInput);
+        const check = await testDatabaseConnection(urlInput, keyInput, {
+          onProgress: (msg) => {
+            if (statusEl) {
+              statusEl.innerHTML = `<span class="spinner-inline"></span> ${msg}`;
+            }
+          },
+        });
+
         if (!check.success) {
           toast.error('Не удалось подключиться: ' + check.error);
+          if (statusEl) {
+            statusEl.style.color = 'var(--accent-danger)';
+            statusEl.innerHTML = `❌ ${check.error}`;
+          }
           return;
         }
 
         await setDatabaseConfig({ isCustom: true, url: urlInput, anonKey: keyInput });
-        toast.success('Подключение к вашей базе данных успешно настроено!');
-        render();
+
+        if (check.emptySchema) {
+          toast.warning('БД подключена! Таблицы ещё не созданы. Открываем окно с SQL-схемой...', 8000);
+          render();
+          openSqlModal();
+        } else {
+          toast.success('Подключение к вашей базе данных успешно настроено!');
+          render();
+        }
       } catch (err) {
         toast.error('Ошибка сохранения БД: ' + (err.message || err));
+        if (statusEl) {
+          statusEl.style.color = 'var(--accent-danger)';
+          statusEl.innerHTML = `❌ ${err.message || err}`;
+        }
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '💾 Подключить';
+        }
+        if (testBtn) testBtn.disabled = false;
       }
     });
 
@@ -242,26 +295,64 @@ export function renderAuth(container) {
         return;
       }
 
-      const btn = document.getElementById('testCustomDbBtn');
-      btn.disabled = true;
-      btn.textContent = '⏳ Проверка...';
+      const saveBtn = document.getElementById('saveCustomDbBtn');
+      const testBtn = document.getElementById('testCustomDbBtn');
+      const statusEl = document.getElementById('customDbStatus');
+
+      if (testBtn) {
+        testBtn.disabled = true;
+        testBtn.innerHTML = '<span class="spinner-inline"></span> Проверка...';
+      }
+      if (saveBtn) saveBtn.disabled = true;
+
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = 'var(--text-secondary)';
+        statusEl.innerHTML = '<span class="spinner-inline"></span> Проверка связи с сервером...';
+      }
 
       try {
-        const res = await testDatabaseConnection(urlInput, keyInput);
+        const res = await testDatabaseConnection(urlInput, keyInput, {
+          onProgress: (msg) => {
+            if (statusEl) {
+              statusEl.innerHTML = `<span class="spinner-inline"></span> ${msg}`;
+            }
+          },
+        });
+
         if (res.success) {
           if (res.emptySchema) {
-            toast.info('Сервер доступен! Таблицы ещё не созданы. Скопируйте схему SQL.');
+            toast.info('Сервер доступен и ключ верен! Но таблицы ещё не созданы. Скопируйте схему SQL.');
+            if (statusEl) {
+              statusEl.style.color = 'var(--accent-gold)';
+              statusEl.innerHTML = '⚠️ Сервер доступен, но таблицы не созданы. Нажмите кнопку <strong>📋 Схема SQL</strong>.';
+            }
           } else {
-            toast.success('Связь с базой данных успешно установлена!');
+            toast.success('Связь с базой данных успешно установлена, все таблицы готовы!');
+            if (statusEl) {
+              statusEl.style.color = 'var(--accent-success)';
+              statusEl.innerHTML = '✅ Связь с базой установлена, все таблицы найдены!';
+            }
           }
         } else {
           toast.error('Ошибка подключения: ' + res.error);
+          if (statusEl) {
+            statusEl.style.color = 'var(--accent-danger)';
+            statusEl.innerHTML = `❌ ${res.error}`;
+          }
         }
       } catch (err) {
         toast.error('Ошибка проверки: ' + err.message);
+        if (statusEl) {
+          statusEl.style.color = 'var(--accent-danger)';
+          statusEl.innerHTML = `❌ ${err.message}`;
+        }
       } finally {
-        btn.disabled = false;
-        btn.textContent = '⚡ Проверить';
+        if (testBtn) {
+          testBtn.disabled = false;
+          testBtn.innerHTML = '⚡ Проверить';
+        }
+        if (saveBtn) saveBtn.disabled = false;
       }
     });
 
@@ -279,14 +370,6 @@ export function renderAuth(container) {
 
     document.getElementById('authCopyInviteBtn')?.addEventListener('click', copyInviteHandler);
     document.getElementById('copyInviteLinkBtn2')?.addEventListener('click', copyInviteHandler);
-
-    // Модальное окно SQL Схемы
-    const openSqlModal = () => {
-      const modal = document.getElementById('authSchemaModal');
-      const textarea = document.getElementById('authSqlTextarea');
-      if (textarea) textarea.value = SUPABASE_FULL_SCHEMA_SQL;
-      if (modal) modal.classList.add('open');
-    };
 
     document.getElementById('copySchemaBtn')?.addEventListener('click', openSqlModal);
 

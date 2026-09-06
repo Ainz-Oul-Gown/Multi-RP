@@ -35,16 +35,23 @@ export function renderAuth(container) {
           </div>
 
           ${dbConfig.isCustom ? `
-            <div style="margin-bottom: 1.25rem; padding: 0.75rem 1rem; border-radius: var(--radius-md); background: rgba(212, 163, 89, 0.12); border: 1px solid var(--accent-gold); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
-              <div>
-                <span class="badge badge-gold" style="margin-bottom: 4px;">🔌 Пользовательская БД</span>
-                <div style="font-size: var(--fs-xs); color: #fff; word-break: break-all;">
-                  Сервер: <strong>${hostname}</strong>
+            <div class="custom-db-banner">
+              <div class="custom-db-banner-top">
+                <div class="custom-db-banner-info">
+                  <span class="badge badge-gold">🔌 Пользовательская БД</span>
+                  <div class="custom-db-banner-host" title="${hostname}">
+                    Сервер: <strong>${hostname}</strong>
+                  </div>
                 </div>
+                <button type="button" class="btn btn-ghost btn-sm" id="authResetDbBtn" title="Вернуться к стандартной базе данных" style="padding: 2px 8px; font-size: 11px; color: var(--text-muted);">
+                  ✕ Сбросить
+                </button>
               </div>
-              <button class="btn btn-secondary btn-sm" id="authCopyInviteBtn" title="Скопировать ссылку для приглашения друга в эту БД">
-                🔗 Пригласить в БД
-              </button>
+              <div class="custom-db-banner-actions">
+                <button class="btn btn-secondary btn-sm" id="authCopyInviteBtn" title="Скопировать ссылку для приглашения друга в эту БД">
+                  🔗 Пригласить в БД
+                </button>
+              </div>
             </div>
           ` : ''}
 
@@ -109,36 +116,39 @@ export function renderAuth(container) {
               </div>
 
               <div class="form-group" style="margin-bottom: 0.75rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <label class="form-label" style="font-size: var(--fs-xs); margin: 0;">Access Token (для авто-развёртывания в 1 клик)</label>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px;">
+                  <label class="form-label" style="font-size: var(--fs-xs); margin: 0;">Access Token (для авто-создания)</label>
                   <a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: var(--accent-gold); text-decoration: underline;">Где взять токен? ↗</a>
                 </div>
                 <input class="input" id="customDbTokenInput" type="password" placeholder="sbp_xxxxxxxxxxxxxxxxxxxx (нужен только для авто-создания)" style="font-size: var(--fs-xs);" />
               </div>
 
-              <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.75rem;">
-                <button type="button" class="btn btn-primary btn-sm" id="autoDeployDbBtn" style="flex: 1; min-width: 170px; background: linear-gradient(135deg, #d4a359 0%, #b8860b 100%); color: #120e0b; font-weight: 700; border: none;" title="Автоматически создаст все таблицы через Supabase API">
+              <!-- Кнопки действий: 1 главная кнопка + сетка 2х2 дополнительных -->
+              <div style="margin-top: 0.75rem;">
+                <button type="button" class="btn btn-primary btn-sm" id="autoDeployDbBtn" style="width: 100%; background: linear-gradient(135deg, #d4a359 0%, #b8860b 100%); color: #120e0b; font-weight: 700; border: none; padding: 0.6rem 1rem;" title="Автоматически создаст все таблицы через Supabase API">
                   🚀 Развернуть в 1 клик
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm" id="saveCustomDbBtn" style="min-width: 95px;">
-                  💾 Подключить
-                </button>
-                <button type="button" class="btn btn-secondary btn-sm" id="testCustomDbBtn">
-                  ⚡ Проверить
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="infoCustomDbBtn" title="Пошаговая инструкция со ссылками">
-                  ℹ️ Инструкция
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="copySchemaBtn" title="Скопировать SQL для ручного создания">
-                  📋 SQL
-                </button>
+                <div class="custom-db-actions-grid">
+                  <button type="button" class="btn btn-secondary btn-sm" id="saveCustomDbBtn" title="Сохранить настройки подключения">
+                    💾 Подключить
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="testCustomDbBtn" title="Проверить связь с базой данных">
+                    ⚡ Проверить
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="infoCustomDbBtn" title="Пошаговая инструкция со ссылками">
+                    ℹ️ Инструкция
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="copySchemaBtn" title="Скопировать SQL для ручного создания">
+                    📋 SQL
+                  </button>
+                </div>
               </div>
 
               <div id="customDbStatus" style="margin-top: 0.6rem; font-size: var(--fs-xs); display: none; padding: 0.45rem 0.65rem; border-radius: var(--radius-sm); background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 163, 89, 0.2);"></div>
 
               ${dbConfig.isCustom ? `
-                <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed rgba(212, 163, 89, 0.2); display: flex; justify-content: space-between; align-items: center;">
-                  <span class="form-hint">Пригласить друга в эту БД:</span>
+                <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed rgba(212, 163, 89, 0.2); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                  <span class="form-hint" style="font-size: var(--fs-xs);">Пригласить друга в эту БД:</span>
                   <button type="button" class="btn btn-secondary btn-sm" id="copyInviteLinkBtn2">
                     🔗 Ссылка для друзей
                   </button>
@@ -295,6 +305,17 @@ export function renderAuth(container) {
 
     document.getElementById('authForm')?.addEventListener('submit', handleSubmit);
     document.getElementById('googleBtn')?.addEventListener('click', handleGoogle);
+
+    // Кнопка быстрого сброса БД из верхнего баннера
+    document.getElementById('authResetDbBtn')?.addEventListener('click', async () => {
+      try {
+        await setDatabaseConfig({ isCustom: false });
+        toast.info('Возврат к стандартной базе данных');
+        render();
+      } catch (err) {
+        toast.error('Ошибка переключения базы: ' + err.message);
+      }
+    });
 
     // Чекбокс «Своя база данных Supabase»
     const checkbox = document.getElementById('customDbCheckbox');

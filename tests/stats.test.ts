@@ -164,3 +164,36 @@ describe("validateAndFixStats with forceSum72", () => {
     expect(sum).toBe(60);
   });
 });
+
+describe("calculateDerivedStats with race bonus fallback", () => {
+  it("automatically applies race AC bonus when raceAcBonus parameter is omitted", () => {
+    const dwarf = calculateDerivedStats({ DEX: 10 }, 'Дварф');
+    expect(dwarf.armor_class).toBe(11); // 10 base + 0 dex + 1 dwarf
+
+    const gnome = calculateDerivedStats({ DEX: 14 }, 'Гном');
+    expect(gnome.armor_class).toBe(13); // 10 base + 2 dex + 1 gnome
+
+    const elf = calculateDerivedStats({ DEX: 14 }, 'Эльф');
+    expect(elf.armor_class).toBe(12); // 10 base + 2 dex + 0 elf
+  });
+
+  it("prioritizes explicit raceAcBonus over default race bonus", () => {
+    const customElf = calculateDerivedStats({ DEX: 10 }, 'Эльф', [], 2);
+    expect(customElf.armor_class).toBe(12); // 10 base + 0 dex + 2 custom
+  });
+});
+
+describe("Migration 033 & Schema Integrity", () => {
+  it("033 migration file contains ai_key_mode and allocate_stat_points", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const migPath = path.resolve(__dirname, "../supabase/migrations/033_add_session_ai_key_mode.sql");
+    expect(fs.existsSync(migPath)).toBe(true);
+
+    const content = fs.readFileSync(migPath, "utf8");
+    expect(content).toContain("ai_key_mode");
+    expect(content).toContain("allocate_stat_points");
+    expect(content).toContain("NOTIFY pgrst, 'reload schema'");
+  });
+});
+

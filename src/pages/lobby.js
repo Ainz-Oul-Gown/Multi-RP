@@ -2653,16 +2653,19 @@ export function renderLobby(container, user) {
       const stats = {};
       STATS.forEach((s) => { stats[s] = parseInt(document.getElementById(`edit_stat_${s}`)?.value) || 10; });
 
+      const race = document.getElementById('editCharRace').value;
+      const raceAcBonus = Number(document.getElementById('editCharRaceAcBonus')?.value || getRaceAcBonus(race));
       const requestPayload = {
         name: document.getElementById('editCharName').value,
-        race: document.getElementById('editCharRace').value,
+        race,
         class: document.getElementById('editCharClass').value,
         appearance: document.getElementById('editCharAppearance').value,
         bio: document.getElementById('editCharBio').value,
         stats,
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
-        race_ac_bonus: Number(document.getElementById('editCharRaceAcBonus')?.value || getRaceAcBonus(document.getElementById('editCharRace').value)),
+        race_ac_bonus: raceAcBonus,
+        ...calculateDerivedStats(stats, race, [], raceAcBonus),
       };
       console.log('[edit-character-card] request:', { id, ...requestPayload });
 

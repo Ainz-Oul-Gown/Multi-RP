@@ -2019,23 +2019,31 @@ export async function renderGame(container, sessionId, user) {
 
                 console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
 
+                const cardRace = card.race || 'Человек';
+                const cardRaceAcBonus = Number(card.race_ac_bonus ?? getRaceAcBonus(cardRace));
                 const spawnTarget = getSelectedSpawnTarget();
                 currentPlayer = await createPlayer({
                   session_id: sessionId,
                   user_id: user.id,
                   name: card.name,
-                  race: card.race,
+                  race: cardRace,
                   class: card.class,
                   appearance: card.appearance,
                   bio: card.bio,
                   personality: card.personality || {},
-                  power_level: card.power_level,
+                  power_level: card.power_level || 10,
+                  level: 1,
+                  xp: 0,
                   stats: card.stats || {},
-                  hp: calculateHpFromStats(card.stats),
-                  max_hp: calculateHpFromStats(card.stats),
-                  money: card.money,
+                  stat_points: 0,
+                  hp: card.hp || calculateHpFromStats(card.stats),
+                  max_hp: card.max_hp || calculateHpFromStats(card.stats),
+                  mp: 50,
+                  max_mp: 50,
+                  money: card.money || 50,
                   current_zone: spawnTarget.zone,
-                  ...calculateDerivedStats(card.stats, card.race || 'Человек', [], getRaceAcBonus(card.race)),
+                  race_ac_bonus: cardRaceAcBonus,
+                  ...calculateDerivedStats(card.stats, cardRace, [], cardRaceAcBonus),
                 });
 
                 console.log('[character-card] player created:', currentPlayer.id);
@@ -2085,25 +2093,32 @@ export async function renderGame(container, sessionId, user) {
         stats[stat] = parseInt(document.getElementById(`stat_${stat}`).value) || 10;
       });
 
+      const charRace = document.getElementById('charRace').value || 'Человек';
+      const raceAcBonus = getRaceAcBonus(charRace);
+      const derived = calculateDerivedStats(stats, charRace, [], raceAcBonus);
       const spawnTarget = getSelectedSpawnTarget();
       const requestPayload = {
         session_id: sessionId,
         user_id: user.id,
         name: document.getElementById('charName').value,
-        race: document.getElementById('charRace').value,
+        race: charRace,
         class: document.getElementById('charClass').value,
         appearance: document.getElementById('charAppearance').value,
         bio: document.getElementById('charBio').value,
         personality: { ideals: [], bonds: [], flaws: [] },
         power_level: 10,
+        level: 1,
+        xp: 0,
         stats,
+        stat_points: 0,
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
+        mp: 50,
+        max_mp: 50,
         money: 50,
         current_zone: spawnTarget.zone,
-        initiative: calculateInitiative(stats),
-        armor_class: calculateArmorClass(stats, document.getElementById('charRace').value || 'Человек', []),
-        saving_throws: calculateSavingThrows(stats, 2),
+        race_ac_bonus: raceAcBonus,
+        ...derived,
       };
       console.log('[create-character] request:', requestPayload);
 

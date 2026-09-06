@@ -249,22 +249,61 @@ export async function createSession(session) {
     world_name: worldName,
     ...session,
   };
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('sessions')
     .insert(sessionData)
     .select()
     .single();
+
+  // Graceful fallback if database schema cache does not yet have ai_key_mode
+  if (error && (
+    error.message?.includes('ai_key_mode') ||
+    error.details?.includes('ai_key_mode') ||
+    error.hint?.includes('ai_key_mode') ||
+    error.code === 'PGRST204'
+  )) {
+    console.warn('[createSession] Retrying insert without ai_key_mode:', error.message);
+    const { ai_key_mode, ...fallbackData } = sessionData;
+    const retry = await supabase
+      .from('sessions')
+      .insert(fallbackData)
+      .select()
+      .single();
+    if (!retry.error) return retry.data;
+  }
+
   if (error) throw error;
   return data;
 }
 
 export async function updateSession(id, updates) {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('sessions')
     .update(updates)
     .eq('id', id)
     .select()
     .single();
+
+  if (error && (
+    error.message?.includes('ai_key_mode') ||
+    error.details?.includes('ai_key_mode') ||
+    error.hint?.includes('ai_key_mode') ||
+    error.code === 'PGRST204'
+  )) {
+    console.warn('[updateSession] Retrying update without ai_key_mode:', error.message);
+    const { ai_key_mode, ...fallbackUpdates } = updates;
+    if (Object.keys(fallbackUpdates).length === 0) {
+      return { id, ...updates };
+    }
+    const retry = await supabase
+      .from('sessions')
+      .update(fallbackUpdates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (!retry.error) return retry.data;
+  }
+
   if (error) throw error;
   return data;
 }
@@ -278,9 +317,9 @@ export async function deleteSession(id) {
     if (rpcData && rpcData.success === false && rpcData.message) {
       throw new Error(rpcData.message);
     }
-  } catch (err) {
-    if (err.message && !err.message.includes('Could not find')) {
-      throw err;
+  } catch (rpcCatchErr) {
+    if (rpcCatchErr?.message && !rpcCatchErr.message.includes('function delete_session') && !rpcCatchErr.message.includes('not found')) {
+      throw rpcCatchErr;
     }
   }
 
@@ -315,11 +354,27 @@ export async function getPlayer(id) {
 }
 
 export async function createPlayer(player) {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('players')
     .insert(player)
     .select()
     .single();
+
+  if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+    console.warn('[createPlayer] Error inserting player, attempting fallback:', error.message);
+    const safePlayer = { ...player };
+    const missingColMatch = error.message?.match(/column ['"]?([a-zA-Z0-9_]+)['"]?/i);
+    if (missingColMatch && missingColMatch[1] && safePlayer[missingColMatch[1]] !== undefined) {
+      delete safePlayer[missingColMatch[1]];
+      const retry = await supabase
+        .from('players')
+        .insert(safePlayer)
+        .select()
+        .single();
+      if (!retry.error) return retry.data;
+    }
+  }
+
   if (error) throw error;
   return data;
 }
@@ -621,11 +676,27 @@ export async function getCharacterCard(id) {
 }
 
 export async function createCharacterCard(card) {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('character_cards')
     .insert(card)
     .select()
     .single();
+
+  if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+    console.warn('[createCharacterCard] Error inserting card, attempting fallback:', error.message);
+    const safeCard = { ...card };
+    const missingColMatch = error.message?.match(/column ['"]?([a-zA-Z0-9_]+)['"]?/i);
+    if (missingColMatch && missingColMatch[1] && safeCard[missingColMatch[1]] !== undefined) {
+      delete safeCard[missingColMatch[1]];
+      const retry = await supabase
+        .from('character_cards')
+        .insert(safeCard)
+        .select()
+        .single();
+      if (!retry.error) return retry.data;
+    }
+  }
+
   if (error) throw error;
   return data;
 }

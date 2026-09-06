@@ -155,11 +155,23 @@ export function validateAndFixStats(raw: any, options: { forceSum72?: boolean } 
   return result;
 }
 
+export function getRaceAcBonus(race: string = 'Человек'): number {
+  const map: Record<string, number> = {
+    'Эльф': 0,
+    'Дварф': 1,
+    'Гном': 1,
+    'Полурослик': 1,
+    'Тифлинг': 0,
+    'Драконорожденный': 0,
+  };
+  return Number(map[race] ?? 0);
+}
+
 export function calculateDerivedStats(stats: any = {}, race: string = 'Человек', equipment: any[] = [], raceAcBonus?: number) {
   const safeStats = validateAndFixStats(stats);
   const initiative = Math.floor(((safeStats.DEX || 10) - 10) / 2);
   const dexMod = Math.floor(((safeStats.DEX || 10) - 10) / 2);
-  const raceBonus = Number(raceAcBonus ?? 0);
+  const raceBonus = Number(raceAcBonus !== undefined && raceAcBonus !== null ? raceAcBonus : getRaceAcBonus(race));
   const equipmentBonus = Array.isArray(equipment)
     ? equipment.reduce((sum: number, item: any) => sum + (Number(item?.ac_bonus) || 0), 0)
     : 0;

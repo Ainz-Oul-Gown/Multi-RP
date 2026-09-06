@@ -161,7 +161,7 @@ export function calculateDerivedStats(stats = {}, race = 'Человек', equip
   const safeStats = validateAndFixStats(stats);
   const initiative = Math.floor(((safeStats.DEX || 10) - 10) / 2);
   const dexMod = Math.floor(((safeStats.DEX || 10) - 10) / 2);
-  const raceBonus = Number(raceAcBonus ?? 0);
+  const raceBonus = Number(raceAcBonus !== undefined && raceAcBonus !== null ? raceAcBonus : getRaceAcBonus(race));
   const equipmentBonus = Array.isArray(equipment)
     ? equipment.reduce((sum, item) => sum + (Number(item.ac_bonus) || 0), 0)
     : 0;

@@ -54,6 +54,7 @@ export async function renderGame(container, sessionId, user) {
   let unsubPlayers = null;
   let unsubTurnQueue = null;
   let realtimeSubscribed = false;
+  let isInitialRender = true;
   const instanceId = Date.now().toString(36); // unique per render call
 
   // ============================================
@@ -318,6 +319,10 @@ export async function renderGame(container, sessionId, user) {
   }
 
   function render() {
+    const chatEl = document.getElementById('gameChat');
+    const wasNearBottom = chatEl ? (chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 80) : true;
+    const prevScrollTop = chatEl ? chatEl.scrollTop : null;
+
     const safeMaxHp = Math.max(1, currentPlayer?.max_hp || 1);
     const hpPercent = currentPlayer
       ? Math.max(0, Math.min(100, (currentPlayer.hp / safeMaxHp) * 100))
@@ -487,7 +492,17 @@ export async function renderGame(container, sessionId, user) {
     `;
 
     bindEvents();
-    scrollToBottom();
+    if (isInitialRender) {
+      scrollToBottom();
+      isInitialRender = false;
+    } else if (wasNearBottom) {
+      scrollToBottom();
+    } else if (prevScrollTop !== null) {
+      const newChat = document.getElementById('gameChat');
+      if (newChat) {
+        newChat.scrollTop = prevScrollTop;
+      }
+    }
   }
 
   function renderMessage(msg) {
@@ -1545,9 +1560,23 @@ export async function renderGame(container, sessionId, user) {
     }
   }
 
+  const PANEL_IDS = ['story', 'profile', 'inventory', 'npc', 'settings'];
+
   async function togglePanel(panel) {
     activePanel = activePanel === panel ? null : panel;
-    render();
+
+    const overlay = document.getElementById('panelOverlay');
+    if (overlay) {
+      overlay.classList.toggle('open', !!activePanel);
+    }
+
+    PANEL_IDS.forEach((id) => {
+      const panelEl = document.getElementById(id + 'Panel');
+      if (panelEl) {
+        panelEl.classList.toggle('open', activePanel === id);
+      }
+    });
+
     if (activePanel === 'inventory') {
       await refreshInventory();
     } else if (activePanel === 'npc') {

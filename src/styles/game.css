@@ -753,6 +753,60 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
+/* DM Typing Indicator Animation */
+.typing-indicator-bubble {
+  animation: fadeIn 0.25s ease-out;
+}
+
+.typing-indicator-bubble .message-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.1rem !important;
+  min-height: 40px;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+}
+
+.typing-dots span {
+  width: 7px;
+  height: 7px;
+  background-color: var(--accent-gold-bright, #e5b869);
+  border-radius: 50%;
+  display: inline-block;
+  opacity: 0.4;
+  animation: dmDotPulse 1.4s infinite ease-in-out both;
+}
+
+.typing-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0s;
+}
+
+@keyframes dmDotPulse {
+  0%, 80%, 100% {
+    transform: scale(0.65);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(229, 184, 105, 0.7);
+  }
+}
+
 /* System message (Слухи таверны) */
 .message-system {
   justify-content: center;

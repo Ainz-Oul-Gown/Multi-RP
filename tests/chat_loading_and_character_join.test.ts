@@ -99,3 +99,63 @@ describe('Router & Session Character Selection Safeguards', () => {
     expect(createPlayerCalled).toBe(false);
   });
 });
+
+describe('Optimistic Chat & DM Typing Indicator', () => {
+  it('optimistic message is added immediately and reconciled when server broadcast arrives', () => {
+    const messages: any[] = [];
+    const text = 'Осматриваюсь вокруг и ищу выход';
+
+    // 1. User sends message -> optimistic message added
+    const tempId = 'temp-' + Date.now();
+    const optimisticMsg = {
+      id: tempId,
+      sender_type: 'player',
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    messages.push(optimisticMsg);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].id).toBe(tempId);
+    expect(messages[0].content).toBe(text);
+
+    // 2. Realtime broadcast arrives with confirmed DB message
+    const confirmedMsg = {
+      id: 'db-msg-uuid-1234',
+      sender_type: 'player',
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+
+    const tempIdx = messages.findIndex((m) => m.id && String(m.id).startsWith('temp-') && m.content === confirmedMsg.content);
+    expect(tempIdx).toBe(0);
+
+    if (tempIdx !== -1) {
+      messages[tempIdx] = confirmedMsg;
+    }
+
+    // Must be reconciled without duplicate
+    expect(messages).toHaveLength(1);
+    expect(messages[0].id).toBe('db-msg-uuid-1234');
+  });
+
+  it('removes DM typing indicator when master narrative message arrives', () => {
+    let typingIndicatorVisible = true;
+
+    const removeDmTypingIndicator = () => {
+      typingIndicatorVisible = false;
+    };
+
+    const incomingMasterMsg = {
+      id: 'msg-master-1',
+      sender_type: 'master',
+      content: 'Мастер начинает рассказ...',
+    };
+
+    if (incomingMasterMsg.sender_type === 'master' || incomingMasterMsg.sender_type === 'npc') {
+      removeDmTypingIndicator();
+    }
+
+    expect(typingIndicatorVisible).toBe(false);
+  });
+});

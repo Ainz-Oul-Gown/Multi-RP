@@ -231,6 +231,26 @@ export async function renderGame(container, sessionId, user) {
       if (payload.eventType === 'INSERT') {
         const msg = payload.new;
         if (!msg) return;
+
+        // Если пришло сообщение от Мастера или NPC, сразу скрываем индикатор генерации
+        if (msg.sender_type === 'master' || msg.sender_type === 'npc') {
+          removeDmTypingIndicator();
+        }
+
+        // Если это сообщение игрока, проверяем, не было ли оно уже отображено оптимистично
+        if (msg.sender_type === 'player') {
+          const tempIdx = messages.findIndex((m) => m.id && String(m.id).startsWith('temp-') && m.content === msg.content);
+          if (tempIdx !== -1) {
+            const oldTempId = messages[tempIdx].id;
+            messages[tempIdx] = msg;
+            const tempEl = document.querySelector(`[data-message-id="${oldTempId}"]`);
+            if (tempEl) {
+              tempEl.setAttribute('data-message-id', msg.id);
+            }
+            return;
+          }
+        }
+
         // Защита от дублирования сообщений в массиве истории
         if (msg.id && messages.some((m) => m.id === msg.id)) {
           return;
@@ -454,6 +474,20 @@ export async function renderGame(container, sessionId, user) {
                 <p>История пока пуста. Начните действие!</p>
               </div>
             `}
+            ${isSubmitting ? `
+              <div id="dmTypingIndicator" class="message message-master typing-indicator-bubble">
+                <div class="message-avatar">🎭</div>
+                <div class="message-body">
+                  <div class="message-text">
+                    <div class="typing-dots">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
           </div>
         </main>
 
@@ -1716,6 +1750,23 @@ export async function renderGame(container, sessionId, user) {
     input.style.height = 'auto';
     updateInputState();
 
+    // 1. Мгновенно отображаем сообщение игрока в чате
+    const tempMsgId = 'temp-' + Date.now();
+    const optimisticPlayerMsg = {
+      id: tempMsgId,
+      session_id: sessionId,
+      sender_type: 'player',
+      sender_id: user?.id || currentPlayer?.id,
+      sender_name: currentPlayer?.name || 'Герой',
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    messages.push(optimisticPlayerMsg);
+    appendMessage(optimisticPlayerMsg);
+
+    // 2. Сразу запускаем анимацию генерации ответа в облачке ДМ
+    showDmTypingIndicator();
+
     try {
       const result = await submitAction(sessionId, currentPlayer.id, sanitizeAIText(text));
 
@@ -1857,8 +1908,44 @@ export async function renderGame(container, sessionId, user) {
         toast.error('Ошибка обработки: ' + err.message);
       }
     } finally {
+      removeDmTypingIndicator();
       isSubmitting = false;
       updateInputState();
+    }
+  }
+
+  function showDmTypingIndicator() {
+    const chatMessages = document.getElementById('chatMessages');
+    if (!chatMessages) return;
+    if (document.getElementById('dmTypingIndicator')) return;
+
+    // Remove empty state if present
+    const empty = chatMessages.querySelector('.chat-empty');
+    if (empty) empty.remove();
+
+    const indicator = document.createElement('div');
+    indicator.id = 'dmTypingIndicator';
+    indicator.className = 'message message-master typing-indicator-bubble';
+    indicator.innerHTML = `
+      <div class="message-avatar">🎭</div>
+      <div class="message-body">
+        <div class="message-text">
+          <div class="typing-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </div>
+    `;
+    chatMessages.appendChild(indicator);
+    scrollToBottom();
+  }
+
+  function removeDmTypingIndicator() {
+    const indicator = document.getElementById('dmTypingIndicator');
+    if (indicator) {
+      indicator.remove();
     }
   }
 
@@ -1874,6 +1961,10 @@ export async function renderGame(container, sessionId, user) {
       return;
     }
 
+    if (msg.sender_type === 'master' || msg.sender_type === 'npc') {
+      removeDmTypingIndicator();
+    }
+
     // Remove empty state if present
     const empty = chatMessages.querySelector('.chat-empty');
     if (empty) empty.remove();
@@ -1883,7 +1974,14 @@ export async function renderGame(container, sessionId, user) {
 
     const div = document.createElement('div');
     div.innerHTML = html;
-    chatMessages.appendChild(div.firstElementChild);
+    const newEl = div.firstElementChild;
+
+    const typingIndicator = document.getElementById('dmTypingIndicator');
+    if (typingIndicator && typingIndicator.parentNode === chatMessages) {
+      chatMessages.insertBefore(newEl, typingIndicator);
+    } else {
+      chatMessages.appendChild(newEl);
+    }
     scrollToBottom();
   }
 
@@ -2388,6 +2486,7 @@ export async function renderGame(container, sessionId, user) {
   // Cleanup on unmount
   function cleanup() {
     isCancelled = true;
+    removeDmTypingIndicator();
     if (unsubMessages) unsubMessages();
     if (unsubPlayers) unsubPlayers();
     if (unsubTurnQueue) {

@@ -90,7 +90,7 @@ img {
 
 .page-centered {
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   padding: var(--space-xl);
 }
 

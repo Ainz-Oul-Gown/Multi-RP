@@ -26,7 +26,7 @@ export function renderAuth(container) {
     }
 
     container.innerHTML = `
-      <div class="page page-centered" style="padding: 1.5rem 1rem;">
+      <div class="page page-centered auth-page">
         <div class="auth-container" style="max-width: 480px;">
           <div class="auth-header">
             <div class="auth-logo">🕯️</div>

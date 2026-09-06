@@ -94,7 +94,8 @@ export function getSpecialAttacksCount(tier = 1) {
  * Get base attacks count by level (2 per 10 levels)
  */
 export function getBaseAttacksCount(level = 1) {
-  return Math.max(2, Math.min(10, 2 + Math.floor((level - 1) / 10)));
+  const lvl = Math.max(1, Number(level) || 1);
+  return Math.max(1, Math.min(10, 1 + Math.floor((lvl - 1) / 10)));
 }
 
 /**
@@ -516,8 +517,8 @@ LEVEL (1-100) = ТЕКУЩАЯ СИЛА (насколько раскрыт по�
 - half_on_save: можно спастись наполовину
 - save_ability: способность спасброска (DEX/CON/WIS)
 
-Спецатаки (special_attacks): 1 на каждый Tier (Tier 5 = 5 спецатак)
-Базовые атаки (base_attacks): 2 на уровни 1-10, +1 за каждые 10 уровней
+Спецатаки (special_attacks): 1 на каждый Tier (Tier 1 = 1 спецатака, Tier 4 = 4, Tier 5 = 5 спецатак)
+Базовые атаки (base_attacks): 1 на каждые 10 уровней (ур. 1-10: 1 атака, ур. 11-20: 2, ур. 21-30: 3, с 31 по 40: 4 базовые атаки)
 
 Типы урона:
 - slashing (режущий), piercing (колющий), bludgeoning (дробящий) — физические

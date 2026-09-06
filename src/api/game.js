@@ -889,8 +889,8 @@ export function getWorldSchema() {
           armor_class: '10 + модификатор DEX + расовый бонус',
           initiative: 'Модификатор DEX = floor((DEX - 10) / 2)',
           hp: 'CON × уровень × 1.5 (существа слабее игрока)',
-          special_attacks: '1 на каждый Tier (Tier 5 = 5 спецатак)',
-          base_attacks: '2 на уровни 1-10, +1 за каждые 10 уровней',
+          special_attacks: '1 на каждый Tier (например Tier 1 = 1 спецатака, Tier 4 = 4, Tier 5 = 5 спецатак)',
+          base_attacks: '1 базовая атака каждые 10 уровней (ур. 1-10: 1 атака, ур. 11-20: 2, ур. 21-30: 3, с 31 по 40: 4 базовые атаки)',
         },
       },
       damage_types: {

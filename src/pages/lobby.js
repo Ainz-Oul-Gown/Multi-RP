@@ -374,11 +374,12 @@ export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдиза�
      • \`habits[]\` / \`catchphrases[]\` / \`status_tags[]\`: Привычки, коронные фразы и социальные теги.
    - **Боевые параметры (D&D 5e):**
      • \`stats\`: STR, DEX, CON, INT, WIS, CHA (значения от 1 до 30; 10 — средний человек).
-     • \`tier\` (1-5): Врождённый потенциал опасности (Tier 1 = мирный/волк, Tier 5 = архимаг/дракон).
+     • \`tier\` (1-5): Врождённый потенциал опасности (задаёт количество специальных атак: Tier 1 = 1 спецатака, Tier 2 = 2, Tier 3 = 3, Tier 4 = 4, Tier 5 = 5 спецатак).
      • \`level\`: Конкретный уровень существа (1-100).
      • \`level_min\` / \`level_max\`: Диапазон уровней для авто-масштабирования сложности под отряд игроков.
      • \`hit_dice\`: Кость здоровья (6, 8, 10 или 12).
-     • \`base_attacks[]\` / \`special_attacks[]\`: Атаки существа с указанием \`damage_type\` и \`damage_dice\`. Поддерживают периодический урон (\`is_dot: true\`, \`dot_duration\`).
+     • \`base_attacks[]\`: Базовые атаки существа. Количество рассчитывается строго по формуле: 1 атака на каждые 10 уровней (с 1 по 10 уровень — 1 базовая атака, с 11 по 20 — 2, с 21 по 30 — 3, с 31 по 40 — 4 базовые атаки и т.д.).
+     • \`special_attacks[]\`: Специальные атаки и заклинания. Количество рассчитывается строго по формуле: ровно 1 спецатака на каждый Tier существа (на 1 тире — 1 спец. атака, на 2 тире — 2, на 3 тире — 3, на 4 тире — 4 спец. атаки, на 5 тире — 5). Поддерживают периодический урон (\`is_dot: true\`, \`dot_duration\`).
      • Допустимые \`damage_type\`: "slashing", "piercing", "bludgeoning", "fire", "cold", "lightning", "thunder", "acid", "poison", "necrotic", "radiant", "psychic", "force".
 
 5. **ФАЙЛЫ ЛОРА (lore_files):**
@@ -1200,10 +1201,11 @@ export function renderLobby(container, user) {
               <li style="margin-left: 1rem;"><code>habits[]</code>, <code>catchphrases[]</code>, <code>status_tags[]</code> — привычки, коронные фразы и социальные теги.</li>
               <li><strong>Боевые параметры (D&amp;D 5e):</strong></li>
               <li style="margin-left: 1rem;"><code>stats</code> — STR, DEX, CON, INT, WIS, CHA (1..30).</li>
-              <li style="margin-left: 1rem;"><code>tier</code> (1-5) — <strong>врождённый потенциал</strong> (1 = мирный/волк, 5 = архимаг/дракон; задаёт количество спецатак).</li>
-              <li style="margin-left: 1rem;"><code>level</code>, <code>level_min</code>, <code>level_max</code> — текущий уровень и рамки для масштабирования энкаунтеров.</li>
+              <li style="margin-left: 1rem;"><code>tier</code> (1-5) — <strong>врождённый потенциал</strong> (задаёт количество спецатак: 1 тир = 1 спец. атака, 2 тир = 2, 3 тир = 3, 4 тир = 4, 5 тир = 5 спец. атак).</li>
+              <li style="margin-left: 1rem;"><code>level</code>, <code>level_min</code>, <code>level_max</code> — текущий уровень (1-100) и рамки масштабирования энкаунтеров.</li>
               <li style="margin-left: 1rem;"><code>hit_dice</code> — кость хитов (6, 8, 10, 12).</li>
-              <li style="margin-left: 1rem;"><code>base_attacks[]</code> и <code>special_attacks[]</code> — список ударов и способностей с типами урона и DoT (периодический урон).</li>
+              <li style="margin-left: 1rem;"><code>base_attacks[]</code> — <strong>базовые атаки</strong> (правило: +1 базовая атака каждые 10 уровней: с 1 по 10 ур. = 1 атака, с 11 по 20 = 2, с 21 по 30 = 3, с 31 по 40 ур. = 4 базовые атаки).</li>
+              <li style="margin-left: 1rem;"><code>special_attacks[]</code> — <strong>специальные атаки и способности</strong> (правило: ровно 1 спецатака на каждый тир: Tier 1 = 1 спецатака, Tier 4 = 4 спецатаки, Tier 5 = 5 спецатак). Поддерживают периодический урон (DoT: <code>is_dot: true</code>, <code>dot_duration</code>).</li>
               <li style="margin-left: 1rem;"><code>damage_type</code>: slashing, piercing, bludgeoning, fire, cold, lightning, thunder, acid, poison, necrotic, radiant, psychic, force.</li>
             </ul>
           </div>

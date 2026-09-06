@@ -1466,6 +1466,7 @@ serve(async (req) => {
           turn_status: systemTruth.turn_status,
           hp_status: systemTruth.player_truths[targetPlayerId]?.hp_status,
           inventory_delta: systemTruth.player_truths[targetPlayerId]?.inventory_delta,
+          game_time: systemTruth.environment.time,
         },
       });
     }
@@ -1479,6 +1480,7 @@ serve(async (req) => {
           is_global: true,
           initiator_player_id: player.id,
           initiator_zone: player.current_zone || null,
+          game_time: systemTruth.environment.time,
         },
       });
     }

@@ -629,6 +629,17 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.remove_session_player(UUID, UUID) TO authenticated, anon, service_role;
 
--- 7. ОБНОВЛЕНИЕ КЭША POSTGREST
+-- 7. REALTIME ПУБЛИКАЦИИ
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'sessions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE sessions;
+  END IF;
+END $$;
+
+-- 8. ОБНОВЛЕНИЕ КЭША POSTGREST
 NOTIFY pgrst, 'reload schema';
 `;

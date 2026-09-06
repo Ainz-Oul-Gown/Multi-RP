@@ -515,32 +515,78 @@ export function onAuthStateChange(callback) {
 }
 
 // Realtime subscription helper
-export function subscribeToTable(table, filter, callback) {
+export function subscribeToTable(table, filter, callback, onStatus) {
   const cleanFilter = filter ? filter.replace(/[^a-zA-Z0-9_-]/g, '_') : 'all';
   const channelId = `realtime:${table}:${cleanFilter}:${Math.random().toString(36).slice(2, 7)}`;
 
   const channel = supabase
     .channel(channelId)
-    .on('postgres_changes', { event: '*', schema: 'public', table, filter }, callback)
-    .subscribe();
+    .on('postgres_changes', { event: '*', schema: 'public', table, filter }, (payload) => {
+      try {
+        callback(payload);
+      } catch (err) {
+        console.error(`[Realtime] Error in ${table} handler:`, err);
+      }
+    })
+    .subscribe((status, err) => {
+      if (status === 'SUBSCRIBED') {
+        console.log(`[Realtime] ✅ Subscribed: ${table} (${cleanFilter})`);
+      } else if (status === 'CHANNEL_ERROR') {
+        console.warn(`[Realtime] ⚠️ Channel error on ${table} (${cleanFilter}):`, err);
+      } else if (status === 'TIMED_OUT') {
+        console.warn(`[Realtime] ⏱️ Timeout on ${table} (${cleanFilter})`);
+      } else if (status === 'CLOSED') {
+        console.log(`[Realtime] 🔌 Channel closed for ${table} (${cleanFilter})`);
+      }
+      if (onStatus) onStatus(status, err);
+    });
 
-  return () => supabase.removeChannel(channel);
+  return () => {
+    try {
+      supabase.removeChannel(channel);
+    } catch (e) {
+      console.warn(`[Realtime] Error removing channel ${channelId}:`, e);
+    }
+  };
 }
 
 // Subscribe to session chat messages
-export function subscribeToSessionMessages(sessionId, callback) {
+export function subscribeToSessionMessages(sessionId, callback, onStatus) {
   return subscribeToTable(
     'messages',
     `session_id=eq.${sessionId}`,
-    (payload) => callback(payload)
+    callback,
+    onStatus
   );
 }
 
-// Subscribe to session player updates (turn tracking)
-export function subscribeToSessionPlayers(sessionId, callback) {
+// Subscribe to session player updates (turn tracking, HP, stats)
+export function subscribeToSessionPlayers(sessionId, callback, onStatus) {
   return subscribeToTable(
     'players',
     `session_id=eq.${sessionId}`,
-    (payload) => callback(payload)
+    callback,
+    onStatus
   );
 }
+
+// Subscribe to session row updates (time, location, party groups, round)
+export function subscribeToSession(sessionId, callback, onStatus) {
+  return subscribeToTable(
+    'sessions',
+    `id=eq.${sessionId}`,
+    callback,
+    onStatus
+  );
+}
+
+// Subscribe to session turn queue updates
+export function subscribeToSessionTurnQueue(sessionId, callback, onStatus) {
+  return subscribeToTable(
+    'turn_queue',
+    `session_id=eq.${sessionId}`,
+    callback,
+    onStatus
+  );
+}
+

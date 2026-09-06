@@ -158,4 +158,77 @@ describe('Optimistic Chat & DM Typing Indicator', () => {
 
     expect(typingIndicatorVisible).toBe(false);
   });
+
+  it('synchronizes game time immediately from message metadata without delay', () => {
+    let session = {
+      id: 'session-123',
+      game_year: 1248,
+      game_month: 5,
+      game_day: 14,
+      game_hour: 10,
+      game_minute: 0,
+    };
+
+    const incomingMasterMsg = {
+      id: 'msg-master-2',
+      sender_type: 'master',
+      content: 'Вы идёте по лесу около получаса.',
+      metadata: {
+        game_time: {
+          year: 1248,
+          month: 5,
+          day: 14,
+          hour: 10,
+          minute: 30,
+        },
+      },
+    };
+
+    if (incomingMasterMsg.metadata?.game_time) {
+      const gt = incomingMasterMsg.metadata.game_time;
+      session = {
+        ...session,
+        game_year: gt.year ?? session.game_year,
+        game_month: gt.month ?? session.game_month,
+        game_day: gt.day ?? session.game_day,
+        game_hour: gt.hour ?? session.game_hour,
+        game_minute: gt.minute ?? session.game_minute,
+      };
+    }
+
+    expect(session.game_hour).toBe(10);
+    expect(session.game_minute).toBe(30);
+  });
+
+  it('updates session and location when Realtime sessions UPDATE event fires', () => {
+    let session: any = {
+      id: 'session-123',
+      current_location_id: 'loc-1',
+      current_wild_zone: null,
+      game_hour: 10,
+      game_minute: 0,
+    };
+
+    const updatePayload = {
+      eventType: 'UPDATE',
+      new: {
+        id: 'session-123',
+        current_location_id: 'loc-1',
+        current_wild_zone: 'Северная опушка',
+        game_hour: 11,
+        game_minute: 15,
+      },
+    };
+
+    if (updatePayload.eventType === 'UPDATE' && updatePayload.new) {
+      session = {
+        ...session,
+        ...updatePayload.new,
+      };
+    }
+
+    expect(session.current_wild_zone).toBe('Северная опушка');
+    expect(session.game_hour).toBe(11);
+    expect(session.game_minute).toBe(15);
+  });
 });

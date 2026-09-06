@@ -1,5 +1,12 @@
 // src/pages/game.js — Игровой экран (Чат + Инвентарь + Профиль)
-import { supabase, subscribeToSessionMessages, subscribeToSessionPlayers, invokeFunction } from '../api/supabase.js';
+import {
+  supabase,
+  subscribeToSessionMessages,
+  subscribeToSessionPlayers,
+  subscribeToSession,
+  subscribeToSessionTurnQueue,
+  invokeFunction
+} from '../api/supabase.js';
 import {
   getSession, getSessionPlayers, getPlayer, getPlayerInventory,
   getSessionMessages, submitAction, updatePlayer, addInventoryItem,
@@ -77,6 +84,7 @@ export async function renderGame(container, sessionId, user) {
   let unsubMessages = null;
   let unsubPlayers = null;
   let unsubTurnQueue = null;
+  let unsubSession = null;
   let realtimeSubscribed = false;
   let isInitialRender = true;
   let isCancelled = false;
@@ -237,6 +245,28 @@ export async function renderGame(container, sessionId, user) {
           removeDmTypingIndicator();
         }
 
+        // Мгновенная синхронизация игрового времени из метаданных входящего сообщения
+        if (msg.metadata?.game_time) {
+          const gt = msg.metadata.game_time;
+          session = {
+            ...session,
+            game_year: gt.year ?? session?.game_year,
+            game_month: gt.month ?? session?.game_month,
+            game_day: gt.day ?? session?.game_day,
+            game_hour: gt.hour ?? session?.game_hour,
+            game_minute: gt.minute ?? session?.game_minute,
+          };
+          updatePlayerUI();
+        } else if (msg.sender_type === 'master' || msg.sender_type === 'system') {
+          // Фоновое обновление сессии на случай изменений в БД
+          getSession(sessionId).then((fresh) => {
+            if (fresh) {
+              session = fresh;
+              updatePlayerUI();
+            }
+          }).catch(() => {});
+        }
+
         // Если это сообщение игрока, проверяем, не было ли оно уже отображено оптимистично
         if (msg.sender_type === 'player') {
           const tempIdx = messages.findIndex((m) => m.id && String(m.id).startsWith('temp-') && m.content === msg.content);
@@ -302,22 +332,35 @@ export async function renderGame(container, sessionId, user) {
       }
     });
 
-    // Подписка на очередь ходов — уникальное имя канала во избежание конфликтов
-    unsubTurnQueue = supabase
-      .channel(`turn_queue:${sessionId}:${instanceId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'turn_queue',
-          filter: `session_id=eq.${sessionId}`,
-        },
-        (payload) => {
-          handleTurnUpdate(payload);
+    // Подписка на изменение параметров сессии (время, календарь, локация, отряды)
+    unsubSession = subscribeToSession(sessionId, async (payload) => {
+      if (payload.eventType === 'UPDATE' && payload.new) {
+        const updated = payload.new;
+        const locChanged = updated.current_location_id !== session?.current_location_id ||
+                           updated.current_wild_zone !== session?.current_wild_zone;
+
+        session = {
+          ...session,
+          ...updated,
+        };
+
+        if (locChanged) {
+          try {
+            const fresh = await getSession(sessionId);
+            if (fresh) session = fresh;
+          } catch (e) {
+            console.warn('Failed to reload session on location change:', e);
+          }
         }
-      )
-      .subscribe();
+
+        updatePlayerUI();
+      }
+    });
+
+    // Подписка на очередь ходов
+    unsubTurnQueue = subscribeToSessionTurnQueue(sessionId, (payload) => {
+      handleTurnUpdate(payload);
+    });
   }
 
   let activeTurnEntityType = 'player';
@@ -345,6 +388,8 @@ export async function renderGame(container, sessionId, user) {
         }
 
         updateInputState();
+      } else if (turn.status === 'completed') {
+        checkTurnQueue();
       }
     }
 
@@ -1816,6 +1861,7 @@ export async function renderGame(container, sessionId, user) {
           game_hour: result.game_time.hour,
           game_minute: result.game_time.minute,
         };
+        updatePlayerUI();
       }
 
       // Обновление локации при смене или генерации начальной локации
@@ -1827,6 +1873,7 @@ export async function renderGame(container, sessionId, user) {
           current_location_id: result.new_location_id || session?.current_location_id,
           current_wild_zone: result.current_wild_zone !== undefined ? result.current_wild_zone : session?.current_wild_zone,
         };
+        updatePlayerUI();
       }
 
 
@@ -2005,7 +2052,12 @@ export async function renderGame(container, sessionId, user) {
 
     if (locStr) {
       if (locEl) {
-        locEl.textContent = `📍 ${locStr}`;
+        const textSpan = locEl.querySelector('span');
+        if (textSpan) {
+          textSpan.textContent = locStr;
+        } else {
+          locEl.textContent = `📍 ${locStr}`;
+        }
         locEl.title = locStr;
         locEl.style.display = '';
       } else {
@@ -2013,7 +2065,7 @@ export async function renderGame(container, sessionId, user) {
         if (statusBar) {
           const span = document.createElement('span');
           span.className = 'game-header-location';
-          span.textContent = `📍 ${locStr}`;
+          span.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg><span>${escapeHtml(locStr)}</span>`;
           span.title = locStr;
           statusBar.prepend(span);
         }
@@ -2023,15 +2075,20 @@ export async function renderGame(container, sessionId, user) {
     }
 
     const timeEl = document.querySelector('.game-header-time');
-    const day = session?.game_day ?? session?.game_time?.day;
-    const month = session?.game_month ?? session?.game_time?.month;
-    const year = session?.game_year ?? session?.game_time?.year;
+    const day = session?.game_day ?? session?.game_time?.day ?? 14;
+    const month = session?.game_month ?? session?.game_time?.month ?? 5;
+    const year = session?.game_year ?? session?.game_time?.year ?? 1248;
     const hour = session?.game_hour ?? session?.game_time?.hour ?? 10;
     const minute = session?.game_minute ?? session?.game_time?.minute ?? 0;
     const timeStr = formatGameCalendarDate(day, month, year, hour, minute);
     if (timeStr) {
       if (timeEl) {
-        timeEl.textContent = `🕐 ${timeStr}`;
+        const textSpan = timeEl.querySelector('span');
+        if (textSpan) {
+          textSpan.textContent = timeStr;
+        } else {
+          timeEl.textContent = `🕐 ${timeStr}`;
+        }
         timeEl.title = timeStr;
         timeEl.style.display = '';
       } else {
@@ -2039,7 +2096,7 @@ export async function renderGame(container, sessionId, user) {
         if (statusBar) {
           const span = document.createElement('span');
           span.className = 'game-header-time';
-          span.textContent = `🕐 ${timeStr}`;
+          span.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>${escapeHtml(timeStr)}</span>`;
           span.title = timeStr;
           statusBar.appendChild(span);
         }
@@ -2483,15 +2540,43 @@ export async function renderGame(container, sessionId, user) {
     });
   }
 
+  function handleVisibilityChange() {
+    if (document.visibilityState === 'visible' && !isCancelled && sessionId) {
+      getSession(sessionId).then((fresh) => {
+        if (fresh) {
+          session = fresh;
+          updatePlayerUI();
+        }
+      }).catch(() => {});
+      checkTurnQueue();
+    }
+  }
+
+  function handleOnline() {
+    if (!isCancelled && sessionId) {
+      getSession(sessionId).then((fresh) => {
+        if (fresh) {
+          session = fresh;
+          updatePlayerUI();
+        }
+      }).catch(() => {});
+      checkTurnQueue();
+    }
+  }
+
+  window.addEventListener('online', handleOnline);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
   // Cleanup on unmount
   function cleanup() {
     isCancelled = true;
     removeDmTypingIndicator();
     if (unsubMessages) unsubMessages();
     if (unsubPlayers) unsubPlayers();
-    if (unsubTurnQueue) {
-      supabase.removeChannel(unsubTurnQueue);
-    }
+    if (unsubSession) unsubSession();
+    if (unsubTurnQueue) unsubTurnQueue();
+    window.removeEventListener('online', handleOnline);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
   }
 
   await load();

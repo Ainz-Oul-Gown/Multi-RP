@@ -300,11 +300,11 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
   // 2. Считаем время
   // ============================================
   const baseTime = {
-    year: session.game_year,
-    month: session.game_month,
-    day: session.game_day,
-    hour: session.game_hour,
-    minute: session.game_minute,
+    year: session.game_year || 1248,
+    month: session.game_month || 5,
+    day: session.game_day || 14,
+    hour: session.game_hour ?? 10,
+    minute: session.game_minute ?? 0,
   };
   const newTime = persistence_output.new_game_time
     ? persistence_output.new_game_time

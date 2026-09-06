@@ -137,6 +137,7 @@ export interface ImproperToolUsage {
 export interface RouterAction {
   action_type: ActionType;
   target_entity_id: string | null;
+  target_name?: string | null;
   target_item_name: string | null;
   item_type?: string | null;
   used_item_id: string | null;

@@ -29,6 +29,21 @@ export function buildRouterSystemPrompt(): string {
 
 1. **Сопоставление предметов**: Каждый предмет в инвентаре имеет уникальный ID. Используй ТОЛЬКО ID из предоставленного списка, никогда не придумывай.
 
+1.1. **ТОЧНОЕ ОПРЕДЕЛЕНИЕ ЦЕЛИ (КРИТИЧЕСКИЙ ПРИОРИТЕТ ДЛЯ target_entity_id)**:
+   - В сообщении пользователя приведены два чётких списка:
+     * "### Живые игроки (сопартийцы в сессии)" — другие игроки (люди).
+     * "### Неигровые персонажи (NPC в локации)" — персонажи мира (трактирщики, торговцы, стражники, монстры).
+   - Если игрок в своём сообщении или в реплике называет имя любого персонажа (например: "Ирис, давай путешествовать вместе?", "говорю с Ирис", "спрашиваю у Брана", "атакую гоблина"):
+     * ТЫ ОБЯЗАН найти этого персонажа по имени в соответствующем списке!
+     * Если названо имя живого игрока (например, "Ирис" из "Живые игроки"):
+       - В \`target_entity_id\` запиши ТОЧНЫЙ UUID этого игрока из квадратных скобок [...].
+       - В \`target_name\` запиши имя игрока (например, "Ирис").
+       - Для разговоров/предложений: \`action_type: "talk"\`, \`stat_to_check: "none"\`.
+       - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ставить UUID NPC (например, трактирщика Брана), если игрок обращается к напарнику (например, Ирис)!
+     * Если названо имя NPC (например, "Бран"):
+       - В \`target_entity_id\` запиши точный UUID этого NPC.
+       - В \`target_name\` запиши "Бран".
+
 2. **Определение характеристики**: Выбери одну стату для проверки:
    - strength (STR) — физические действия, рубка, борьба
    - dexterity (DEX) — ловкость рук, уклонение
@@ -137,7 +152,8 @@ export function buildRouterSystemPrompt(): string {
   "actions": [
     {
       "action_type": "attack" | "stealth_attack" | "move" | "loot" | "craft_recipe" | "craft_custom" | "transfer" | "drop" | "talk" | "search" | "harvest_ambient",
-      "target_entity_id": "uuid или null",
+      "target_entity_id": "uuid персонажа/игрока/npc или null",
+      "target_name": "Точное имя цели на русском языке (например: 'Ирис' или 'Бран') или null",
       "target_item_name": "string или null",
       "item_type": "string или null",
       "used_item_id": "uuid или null",
@@ -170,7 +186,7 @@ export function buildRouterSystemPrompt(): string {
 // ============================================
 // Сборка userMessage из контекста
 // ============================================
-function buildUserMessage(input: any): string {
+export function buildUserMessage(input: any): string {
   const lines: string[] = [];
 
   const actionText = input?.player_action_text || input?.action_text || "";
@@ -228,25 +244,35 @@ function buildUserMessage(input: any): string {
     lines.push("");
   }
 
-  const npcs = Array.isArray(input?.nearby_npcs) ? input.nearby_npcs : [];
-  if (npcs.length > 0) {
-    lines.push(`## NPC рядом`);
-    for (const npc of npcs) {
-      lines.push(`- [${npc.id || 'npc'}] ${npc.name || 'NPC'} (${npc.race || 'гуманоид'})${npc.is_hostile ? ' ⚔️ ВРАГ' : ''}, HP ${npc.hp ?? 10}/${npc.max_hp ?? 10}, дистанция ${npc.distance_meters ?? 5}м`);
-    }
-    lines.push("");
-  } else {
-    lines.push(`## NPC рядом`);
-    lines.push("Никого.");
-    lines.push("");
-  }
+  lines.push(`## ДОСТУПНЫЕ ЦЕЛИ И ПЕРСОНАЖИ В ЛОКАЦИИ (Используй их точный UUID в target_entity_id)`);
+  lines.push(`ВНИМАНИЕ: Если действие или реплика игрока направлена на кого-либо (разговор, вопрос, обращение, атака, передача), ты ОБЯЗАН сопоставить названное имя с персонажами ниже и записать его точный UUID в target_entity_id, а имя в target_name!`);
+  lines.push("");
 
   const players = Array.isArray(input?.nearby_players) ? input.nearby_players : [];
+  lines.push(`### Живые игроки (сопартийцы в сессии — ВЫСШИЙ ПРИОРИТЕТ при диалогах и совместных действиях):`);
   if (players.length > 0) {
-    lines.push(`## Другие игроки рядом (сопартийцы в зоне)`);
     for (const p of players) {
-      lines.push(`- [${p.id || 'player'}] ${p.name || 'Игрок'} (${p.race || 'Гуманоид'}, ${p.class || 'Игрок'}, ур.${p.level || 1}), HP ${p.hp ?? 100}/${p.max_hp ?? 100}${p.current_zone ? `, подзона "${p.current_zone}"` : ''}`);
+      lines.push(`- ИГРОК: UUID="${p.id || 'player'}" | ИМЯ="${p.name || 'Игрок'}" (${p.race || 'Гуманоид'}, ${p.class || 'Игрок'}, ур.${p.level || 1})${p.current_zone ? `, подзона: "${p.current_zone}"` : ''}`);
     }
+  } else {
+    lines.push(`- (нет других игроков рядом)`);
+  }
+  lines.push("");
+
+  const npcs = Array.isArray(input?.nearby_npcs) ? input.nearby_npcs : [];
+  lines.push(`### Неигровые персонажи (NPC в локации):`);
+  if (npcs.length > 0) {
+    for (const npc of npcs) {
+      lines.push(`- NPC: UUID="${npc.id || 'npc'}" | ИМЯ="${npc.name || 'NPC'}" (${npc.race || 'гуманоид'})${npc.is_hostile ? ' ⚔️ ВРАГ' : ''}, дистанция: ${npc.distance_meters ?? 5}м`);
+    }
+  } else {
+    lines.push(`- (нет NPC рядом)`);
+  }
+  lines.push("");
+
+  if (players.length > 0) {
+    const playerNames = players.map((p: any) => `"${p.name}"`).join(", ");
+    lines.push(`СТРОГОЕ ПРАВИЛО: Если игрок произносит фразу или обращается к персонажу с именем из списка живых игроков (${playerNames}) — например: "Ирис, давай...", целью ЯВЛЯЕТСЯ ИГРОК! target_entity_id ОБЯЗАН быть равен UUID этого игрока! КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО указывать NPC (трактирщика, бармена и т.д.), если в тексте упомянут живой игрок!`);
     lines.push("");
   }
 
@@ -363,6 +389,7 @@ function normalizeRouterOutput(parsed: any): RouterOutputPayload {
     actions: rawActions.map((a: any): RouterAction => ({
       action_type: a.action_type,
       target_entity_id: a.target_entity_id ?? null,
+      target_name: a.target_name ?? null,
       target_item_name: (a.target_item_name && a.target_item_name.toLowerCase().trim() === "находка") ? null : (a.target_item_name ?? null),
       item_type: a.item_type ?? null,
       used_item_id: a.used_item_id ?? null,
@@ -540,6 +567,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
 
   const inv = Array.isArray(input?.inventory) ? input.inventory : Array.isArray((input as any)?.player_inventory) ? (input as any).player_inventory : [];
   const npcs = Array.isArray(input?.nearby_npcs) ? input.nearby_npcs : [];
+  const players = Array.isArray(input?.nearby_players) ? input.nearby_players : [];
 
   // 1. Выбрасывание предметов (drop) — выполняется гарантированно и без бросков кубиков
   if (/(?:выкид|выброс|броса|выкину|избавл|избавь)/i.test(lower)) {
@@ -563,6 +591,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     actions.push({
       action_type: "drop",
       target_entity_id: null,
+      target_name: null,
       target_item_name: targetName,
       used_item_id: matchedItem?.id || null,
       consumed_materials: [{ id: matchedItem?.id || "drop", quantity: qty }],
@@ -572,7 +601,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     });
     timeEstimate = 1;
   }
-  // 2. Передача предмета другому персонажу / NPC (transfer)
+  // 2. Передача предмета другому персонажу / игроку / NPC (transfer)
   else if (/(?:переда|отда|дар|вруч)/i.test(lower)) {
     const qtyMatch = lower.match(/\b(\d+)\b/);
     const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
@@ -585,21 +614,69 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
       return itemStems.some((is: string) => actionStems.some((as: string) => as.includes(is) || is.includes(as)));
     });
 
-    let matchedNpc = npcs.find((n: any) => {
-      const npcStems = (n.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
-      return npcStems.some((ns: string) => actionStems.some((as: string) => as.includes(ns) || ns.includes(as)));
+    // Сначала ищем среди живых игроков!
+    let matchedPlayer = players.find((p: any) => {
+      const pStems = (p.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+      return pStems.some((ps: string) => actionStems.some((as: string) => as.includes(ps) || ps.includes(as)));
     });
 
-    if (!matchedNpc && npcs.length === 1 && !npcs[0].is_hostile) {
-      matchedNpc = npcs[0];
+    let matchedNpc = null;
+    if (!matchedPlayer) {
+      matchedNpc = npcs.find((n: any) => {
+        const npcStems = (n.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+        return npcStems.some((ns: string) => actionStems.some((as: string) => as.includes(ns) || ns.includes(as)));
+      });
+      if (!matchedNpc && npcs.length === 1 && !npcs[0].is_hostile) {
+        matchedNpc = npcs[0];
+      }
     }
+
+    const targetEntityId = matchedPlayer ? matchedPlayer.id : (matchedNpc ? matchedNpc.id : null);
+    const targetEntityName = matchedPlayer ? matchedPlayer.name : (matchedNpc ? matchedNpc.name : null);
 
     actions.push({
       action_type: "transfer",
-      target_entity_id: matchedNpc?.id || null,
+      target_entity_id: targetEntityId,
+      target_name: targetEntityName,
       target_item_name: matchedItem?.item_name || null,
       used_item_id: matchedItem?.id || null,
       consumed_materials: [{ id: matchedItem?.id || "transfer", quantity: qty }],
+      stat_to_check: "none",
+      ai_custom_dc: null,
+      improper_tool_usage: null,
+    });
+    timeEstimate = 2;
+  }
+  // 3. Разговор / обращение / вопрос / предложение (talk)
+  else if (/["«»]/.test(rawText) || /(?:сказ|говор|спрос|крич|шепт|давай|пойдём|пойдем|обращ|предлаг)/i.test(lower)) {
+    const cleanStem = (w: string) => w.replace(/(?:а|ов|ев|и|ы|у|е|ом|ам|ами|ях|ых|их|ого|его|ому|ему|ым|им|ую|ею|ей|я)$/i, "");
+    const actionStems = lower.split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+
+    // ВЫСШИЙ ПРИОРИТЕТ: живые игроки!
+    let matchedPlayer = players.find((p: any) => {
+      const pStems = (p.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+      return pStems.some((ps: string) => actionStems.some((as: string) => as.includes(ps) || ps.includes(as)));
+    });
+
+    let matchedNpc = null;
+    if (!matchedPlayer) {
+      matchedNpc = npcs.find((n: any) => {
+        const npcStems = (n.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+        return npcStems.some((ns: string) => actionStems.some((as: string) => as.includes(ns) || ns.includes(as)));
+      });
+    }
+
+    const targetEntityId = matchedPlayer ? matchedPlayer.id : (matchedNpc ? matchedNpc.id : null);
+    const targetEntityName = matchedPlayer ? matchedPlayer.name : (matchedNpc ? matchedNpc.name : null);
+
+    actions.push({
+      action_type: "talk",
+      target_entity_id: targetEntityId,
+      target_name: targetEntityName,
+      target_item_name: null,
+      item_type: null,
+      used_item_id: null,
+      consumed_materials: null,
       stat_to_check: "none",
       ai_custom_dc: null,
       improper_tool_usage: null,

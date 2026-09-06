@@ -31,7 +31,7 @@ vi.mock("https://esm.sh/@supabase/supabase-js@2", () => ({
 }));
 
 import { formatRpText, escapeHtml } from "../src/pages/game.js";
-import { buildRouterSystemPrompt } from "../supabase/functions/process-turn/steps/step1_router.ts";
+import { buildRouterSystemPrompt, buildUserMessage, buildRouterHeuristicFallback } from "../supabase/functions/process-turn/steps/step1_router.ts";
 import { buildNarratorSystemPrompt } from "../supabase/functions/process-turn/steps/step5_narrator.ts";
 import { SUPABASE_FULL_SCHEMA_SQL } from "../src/utils/supabaseFullSchema.js";
 import { TalkHandler } from "../supabase/functions/process-turn/engine/handlers/talk_handler.ts";
@@ -212,5 +212,49 @@ describe("Party System & Schema Verification", () => {
     expect(res.system_facts[0]).toContain("Артур обращается к Ирис");
     expect(res.system_facts[0]).not.toContain("Бран");
   });
+
+  it("buildUserMessage formats live players and NPCs with clear UUID and NAME markers and priority instructions", () => {
+    const input: any = {
+      player_action_text: 'Ирис, давай путешествовать вместе?',
+      player: { id: "p-actor", name: "Артур", race: "Человек", class: "Воин", level: 1 },
+      nearby_players: [
+        { id: "p-iris", name: "Ирис", race: "Эльф", class: "Маг", level: 2, hp: 100, max_hp: 100 },
+      ],
+      nearby_npcs: [
+        { id: "npc-bran", name: "Бран", race: "Человек", hp: 15, max_hp: 15, is_hostile: false },
+      ],
+    };
+
+    const userMessage = buildUserMessage(input);
+
+    expect(userMessage).toContain("ДОСТУПНЫЕ ЦЕЛИ И ПЕРСОНАЖИ В ЛОКАЦИИ");
+    expect(userMessage).toContain('Живые игроки (сопартийцы в сессии — ВЫСШИЙ ПРИОРИТЕТ при диалогах и совместных действиях):');
+    expect(userMessage).toContain('ИГРОК: UUID="p-iris" | ИМЯ="Ирис"');
+    expect(userMessage).toContain('Неигровые персонажи (NPC в локации):');
+    expect(userMessage).toContain('NPC: UUID="npc-bran" | ИМЯ="Бран"');
+    expect(userMessage).toContain('СТРОГОЕ ПРАВИЛО: Если игрок произносит фразу или обращается к персонажу с именем из списка живых игроков ("Ирис")');
+    expect(userMessage).toContain('КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО указывать NPC (трактирщика, бармена и т.д.), если в тексте упомянут живой игрок!');
+  });
+
+  it("buildRouterHeuristicFallback correctly maps player dialogue to talk action with player target", () => {
+    const input: any = {
+      player_action_text: 'Ирис, давай путешествовать вместе?',
+      nearby_players: [
+        { id: "p-iris", name: "Ирис", race: "Эльф" },
+      ],
+      nearby_npcs: [
+        { id: "npc-bran", name: "Бран", race: "Человек" },
+      ],
+    };
+
+    const result = buildRouterHeuristicFallback(input);
+
+    expect(result.status).toBe("success");
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0].action_type).toBe("talk");
+    expect(result.actions[0].target_entity_id).toBe("p-iris");
+    expect(result.actions[0].target_name).toBe("Ирис");
+  });
 });
+
 

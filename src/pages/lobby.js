@@ -565,14 +565,23 @@ export function renderLobby(container, user) {
 
            <div class="form-group" style="margin-bottom: 1rem;">
              <label class="form-label">OpenRouter API Key</label>
-             <input
-               class="input"
-               type="password"
-               id="openrouterKeyInput"
-               placeholder="sk-or-v1-..."
-               value="${userSettings?.openrouter_key || ''}"
-               autocomplete="off"
-             />
+             <div style="display: flex; gap: 0.4rem; align-items: center;">
+               <input
+                 class="input"
+                 type="password"
+                 id="openrouterKeyInput"
+                 placeholder="sk-or-v1-..."
+                 value="${userSettings?.openrouter_key || ''}"
+                 autocomplete="off"
+                 style="flex: 1;"
+               />
+               <button type="button" class="btn btn-secondary btn-sm" id="toggleOpenrouterKeyVisibilityBtn" title="Показать / скрыть ключ" style="padding: 0.45rem 0.65rem; white-space: nowrap;">
+                 👁️
+               </button>
+               <button type="button" class="btn btn-secondary btn-sm" id="copyOpenrouterKeyBtn" title="Скопировать OpenRouter API Key в буфер обмена" style="padding: 0.45rem 0.75rem; white-space: nowrap;">
+                 📋 Копировать
+               </button>
+             </div>
              <span class="form-hint">
                Ваш личный ключ для OpenRouter API.
                ${maskedKey ? `Текущий: <code>${maskedKey}</code>` : 'Не задан — игра не сможет вызывать ИИ.'}
@@ -2144,6 +2153,32 @@ export function renderLobby(container, user) {
     document.getElementById('copyUserIdBtn')?.addEventListener('click', () => {
       navigator.clipboard.writeText(user.id);
       toast.success('ID скопирован!');
+    });
+
+    // Toggle OpenRouter Key visibility
+    document.getElementById('toggleOpenrouterKeyVisibilityBtn')?.addEventListener('click', () => {
+      const keyInput = document.getElementById('openrouterKeyInput');
+      const toggleBtn = document.getElementById('toggleOpenrouterKeyVisibilityBtn');
+      if (!keyInput) return;
+      if (keyInput.type === 'password') {
+        keyInput.type = 'text';
+        if (toggleBtn) toggleBtn.textContent = '🙈';
+      } else {
+        keyInput.type = 'password';
+        if (toggleBtn) toggleBtn.textContent = '👁️';
+      }
+    });
+
+    // Copy OpenRouter API Key
+    document.getElementById('copyOpenrouterKeyBtn')?.addEventListener('click', () => {
+      const keyInput = document.getElementById('openrouterKeyInput');
+      const key = keyInput?.value?.trim() || userSettings?.openrouter_key || '';
+      if (!key) {
+        toast.warning('Ключ OpenRouter ещё не введен');
+        return;
+      }
+      navigator.clipboard.writeText(key);
+      toast.success('OpenRouter API Key скопирован в буфер обмена!');
     });
 
     // Copy DB invite link from lobby

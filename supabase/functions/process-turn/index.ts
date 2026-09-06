@@ -877,11 +877,12 @@ serve(async (req) => {
         current_wild_zone_description: null,
       }).eq("id", session_id);
 
-      // Сбрасываем подзоны всех игроков сессии — весь отряд вместе входит в новую локацию
+      // Игроки двигаются независимо: сбрасываем подзону переместившегося игрока
       try {
-        await supabase.from("players").update({ current_zone: null }).eq("session_id", session_id);
+        await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
+        player.current_zone = null;
       } catch (pzErr) {
-        console.warn(`[${requestId}] Failed to reset players current_zone:`, pzErr);
+        console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
       }
 
       // Сгенерировать карту расстояний зон и тип местности для новой локации через ИИ
@@ -932,11 +933,12 @@ serve(async (req) => {
       currentLocationName = new_wild_zone;
       session.current_wild_zone = new_wild_zone;
 
-      // Сбрасываем подзоны всех игроков сессии — отряд вместе перемещается в дикую зону
+      // Игроки двигаются независимо: сбрасываем подзону переместившегося игрока
       try {
-        await supabase.from("players").update({ current_zone: null }).eq("session_id", session_id);
+        await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
+        player.current_zone = null;
       } catch (pzErr) {
-        console.warn(`[${requestId}] Failed to reset players current_zone:`, pzErr);
+        console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
       }
 
       // Сгенерировать карту расстояний зон и тип местности для дикой зоны через ИИ

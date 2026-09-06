@@ -5,48 +5,98 @@ import {
   buildFallbackLocationMap,
 } from "../supabase/functions/_shared/fog_location_generator.ts";
 
-describe("Мультиплеер: спавн игроков, передача ходов и эхо войны", () => {
-  describe("1. Спавн игроков рядом друг с другом", () => {
-    it("новый игрок подключается в ту же подзону, где уже находится отряд", () => {
-      // Игрок 1 уже играет и находится в подзоне 'Главный зал'
-      const existingPlayers = [
-        { id: "p1", name: "Воин Рагнар", current_zone: "Главный зал" },
+describe("Мультиплеер: спавн игроков, выбор точки появления, передача ходов и эхо войны", () => {
+  describe("1. Спавн и выбор точки появления", () => {
+    it("если есть только один игрок в сессии — новый игрок появляется рядом с ним автоматически без выбора", () => {
+      const allPlayers = [
+        { id: "p1", name: "Воин Рагнар", race: "Человек", class: "Воин", current_zone: "Главный зал" },
       ];
 
-      // Правило спавна: зона берется от существующего отряда
-      const partyZone = existingPlayers.length > 0 ? (existingPlayers[0].current_zone || null) : null;
-      expect(partyZone).toBe("Главный зал");
+      function resolveSpawnTarget(players: any[], selectedPlayerId?: string) {
+        if (!players.length) return { zone: null, targetName: null };
+        if (players.length === 1) return { zone: players[0].current_zone || null, targetName: players[0].name };
+        if (selectedPlayerId) {
+          const found = players.find(p => p.id === selectedPlayerId);
+          if (found) return { zone: found.current_zone || null, targetName: found.name };
+        }
+        return { zone: players[0]?.current_zone || null, targetName: players[0]?.name || null };
+      }
 
-      // Новый игрок создается с этой же зоной
-      const newPlayer = {
-        id: "p2",
-        name: "Маг Эльдар",
-        current_zone: partyZone,
-      };
-
-      expect(newPlayer.current_zone).toBe(existingPlayers[0].current_zone);
+      const spawn = resolveSpawnTarget(allPlayers);
+      expect(spawn.zone).toBe("Главный зал");
+      expect(spawn.targetName).toBe("Воин Рагнар");
     });
 
-    it("при одновременном старте сессии оба игрока начинают в одной стартовой зоне", () => {
-      const existingPlayers: any[] = [];
-      const partyZone = existingPlayers.length > 0 ? (existingPlayers[0].current_zone || null) : null;
-      expect(partyZone).toBeNull(); // NULL = базовая зона локации
+    it("если в сессии 2 или более игроков — новый игрок может выбрать конкретного персонажа и получить его координаты", () => {
+      const allPlayers = [
+        { id: "p1", name: "Воин Рагнар", current_zone: "Главный зал" },
+        { id: "p2", name: "Вор Локи", current_zone: "Погреб" },
+        { id: "p3", name: "Маг Эльдар", current_zone: "Башня магии" },
+      ];
 
-      const player1 = { id: "p1", name: "Алиса", current_zone: partyZone };
-      const player2 = { id: "p2", name: "Боб", current_zone: player1.current_zone };
+      function resolveSpawnTarget(players: any[], selectedPlayerId?: string) {
+        if (!players.length) return { zone: null, targetName: null };
+        if (players.length === 1) return { zone: players[0].current_zone || null, targetName: players[0].name };
+        if (selectedPlayerId) {
+          const found = players.find(p => p.id === selectedPlayerId);
+          if (found) return { zone: found.current_zone || null, targetName: found.name };
+        }
+        return { zone: players[0]?.current_zone || null, targetName: players[0]?.name || null };
+      }
 
-      expect(player1.current_zone).toBe(player2.current_zone);
+      // Выбираем появиться рядом с Вором Локи в Погребе
+      const spawnNearLoki = resolveSpawnTarget(allPlayers, "p2");
+      expect(spawnNearLoki.zone).toBe("Погреб");
+      expect(spawnNearLoki.targetName).toBe("Вор Локи");
+
+      // Выбираем появиться рядом с Магом Эльдаром в Башне
+      const spawnNearEldar = resolveSpawnTarget(allPlayers, "p3");
+      expect(spawnNearEldar.zone).toBe("Башня магии");
+      expect(spawnNearEldar.targetName).toBe("Маг Эльдар");
+    });
+
+    it("новый игрок объявляется в системе как путник/незнакомец, а не как старый друг", () => {
+      const currentPlayer = { name: "Новичок", race: "Эльф", class: "Следопыт" };
+      const targetName = "Воин Рагнар";
+      const nearStr = targetName ? `рядом с героем ${targetName}` : "в локации";
+      const announcement = `👋 В поле зрения появляется странник: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class}), замеченный ${nearStr}. Вы ещё не знакомы с ним.`;
+
+      expect(announcement).toContain("странник: Новичок");
+      expect(announcement).toContain("Вы ещё не знакомы с ним");
+      expect(announcement).toContain("рядом с героем Воин Рагнар");
     });
   });
 
-  describe("2. Передача ходов между игроками", () => {
+  describe("2. Независимое перемещение игроков", () => {
+    it("перемещение одного игрока между подзонами не меняет положение других игроков", () => {
+      const players = [
+        { id: "p1", name: "Игрок 1", current_zone: "Главный зал" },
+        { id: "p2", name: "Игрок 2", current_zone: "Главный зал" },
+      ];
+
+      // Игрок 1 перемещается в погреб
+      const movingPlayerId = "p1";
+      const newZone = "Погреб";
+
+      const updatedPlayers = players.map(p => {
+        if (p.id === movingPlayerId) {
+          return { ...p, current_zone: newZone };
+        }
+        return p;
+      });
+
+      expect(updatedPlayers.find(p => p.id === "p1")?.current_zone).toBe("Погреб");
+      expect(updatedPlayers.find(p => p.id === "p2")?.current_zone).toBe("Главный зал");
+    });
+  });
+
+  describe("3. Передача ходов между игроками", () => {
     it("initTurnQueue корректно активирует первого игрока и ставит второго в waiting", () => {
       const players = [
         { id: "p1", name: "Игрок 1" },
         { id: "p2", name: "Игрок 2" },
       ];
 
-      // Проверяем логику: первый active, второй waiting
       const queue = players.map((p, idx) => ({
         player_id: p.id,
         status: idx === 0 ? "active" : "waiting",
@@ -57,7 +107,7 @@ describe("Мультиплеер: спавн игроков, передача х
     });
   });
 
-  describe("3. Эхо войны (Fog of War) и акустика местности", () => {
+  describe("4. Эхо войны (Fog of War) и акустика местности", () => {
     it("в одной зоне расстояние 0 (SAME_ROOM) — эхо войны не глушится, игроки видят друг друга", () => {
       const locMap = {
         "Главный зал": { "Погреб": 2, "Двор": 2 },

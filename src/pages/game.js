@@ -1868,6 +1868,43 @@ export async function renderGame(container, sessionId, user) {
           <h2 class="card-title" style="margin-bottom: 0.5rem;">⚔️ Создание персонажа</h2>
           <p class="form-hint" style="margin-bottom: 1rem;">Выберите существующего героя или создайте нового</p>
 
+          <!-- Выбор точки спавна в мультиплеере -->
+          ${allPlayers.length > 1 ? `
+            <div class="spawn-selection-box" style="margin-bottom: 1.25rem; padding: 0.85rem; background: rgba(30, 24, 20, 0.6); border: 1px solid var(--border); border-radius: var(--radius-md);">
+              <label class="form-label" style="display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--accent); margin-bottom: 0.5rem;">
+                📍 Выберите, рядом с кем появиться:
+              </label>
+              <div style="display: flex; flex-direction: column; gap: 0.5rem;" id="spawnChoicesContainer">
+                ${allPlayers.map((p, idx) => {
+                  const pLoc = `${session?.current_wild_zone ? '🌲 ' + session.current_wild_zone : (session?.current_location_name || 'Локация')}${p.current_zone ? ` • 📍 ${p.current_zone}` : ' • Основная зона'}`;
+                  return `
+                    <label class="spawn-radio-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid ${idx === 0 ? 'var(--primary)' : 'var(--border)'}; border-radius: var(--radius-sm); cursor: pointer; background: rgba(0,0,0,0.25);">
+                      <input type="radio" name="spawnTargetPlayerId" value="${p.id}" ${idx === 0 ? 'checked' : ''} />
+                      <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                          ⚔️ ${escapeHtml(p.name)}
+                          <span class="badge badge-info" style="font-size: 0.7rem;">${escapeHtml(p.race || 'Герой')} / ${escapeHtml(p.class || '')}</span>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                          📍 ${escapeHtml(pLoc)}
+                        </div>
+                      </div>
+                    </label>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : (allPlayers.length === 1 ? `
+            <div class="spawn-info-box" style="margin-bottom: 1.25rem; padding: 0.75rem; background: rgba(30, 24, 20, 0.5); border-left: 3px solid var(--primary); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;">
+              <div style="font-size: 0.85rem; color: var(--text-main);">
+                📍 Вы появитесь рядом с героем <strong>${escapeHtml(allPlayers[0].name)}</strong> (${escapeHtml(allPlayers[0].race || 'Герой')} / ${escapeHtml(allPlayers[0].class || '')}):
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                📍 ${escapeHtml(`${session?.current_wild_zone ? '🌲 ' + session.current_wild_zone : (session?.current_location_name || 'Локация')}${allPlayers[0].current_zone ? ` • ${allPlayers[0].current_zone}` : ' • Основная зона'}`)}
+              </div>
+            </div>
+          ` : '')}
+
           <!-- Существующие карточки -->
           <div id="existingCardsList" class="char-select-grid" style="margin-bottom: 1.5rem;">
             <p class="text-muted" style="text-align: center;">Загрузка карточек...</p>
@@ -1926,6 +1963,29 @@ export async function renderGame(container, sessionId, user) {
       </div>
     `;
 
+    function getSelectedSpawnTarget() {
+      if (!allPlayers.length) return { zone: null, targetName: null };
+      if (allPlayers.length === 1) return { zone: allPlayers[0].current_zone || null, targetName: allPlayers[0].name };
+      const checkedRadio = document.querySelector('input[name="spawnTargetPlayerId"]:checked');
+      if (checkedRadio) {
+        const targetPlayer = allPlayers.find((p) => p.id === checkedRadio.value);
+        if (targetPlayer) {
+          return { zone: targetPlayer.current_zone || null, targetName: targetPlayer.name };
+        }
+      }
+      return { zone: allPlayers[0]?.current_zone || null, targetName: allPlayers[0]?.name || null };
+    }
+
+    document.querySelectorAll('input[name="spawnTargetPlayerId"]').forEach((radio) => {
+      radio.addEventListener('change', () => {
+        document.querySelectorAll('.spawn-radio-card').forEach((card) => {
+          card.style.borderColor = 'var(--border)';
+        });
+        const parent = radio.closest('.spawn-radio-card');
+        if (parent) parent.style.borderColor = 'var(--primary)';
+      });
+    });
+
     // Load existing cards after DOM elements are created
     try {
       const cards = await getCharacterCards(user.id);
@@ -1959,7 +2019,7 @@ export async function renderGame(container, sessionId, user) {
 
                 console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
 
-                const partyZone = allPlayers.length > 0 ? (allPlayers[0].current_zone || null) : null;
+                const spawnTarget = getSelectedSpawnTarget();
                 currentPlayer = await createPlayer({
                   session_id: sessionId,
                   user_id: user.id,
@@ -1974,18 +2034,19 @@ export async function renderGame(container, sessionId, user) {
                   hp: calculateHpFromStats(card.stats),
                   max_hp: calculateHpFromStats(card.stats),
                   money: card.money,
-                  current_zone: partyZone,
+                  current_zone: spawnTarget.zone,
                   ...calculateDerivedStats(card.stats, card.race || 'Человек', [], getRaceAcBonus(card.race)),
                 });
 
                 console.log('[character-card] player created:', currentPlayer.id);
                 if (allPlayers.length > 0) {
                   try {
+                    const nearText = spawnTarget.targetName ? `рядом с героем ${spawnTarget.targetName}` : 'в локации';
                     await supabase.from('messages').insert({
                       session_id: sessionId,
                       sender_type: 'system',
                       sender_name: 'Система',
-                      content: `⚔️ К отряду присоединился новый герой: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class})! Вы находитесь рядом и готовы к совместным приключениям.`,
+                      content: `👋 В поле зрения появляется странник: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class}), замеченный ${nearText}. Вы ещё не знакомы с ним.`,
                     });
                   } catch (annErr) {
                     console.warn('Failed to announce join:', annErr);
@@ -2015,8 +2076,6 @@ export async function renderGame(container, sessionId, user) {
       }
     }
 
-
-
     // Create new character
     document.getElementById('createCharacterForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2026,7 +2085,7 @@ export async function renderGame(container, sessionId, user) {
         stats[stat] = parseInt(document.getElementById(`stat_${stat}`).value) || 10;
       });
 
-      const partyZone = allPlayers.length > 0 ? (allPlayers[0].current_zone || null) : null;
+      const spawnTarget = getSelectedSpawnTarget();
       const requestPayload = {
         session_id: sessionId,
         user_id: user.id,
@@ -2041,7 +2100,7 @@ export async function renderGame(container, sessionId, user) {
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
         money: 50,
-        current_zone: partyZone,
+        current_zone: spawnTarget.zone,
         initiative: calculateInitiative(stats),
         armor_class: calculateArmorClass(stats, document.getElementById('charRace').value || 'Человек', []),
         saving_throws: calculateSavingThrows(stats, 2),
@@ -2054,11 +2113,12 @@ export async function renderGame(container, sessionId, user) {
         console.log('[create-character] player created:', currentPlayer.id);
         if (allPlayers.length > 0) {
           try {
+            const nearText = spawnTarget.targetName ? `рядом с героем ${spawnTarget.targetName}` : 'в локации';
             await supabase.from('messages').insert({
               session_id: sessionId,
               sender_type: 'system',
               sender_name: 'Система',
-              content: `⚔️ К отряду присоединился новый герой: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class})! Вы находитесь рядом и готовы к совместным приключениям.`,
+              content: `👋 В поле зрения появляется странник: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class}), замеченный ${nearText}. Вы ещё не знакомы с ним.`,
             });
           } catch (annErr) {
             console.warn('Failed to announce join:', annErr);

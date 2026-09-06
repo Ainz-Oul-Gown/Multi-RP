@@ -1102,8 +1102,9 @@ export function renderLobby(container, user) {
 
   function renderWorlds() {
     return `
-      <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
         <button class="btn btn-primary btn-sm" id="newWorldBtn2">+ Новый мир</button>
+        <button class="btn btn-secondary btn-sm" data-action="schema-info" id="schemaInfoBtn" title="Структура файла экспорта и AI-промпт">ℹ️ Инфо</button>
       </div>
       <div class="card-grid">
         ${worlds.map((w) => {
@@ -1121,7 +1122,6 @@ export function renderLobby(container, user) {
               ${canResume ? `<button class="btn btn-primary btn-sm" data-action="resume-gen" data-id="${w.id}" data-name="${w.name}">⏳ Продолжить</button>` : ''}
               <button class="btn btn-secondary btn-sm" data-action="edit-world" data-id="${w.id}">✏️</button>
               <button class="btn btn-secondary btn-sm" data-action="export" data-id="${w.id}">📤</button>
-              <button class="btn btn-ghost btn-sm" data-action="schema-info" data-id="${w.id}" title="Структура файла экспорта">ℹ️</button>
               <button class="btn btn-ghost btn-sm" data-action="delete-world" data-id="${w.id}">🗑️</button>
             </div>
           </div>

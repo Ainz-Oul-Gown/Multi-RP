@@ -396,21 +396,23 @@ serve(async (req) => {
     }
 
     // Load location, available locations, lore
-    let currentLocationName: string | null = null, currentStateName: string | null = null;
+    let currentLocationName: string | null = null, currentStateName: string | null = null, currentLocationType: string | null = null;
     // Wild zone — природная зона вне именных локаций (лес, пещера, поле)
     const currentWildZone: string | null = session.current_wild_zone || null;
     if (currentWildZone) {
       // Player is in open world / wild zone — use currentWildZone as location name
       currentLocationName = currentWildZone;
+      currentLocationType = "wild";
     } else if (session.current_location_id) {
       try {
         const { data: locData } = await supabase
           .from("locations")
-          .select("name, states(name)")
+          .select("name, type, states(name)")
           .eq("id", session.current_location_id)
           .maybeSingle();
         if (locData) {
           currentLocationName = locData.name;
+          currentLocationType = locData.type || null;
           const stateObj = Array.isArray(locData.states) ? locData.states[0] : locData.states;
           currentStateName = stateObj?.name || null;
         }
@@ -681,6 +683,18 @@ serve(async (req) => {
         max_hp: n.max_hp ?? 10,
         distance_meters: 5,
       })),
+      nearby_players: (allPlayers || [])
+        .filter((p: any) => p.id !== player.id)
+        .map((p: any) => ({
+          id: p.id,
+          name: p.name || "Герой",
+          race: p.race || "Человек",
+          class: p.class || "Игрок",
+          level: p.level || 1,
+          hp: p.hp ?? 100,
+          max_hp: p.max_hp ?? 100,
+          current_zone: p.current_zone || null,
+        })),
       weather: {
         description: "Ясно",
         temperature: 20,
@@ -734,6 +748,11 @@ serve(async (req) => {
       new_wild_zone: string | null = null,
       wild_zone_changed = false,
       travel_description = "";
+
+    // Детектор намерения перемещения или выхода из помещения
+    const isMovementAction = routerResult.actions?.some((a: any) => a.action_type === "move") ||
+      /выход|выйти|выхожу|покинуть|покидаю|уйти|ухожу|отправиться|иду |еду |бегу |на улиц|наружу|за пределы|на тракт|в лес|в город|к озеру|в путь|зайти в |вернуться/i.test(safeActionText);
+
     try {
       const gpsSystemPrompt = buildGpsPrompt({
         playerName: cleanTextForAI(player.name || "Герой"),
@@ -745,7 +764,7 @@ serve(async (req) => {
         currentMinute: session.game_minute || 0,
         currentLocation: currentLocationName, currentState: currentStateName,
         currentWildZone,
-        wantsLocationChange: false, locationChangeDescription: "",
+        wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
         availableLocations,
       });
       const gpsResp = await callAI(gpsSystemPrompt, "Определи время.", openrouterApiKey, 2, gpsModel);
@@ -754,7 +773,7 @@ serve(async (req) => {
         time_passed_minutes = Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0));
         if (gpsParsed.location_changed === true) {
           if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
-            // Переход в дикую зону (лес, пещера, поле)
+            // Переход в дикую зону (лес, пещера, поле, тракт)
             wild_zone_changed = true;
             new_wild_zone = gpsParsed.new_location_name;
             travel_description = gpsParsed.travel_description || "";
@@ -771,6 +790,26 @@ serve(async (req) => {
         }
       }
     } catch (e) { /* ignore GPS errors, game continues */ }
+
+    // Детерминированная гарантия: выход из здания/таверны наружу, если GPS не переключил зону
+    const isBuildingLocation = /таверн|трактир|постоял|дом|подвал|грот|катакомб|погреб|tavern|building|dungeon/i.test(currentLocationType || "") ||
+      /таверн|трактир|постоял|дом|башн|катакомб|погреб/i.test(currentLocationName || "");
+    const isExitingBuilding = /выход|выйти|выхожу|покида|наружу|на улиц|на воздух|во двор|на двор|на тракт|на дорог|в путь/i.test(safeActionText);
+    const isEnteringBuilding = /зайти в таверну|захожу в таверну|вернуться в таверну|вхожу в таверну|зайти внутрь|вернуться внутрь/i.test(safeActionText);
+
+    if (isBuildingLocation && isExitingBuilding && !location_changed && !wild_zone_changed) {
+      wild_zone_changed = true;
+      new_wild_zone = `Тракт у ${currentLocationName || "таверны"}`;
+      travel_description = `Вы распахиваете дубовую дверь и выходите из ${currentLocationName || "помещения"} наружу на свежий воздух придорожного тракта.`;
+      time_passed_minutes = Math.max(time_passed_minutes, 5);
+      console.log(`[${requestId}] [EXIT_BUILDING] Player stepped outside: ${new_wild_zone}`);
+    } else if (currentWildZone && isEnteringBuilding && !location_changed) {
+      wild_zone_changed = true;
+      new_wild_zone = null;
+      travel_description = `Вы возвращаетесь внутрь таверны в тёплое помещение.`;
+      time_passed_minutes = Math.max(time_passed_minutes, 5);
+      console.log(`[${requestId}] [ENTER_BUILDING] Player stepped back inside tavern`);
+    }
 
 
     // ============================================

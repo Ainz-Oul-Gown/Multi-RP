@@ -77,6 +77,12 @@ export class TransferHandler extends BaseActionHandler {
       if (!onlyNpc.is_hostile) {
         targetId = onlyNpc.id;
       }
+    } else if (!targetId) {
+      // Если рядом есть ровно один сопартиец (кроме действующего игрока) — передаём ему
+      const otherPlayers = Array.from(context.targets.players.entries()).filter(([id]) => id !== player.id);
+      if (otherPlayers.length === 1) {
+        targetId = otherPlayers[0][0];
+      }
     }
 
     if (!targetId) {
@@ -137,8 +143,11 @@ export class TransferHandler extends BaseActionHandler {
       result: {
         action_type: this.action_type,
         success: true,
+        target_entity_id: targetId,
+        target_type: toType,
+        target_id: targetId,
         details: `Передано: ${item.item_name} → ${targetName}`,
-      },
+      } as any,
       mutations: [mutation],
       system_facts: [`${player.name} передал ${item.item_name} (x${quantity}) → ${targetName}.`],
     };

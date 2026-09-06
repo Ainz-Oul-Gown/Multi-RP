@@ -458,56 +458,78 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
         }
       }
     } else {
-      // Этот игрок — НЕ инициатор. Нужно решить, видит ли он действие.
-      // Ищем все экшены, где цель = этот игрок
-      const actionsTargetingThisPlayer = engine_output.action_results.filter(
-        (ar) => {
-          const actions = engine_output.action_results;
-          // Определяем: цель — player с этим id
-          return actions.some(() => false); // упрощённо
-        },
+      // Этот игрок — НЕ инициатор. Нужно определить его знания.
+      const actingPlayer = players.find((p) => p.id === acting_player_id);
+      const attackerName = actingPlayer?.name || "Другой игрок";
+
+      // 1. Проверяем, был ли этот игрок прямой целью действий
+      const targetedActions = engine_output.action_results.filter((ar: any) =>
+        ar.target_entity_id === player.id ||
+        ar.target_id === player.id ||
+        (ar.details && ar.details.includes(player.name))
       );
-      // Более прямая проверка: были ли мутации UPDATE_HP на этого игрока
-      const wasAttacked = hpMutations.length > 0;
+
+      // Проверяем получение предметов через TRANSFER_ITEM
+      const receivedTransfers = engine_output.mutations.filter(
+        (m: any) => m.type === "TRANSFER_ITEM" && m.to_type === "player" && m.to_id === player.id
+      );
+
+      // Атака и урон
+      const wasAttacked = hpMutations.length > 0 || targetedActions.some((ar) => ar.action_type === "attack" || ar.action_type === "stealth_attack");
 
       if (wasAttacked) {
-        // Проверяем, было ли это скрытной атакой
-        const isStealth = engine_output.action_results.some(
-          (ar) => ar.action_type === "stealth_attack" || ar.action_type === "attack",
-        );
-
-        // Упрощённо: если attack, но не stealth — видим имя инициатора
-        const attackerIsActing = engine_output.action_results.find(
-          (ar) => ar.action_type === "attack" || ar.action_type === "stealth_attack",
-        );
-
-        if (attackerIsActing?.action_type === "stealth_attack") {
-          // Скрытная атака: ID атакующего НЕ раскрывается
+        const isStealth = targetedActions.some((ar) => ar.action_type === "stealth_attack");
+        if (isStealth) {
           knowledge.push(`Вы внезапно получили ${Math.abs(hpDelta)} физического урона. Источник урона неизвестен!`);
         } else {
-          // Открытая атака
-          const actingPlayer = players.find((p) => p.id === acting_player_id);
-          const attackerName = actingPlayer?.name || "Неизвестный";
-          knowledge.push(`${attackerName} атаковал вас и нанёс ${Math.abs(hpDelta)} урона.`);
+          knowledge.push(`${attackerName} атакует вас${hpDelta !== 0 ? ` и наносит ${Math.abs(hpDelta)} урона` : ""}!`);
         }
-      } else {
-        // Игрок не был целью — он bystander
-        // Видит ли он событие? Смотрим на глобальный бой
+      }
+
+      // Передача предметов
+      if (receivedTransfers.length > 0) {
+        for (const tm of receivedTransfers as any[]) {
+          knowledge.push(`${attackerName} передал вам предмет (x${tm.quantity || 1}).`);
+        }
+      }
+
+      // Разговор / обращение
+      const talkAction = targetedActions.find((ar) => ar.action_type === "talk");
+      if (talkAction) {
+        const talkFact = (engine_output.system_facts || []).find((f) => f.includes(player.name) && (f.includes("обращается к") || f.includes("заводит разговор")));
+        if (talkFact) {
+          knowledge.push(talkFact);
+        } else {
+          knowledge.push(`${attackerName} обращается к вам: «${talkAction.details || "..."}».`);
+        }
+      }
+
+      // Другие прямые взаимодействия
+      for (const ar of targetedActions) {
+        if (ar.action_type !== "attack" && ar.action_type !== "stealth_attack" && ar.action_type !== "talk") {
+          knowledge.push(`${attackerName} взаимодействует с вами (${ar.details || ar.action_type}).`);
+        }
+      }
+
+      // 2. Если игрок не был прямой целью, но находится рядом как свидетель (bystander)
+      if (knowledge.length === 0) {
         const globalAttack = engine_output.action_results.some(
           (ar) => ar.action_type === "attack" || ar.action_type === "stealth_attack",
         );
         if (globalAttack) {
-          const attackerIsStealth = engine_output.action_results.some(
-            (ar) => ar.action_type === "stealth_attack",
-          );
-          if (attackerIsStealth) {
-            // Скрытая атака: bystander видит только следствие
-            const victimName = players.find((p) => p.id !== acting_player_id)?.name || "другой игрок";
-            knowledge.push(`${victimName} внезапно вздрагивает от ранения из ниоткуда.`);
+          const isStealth = engine_output.action_results.some((ar) => ar.action_type === "stealth_attack");
+          if (isStealth) {
+            knowledge.push("Рядом слышен глухой звук удара и вскрик из тени.");
           } else {
-            const attacker = players.find((p) => p.id === acting_player_id)?.name || "Игрок";
-            const victim = players.find((p) => p.id !== acting_player_id)?.name || "другой игрок";
-            knowledge.push(`${attacker} атакует ${victim}!`);
+            const victim = players.find((p) => p.id !== acting_player_id && p.id !== player.id)?.name || "цель";
+            knowledge.push(`${attackerName} атакует ${victim}!`);
+          }
+        } else {
+          // Обычное действие сопартийца рядом
+          for (const ar of engine_output.action_results) {
+            if (ar.success && ar.details) {
+              knowledge.push(`${attackerName}: ${ar.details}`);
+            }
           }
         }
       }

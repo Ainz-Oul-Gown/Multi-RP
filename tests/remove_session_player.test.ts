@@ -17,10 +17,11 @@ vi.mock('../src/api/supabase.js', () => {
     })),
   };
 
+  const invokeFunctionMock = vi.fn();
   return {
     supabase: supabaseMock,
     signOut: vi.fn(),
-    invokeFunction: vi.fn(),
+    invokeFunction: invokeFunctionMock,
   };
 });
 
@@ -61,19 +62,42 @@ describe("removeSessionPlayer API", () => {
     expect(result.player_id).toBe("player-123");
   });
 
-  it("falls back to direct delete when RPC is missing", async () => {
-    const { supabase } = await import('../src/api/supabase.js');
+  it("calls manage-player edge function when RPC is missing", async () => {
+    const { supabase, invokeFunction } = await import('../src/api/supabase.js');
     (supabase.rpc as any).mockResolvedValueOnce({
       data: null,
       error: { message: "Could not find the function public.remove_session_player" },
     });
-    const fromMock = supabase.from as any;
-    const deleteChain = fromMock();
-    deleteChain.delete().eq.mockResolvedValue({ error: null });
+    (invokeFunction as any).mockResolvedValueOnce({
+      success: true,
+      player_id: "player-456",
+    });
 
     const result = await removeSessionPlayer("sess-1", "player-456");
+    expect(invokeFunction).toHaveBeenCalledWith('manage-player', {
+      action: 'remove_player',
+      sessionId: 'sess-1',
+      playerId: 'player-456',
+    });
     expect(result.success).toBe(true);
     expect(result.player_id).toBe("player-456");
+  });
+
+  it("throws error when direct delete deletes 0 rows due to RLS", async () => {
+    const { supabase, invokeFunction } = await import('../src/api/supabase.js');
+    (supabase.rpc as any).mockResolvedValueOnce({
+      data: null,
+      error: { message: "Could not find the function public.remove_session_player" },
+    });
+    (invokeFunction as any).mockRejectedValueOnce(new Error("Edge function unavailable"));
+
+    const selectMock = vi.fn().mockResolvedValue({ data: [], error: null });
+    const eqMock = vi.fn().mockReturnValue({ select: selectMock });
+    const deleteMock = vi.fn().mockReturnValue({ eq: eqMock });
+    (supabase.from as any).mockReturnValue({ delete: deleteMock });
+
+    await expect(removeSessionPlayer("sess-1", "player-blocked"))
+      .rejects.toThrow("операция заблокирована правами RLS");
   });
 
   it("throws error when RPC returns permission error", async () => {

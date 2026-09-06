@@ -25,6 +25,17 @@ export interface NearbyNpc {
   distance_meters: number;
 }
 
+export interface NearbyPlayer {
+  id: string;
+  name: string;
+  race?: string;
+  class?: string;
+  level?: number;
+  hp?: number;
+  max_hp?: number;
+  current_zone?: string | null;
+}
+
 export interface WeatherInfo {
   description: string;
   temperature: number;
@@ -73,6 +84,9 @@ export interface RouterInputContext {
 
   // NPC рядом
   nearby_npcs: NearbyNpc[];
+
+  // Другие игроки рядом (сопартийцы в сессии)
+  nearby_players?: NearbyPlayer[];
 
   // Погода
   weather: WeatherInfo;

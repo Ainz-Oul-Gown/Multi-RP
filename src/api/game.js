@@ -405,6 +405,7 @@ export async function deletePlayer(id) {
 }
 
 export async function removeSessionPlayer(sessionId, playerId) {
+  // 1. Попытка через хранимую процедуру в БД (RPC)
   try {
     const { data, error } = await supabase.rpc('remove_session_player', {
       p_session_id: sessionId,
@@ -416,21 +417,58 @@ export async function removeSessionPlayer(sessionId, playerId) {
     if (data && data.success === false && data.error) {
       throw new Error(data.error);
     }
-    if (error && !error.message?.includes('function') && !error.message?.includes('not found')) {
+    if (error && !error.message?.includes('function') && !error.message?.includes('not found') && !error.message?.includes('schema cache')) {
       throw error;
     }
   } catch (rpcErr) {
-    if (rpcErr.message && !rpcErr.message.includes('function remove_session_player') && !rpcErr.message.includes('not found')) {
+    if (rpcErr.message && !rpcErr.message.includes('function remove_session_player') && !rpcErr.message.includes('not found') && !rpcErr.message.includes('schema cache')) {
       throw rpcErr;
     }
   }
 
-  // Fallback: direct delete from turn_queue then players table
+  // 2. Попытка через Edge Function manage-player (сервисный ключ обходит ограничения RLS)
+  try {
+    const edgeRes = await invokeFunction('manage-player', {
+      action: 'remove_player',
+      sessionId,
+      playerId,
+    });
+    if (edgeRes?.success) {
+      return edgeRes;
+    }
+    if (edgeRes && edgeRes.success === false && edgeRes.error) {
+      throw new Error(edgeRes.error);
+    }
+  } catch (edgeErr) {
+    console.warn('[removeSessionPlayer] Edge Function manage-player fallback error:', edgeErr);
+  }
+
+  // 3. Прямое удаление на клиенте с обязательной проверкой затронутых строк
   try {
     await supabase.from('turn_queue').delete().eq('player_id', playerId);
   } catch {}
-  const { error } = await supabase.from('players').delete().eq('id', playerId);
+  try {
+    await supabase.from('player_injuries').delete().eq('player_id', playerId);
+  } catch {}
+  try {
+    await supabase.from('player_skills').delete().eq('player_id', playerId);
+  } catch {}
+  try {
+    await supabase.from('inventory').delete().eq('player_id', playerId);
+  } catch {}
+
+  const { data: deletedRows, error } = await supabase
+    .from('players')
+    .delete()
+    .eq('id', playerId)
+    .select('id');
+
   if (error) throw error;
+
+  if (!deletedRows || deletedRows.length === 0) {
+    throw new Error('Не удалось удалить участника: операция заблокирована правами RLS в базе данных Supabase. Пожалуйста, примените миграцию 034 в SQL Editor.');
+  }
+
   return { success: true, player_id: playerId };
 }
 

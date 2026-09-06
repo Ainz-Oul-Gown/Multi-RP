@@ -25,6 +25,10 @@ import {
 
 export interface PlayerKnowledge {
   player_id: string;
+  player_name?: string;
+  player_race?: string;
+  player_class?: string;
+  is_acting_player?: boolean;
   knowledge: string[]; // Только то, что видит ЭТОТ игрок
   hp_status: {
     current: number;
@@ -511,6 +515,10 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
 
     player_truths[player.id] = {
       player_id: player.id,
+      player_name: player.name || "Герой",
+      player_race: player.race || "Человек",
+      player_class: player.class || "Воин",
+      is_acting_player: player.id === acting_player_id,
       knowledge,
       hp_status: {
         current: player.hp + hpDelta,

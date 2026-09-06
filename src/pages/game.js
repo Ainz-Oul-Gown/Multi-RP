@@ -1959,6 +1959,7 @@ export async function renderGame(container, sessionId, user) {
 
                 console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
 
+                const partyZone = allPlayers.length > 0 ? (allPlayers[0].current_zone || null) : null;
                 currentPlayer = await createPlayer({
                   session_id: sessionId,
                   user_id: user.id,
@@ -1973,10 +1974,23 @@ export async function renderGame(container, sessionId, user) {
                   hp: calculateHpFromStats(card.stats),
                   max_hp: calculateHpFromStats(card.stats),
                   money: card.money,
+                  current_zone: partyZone,
                   ...calculateDerivedStats(card.stats, card.race || 'Человек', [], getRaceAcBonus(card.race)),
                 });
 
                 console.log('[character-card] player created:', currentPlayer.id);
+                if (allPlayers.length > 0) {
+                  try {
+                    await supabase.from('messages').insert({
+                      session_id: sessionId,
+                      sender_type: 'system',
+                      sender_name: 'Система',
+                      content: `⚔️ К отряду присоединился новый герой: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class})! Вы находитесь рядом и готовы к совместным приключениям.`,
+                    });
+                  } catch (annErr) {
+                    console.warn('Failed to announce join:', annErr);
+                  }
+                }
                 allPlayers.push(currentPlayer);
                 await initTurnQueue(sessionId, allPlayers);
                 await checkTurnQueue();
@@ -2012,6 +2026,7 @@ export async function renderGame(container, sessionId, user) {
         stats[stat] = parseInt(document.getElementById(`stat_${stat}`).value) || 10;
       });
 
+      const partyZone = allPlayers.length > 0 ? (allPlayers[0].current_zone || null) : null;
       const requestPayload = {
         session_id: sessionId,
         user_id: user.id,
@@ -2026,6 +2041,7 @@ export async function renderGame(container, sessionId, user) {
         hp: calculateHpFromStats(stats),
         max_hp: calculateHpFromStats(stats),
         money: 50,
+        current_zone: partyZone,
         initiative: calculateInitiative(stats),
         armor_class: calculateArmorClass(stats, document.getElementById('charRace').value || 'Человек', []),
         saving_throws: calculateSavingThrows(stats, 2),
@@ -2036,6 +2052,18 @@ export async function renderGame(container, sessionId, user) {
         currentPlayer = await createPlayer(requestPayload);
 
         console.log('[create-character] player created:', currentPlayer.id);
+        if (allPlayers.length > 0) {
+          try {
+            await supabase.from('messages').insert({
+              session_id: sessionId,
+              sender_type: 'system',
+              sender_name: 'Система',
+              content: `⚔️ К отряду присоединился новый герой: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class})! Вы находитесь рядом и готовы к совместным приключениям.`,
+            });
+          } catch (annErr) {
+            console.warn('Failed to announce join:', annErr);
+          }
+        }
         allPlayers.push(currentPlayer);
         await initTurnQueue(sessionId, allPlayers);
         await checkTurnQueue();

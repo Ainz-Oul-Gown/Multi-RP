@@ -877,6 +877,13 @@ serve(async (req) => {
         current_wild_zone_description: null,
       }).eq("id", session_id);
 
+      // Сбрасываем подзоны всех игроков сессии — весь отряд вместе входит в новую локацию
+      try {
+        await supabase.from("players").update({ current_zone: null }).eq("session_id", session_id);
+      } catch (pzErr) {
+        console.warn(`[${requestId}] Failed to reset players current_zone:`, pzErr);
+      }
+
       // Сгенерировать карту расстояний зон и тип местности для новой локации через ИИ
       try {
         const newLocMap = await ensureLocationMapAndTerrain({
@@ -925,6 +932,13 @@ serve(async (req) => {
       currentLocationName = new_wild_zone;
       session.current_wild_zone = new_wild_zone;
 
+      // Сбрасываем подзоны всех игроков сессии — отряд вместе перемещается в дикую зону
+      try {
+        await supabase.from("players").update({ current_zone: null }).eq("session_id", session_id);
+      } catch (pzErr) {
+        console.warn(`[${requestId}] Failed to reset players current_zone:`, pzErr);
+      }
+
       // Сгенерировать карту расстояний зон и тип местности для дикой зоны через ИИ
       try {
         const wildLocMap = await ensureLocationMapAndTerrain({
@@ -951,6 +965,28 @@ serve(async (req) => {
         (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))
       );
       console.log(`[${requestId}] [WILD_ZONE] Player entered wild zone: ${new_wild_zone}`);
+    }
+
+    // Отслеживание перемещения игрока внутри подзон локации (для Тумана Войны / Эха Войны)
+    if (!location_changed && !wild_zone_changed && locationMap && Object.keys(locationMap).length > 0) {
+      const availableZones = Object.keys(locationMap);
+      const lowerAction = safeActionText.toLowerCase();
+
+      const matchedZone = availableZones.find((z) => {
+        const normZone = z.toLowerCase();
+        return lowerAction.includes(normZone) ||
+          normZone.split(/\s+/).some((word) => word.length > 3 && lowerAction.includes(word.slice(0, -1)));
+      });
+
+      if (matchedZone && matchedZone !== (player.current_zone || "")) {
+        console.log(`[${requestId}] [ZONE] Player ${player.name} moved to subzone "${matchedZone}" (was: "${player.current_zone || 'основная'}")`);
+        player.current_zone = matchedZone;
+        try {
+          await supabase.from("players").update({ current_zone: matchedZone }).eq("id", player.id);
+        } catch (zErr) {
+          console.warn(`[${requestId}] Failed to update player current_zone:`, zErr);
+        }
+      }
     }
 
 

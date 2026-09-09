@@ -171,4 +171,61 @@ describe("Управление Временем и Статус занятост
     // @ts-ignore
     expect(timeMutation?.minutes).toBe(45);
   });
+
+  it("проверяет обновленную схему экспорта мира (3.2) и мастер-промпт на наличие координат и подзон", async () => {
+    const { getWorldSchema } = await import("../src/api/game.js");
+    const { MASTER_AI_WORLD_PROMPT } = await import("../src/pages/lobby.js");
+
+    const schema = getWorldSchema();
+    expect(schema.version).toBe("3.2");
+    expect(schema.structure.world.settings).toContain("scale_unit");
+    expect(schema.structure.geography.states[0].locations[0].pos_x).toBeDefined();
+    expect(schema.structure.geography.states[0].locations[0].pos_y).toBeDefined();
+    expect(schema.structure.geography.states[0].locations[0].danger_level).toBeDefined();
+    expect(schema.structure.geography.states[0].locations[0].subzones).toBeDefined();
+
+    expect(MASTER_AI_WORLD_PROMPT).toContain('"scale_unit": "километры"');
+    expect(MASTER_AI_WORLD_PROMPT).toContain('"pos_x"');
+    expect(MASTER_AI_WORLD_PROMPT).toContain('"pos_y"');
+    expect(MASTER_AI_WORLD_PROMPT).toContain('"danger_level"');
+    expect(MASTER_AI_WORLD_PROMPT).toContain('"subzones"');
+  });
+
+  it("валидирует файл Этерия.json под континентальный масштаб Евразии и биомы", async () => {
+    const fs = await import("fs");
+    const raw = fs.readFileSync("Этерия.json", "utf8");
+    const etheria = JSON.parse(raw);
+
+    expect(etheria.version).toBe("3.2");
+    expect(etheria.world.settings.scale_unit).toBe("километры");
+    expect(etheria.geography.states.length).toBe(8);
+
+    let totalLocations = 0;
+    const validBiomes = [
+      "Залески", "Леса", "Пустыня", "Болота", "Дождливые леса",
+      "Вечные льды", "Дождливые тропики", "Саванна", "Поля",
+      "Ледяная пустошь", "Тропики", "Тундра"
+    ];
+
+    etheria.geography.states.forEach((state: any) => {
+      expect(state.locations.length).toBeGreaterThan(0);
+      state.locations.forEach((loc: any) => {
+        totalLocations++;
+        expect(typeof loc.pos_x).toBe("number");
+        expect(typeof loc.pos_y).toBe("number");
+        expect(validBiomes).toContain(loc.biome);
+        expect(["safe", "normal", "danger", "lethal"]).toContain(loc.danger_level);
+        expect(Array.isArray(loc.subzones)).toBe(true);
+        expect(loc.subzones.length).toBeGreaterThan(0);
+        // Subzones must have relative coordinates and radius
+        loc.subzones.forEach((sub: any) => {
+          expect(typeof sub.pos_x).toBe("number");
+          expect(typeof sub.pos_y).toBe("number");
+          expect(typeof sub.radius).toBe("number");
+        });
+      });
+    });
+
+    expect(totalLocations).toBe(72);
+  });
 });

@@ -65,6 +65,8 @@ export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдиза�
     "name": "Название мира",
     "description": "Глубокое атмосферное описание эпохи, глобального конфликта, магии и законов мироздания",
     "settings": {
+      "scale_unit": "километры",
+      "time_flow_ratio": 1.0,
       "races": ["Человек", "Эльф", "Дварф", "Гном", "Зверолюд"],
       "classes": ["Воин", "Маг", "Следопыт", "Плут", "Жрец", "Паладин"],
       "max_level": 20,
@@ -135,6 +137,11 @@ export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдиза�
         "state_name": "Северный Предел",
         "type": "city",
         "terrain_type": "urban",
+        "danger_level": "safe",
+        "pos_x": 120.0,
+        "pos_y": -80.0,
+        "bounds_shape": "circle",
+        "bounds_data": { "radius": 35 },
         "description": "Укреплённый торговый город на слиянии рек. Высокие каменные стены, скрип водяных мельниц, запах печёного хлеба и речной рыбы.",
         "zones": [
           { "id": "loc1_square", "name": "Рыночная площадь", "type": "open" },
@@ -147,7 +154,12 @@ export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдиза�
           "loc1_tavern": { "loc1_square": 30, "loc1_tavern": 0, "loc1_gates": 95, "loc1_docks": 70 },
           "loc1_gates": { "loc1_square": 80, "loc1_tavern": 95, "loc1_gates": 0, "loc1_docks": 120 },
           "loc1_docks": { "loc1_square": 60, "loc1_tavern": 70, "loc1_gates": 120, "loc1_docks": 0 }
-        }
+        },
+        "subzones": [
+          { "name": "Рыночная площадь", "description": "Шумные ряды купцов и фонтан", "pos_x": 120.0, "pos_y": -80.0, "radius": 0.5 },
+          { "name": "Северные ворота", "description": "Крепостной бастион и подъемный мост", "pos_x": 120.8, "pos_y": -79.2, "radius": 0.4 },
+          { "name": "Речной причал", "description": "Деревянные сходни и склады", "pos_x": 119.5, "pos_y": -80.6, "radius": 0.4 }
+        ]
       },
       {
         "id": "loc_darkwood",
@@ -155,6 +167,11 @@ export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдиза�
         "state_name": "Северный Предел",
         "type": "landmark",
         "terrain_type": "forest",
+        "danger_level": "danger",
+        "pos_x": 185.0,
+        "pos_y": -45.0,
+        "bounds_shape": "circle",
+        "bounds_data": { "radius": 50 },
         "description": "Древний угрюмый бор, окутанный вечным туманом. Вековые сосны закрывают солнце, повсюду мхи и следы диких зверей.",
         "zones": [
           { "id": "loc2_edge", "name": "Опушка и старый тракт", "type": "open" },
@@ -165,7 +182,12 @@ export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдиза�
           "loc2_edge": { "loc2_edge": 0, "loc2_shrine": 150, "loc2_cave": 220 },
           "loc2_shrine": { "loc2_edge": 150, "loc2_shrine": 0, "loc2_cave": 90 },
           "loc2_cave": { "loc2_edge": 220, "loc2_shrine": 90, "loc2_cave": 0 }
-        }
+        },
+        "subzones": [
+          { "name": "Опушка и старый тракт", "description": "Вход под своды вековых деревьев", "pos_x": 185.0, "pos_y": -45.0, "radius": 1.0 },
+          { "name": "Заброшенное святилище", "description": "Омшалые каменные колонны", "pos_x": 185.6, "pos_y": -44.8, "radius": 0.5 },
+          { "name": "Вход в пещеру волков", "description": "Мрачный разлом в скале", "pos_x": 186.2, "pos_y": -45.4, "radius": 0.4 }
+        ]
       }
     ]
   },
@@ -338,10 +360,16 @@ export const MASTER_AI_WORLD_PROMPT = `Ты — ведущий геймдиза�
    - \`arcs[].goals[]\`: Конкретные задачи. ИИ-пайплайн игры анализирует действия игроков и автоматически отмечает выполненные цели, продвигая сюжет к следующему акту!
    - \`arcs[].key_npcs[]\` и \`key_locations[]\`: Подсказывают ИИ-Мастеру, вокруг кого строить события акта.
 
-3. **ГЕОГРАФИЯ, НАВИГАЦИЯ И ТУМАН ВОЙНЫ (geography):**
+3. **ГЕОГРАФИЯ, ФИЗИЧЕСКИЕ КООРДИНАТЫ, РАДАР И ТУМАН ВОЙНЫ (geography):**
+   - \`world.settings.scale_unit\`: Единица измерения мира: "километры" (для континентов, планет) или "метры" (для локальных городов/островов).
+   - \`world.settings.time_flow_ratio\`: Скорость течения времени (по умолчанию 1.0).
    - \`states[].name\` / \`description\`: Государства мира. Служат контекстом для законов, культуры и политики.
    - \`locations[].state_name\`: Привязка локации к государству (должно точно совпадать с \`states[].name\`).
    - \`locations[].type\`: "capital" | "city" | "village" | "ruins" | "landmark" | "camp" | "dungeon".
+   - \`locations[].pos_x\` и \`locations[].pos_y\`: **Непрерывные координаты на глобальной карте мира** (центр [0, 0]). Движок и миникарта рассчитывают расстояния между городами и время дальних путешествий на их основе!
+   - \`locations[].bounds_shape\` ("circle") и \`bounds_data\` (\`{"radius": 35}\`): Геометрические границы локации в единицах \`scale_unit\`.
+   - \`locations[].danger_level\`: Уровень опасности: "safe" | "normal" | "danger" | "lethal".
+   - \`locations[].subzones[]\`: **Физические подзоны внутри локации для радара** (\`name\`, \`description\`, \`pos_x\`, \`pos_y\`, \`radius\`). По ним радар миникарты с высокой точностью позиционирует игроков и NPC!
    - \`locations[].terrain_type\`: СТРОГО одно из:
      • "urban" (город, крепость) — средний обзор, высокая плотность NPC.
      • "building" (внутри здания/замка) — ближний бой, закрытые зоны, слышимость шагов.
@@ -1106,6 +1134,25 @@ export function renderLobby(container, user) {
             <label class="form-label">Описание</label>
             <textarea class="input" id="new-city-desc" rows="2" placeholder="Атмосферное описание локации..."></textarea>
           </div>
+          <div class="npc-form-grid" style="margin-top: 0.5rem;">
+            <div class="form-group">
+              <label class="form-label">Координата X (pos_x)</label>
+              <input type="number" step="any" class="input" id="new-city-pos-x" value="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Координата Y (pos_y)</label>
+              <input type="number" step="any" class="input" id="new-city-pos-y" value="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Уровень опасности</label>
+              <select class="input" id="new-city-danger">
+                <option value="safe">🟢 Безопасная (safe)</option>
+                <option value="normal" selected>🟡 Обычная (normal)</option>
+                <option value="danger">🟠 Опасная (danger)</option>
+                <option value="lethal">🔴 Смертельная (lethal)</option>
+              </select>
+            </div>
+          </div>
           <div class="form-group">
             <label class="form-label">Стартовые подзоны (через запятую)</label>
             <input class="input" id="new-city-subzones" value="Вход, Центральная часть, Окрестности" placeholder="Вход, Рыночная площадь, Закоулки" />
@@ -1166,15 +1213,20 @@ export function renderLobby(container, user) {
           </div>
           
           <div class="schema-section">
-            <h4>🗺️ 2. География, Навигация и Туман Войны (geography)</h4>
-            <p class="form-hint" style="margin-bottom: 0.5rem;">Определяют пространственную структуру, видимость и расчет времени в пути:</p>
+            <h4>🗺️ 2. География, Физические Координаты, Радар и Туман Войны (geography)</h4>
+            <p class="form-hint" style="margin-bottom: 0.5rem;">Определяют непрерывное пространство мира, дальность обзора, радар миникарты и расчет времени в пути:</p>
             <ul>
+              <li><strong>world.settings.scale_unit</strong> — единица измерения пространства сессии (<strong>"километры"</strong> для масштабных континентов/планет, <strong>"метры"</strong> для локальных регионов).</li>
+              <li><strong>world.settings.time_flow_ratio</strong> — скорость течения времени в сессии (1.0 = нормальное время).</li>
               <li><strong>states[]</strong> — государства и регионы (<code>name</code>, <code>description</code>, законы, культура).</li>
               <li><strong>locations[]</strong> — поселения, руины, подземелья, замки:</li>
               <li style="margin-left: 1rem;"><code>name</code>, <code>state_name</code> (точное совпадение со states), <code>type</code> (capital / city / village / ruins / landmark / camp / dungeon).</li>
+              <li style="margin-left: 1rem;"><code>pos_x</code>, <code>pos_y</code> — <strong>глобальные непрерывные координаты</strong> на карте мира (центр [0, 0]). Движок и радар используют их для расчёта расстояний и времени дальних путешествий!</li>
+              <li style="margin-left: 1rem;"><code>bounds_shape</code>, <code>bounds_data</code> — форма и радиус охвата территории (например <code>{"radius": 35}</code>).</li>
+              <li style="margin-left: 1rem;"><code>danger_level</code> — уровень угрозы: <strong>safe</strong> (безопасно) | <strong>normal</strong> | <strong>danger</strong> | <strong>lethal</strong> (смертельно).</li>
               <li style="margin-left: 1rem;"><code>terrain_type</code> — <strong>тип местности</strong> (СТРОГО: <strong>urban</strong> | <strong>building</strong> | <strong>forest</strong> | <strong>cave</strong> | <strong>mountain</strong> | <strong>open</strong>). Определяет дальность Тумана Войны, звуки окружения, скрытность и модификатор шагов!</li>
-              <li style="margin-left: 1rem;"><code>zones[]</code> — внутренние зоны локации (2-5 шт.) с типами <strong>open</strong> (улица, площадь) / <strong>closed</strong> (таверна, подвал).</li>
-              <li style="margin-left: 1rem;"><code>location_map</code> — <strong>симметричная матрица расстояний в метрах</strong> (<code>map[A][B] === map[B][A]</code>, <code>map[A][A] = 0</code>). По ней GPS-движок с точностью до минуты рассчитывает время перемещения героев и дальность атак!</li>
+              <li style="margin-left: 1rem;"><code>subzones[]</code> — <strong>физические подзоны для радара миникарты</strong> (<code>name</code>, <code>description</code>, <code>pos_x</code>, <code>pos_y</code>, <code>radius</code>), в которых герои и NPC позиционируются и перемещаются в реальном времени.</li>
+              <li style="margin-left: 1rem;"><code>location_map</code> — <strong>симметричная матрица расстояний в метрах</strong> между зонами (<code>map[A][B] === map[B][A]</code>, <code>map[A][A] = 0</code>).</li>
             </ul>
           </div>
           
@@ -1314,8 +1366,9 @@ export function renderLobby(container, user) {
           const canResume = genStatus.intelligent || genStatus.creatures;
           return `
           <div class="card world-card">
-            <div class="card-header">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
               <h3 class="card-title">🌍 ${w.name}</h3>
+              ${w.settings?.scale_unit ? `<span style="font-size: 0.75rem; color: var(--accent-gold); font-family: var(--font-mono); background: rgba(212,163,89,0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(212,163,89,0.2);">📏 ${w.settings.scale_unit}</span>` : ''}
             </div>
             <pre class="world-settings-preview">${JSON.stringify(w.settings || {}, null, 2).slice(0, 200)}</pre>
             <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -1989,6 +2042,8 @@ export function renderLobby(container, user) {
                     <strong class="city-name">${loc.name}</strong>
                     <span class="city-type">${loc.type}</span>
                     <span class="terrain-badge terrain-${loc.terrain_type || 'open'}">${TERRAIN_LABELS[loc.terrain_type] || '🌾 Равнина'}</span>
+                    <span style="font-size:0.75rem; color: var(--accent-gold); font-family: var(--font-mono);">📍 (${loc.pos_x ?? 0}, ${loc.pos_y ?? 0})</span>
+                    <span style="font-size:0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">${loc.danger_level || 'normal'}</span>
                     <span class="zone-count-badge">🎯 ${Array.isArray(loc.zones) ? loc.zones.length : 0} подзон</span>
                     ${loc.location_map && Object.keys(loc.location_map).length ? '<span style="font-size:0.7rem; color:#81c784;">🗺️ Дистанции OK</span>' : '<span style="font-size:0.7rem; color:#e57373;">⚠️ Без матрицы</span>'}
                   </div>
@@ -2025,6 +2080,23 @@ export function renderLobby(container, user) {
                         <option value="cave" ${loc.terrain_type === 'cave' ? 'selected' : ''}>🕳️ Пещера / Катакомбы (cave)</option>
                         <option value="mountain" ${loc.terrain_type === 'mountain' ? 'selected' : ''}>⛰️ Горы / Скалы (mountain)</option>
                         <option value="open" ${loc.terrain_type === 'open' ? 'selected' : ''}>🌾 Открытая равнина / Поля (open)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Координата X</label>
+                      <input type="number" step="any" class="input" id="edit-loc-pos-x-${loc.id}" value="${loc.pos_x ?? 0}" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Координата Y</label>
+                      <input type="number" step="any" class="input" id="edit-loc-pos-y-${loc.id}" value="${loc.pos_y ?? 0}" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Уровень опасности</label>
+                      <select class="input" id="edit-loc-danger-${loc.id}">
+                        <option value="safe" ${loc.danger_level === 'safe' ? 'selected' : ''}>🟢 Безопасная (safe)</option>
+                        <option value="normal" ${loc.danger_level === 'normal' || !loc.danger_level ? 'selected' : ''}>🟡 Обычная (normal)</option>
+                        <option value="danger" ${loc.danger_level === 'danger' ? 'selected' : ''}>🟠 Опасная (danger)</option>
+                        <option value="lethal" ${loc.danger_level === 'lethal' ? 'selected' : ''}>🔴 Смертельная (lethal)</option>
                       </select>
                     </div>
                   </div>
@@ -2169,6 +2241,10 @@ export function renderLobby(container, user) {
               if (mapRaw) location_map = JSON.parse(mapRaw);
             } catch { toast.error('Ошибка в JSON матрицы расстояний'); return; }
 
+            const pos_x = parseFloat(document.getElementById(`edit-loc-pos-x-${locId}`)?.value || 0);
+            const pos_y = parseFloat(document.getElementById(`edit-loc-pos-y-${locId}`)?.value || 0);
+            const danger_level = document.getElementById(`edit-loc-danger-${locId}`)?.value || 'normal';
+
             try {
               await updateLocation(locId, {
                 name,
@@ -2177,6 +2253,9 @@ export function renderLobby(container, user) {
                 description,
                 zones,
                 location_map,
+                pos_x,
+                pos_y,
+                danger_level,
               });
               toast.success(`Локация «${name}» сохранена!`);
               await loadGeography(worldId);
@@ -2320,6 +2399,10 @@ export function renderLobby(container, user) {
         });
       });
 
+      const pos_x = parseFloat(document.getElementById('new-city-pos-x')?.value || 0);
+      const pos_y = parseFloat(document.getElementById('new-city-pos-y')?.value || 0);
+      const danger_level = document.getElementById('new-city-danger')?.value || 'normal';
+
       try {
         await createLocation({
           state_id: stateId,
@@ -2329,6 +2412,9 @@ export function renderLobby(container, user) {
           description,
           zones,
           location_map,
+          pos_x,
+          pos_y,
+          danger_level,
         });
         toast.success(`Локация «${name}» создана с ${zones.length} подзонами!`);
         document.getElementById('createCityForm').style.display = 'none';

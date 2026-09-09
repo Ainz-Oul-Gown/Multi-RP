@@ -320,22 +320,47 @@ export async function countNPCs(loreText) {
 export async function generateWorldGeography(loreText, worldId, onProgress = () => {}) {
   console.log('[generateWorldGeography] Starting, loreText length:', loreText.length);
   
-  const SYSTEM_PROMPT = `На основе описания мира создай географию: государства и города.
+  const SYSTEM_PROMPT = `На основе описания мира создай подробную географию: государства, города и локации с физической системой координат.
 Правила:
 - Если в тексте уже упоминаются государства/королевства/регионы — используй ВСЕ их (сколько бы их ни было)
 - Если в тексте нет упоминаний государств — создай 3 новых государства
 - Для каждого государства создай минимум 6 локаций: 1 столица (type: capital) + 5 городов/деревень/руин/достопримечательностей (type: city, village, ruins, landmark)
+- Масштаб: задай scale_unit ("километры" для масштабных миров/континентов, "метры" для локальных регионов/островов)
+- Для каждой локации укажи:
+  * pos_x и pos_y: физические координаты на глобальной карте (центр [0, 0], реалистичный континентальный разброс от сотен до тысяч км при scale_unit="километры")
+  * terrain_type: СТРОГО одно из: "urban" | "building" | "forest" | "cave" | "mountain" | "open"
+  * danger_level: "safe" (столицы, торговые центры) | "normal" (окрестности, деревни) | "danger" (глухие леса, руины) | "lethal" (древние логова, аномалии)
+  * bounds_shape: "circle"
+  * bounds_data: {"radius": 25}
+  * subzones: массив из 2-4 физических подзон внутри локации для радара миникарты (например: [{"name": "Входные ворота", "pos_x": -5, "pos_y": 0, "radius": 10}, {"name": "Рыночная площадь", "pos_x": 0, "pos_y": 0, "radius": 15}])
 - Названия должны быть уникальными и соответствовать сеттингу мира
-- Описания краткие, но атмосферные (1-2 предложения)
 - ВСЕ названия и описания должны быть на русском языке
 
 Верни ТОЛЬКО JSON объект:
 {
+  "scale_unit": "километры",
   "states": [{"name": "Название государства", "description": "Описание"}],
-  "locations": [{"name": "Название локации", "type": "capital|city|village|ruins|landmark", "state_name": "Название государства", "description": "Описание"}]
+  "locations": [
+    {
+      "name": "Название локации",
+      "type": "capital|city|village|ruins|landmark",
+      "state_name": "Название государства",
+      "terrain_type": "urban|building|forest|cave|mountain|open",
+      "danger_level": "safe|normal|danger|lethal",
+      "pos_x": 120.0,
+      "pos_y": -80.0,
+      "bounds_shape": "circle",
+      "bounds_data": {"radius": 25},
+      "description": "Описание локации",
+      "subzones": [
+        {"name": "Вход", "description": "Главный вход", "pos_x": -2, "pos_y": 0, "radius": 5},
+        {"name": "Центральная площадь", "description": "Сердце поселения", "pos_x": 0, "pos_y": 0, "radius": 10}
+      ]
+    }
+  ]
 }`;
 
-  onProgress({ step: 'geography_start', message: 'Генерация государств и городов...' });
+  onProgress({ step: 'geography_start', message: 'Генерация государств и городов с физическими координатами...' });
   
   const response = await callOpenRouter(SYSTEM_PROMPT, loreText);
   
@@ -370,6 +395,16 @@ export async function generateWorldGeography(loreText, worldId, onProgress = () 
 export async function saveWorldGeography(worldId, geography) {
   console.log('[saveWorldGeography] Saving geography for world:', worldId);
   
+  // Update scale_unit in world settings if provided
+  if (geography.scale_unit) {
+    try {
+      const { data: w } = await supabase.from('worlds').select('settings').eq('id', worldId).maybeSingle();
+      const newSettings = { ...(w?.settings || {}), scale_unit: geography.scale_unit };
+      await supabase.from('worlds').update({ settings: newSettings }).eq('id', worldId);
+    } catch (sErr) {
+      console.warn('[saveWorldGeography] Could not update world scale_unit:', sErr.message);
+    }
+  }
   
   // Insert states
   const statesToInsert = geography.states.map(s => ({
@@ -401,6 +436,12 @@ export async function saveWorldGeography(worldId, geography) {
     state_id: stateMap[l.state_name] || insertedStates[0]?.id,
     name: l.name,
     type: l.type || 'city',
+    terrain_type: ['urban', 'building', 'forest', 'cave', 'mountain', 'open'].includes(l.terrain_type) ? l.terrain_type : 'open',
+    danger_level: ['safe', 'normal', 'danger', 'lethal'].includes(l.danger_level) ? l.danger_level : 'normal',
+    pos_x: Number(l.pos_x) || 0,
+    pos_y: Number(l.pos_y) || 0,
+    bounds_shape: ['circle', 'rect', 'polygon'].includes(l.bounds_shape) ? l.bounds_shape : 'circle',
+    bounds_data: (l.bounds_data && typeof l.bounds_data === 'object') ? l.bounds_data : { radius: 25 },
     description: l.description || '',
   }));
   
@@ -415,6 +456,27 @@ export async function saveWorldGeography(worldId, geography) {
   }
   
   console.log('[saveWorldGeography] Saved', insertedLocations.length, 'locations');
+  
+  // Insert subzones if present
+  for (let idx = 0; idx < geography.locations.length; idx++) {
+    const origLoc = geography.locations[idx];
+    const newLoc = insertedLocations[idx];
+    if (newLoc && Array.isArray(origLoc.subzones) && origLoc.subzones.length > 0) {
+      const subzonesToInsert = origLoc.subzones.map(sub => ({
+        location_id: newLoc.id,
+        name: sub.name,
+        description: sub.description || '',
+        pos_x: Number(sub.pos_x) || 0,
+        pos_y: Number(sub.pos_y) || 0,
+        radius: Number(sub.radius) || 10,
+      }));
+      try {
+        await supabase.from('subzones').insert(subzonesToInsert);
+      } catch (subErr) {
+        console.warn('[saveWorldGeography] Error inserting subzones:', subErr.message);
+      }
+    }
+  }
   
   return { states: insertedStates, locations: insertedLocations };
 }

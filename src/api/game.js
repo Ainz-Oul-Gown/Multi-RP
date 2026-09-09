@@ -244,14 +244,16 @@ export function extractMissingColumn(error) {
 
 export async function createSession(session) {
   let worldName = session.world_name || null;
-  if (!worldName && session.world_id) {
+  let scaleUnit = 'метры';
+  if (session.world_id) {
     try {
       const { data: w } = await supabase
         .from('worlds')
-        .select('name')
+        .select('name, settings')
         .eq('id', session.world_id)
         .maybeSingle();
       if (w?.name) worldName = w.name;
+      if (w?.settings?.scale_unit) scaleUnit = w.settings.scale_unit;
     } catch {}
   }
 
@@ -262,6 +264,7 @@ export async function createSession(session) {
     game_hour: 10,
     game_minute: 0,
     world_name: worldName,
+    scale_unit: session.scale_unit || scaleUnit,
     ...session,
   };
 
@@ -836,10 +839,10 @@ export async function exportWorld(worldId) {
   const loreFiles = await getLoreFiles(worldId);
   const folders = await getLoreFilesByFolder(worldId);
   
-  // Get states with locations
+  // Get states with locations and subzones
   const { data: states } = await supabase
     .from('states')
-    .select('*, locations(*)')
+    .select('*, locations(*, subzones(*))')
     .eq('world_id', worldId)
     .order('name');
   
@@ -852,7 +855,7 @@ export async function exportWorld(worldId) {
     .order('name');
 
   const exportData = {
-    version: '3.1',
+    version: '3.2',
     exported_at: new Date().toISOString(),
     schema: 'multirp_world_full',
     world: {
@@ -879,8 +882,21 @@ export async function exportWorld(worldId) {
           type: l.type,
           terrain_type: l.terrain_type || 'open',
           description: l.description,
+          pos_x: l.pos_x ?? 0,
+          pos_y: l.pos_y ?? 0,
+          bounds_shape: l.bounds_shape || 'circle',
+          bounds_data: l.bounds_data || { radius: 100 },
+          danger_level: l.danger_level || 'normal',
           zones: l.zones || [],
           location_map: l.location_map || {},
+          subzones: l.subzones?.map(sub => ({
+            id: sub.id,
+            name: sub.name,
+            description: sub.description || '',
+            pos_x: sub.pos_x ?? 0,
+            pos_y: sub.pos_y ?? 0,
+            radius: sub.radius ?? 10,
+          })) || [],
         })) || [],
       })) || [],
     },
@@ -915,6 +931,9 @@ export async function exportWorld(worldId) {
         catchphrases: n.catchphrases,
         location_id: n.location_id,
         state_id: n.state_id,
+        pos_x: n.pos_x ?? 0,
+        pos_y: n.pos_y ?? 0,
+        subzone_id: n.subzone_id || null,
         special_attacks: n.special_attacks,
         base_attacks: n.base_attacks,
         is_pack: n.is_pack_instance,
@@ -938,9 +957,10 @@ export function downloadJSON(data, filename) {
 }
 
 // Get schema info for display
+// Get schema info for display
 export function getWorldSchema() {
   return {
-    version: '3.1',
+    version: '3.2',
     description: 'Полный экспорт мира MultiRP',
     structure: {
       version: 'string - версии формата',
@@ -948,7 +968,7 @@ export function getWorldSchema() {
       schema: 'идентификатор схемы',
       world: {
         name: 'string - название мира',
-        settings: 'object - настройки мира (races, classes, max_level и т.д.)',
+        settings: 'object - настройки мира (scale_unit: "метры"|"километры", time_flow_ratio, races, classes, max_level и т.д.)',
         description: 'string - описание',
       },
       lore_files: [{
@@ -968,7 +988,22 @@ export function getWorldSchema() {
             id: 'UUID',
             name: 'string - название локации',
             type: 'capital|city|village|ruins|landmark',
+            terrain_type: 'urban|building|forest|cave|mountain|open',
+            danger_level: 'safe|normal|danger|lethal',
+            pos_x: 'number - X координата на глобальной карте',
+            pos_y: 'number - Y координата на глобальной карте',
+            bounds_shape: 'circle|rect|polygon',
+            bounds_data: 'object - { radius: 50 }',
             description: 'string - описание',
+            zones: ['string - зоны локации'],
+            location_map: 'object - матрица расстояний',
+            subzones: [{
+              name: 'string - название подзоны',
+              description: 'string - описание',
+              pos_x: 'number - координата X подзоны',
+              pos_y: 'number - координата Y подзоны',
+              radius: 'number - радиус подзоны',
+            }],
           }],
         }],
       },
@@ -993,8 +1028,11 @@ export function getWorldSchema() {
           catchphrases: ['string - фразы'],
           location_id: 'UUID - ID локации (только для NPC)',
           state_id: 'UUID - ID государства',
-          special_attacks: [{ name, description, damage_type, damage_dice, is_dot, dot_duration }],
-          base_attacks: [{ name, description, damage_type, damage_dice }],
+          pos_x: 'number - текущая X координата NPC',
+          pos_y: 'number - текущая Y координата NPC',
+          subzone_id: 'UUID - ID подзоны нахождения',
+          special_attacks: 'array - [{ name, description, damage_type, damage_dice, is_dot, dot_duration }]',
+          base_attacks: 'array - [{ name, description, damage_type, damage_dice }]',
           is_pack: 'boolean - ходит стаей',
           is_unique: 'boolean - уникальный экземпляр (получает имя)',
           // Расчётные поля (не включаются в экспорт): hp, max_hp, armor_class, initiative, saving_throws
@@ -1132,11 +1170,13 @@ export async function importWorld(jsonData, ownerId) {
     loreCount = files.length;
   }
 
-  // Import geography (states + locations)
+  // Import geography (states + locations + subzones)
   const locationIdMap = {}; // old ID -> new ID
   const locationNameMap = {}; // name -> new ID (for JSON without IDs)
   const stateIdMap = {}; // old ID -> new ID
   const stateNameMap = {}; // name -> new ID (for JSON without IDs)
+  const subzoneIdMap = {}; // old subzone ID -> new subzone ID
+  const subzoneNameMap = {}; // subzone name -> new subzone ID
   let stateCount = 0;
   let locationCount = 0;
   
@@ -1165,6 +1205,13 @@ export async function importWorld(jsonData, ownerId) {
           type: l.type || 'city',
           terrain_type: l.terrain_type || null,
           description: l.description || '',
+          pos_x: Number(l.pos_x) || 0,
+          pos_y: Number(l.pos_y) || 0,
+          bounds_shape: ['circle', 'rect', 'polygon'].includes(l.bounds_shape) ? l.bounds_shape : 'circle',
+          bounds_data: (l.bounds_data && typeof l.bounds_data === 'object') ? l.bounds_data : { radius: 100 },
+          danger_level: ['safe', 'normal', 'danger', 'lethal'].includes(l.danger_level) ? l.danger_level : 'normal',
+          zones: Array.isArray(l.zones) ? l.zones : [],
+          location_map: (l.location_map && typeof l.location_map === 'object') ? l.location_map : {},
         }));
         
         const { data: newLocations, error: locError } = await supabase
@@ -1175,13 +1222,45 @@ export async function importWorld(jsonData, ownerId) {
         if (locError) throw locError;
         locationCount += newLocations.length;
         
-        // Map old location IDs to new ones
-        state.locations.forEach((oldLoc, idx) => {
-          if (newLocations[idx]) {
-            locationIdMap[oldLoc.id] = newLocations[idx].id;
-            locationNameMap[oldLoc.name.toLowerCase().trim()] = newLocations[idx].id;
+        // Map old location IDs to new ones and insert subzones
+        for (let idx = 0; idx < state.locations.length; idx++) {
+          const oldLoc = state.locations[idx];
+          const newLoc = newLocations[idx];
+          if (newLoc) {
+            locationIdMap[oldLoc.id] = newLoc.id;
+            locationNameMap[oldLoc.name.toLowerCase().trim()] = newLoc.id;
+
+            // Import subzones for this location if provided
+            if (Array.isArray(oldLoc.subzones) && oldLoc.subzones.length > 0) {
+              const subzonesToInsert = oldLoc.subzones.map(sub => ({
+                location_id: newLoc.id,
+                name: sub.name,
+                description: sub.description || '',
+                pos_x: Number(sub.pos_x) || 0,
+                pos_y: Number(sub.pos_y) || 0,
+                radius: Number(sub.radius) || 10,
+              }));
+
+              try {
+                const { data: insertedSubzones, error: subError } = await supabase
+                  .from('subzones')
+                  .insert(subzonesToInsert)
+                  .select();
+
+                if (!subError && insertedSubzones) {
+                  oldLoc.subzones.forEach((oldSub, sIdx) => {
+                    if (insertedSubzones[sIdx]) {
+                      if (oldSub.id) subzoneIdMap[oldSub.id] = insertedSubzones[sIdx].id;
+                      if (oldSub.name) subzoneNameMap[oldSub.name.toLowerCase().trim()] = insertedSubzones[sIdx].id;
+                    }
+                  });
+                }
+              } catch (subErr) {
+                console.warn('[importWorld] Subzones import warning:', subErr.message);
+              }
+            }
           }
-        });
+        }
       }
     }
   }
@@ -1309,6 +1388,9 @@ export async function importWorld(jsonData, ownerId) {
         catchphrases: n.catchphrases || [],
         location_id: locationId,
         state_id: stateId,
+        pos_x: Number(n.pos_x) || 0,
+        pos_y: Number(n.pos_y) || 0,
+        subzone_id: (n.subzone_id && subzoneIdMap[n.subzone_id]) || (n.subzone_name && subzoneNameMap[n.subzone_name.toLowerCase().trim()]) || null,
         // Новые поля психологии и отыгрыша NPC
         temperament: (typeof n.temperament === 'string' && n.temperament.trim()) ? n.temperament.trim() : 'pragmatist',
         motivation: (typeof n.motivation === 'string' && n.motivation.trim()) ? n.motivation.trim() : 'Жить в безопасности и достатке',

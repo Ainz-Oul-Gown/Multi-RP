@@ -9,6 +9,8 @@ export interface StartingLocationResult {
   location_name: string;
   location_type: string;
   state_name: string;
+  pos_x?: number;
+  pos_y?: number;
   weather: string;
   atmosphere: {
     sounds: string[];
@@ -411,7 +413,11 @@ export async function ensureStartingLocation(params: {
 
   // 3. Создаём локацию в locations
   let locationId = session.current_location_id;
+  let locPosX = 0;
+  let locPosY = 0;
   try {
+    locPosX = Math.floor(Math.random() * 401) - 200; // -200..200
+    locPosY = Math.floor(Math.random() * 401) - 200; // -200..200
     const { data: newLoc, error: locErr } = await supabase
       .from("locations")
       .insert({
@@ -421,6 +427,8 @@ export async function ensureStartingLocation(params: {
         type: generatedData.location_type,
         description: generatedData.description,
         weather: generatedData.weather,
+        pos_x: locPosX,
+        pos_y: locPosY,
       })
       .select("id, name, type")
       .single();
@@ -489,6 +497,8 @@ export async function ensureStartingLocation(params: {
     location_name: generatedData.location_name,
     location_type: generatedData.location_type,
     state_name: generatedData.state_name,
+    pos_x: locPosX,
+    pos_y: locPosY,
     weather: generatedData.weather,
     atmosphere: generatedData.atmosphere,
     game_time: gameTime,

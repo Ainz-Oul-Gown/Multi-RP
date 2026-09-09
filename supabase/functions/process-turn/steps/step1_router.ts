@@ -217,9 +217,15 @@ export function buildUserMessage(input: any): string {
   const lines: string[] = [];
 
   const actionText = input?.player_action_text || input?.action_text || "";
-  lines.push(`## Действие игрока`);
+  lines.push(`## ДЕЙСТВИЕ ИГРОКА`);
   lines.push(`"${cleanTextForAI(actionText)}"`);
   lines.push("");
+
+  if (input?.recent_history) {
+    lines.push(`## ПОСЛЕДНИЕ РЕПЛИКИ И СОБЫТИЯ ЧАТА (КОНТЕКСТ)`);
+    lines.push(input.recent_history);
+    lines.push("");
+  }
 
   const p = input?.player || {};
   const playerName = p.name || input?.player_name || "Герой";

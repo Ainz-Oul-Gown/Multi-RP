@@ -76,6 +76,9 @@ export interface RouterInputContext {
   // Текст игрока
   player_action_text: string;
 
+  // Недавняя история чата для контекста (кто кому что сказал)
+  recent_history?: string;
+
   // Снимок игрока
   player: PlayerSnapshot;
 

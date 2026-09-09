@@ -24,16 +24,20 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetched = fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
+        // Если сеть доступна, кэшируем ответ и возвращаем его
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => cached);
-      return cached || fetched;
-    })
+      })
+      .catch(() => {
+        // Если сети нет, возвращаем из кэша
+        return caches.match(event.request);
+      })
   );
 });

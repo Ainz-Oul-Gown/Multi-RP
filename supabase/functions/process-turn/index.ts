@@ -28,118 +28,10 @@ import { RouterInputContext } from "./types.ts";
 import { evaluateStoryProgress } from "../_shared/storyProgressEvaluator.ts";
 import { ensureLocationMapAndTerrain, TERRAIN_MODIFIERS, TerrainType } from "../_shared/fog_location_generator.ts";
 import { executeRoundCycleNpcSimulation } from "../_shared/npc_world_simulator.ts";
+import { parseStatAllocationIntent } from "./steps/stat_allocation_utils.ts";
+import { advanceTime } from "./steps/time_utils.ts";
 
-// ============================================
-// ТУМАН ВОЙНЫ — вспомогательные функции (Deno-совместимые, без внешних импортов)
-// ============================================
-
-/** Distance Tier — уровни расстояния */
-const DISTANCE_TIER = { SAME_ROOM: 0, CLOSE: 1, NEARBY: 2, DISTRICT: 3, FAR: 4, VERY_FAR: 5 };
-
-/** Пороги слышимости/видимости по типу события */
-const FOG_THRESHOLDS: Record<string, { audioTier: number; visualTier: number }> = {
-  whisper:       { audioTier: 0, visualTier: 0 },
-  speech:        { audioTier: 2, visualTier: 1 },
-  shout:         { audioTier: 2, visualTier: 1 },
-  combat_light:  { audioTier: 1, visualTier: 1 },
-  combat_medium: { audioTier: 2, visualTier: 1 },
-  combat_heavy:  { audioTier: 3, visualTier: 2 },
-  magic_minor:   { audioTier: 1, visualTier: 2 },
-  magic_major:   { audioTier: 3, visualTier: 3 },
-  explosion:     { audioTier: 4, visualTier: 4 },
-  cataclysm:     { audioTier: 5, visualTier: 5 },
-};
-
-/** Шаблоны дистантного восприятия */
-const FOG_TEMPLATES: Record<string, Record<number, { audio?: string[]; visual?: string[] }>> = {
-  whisper: { 1: { audio: ["За стеной едва слышен тихий шёпот."] } },
-  speech:  {
-    1: { audio: ["Через стену доносится чей-то голос."] },
-    2: { audio: ["Откуда-то неподалёку слышны голоса."] },
-  },
-  shout: {
-    1: { audio: ["Сквозь стену кто-то прокричал: «{content}»", "За стеной раздался крик: «{content}»"] },
-    2: { audio: ["Откуда-то {dir} донёсся крик.", "С {dir} долетел отчаянный возглас."] },
-  },
-  combat_light: {
-    1: { audio: ["За стеной слышен шум возни.", "По ту сторону стены что-то упало."] },
-    2: { audio: ["С {dir} доносится едва слышный шум."] },
-  },
-  combat_medium: {
-    1: { audio: ["За стеной звенит сталь и слышны грузные удары."] },
-    2: { audio: ["С {dir} доносится звон стали.", "Где-то {dir} идёт потасовка."] },
-    3: { audio: ["С {dir} долетает отдалённый шум боя."] },
-  },
-  combat_heavy: {
-    1: { audio: ["Оглушительный грохот — стены дрожат."] },
-    2: { audio: ["С {dir} мощный удар, земля дрогнула."], visual: ["В стороне {dir} взметнулось облако пыли."] },
-    3: { audio: ["На {dir} послышался взрыв."], visual: ["Над крышами {dir} поднимается дым."] },
-  },
-  magic_minor: {
-    1: { visual: ["По ту сторону стены вспыхнул необычный свет."] },
-    2: { visual: ["Откуда-то {dir} проскочила странная вспышка."] },
-  },
-  magic_major: {
-    1: { audio: ["За стеной — оглушительная вспышка."] },
-    2: { audio: ["С {dir} удар грома."], visual: ["Над {dir} вспыхнул ослепительный свет."] },
-    3: { audio: ["На {dir} что-то взорвалось с магическим грохотом."], visual: ["На горизонте {dir} расцвёл всплеск энергии."] },
-  },
-  explosion: {
-    1: { audio: ["Оглушительный взрыв! Стены дрожат."] },
-    2: { audio: ["Рядом {dir} прогремел взрыв."], visual: ["С {dir} взметнулись языки пламени."] },
-    3: { audio: ["На {dir} отдалённый взрыв, земля дрогнула."], visual: ["Над крышами {dir} клубится чёрный дым."] },
-    4: { audio: ["Издалека {dir} донёсся едва слышный гром."], visual: ["Вдали {dir} поднимается столб дыма."] },
-  },
-  cataclysm: {
-    2: { audio: ["С {dir} чудовищный грохот, земля трясётся."], visual: ["Небо {dir} окрашивается в багровый цвет."] },
-    3: { audio: ["Земля дрожит — на {dir} что-то невообразимое."], visual: ["Горизонт {dir} пылает."] },
-    4: { audio: ["Отдалённый гул и дрожание почвы с {dir}."], visual: ["На горизонте {dir} — зарево."] },
-    5: { visual: ["Вдали {dir} что-то горит — столб дыма виден даже отсюда."] },
-  },
-};
-
-const FOG_DIRS = ["севере", "юге", "востоке", "западе", "северо-востоке", "юго-западе"];
-
-function fogPickNarrative(eventType: string, tier: number, content: string): string | null {
-  const tpl = FOG_TEMPLATES[eventType]?.[tier];
-  if (!tpl) return null;
-  const lines = [...(tpl.audio || []), ...(tpl.visual || [])];
-  if (!lines.length) return null;
-  const dir = FOG_DIRS[Math.floor(Math.random() * FOG_DIRS.length)];
-  const line = lines[Math.floor(Math.random() * lines.length)];
-  return line.replace(/\{dir\}/g, dir).replace(/\{content\}/g, content || "...");
-}
-
-/**
- * Расчёт эффективных порогов слышимости и видимости с учётом типа местности (terrain_type).
- * Никаких эвристик — тип события передаётся напрямую из решения ИИ (Router).
- */
-function fogGetEffectiveThresholds(eventType: string, terrainType?: string | null): { audioTier: number; visualTier: number } {
-  const base = FOG_THRESHOLDS[eventType] || FOG_THRESHOLDS.combat_medium;
-  const mod = terrainType && (TERRAIN_MODIFIERS as any)[terrainType]
-    ? (TERRAIN_MODIFIERS as any)[terrainType]
-    : { audioMod: 0, visualMod: 0 };
-
-  return {
-    audioTier: Math.max(0, Math.min(5, base.audioTier + mod.audioMod)),
-    visualTier: Math.max(0, Math.min(5, base.visualTier + mod.visualMod)),
-  };
-}
-
-function fogGetDistanceTier(sourceZone: string | null, targetZone: string | null, locationMap: Record<string, Record<string, number>>): number {
-  if (!sourceZone || !targetZone) return 0;
-  if (sourceZone === targetZone) return 0;
-  const direct = locationMap?.[sourceZone]?.[targetZone];
-  if (direct !== undefined) return Number(direct);
-  const reverse = locationMap?.[targetZone]?.[sourceZone];
-  if (reverse !== undefined) return Number(reverse);
-  return DISTANCE_TIER.CLOSE; // разные зоны, карты нет → считаем соседними
-}
-
-function fogExtractSpeech(actionText: string): string {
-  const m = actionText.match(/[«"]([^»"]{1,120})[»"]/);
-  return m ? m[1] : "";
-}
+import { DISTANCE_TIER, fogPickNarrative, fogGetEffectiveThresholds, fogGetDistanceTier, fogExtractSpeech } from "./steps/fog_of_war_utils.ts";
 
 function getPlayerPartyId(p: any, session: any): string | null {
   if (p?.party_id) return String(p.party_id);
@@ -199,6 +91,9 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
       });
       if (!response.ok) {
         lastError = new Error(`AI API error: ${response.status}`);
+        if (response.status === 401 || response.status === 402 || response.status === 403) {
+          throw lastError;
+        }
         continue; // retry
       }
       const data = await response.json();
@@ -219,90 +114,6 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
 
 
 // ============================================
-// Утилиты времени (для fallback в GPS, если Шаг 1.6 не вызывается)
-// ============================================
-function advanceTime(base: { year: number; month: number; day: number; hour: number; minute: number }, addMinutes: number) {
-  let totalMin = (base.hour * 60 + base.minute + addMinutes);
-  let day = base.day, month = base.month, year = base.year;
-  const minutesInDay = 24 * 60;
-  while (totalMin >= minutesInDay) {
-    totalMin -= minutesInDay;
-    day++;
-    if (day > 30) { day = 1; month++; if (month > 12) { month = 1; year++; } }
-  }
-  return { year, month, day, hour: Math.floor(totalMin / 60), minute: totalMin % 60 };
-}
-
-// ============================================
-// Парсинг намерения прокачки характеристик из текста чата
-// ============================================
-function parseStatAllocationIntent(text: string): { stat: string; points: number } | null {
-  if (!text) return null;
-  const clean = text.toLowerCase().trim();
-
-  const statMap: Record<string, string> = {
-    "сил": "STR", "str": "STR", "strength": "STR",
-    "ловк": "DEX", "dex": "DEX", "dexterity": "DEX",
-    "вынос": "CON", "con": "CON", "constitution": "CON", "тело": "CON",
-    "интел": "INT", "int": "INT", "intelligence": "INT", "ум": "INT",
-    "мудр": "WIS", "wis": "WIS", "wisdom": "WIS",
-    "хариз": "CHA", "cha": "CHA", "charisma": "CHA", "обаяни": "CHA"
-  };
-
-  // Шаблон 1: глагол + количество + характеристика
-  // "вкладываю 2 очка в силу", "качаю ловкость +1", "добавь 2 в выносливость", "повысь мудрость на 1"
-  const verbRegex = /(?:вкладываю|вкачиваю|качаю|повышаю|добавь|распредели|кинь|увеличь|подними|повысь|поставь)\s*(?:себе)?\s*(\+?\d+)?\s*(?:очка|очко|очков|ед|пт|поинт[а-я]*)?\s*(?:в|на|к)?\s*([а-яa-z]+)/i;
-  const match1 = clean.match(verbRegex);
-  if (match1) {
-    const rawPts = match1[1] ? parseInt(match1[1].replace("+", ""), 10) : 1;
-    const rawStat = match1[2].toLowerCase();
-    for (const [prefix, statKey] of Object.entries(statMap)) {
-      if (rawStat.startsWith(prefix)) {
-        return { stat: statKey, points: isNaN(rawPts) || rawPts <= 0 ? 1 : rawPts };
-      }
-    }
-  }
-
-  // Шаблон 2: характеристика + количество ("ловкость +1", "сила 2", "интеллект +2")
-  const statFirstRegex = /([а-яa-z]+)\s*(?:\+|\bплюс\b|\bна\b)?\s*(\d+)\s*(?:очка|очко|очков|ед|пт|поинт[а-я]*)?/i;
-  const match2 = clean.match(statFirstRegex);
-  if (match2) {
-    const rawStat = match2[1].toLowerCase();
-    const rawPts = parseInt(match2[2], 10);
-    for (const [prefix, statKey] of Object.entries(statMap)) {
-      if (rawStat.startsWith(prefix)) {
-        return { stat: statKey, points: isNaN(rawPts) || rawPts <= 0 ? 1 : rawPts };
-      }
-    }
-  }
-
-  // Шаблон 3: +N характеристика ("+1 сила", "+2 выносливость")
-  const plusFirstRegex = /\+(\d+)\s*(?:в|на|к)?\s*([а-яa-z]+)/i;
-  const match3 = clean.match(plusFirstRegex);
-  if (match3) {
-    const rawPts = parseInt(match3[1], 10);
-    const rawStat = match3[2].toLowerCase();
-    for (const [prefix, statKey] of Object.entries(statMap)) {
-      if (rawStat.startsWith(prefix)) {
-        return { stat: statKey, points: isNaN(rawPts) || rawPts <= 0 ? 1 : rawPts };
-      }
-    }
-  }
-
-  // Шаблон 4: глагол + характеристика без цифр ("качаю силу", "повысь ловкость" -> 1 очко)
-  const simpleRegex = /(?:вкладываю|вкачиваю|качаю|повышаю|увеличь|подними|повысь)\s*(?:себе)?\s*(?:в|на|к)?\s*([а-яa-z]+)/i;
-  const match4 = clean.match(simpleRegex);
-  if (match4) {
-    const rawStat = match4[1].toLowerCase();
-    for (const [prefix, statKey] of Object.entries(statMap)) {
-      if (rawStat.startsWith(prefix)) {
-        return { stat: statKey, points: 1 };
-      }
-    }
-  }
-
-  return null;
-}
 
 // ============================================
 // Main Handler — 5-шаговый конвейер

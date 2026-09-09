@@ -268,25 +268,14 @@ export async function createSession(session) {
     ...session,
   };
 
-  let insertData = { ...sessionData };
-  for (let attempt = 0; attempt < 5; attempt++) {
-    let { data, error } = await supabase
-      .from('sessions')
-      .insert(insertData)
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('sessions')
+    .insert(sessionData)
+    .select()
+    .single();
 
-    if (!error) return data;
-
-    const missingCol = extractMissingColumn(error);
-    if (missingCol && insertData[missingCol] !== undefined) {
-      console.warn(`[createSession] Column '${missingCol}' not in schema cache, retrying without it...`);
-      delete insertData[missingCol];
-      continue;
-    }
-
-    throw error;
-  }
+  if (error) throw error;
+  return data;
 }
 
 export async function updateSession(id, updates) {
@@ -369,26 +358,14 @@ export async function getPlayer(id) {
 export async function createPlayer(player) {
   // race_ac_bonus is derived from race and not needed in the database table
   const { race_ac_bonus, ...playerData } = player;
-  let insertData = { ...playerData };
+  const { data, error } = await supabase
+    .from('players')
+    .insert(playerData)
+    .select()
+    .single();
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    let { data, error } = await supabase
-      .from('players')
-      .insert(insertData)
-      .select()
-      .single();
-
-    if (!error) return data;
-
-    const missingCol = extractMissingColumn(error);
-    if (missingCol && insertData[missingCol] !== undefined) {
-      console.warn(`[createPlayer] Column '${missingCol}' not in schema cache, retrying without it...`);
-      delete insertData[missingCol];
-      continue;
-    }
-
-    throw error;
-  }
+  if (error) throw error;
+  return data;
 }
 
 export async function updatePlayer(id, updates) {
@@ -446,19 +423,8 @@ export async function removeSessionPlayer(sessionId, playerId) {
     console.warn('[removeSessionPlayer] Edge Function manage-player fallback error:', edgeErr);
   }
 
-  // 3. Прямое удаление на клиенте с обязательной проверкой затронутых строк
-  try {
-    await supabase.from('turn_queue').delete().eq('player_id', playerId);
-  } catch {}
-  try {
-    await supabase.from('player_injuries').delete().eq('player_id', playerId);
-  } catch {}
-  try {
-    await supabase.from('player_skills').delete().eq('player_id', playerId);
-  } catch {}
-  try {
-    await supabase.from('inventory').delete().eq('player_id', playerId);
-  } catch {}
+  // 3. Прямое удаление на клиенте
+  // Связанные таблицы (turn_queue, inventory и т.д.) удалятся автоматически благодаря ON DELETE CASCADE в базе данных.
 
   const { data: deletedRows, error } = await supabase
     .from('players')
@@ -769,26 +735,14 @@ export async function getCharacterCard(id) {
 
 export async function createCharacterCard(card) {
   const { race_ac_bonus, ...cardData } = card;
-  let insertData = { ...cardData };
+  const { data, error } = await supabase
+    .from('character_cards')
+    .insert(cardData)
+    .select()
+    .single();
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    let { data, error } = await supabase
-      .from('character_cards')
-      .insert(insertData)
-      .select()
-      .single();
-
-    if (!error) return data;
-
-    const missingCol = extractMissingColumn(error);
-    if (missingCol && insertData[missingCol] !== undefined) {
-      console.warn(`[createCharacterCard] Column '${missingCol}' not in schema cache, retrying without it...`);
-      delete insertData[missingCol];
-      continue;
-    }
-
-    throw error;
-  }
+  if (error) throw error;
+  return data;
 }
 
 export async function updateCharacterCard(id, updates) {

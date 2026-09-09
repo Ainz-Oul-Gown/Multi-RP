@@ -27,46 +27,11 @@ import {
   deleteStoryline,
   toggleGoalCompletion,
 } from '../api/storyline.js';
+import { renderMessage } from './components/game-chat-ui.js';
 
-function sanitizeAIText(raw) {
-  if (!raw) return "";
-  let text = String(raw);
-  text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-  text = text.replace(/[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\u00FF\u0400-\u04FF]/g, "");
-  text = text.replace(/\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, "");
-  text = text.replace(/[A-Za-z0-9+\/]{20,}={0,2}/g, "");
-  text = text.replace(/https?:\/\/[^\s]+/g, "");
-  text = text.replace(/[A-Za-z]:\\[^\s]+/g, "");
-  text = text.replace(/\s+/g, " ").trim();
-  if (text.length > 4000) text = text.slice(0, 4000);
-  return text;
-}
-
+import { sanitizeAIText, escapeHtml, formatRpText } from '../utils/text.js';
 import { formatGameCalendarDate } from '../utils/gameDate.js';
-export { formatGameCalendarDate };
-
-export function escapeHtml(text) {
-  if (!text) return '';
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-export function formatRpText(text) {
-  if (!text) return '';
-  let escaped = escapeHtml(text);
-  // 1. Direct spoken speech in quotes FIRST, before any HTML attributes are added:
-  escaped = escaped.replace(/&quot;([^&]+?)&quot;/g, "<span class='rp-speech'>«$1»</span>");
-  escaped = escaped.replace(/«([^»]+?)»/g, "<span class='rp-speech'>«$1»</span>");
-  escaped = escaped.replace(/[“”]([^“”]+?)[“”]/g, "<span class='rp-speech'>«$1»</span>");
-  // 2. Actions / physical acts / thoughts in **...** or *...*
-  escaped = escaped.replace(/\*\*([^*]+?)\*\*/g, "<span class='rp-action'>*$1*</span>");
-  escaped = escaped.replace(/\*([^*]+?)\*/g, "<span class='rp-action'>*$1*</span>");
-  return escaped;
-}
+export { formatGameCalendarDate, escapeHtml, formatRpText };
 
 export async function renderGame(container, sessionId, user) {
   let session = null;
@@ -535,7 +500,7 @@ export async function renderGame(container, sessionId, user) {
             ${messages.length
               ? messages
                   .filter(isMessageVisibleToCurrentPlayer)
-                  .map(renderMessage)
+                  .map(msg => renderMessage(msg, user?.id, currentPlayer?.id))
                   .join('')
               : `
               <div class="chat-empty">
@@ -734,126 +699,6 @@ export async function renderGame(container, sessionId, user) {
     }
   }
 
-  function renderMessage(msg) {
-    const safeMsgId = escapeHtml(msg.id || '');
-    if (msg.sender_type === 'master') {
-      const isGlobalLog = msg.metadata?.is_global === true || msg.metadata?.type === 'global_log';
-      const isFogMsg    = msg.metadata?.fog_filtered === true || msg.metadata?.type === 'fog_perception';
-
-      if (isFogMsg) {
-        // 🌫️ Дистантное восприятие — серо-коричневый стиль, курсив
-        return `
-          <div class="message message-fog" data-message-id="${safeMsgId}" style="
-            display: flex; gap: 0.75rem; align-items: flex-start;
-            padding: 0.6rem 0.8rem;
-            background: linear-gradient(135deg, rgba(30,23,19,0.7) 0%, rgba(20,15,12,0.8) 100%);
-            border-left: 3px solid rgba(180,140,80,0.3);
-            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-            margin: 2px 0;
-            opacity: 0.85;
-          ">
-            <div style="font-size: 1rem; flex-shrink: 0; opacity: 0.6;">🌫️</div>
-            <div style="font-style: italic; color: var(--text-muted); font-size: var(--fs-sm); line-height: 1.5;">${formatRpText(msg.content)}</div>
-          </div>
-        `;
-      }
-
-      return `
-        <div class="message ${isGlobalLog ? 'message-system' : 'message-master'}" data-message-id="${safeMsgId}">
-          <div class="message-avatar">${isGlobalLog ? '📜' : '🎭'}</div>
-          <div class="message-body">
-            ${isGlobalLog ? '<div class="message-sender" style="font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: 2px;">Общий лог комнаты</div>' : ''}
-            <div class="message-text">${formatRpText(msg.content)}</div>
-          </div>
-        </div>
-      `;
-    }
-
-    if (msg.sender_type === 'system') {
-      if (msg.metadata?.type === 'world_cycle_log') {
-        const roundNum = msg.metadata.round_number || '';
-        const rawLines = (msg.content || '').split('\n').map(l => l.trim()).filter(Boolean);
-        const header = rawLines[0] || `🌍 Хроника мира | Раунд ${roundNum}`;
-        const items = rawLines.slice(1);
-        return `
-          <div class="message message-world-chronicle" data-message-id="${safeMsgId}" style="
-            padding: 0.85rem 1.1rem;
-            margin: 0.6rem 0;
-            background: linear-gradient(135deg, rgba(20, 24, 34, 0.95) 0%, rgba(12, 16, 26, 0.98) 100%);
-            border: 1px solid rgba(245, 158, 11, 0.35);
-            border-left: 4px solid #f59e0b;
-            border-radius: var(--radius-sm);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-          ">
-            <div style="font-size: 0.88rem; font-weight: 700; color: #fbbf24; margin-bottom: 0.45rem; display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 1.1rem;">🌍</span>
-              <span>${escapeHtml(header.replace(/^[🌍*#\s]+/, ''))}</span>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); line-height: 1.5; color: #e2e8f0;">
-              ${items.length > 0
-                ? items.map(it => `<div style="padding-left: 6px; border-left: 2px solid rgba(245, 158, 11, 0.25);">${formatRpText(it.replace(/^[•*\-\s]+/, ''))}</div>`).join('')
-                : `<div style="color: var(--text-muted); font-style: italic;">В дальних краях день прошёл спокойно.</div>`
-              }
-            </div>
-          </div>
-        `;
-      }
-
-      return `
-        <div class="message message-system" data-message-id="${safeMsgId}">
-          <div class="message-text">${formatRpText(msg.content)}</div>
-        </div>
-      `;
-    }
-
-    // Сообщения от NPC / спутников
-    if (msg.sender_type === 'npc') {
-      const npcName = msg.sender_name || 'Персонаж';
-      const isCompanion = msg.metadata?.is_companion === true;
-      return `
-        <div class="message message-npc" data-message-id="${safeMsgId}" style="
-          display: flex; gap: 0.75rem; align-items: flex-start;
-          padding: 0.75rem 1rem;
-          background: linear-gradient(135deg, rgba(28, 22, 40, 0.85) 0%, rgba(18, 15, 28, 0.95) 100%);
-          border-left: 3px solid ${isCompanion ? '#10b981' : '#8b5cf6'};
-          border-radius: 0 var(--radius-md) var(--radius-md) 0;
-          margin: 4px 0;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        ">
-          <div class="message-avatar" style="font-size: 1.25rem; flex-shrink: 0; background: ${isCompanion ? 'rgba(16, 185, 129, 0.15)' : 'rgba(139, 92, 246, 0.15)'}; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid ${isCompanion ? 'rgba(16, 185, 129, 0.3)' : 'rgba(139, 92, 246, 0.3)'};">
-            ${isCompanion ? '🤝' : '👤'}
-          </div>
-          <div class="message-body" style="flex: 1;">
-            <div class="message-sender" style="font-size: var(--fs-xs); font-weight: 600; color: ${isCompanion ? '#34d399' : '#a78bfa'}; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
-              <span>${escapeHtml(npcName)}</span>
-              ${isCompanion ? '<span style="font-size: 0.7rem; padding: 1px 5px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #6ee7b7;">Спутник</span>' : ''}
-            </div>
-            <div class="message-text" style="color: var(--text-primary); font-size: var(--fs-sm); line-height: 1.5;">${formatRpText(msg.content)}</div>
-          </div>
-        </div>
-      `;
-    }
-
-    // Сообщения игроков: показываем свои
-    if (msg.sender_type === 'player') {
-      const myUserId = user?.id;
-      const myPlayerId = currentPlayer?.id;
-      const isMine = (myUserId && msg.sender_id === myUserId) || (myPlayerId && msg.sender_id === myPlayerId);
-      if (isMine) {
-        return `
-          <div class="message message-self" data-message-id="${safeMsgId}">
-            <div class="message-body">
-              <div class="message-text">${formatRpText(msg.content)}</div>
-            </div>
-            <div class="message-avatar">⚔️</div>
-          </div>
-        `;
-      }
-      return ''; // Чужие сообщения скрыты (события приходят через общий лог)
-    }
-
-    return '';
-  }
 
   function renderProfile(player) {
     if (!player) return '';
@@ -2539,7 +2384,7 @@ export async function renderGame(container, sessionId, user) {
     const empty = chatMessages.querySelector('.chat-empty');
     if (empty) empty.remove();
 
-    const html = renderMessage(msg);
+    const html = renderMessage(msg, user?.id, currentPlayer?.id);
     if (!html) return;
 
     const div = document.createElement('div');

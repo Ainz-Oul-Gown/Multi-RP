@@ -31,13 +31,19 @@ class Router {
       paramNames.push(name);
       return '([^/]+)';
     });
-    this.routes = this.routes.filter((r) => r.pattern !== pattern);
-    this.routes.push({
+    const newRoute = {
       pattern,
       regex: new RegExp(`^${regexStr}$`),
       paramNames,
       handler,
-    });
+    };
+
+    const existingIndex = this.routes.findIndex((r) => r.pattern === pattern);
+    if (existingIndex !== -1) {
+      this.routes[existingIndex] = newRoute;
+    } else {
+      this.routes.push(newRoute);
+    }
     return this;
   }
 

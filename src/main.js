@@ -20,17 +20,38 @@ if ('serviceWorker' in navigator) {
 // Show loading state while Supabase resolves auth
 app.innerHTML = '<div class="page page-centered"><p style="color: var(--text-muted);">Загрузка...</p></div>';
 
+// Define routes once
+router
+  .add('/', () => {
+    renderLobby(app, currentUser);
+  })
+  .add('/auth', () => {
+    renderAuth(app);
+  })
+  .add('/session/:id/settings', (params) => {
+    renderSessionSettings(app, params.id, currentUser);
+  })
+  .add('/session/:id', (params) => {
+    renderGame(app, params.id, currentUser).then((cleanup) => {
+      cleanupFn = cleanup;
+    });
+  });
+
 async function bootstrap() {
   // Асинхронно считываем конфигурацию БД (URL-инвайт или сохраненную в IndexedDB)
   await initDatabaseFromStorageOrUrl();
 
+  let isInitialAuth = true;
+
   // Auth state listener — handles both initial check AND OAuth callback
   onAuthStateChange((user) => {
-    // Если пользователь не изменился (тот же ID), не перемонтируем заново роутер и активную страницу
-    if (currentUser && user && currentUser.id === user.id) {
+    // Если статус авторизации не изменился
+    if (!isInitialAuth && currentUser === user) return;
+    if (!isInitialAuth && currentUser && user && currentUser.id === user.id) {
       currentUser = user;
       return;
     }
+    isInitialAuth = false;
 
     currentUser = user;
     if (cleanupFn) {
@@ -42,23 +63,6 @@ async function bootstrap() {
       renderAuth(app);
       return;
     }
-
-    // Define routes
-    router
-      .add('/', () => {
-        renderLobby(app, user);
-      })
-      .add('/auth', () => {
-        renderAuth(app);
-      })
-      .add('/session/:id/settings', (params) => {
-        renderSessionSettings(app, params.id, user);
-      })
-      .add('/session/:id', (params) => {
-        renderGame(app, params.id, user).then((cleanup) => {
-          cleanupFn = cleanup;
-        });
-      });
 
     router.resolve();
   });

@@ -15,7 +15,7 @@ import {
   getCharacterCards, getNpcRelationships, getNpcMemories, getRelationshipTierLabelClient,
   getPlayerSkills, allocateStatPoints,
   updatePlayerZone, updateLocationMap, getSessionPlayersWithZones,
-  removeSessionPlayer
+  removeSessionPlayer, getWorldMapData
 } from '../api/game.js';
 import { STATS, calculateHpFromStats, calculateDerivedStats, getRaceAcBonus, calculateInitiative, calculateArmorClass, calculateSavingThrows, getItemMeta } from '../config.js';
 import { toast } from '../utils/toast.js';
@@ -89,6 +89,14 @@ export async function renderGame(container, sessionId, user) {
   let isInitialRender = true;
   let isCancelled = false;
   let isSelectingCharacter = false;
+  let cachedWorldMapData = null;
+  let mapZoom = 0.5;
+  let mapPanX = 0;
+  let mapPanY = 0;
+  let isMapWide = false;
+  let isMapFullscreen = false;
+  let showMapLabels = true;
+  let mapHasBeenCentered = false;
   const instanceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5); // unique per render call
 
   // ============================================
@@ -176,6 +184,13 @@ export async function renderGame(container, sessionId, user) {
           console.warn('Failed to load player skills:', skErr);
         }
         await checkTurnQueue();
+      }
+
+      // Предзагрузка данных карты мира
+      if (session?.world_id) {
+        getWorldMapData(session.world_id)
+          .then((data) => { cachedWorldMapData = data; })
+          .catch((err) => console.warn('World map preload warning:', err));
       }
     } catch (err) {
       if (isCancelled) return;
@@ -635,37 +650,56 @@ export async function renderGame(container, sessionId, user) {
         </div>
 
         <!-- Map & Radar Panel -->
-        <div class="side-panel ${activePanel === 'map' ? 'open' : ''}" id="mapPanel">
+        <div class="side-panel ${activePanel === 'map' ? 'open' : ''} ${isMapWide ? 'map-wide' : ''} ${isMapFullscreen ? 'map-fullscreen' : ''}" id="mapPanel">
           <div class="side-panel-header">
-            <h2>🗺️ Карта и Радар</h2>
-            <button class="btn btn-ghost btn-icon" id="closeMapBtn">✕</button>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h2>🗺️ Карта мира</h2>
+              <span id="mapScaleBadge" class="badge badge-info" style="font-size: 0.65rem;">${escapeHtml(session?.scale_unit || 'километры')}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <button class="btn btn-ghost btn-icon" id="toggleMapWideBtn" title="Широкий режим / обычный" aria-label="Шире" style="font-size: 0.85rem;">
+                ${isMapWide ? '◀▶' : '▶◀'}
+              </button>
+              <button class="btn btn-ghost btn-icon" id="toggleMapFullscreenBtn" title="Во весь экран" aria-label="Во весь экран" style="font-size: 0.85rem;">
+                ${isMapFullscreen ? '🗗' : '⛶'}
+              </button>
+              <button class="btn btn-ghost btn-icon" id="closeMapBtn" title="Закрыть">✕</button>
+            </div>
           </div>
-          <div class="side-panel-content" id="mapContent" style="padding: 1rem; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
-            <div style="font-size: var(--fs-xs); color: var(--text-muted); align-self: flex-start;">
-              Масштаб мира: <strong>${escapeHtml(session?.scale_unit || 'метры')}</strong> • Сложность: <strong>${escapeHtml(session?.difficulty || 'normal')}</strong>
+          <div class="side-panel-content map-panel-content" id="mapContent">
+            <!-- Toolbar -->
+            <div class="map-toolbar">
+              <div class="map-status-info">
+                <span>📍 <strong>(${currentPlayer?.pos_x ?? 0}, ${currentPlayer?.pos_y ?? 0})</strong></span>
+                <span id="mapZoomLevelText" style="color: var(--accent-gold); font-weight: 600;">100%</span>
+              </div>
+              <div class="map-controls-group">
+                <button class="btn btn-ghost btn-xs" id="mapRecenterBtn" title="Отцентровать на моём герое">🎯 Я</button>
+                <button class="btn btn-ghost btn-xs" id="mapFitWorldBtn" title="Показать весь мир">🌐 Мир</button>
+                <button class="btn btn-ghost btn-xs" id="mapZoomInBtn" title="Приблизить">➕</button>
+                <button class="btn btn-ghost btn-xs" id="mapZoomOutBtn" title="Отдалить">➖</button>
+                <button class="btn btn-ghost btn-xs" id="mapToggleLabelsBtn" title="Показать/скрыть названия">${showMapLabels ? '🏷️ Вкл' : '🏷️ Выкл'}</button>
+              </div>
             </div>
-            <div class="radar-container" style="position: relative; width: 280px; height: 280px; background: radial-gradient(circle, rgba(20, 35, 25, 0.9) 0%, rgba(10, 18, 14, 0.95) 100%); border: 2px solid var(--accent-gold); border-radius: 50%; box-shadow: 0 0 20px rgba(0,0,0,0.8), inset 0 0 15px rgba(34, 197, 94, 0.2); overflow: hidden; display: flex; align-items: center; justify-content: center;">
-              <!-- Radar Grid Rings -->
-              <div style="position: absolute; width: 200px; height: 200px; border: 1px dashed rgba(34, 197, 94, 0.25); border-radius: 50%;"></div>
-              <div style="position: absolute; width: 100px; height: 100px; border: 1px dashed rgba(34, 197, 94, 0.35); border-radius: 50%;"></div>
-              <div style="position: absolute; width: 100%; height: 1px; background: rgba(34, 197, 94, 0.2);"></div>
-              <div style="position: absolute; height: 100%; width: 1px; background: rgba(34, 197, 94, 0.2);"></div>
-              
-              <!-- Player Blip (Center) -->
-              <div style="position: absolute; width: 12px; height: 12px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 8px #22c55e; z-index: 5;" title="Вы: (${currentPlayer?.pos_x ?? 0}, ${currentPlayer?.pos_y ?? 0})"></div>
-              
-              <!-- Party Fellows Blips -->
-              ${(allPlayers || []).filter(p => p.id !== currentPlayer?.id).map((p, idx) => {
-                const dx = Math.max(-120, Math.min(120, ((p.pos_x ?? 0) - (currentPlayer?.pos_x ?? 0)) * 2));
-                const dy = Math.max(-120, Math.min(120, ((p.pos_y ?? 0) - (currentPlayer?.pos_y ?? 0)) * 2));
-                return `
-                  <div style="position: absolute; transform: translate(${dx}px, ${dy}px); width: 10px; height: 10px; background: #38bdf8; border-radius: 50%; box-shadow: 0 0 6px #38bdf8; z-index: 4;" title="${escapeHtml(p.name || 'Напарник')}"></div>
-                `;
-              }).join('')}
+
+            <!-- Viewport -->
+            <div class="map-viewport" id="mapViewport">
+              <div class="map-stage" id="mapStage">
+                <!-- SVG Grid layer -->
+                <svg id="mapGridSvg" class="map-grid-svg"></svg>
+                <!-- Locations markers layer -->
+                <div id="mapLocationsLayer"></div>
+                <!-- Players layer -->
+                <div id="mapPlayersLayer"></div>
+              </div>
+
+              <!-- Floating Info Card (when location clicked) -->
+              <div id="mapLocationPopup" class="map-info-popup" style="display: none;"></div>
             </div>
-            <div style="display: flex; gap: 1rem; font-size: var(--fs-xs); color: var(--text-muted);">
-              <span>🟢 Вы</span>
-              <span>🔵 Напарники</span>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-xs); color: var(--text-muted); padding: 0 4px;">
+              <span>🖱️ Скролл / 🤏 Щипок: Зум • ✋ Свайп: Сдвиг</span>
+              <span>🟢 Вы • 🔵 Напарники • 🏰 Города</span>
             </div>
           </div>
         </div>
@@ -1671,6 +1705,9 @@ export async function renderGame(container, sessionId, user) {
     if (activePanel === 'story') {
       bindStoryEvents();
     }
+    if (activePanel === 'map') {
+      refreshMapPanel();
+    }
 
     // Busy state: interrupt long term activity
     document.getElementById('interruptBusyBtn')?.addEventListener('click', async () => {
@@ -1839,6 +1876,405 @@ export async function renderGame(container, sessionId, user) {
     }
   }
 
+  // ============================================
+  // ИНТЕРАКТИВНАЯ КАРТА МИРА
+  // ============================================
+  function getCoordScale() {
+    const unit = (session?.scale_unit || 'километры').toLowerCase();
+    const isKm = unit.startsWith('кил') || unit.startsWith('km') || unit === 'км';
+    return isKm ? 0.35 : 1.5;
+  }
+
+  function applyMapTransform() {
+    const stage = document.getElementById('mapStage');
+    if (stage) {
+      stage.style.transform = `translate(${mapPanX}px, ${mapPanY}px) scale(${mapZoom})`;
+    }
+    const zoomText = document.getElementById('mapZoomLevelText');
+    if (zoomText) {
+      zoomText.textContent = `${Math.round(mapZoom * 100)}%`;
+    }
+  }
+
+  function recenterMapOnPlayer() {
+    const viewport = document.getElementById('mapViewport');
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const vw = rect.width || 340;
+    const vh = rect.height || 400;
+
+    const scale = getCoordScale();
+    const px = (currentPlayer?.pos_x ?? 0) * scale;
+    const py = (currentPlayer?.pos_y ?? 0) * scale;
+
+    mapPanX = Math.round(vw / 2 - px * mapZoom);
+    mapPanY = Math.round(vh / 2 - py * mapZoom);
+    applyMapTransform();
+  }
+
+  function fitWorldMap() {
+    const viewport = document.getElementById('mapViewport');
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const vw = rect.width || 340;
+    const vh = rect.height || 400;
+
+    const scale = getCoordScale();
+    const locations = cachedWorldMapData?.locations || [];
+    const allX = locations.map(l => (l.pos_x ?? 0) * scale);
+    const allY = locations.map(l => (l.pos_y ?? 0) * scale);
+    allX.push((currentPlayer?.pos_x ?? 0) * scale);
+    allY.push((currentPlayer?.pos_y ?? 0) * scale);
+
+    const minX = Math.min(...allX);
+    const maxX = Math.max(...allX);
+    const minY = Math.min(...allY);
+    const maxY = Math.max(...allY);
+
+    const spanW = Math.max(200, maxX - minX + 120);
+    const spanH = Math.max(200, maxY - minY + 120);
+
+    const fitZoom = Math.max(0.06, Math.min(2.0, Math.min((vw * 0.9) / spanW, (vh * 0.9) / spanH)));
+    mapZoom = fitZoom;
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+    mapPanX = Math.round(vw / 2 - midX * mapZoom);
+    mapPanY = Math.round(vh / 2 - midY * mapZoom);
+    applyMapTransform();
+  }
+
+  function zoomMapStep(factor, pivotX = null, pivotY = null) {
+    const viewport = document.getElementById('mapViewport');
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const cx = pivotX !== null ? pivotX : (rect.width / 2);
+    const cy = pivotY !== null ? pivotY : (rect.height / 2);
+
+    const stageX = (cx - mapPanX) / mapZoom;
+    const stageY = (cy - mapPanY) / mapZoom;
+
+    const newZoom = Math.max(0.05, Math.min(5.0, mapZoom * factor));
+    mapPanX = Math.round(cx - stageX * newZoom);
+    mapPanY = Math.round(cy - stageY * newZoom);
+    mapZoom = newZoom;
+    applyMapTransform();
+  }
+
+  function renderMapElements() {
+    const gridSvg = document.getElementById('mapGridSvg');
+    const locLayer = document.getElementById('mapLocationsLayer');
+    const plLayer = document.getElementById('mapPlayersLayer');
+    if (!gridSvg || !locLayer || !plLayer) return;
+
+    const scale = getCoordScale();
+    const locations = cachedWorldMapData?.locations || [];
+
+    // 1. Grid SVG
+    const gridSize = 4000;
+    let gridLines = '';
+    const step = 500 * scale;
+    for (let x = -gridSize; x <= gridSize; x += step) {
+      gridLines += `<line x1="${x}" y1="${-gridSize}" x2="${x}" y2="${gridSize}" stroke="rgba(34, 197, 94, 0.08)" stroke-width="1" />`;
+    }
+    for (let y = -gridSize; y <= gridSize; y += step) {
+      gridLines += `<line x1="${-gridSize}" y1="${y}" x2="${gridSize}" y2="${y}" stroke="rgba(34, 197, 94, 0.08)" stroke-width="1" />`;
+    }
+
+    gridSvg.setAttribute('width', `${gridSize * 2}`);
+    gridSvg.setAttribute('height', `${gridSize * 2}`);
+    gridSvg.style.left = `${-gridSize}px`;
+    gridSvg.style.top = `${-gridSize}px`;
+    gridSvg.innerHTML = `
+      <g transform="translate(${gridSize}, ${gridSize})">
+        ${gridLines}
+        <line x1="${-gridSize}" y1="0" x2="${gridSize}" y2="0" stroke="rgba(212, 163, 89, 0.35)" stroke-width="1.5" stroke-dasharray="4,4" />
+        <line x1="0" y1="${-gridSize}" x2="0" y2="${gridSize}" stroke="rgba(212, 163, 89, 0.35)" stroke-width="1.5" stroke-dasharray="4,4" />
+        <circle cx="0" cy="0" r="${1000 * scale}" fill="none" stroke="rgba(34, 197, 94, 0.18)" stroke-width="1" stroke-dasharray="6,6" />
+        <circle cx="0" cy="0" r="${2000 * scale}" fill="none" stroke="rgba(34, 197, 94, 0.18)" stroke-width="1" stroke-dasharray="6,6" />
+        <circle cx="0" cy="0" r="${3000 * scale}" fill="none" stroke="rgba(34, 197, 94, 0.12)" stroke-width="1" stroke-dasharray="8,8" />
+        <circle cx="0" cy="0" r="4" fill="#d4a359" />
+        <text x="8" y="-8" fill="rgba(212, 163, 89, 0.75)" font-size="11" font-family="monospace">Центр мира (0, 0)</text>
+      </g>
+    `;
+
+    // 2. Locations
+    locLayer.innerHTML = locations.map((loc) => {
+      const lx = (loc.pos_x ?? 0) * scale;
+      const ly = (loc.pos_y ?? 0) * scale;
+
+      let icon = '🏰';
+      let pinBg = '#3b82f6';
+      if (loc.is_wild_zone) {
+        icon = '🌲';
+        pinBg = '#10b981';
+      } else if (loc.danger_level === 'deadly' || loc.danger_level === 'extreme') {
+        icon = '💀';
+        pinBg = '#ef4444';
+      } else if (loc.danger_level === 'hard') {
+        icon = '⚠️';
+        pinBg = '#f59e0b';
+      } else if (loc.type === 'capital') {
+        icon = '👑';
+        pinBg = '#8b5cf6';
+      } else if (loc.type === 'dungeon') {
+        icon = '🗝️';
+        pinBg = '#e11d48';
+      }
+
+      return `
+        <div class="map-marker" data-loc-id="${escapeHtml(loc.id)}" style="left: ${lx}px; top: ${ly}px;" title="${escapeHtml(loc.name)} (${loc.pos_x}, ${loc.pos_y})">
+          <div class="map-marker-pin" style="background: ${pinBg};">${icon}</div>
+          <span class="map-marker-label" style="display: ${showMapLabels ? 'block' : 'none'};">${escapeHtml(loc.name)}</span>
+        </div>
+      `;
+    }).join('');
+
+    locLayer.querySelectorAll('.map-marker').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const locId = el.dataset.locId;
+        const loc = locations.find(l => l.id === locId);
+        if (!loc) return;
+        showLocationPopup(loc);
+      });
+    });
+
+    // 3. Players
+    const myScaleX = (currentPlayer?.pos_x ?? 0) * scale;
+    const myScaleY = (currentPlayer?.pos_y ?? 0) * scale;
+
+    const otherPlayersHtml = (allPlayers || [])
+      .filter(p => p.id !== currentPlayer?.id)
+      .map(p => {
+        const px = (p.pos_x ?? 0) * scale;
+        const py = (p.pos_y ?? 0) * scale;
+        return `
+          <div class="map-player-beacon" style="left: ${px}px; top: ${py}px;" title="${escapeHtml(p.name || 'Напарник')} (${p.pos_x ?? 0}, ${p.pos_y ?? 0})">
+            <div class="map-party-dot"></div>
+            <span class="map-marker-label" style="background: rgba(14, 38, 64, 0.9); color: #7dd3fc;">${escapeHtml(p.name || 'Напарник')}</span>
+          </div>
+        `;
+      }).join('');
+
+    plLayer.innerHTML = `
+      ${otherPlayersHtml}
+      <div class="map-player-beacon" style="left: ${myScaleX}px; top: ${myScaleY}px;" title="Вы: (${currentPlayer?.pos_x ?? 0}, ${currentPlayer?.pos_y ?? 0})">
+        <div class="map-player-dot"></div>
+        <span class="map-marker-label" style="background: rgba(10, 40, 20, 0.95); color: #4ade80; font-weight: 700;">🟢 Вы (${currentPlayer?.name || 'Герой'})</span>
+      </div>
+    `;
+  }
+
+  function showLocationPopup(loc) {
+    const popup = document.getElementById('mapLocationPopup');
+    if (!popup) return;
+
+    const subzonesList = (loc.subzones || []).map(sz => `
+      <span class="badge badge-info" style="font-size: 0.65rem;">
+        ${escapeHtml(sz.name)} (R:${sz.radius || 10})
+      </span>
+    `).join(' ') || '<span style="color: var(--text-muted); font-size: 0.75rem;">Нет сабзон</span>';
+
+    const dx = (loc.pos_x ?? 0) - (currentPlayer?.pos_x ?? 0);
+    const dy = (loc.pos_y ?? 0) - (currentPlayer?.pos_y ?? 0);
+    const dist = Math.round(Math.sqrt(dx * dx + dy * dy));
+    const unit = session?.scale_unit || 'км';
+
+    popup.style.display = 'flex';
+    popup.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(212, 163, 89, 0.3); padding-bottom: 4px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <strong style="color: var(--accent-gold); font-size: var(--fs-md);">${escapeHtml(loc.name)}</strong>
+          <span class="badge ${loc.danger_level === 'deadly' || loc.danger_level === 'extreme' ? 'badge-danger' : loc.danger_level === 'hard' ? 'badge-warning' : 'badge-success'}" style="font-size: 0.65rem;">
+            ${escapeHtml(loc.danger_level || 'normal')}
+          </span>
+        </div>
+        <button class="btn btn-ghost btn-icon btn-xs" id="closeLocPopupBtn" style="font-size: 0.75rem; width: 22px; height: 22px;">✕</button>
+      </div>
+      <div style="font-size: var(--fs-xs); color: var(--text-muted); display: flex; justify-content: space-between; margin-top: 2px;">
+        <span>Координаты: <strong>[${loc.pos_x ?? 0}, ${loc.pos_y ?? 0}]</strong></span>
+        <span>Дистанция: <strong style="color: #38bdf8;">${dist} ${escapeHtml(unit)}</strong></span>
+      </div>
+      ${loc.description ? `<p style="font-size: var(--fs-xs); color: var(--text-main); margin: 3px 0; line-height: 1.3;">${escapeHtml(loc.description)}</p>` : ''}
+      <div style="margin-top: 4px;">
+        <small style="color: var(--text-muted); display: block; margin-bottom: 2px;">Сабзоны:</small>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+          ${subzonesList}
+        </div>
+      </div>
+    `;
+
+    document.getElementById('closeLocPopupBtn')?.addEventListener('click', () => {
+      popup.style.display = 'none';
+    });
+  }
+
+  function initMapInteractions() {
+    const viewport = document.getElementById('mapViewport');
+    if (!viewport || viewport.dataset.interactionsBound === 'true') return;
+    viewport.dataset.interactionsBound = 'true';
+
+    const activePointers = new Map();
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let initialPinchDist = null;
+    let initialPinchZoom = mapZoom;
+
+    function getDistance(p1, p2) {
+      const dx = p1.clientX - p2.clientX;
+      const dy = p1.clientY - p2.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function getMidpoint(p1, p2) {
+      const rect = viewport.getBoundingClientRect();
+      return {
+        x: (p1.clientX + p2.clientX) / 2 - rect.left,
+        y: (p1.clientY + p2.clientY) / 2 - rect.top,
+      };
+    }
+
+    viewport.addEventListener('pointerdown', (e) => {
+      try {
+        viewport.setPointerCapture(e.pointerId);
+      } catch {}
+      activePointers.set(e.pointerId, e);
+
+      const popup = document.getElementById('mapLocationPopup');
+      if (popup && e.target === viewport) {
+        popup.style.display = 'none';
+      }
+
+      if (activePointers.size === 1) {
+        isDragging = true;
+        dragStartX = e.clientX - mapPanX;
+        dragStartY = e.clientY - mapPanY;
+      } else if (activePointers.size === 2) {
+        isDragging = false;
+        const [p1, p2] = Array.from(activePointers.values());
+        initialPinchDist = getDistance(p1, p2);
+        initialPinchZoom = mapZoom;
+      }
+    });
+
+    viewport.addEventListener('pointermove', (e) => {
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, e);
+
+      if (activePointers.size === 1 && isDragging) {
+        mapPanX = Math.round(e.clientX - dragStartX);
+        mapPanY = Math.round(e.clientY - dragStartY);
+        applyMapTransform();
+      } else if (activePointers.size === 2 && initialPinchDist) {
+        const [p1, p2] = Array.from(activePointers.values());
+        const currentDist = getDistance(p1, p2);
+        if (currentDist > 0) {
+          const factor = currentDist / initialPinchDist;
+          const mid = getMidpoint(p1, p2);
+
+          const stageX = (mid.x - mapPanX) / mapZoom;
+          const stageY = (mid.y - mapPanY) / mapZoom;
+
+          const newZoom = Math.max(0.05, Math.min(5.0, initialPinchZoom * factor));
+          mapPanX = Math.round(mid.x - stageX * newZoom);
+          mapPanY = Math.round(mid.y - stageY * newZoom);
+          mapZoom = newZoom;
+          applyMapTransform();
+        }
+      }
+    });
+
+    const handlePointerEnd = (e) => {
+      activePointers.delete(e.pointerId);
+      try {
+        if (viewport.hasPointerCapture(e.pointerId)) {
+          viewport.releasePointerCapture(e.pointerId);
+        }
+      } catch {}
+
+      if (activePointers.size === 1) {
+        const remaining = Array.from(activePointers.values())[0];
+        isDragging = true;
+        dragStartX = remaining.clientX - mapPanX;
+        dragStartY = remaining.clientY - mapPanY;
+        initialPinchDist = null;
+      } else if (activePointers.size === 0) {
+        isDragging = false;
+        initialPinchDist = null;
+      }
+    };
+
+    viewport.addEventListener('pointerup', handlePointerEnd);
+    viewport.addEventListener('pointercancel', handlePointerEnd);
+
+    viewport.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const factor = e.deltaY < 0 ? 1.18 : 0.85;
+      zoomMapStep(factor, mouseX, mouseY);
+    }, { passive: false });
+  }
+
+  function bindMapToolbarEvents() {
+    document.getElementById('mapZoomInBtn')?.addEventListener('click', () => zoomMapStep(1.3));
+    document.getElementById('mapZoomOutBtn')?.addEventListener('click', () => zoomMapStep(0.77));
+    document.getElementById('mapRecenterBtn')?.addEventListener('click', () => recenterMapOnPlayer());
+    document.getElementById('mapFitWorldBtn')?.addEventListener('click', () => fitWorldMap());
+
+    document.getElementById('mapToggleLabelsBtn')?.addEventListener('click', () => {
+      showMapLabels = !showMapLabels;
+      const btn = document.getElementById('mapToggleLabelsBtn');
+      if (btn) btn.textContent = showMapLabels ? '🏷️ Вкл' : '🏷️ Выкл';
+      document.querySelectorAll('.map-marker-label').forEach((el) => {
+        el.style.display = showMapLabels ? 'block' : 'none';
+      });
+    });
+
+    document.getElementById('toggleMapWideBtn')?.addEventListener('click', () => {
+      isMapWide = !isMapWide;
+      const panel = document.getElementById('mapPanel');
+      if (panel) panel.classList.toggle('map-wide', isMapWide);
+      const btn = document.getElementById('toggleMapWideBtn');
+      if (btn) btn.textContent = isMapWide ? '◀▶' : '▶◀';
+      setTimeout(recenterMapOnPlayer, 100);
+    });
+
+    document.getElementById('toggleMapFullscreenBtn')?.addEventListener('click', () => {
+      isMapFullscreen = !isMapFullscreen;
+      const panel = document.getElementById('mapPanel');
+      if (panel) panel.classList.toggle('map-fullscreen', isMapFullscreen);
+      const btn = document.getElementById('toggleMapFullscreenBtn');
+      if (btn) btn.textContent = isMapFullscreen ? '🗗' : '⛶';
+      setTimeout(recenterMapOnPlayer, 100);
+    });
+  }
+
+  async function refreshMapPanel() {
+    if (!cachedWorldMapData && session?.world_id) {
+      try {
+        cachedWorldMapData = await getWorldMapData(session.world_id);
+      } catch (err) {
+        console.warn('Failed to load world map data:', err);
+      }
+    }
+
+    renderMapElements();
+    initMapInteractions();
+    bindMapToolbarEvents();
+
+    if (!mapHasBeenCentered) {
+      setTimeout(() => {
+        recenterMapOnPlayer();
+        mapHasBeenCentered = true;
+      }, 60);
+    } else {
+      applyMapTransform();
+    }
+  }
+
   const PANEL_IDS = ['story', 'profile', 'inventory', 'npc', 'map', 'settings'];
 
   async function togglePanel(panel) {
@@ -1864,6 +2300,8 @@ export async function renderGame(container, sessionId, user) {
       await refreshProfile();
     } else if (activePanel === 'story') {
       await refreshStoryPanel();
+    } else if (activePanel === 'map') {
+      await refreshMapPanel();
     }
   }
 

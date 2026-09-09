@@ -102,7 +102,10 @@ export type EngineMutation =
   | { type: "INSERT_ITEM"; owner_id: string; owner_type: "player" | "npc" | "location"; item: any }
   | { type: "TRANSFER_ITEM"; item_id: string; from_id: string; to_id: string; from_type: "player" | "npc" | "location"; to_type: "player" | "npc" | "location"; quantity: number }
   | { type: "SPAWN_STRUCTURE"; location_id: string; structure: any }
-  | { type: "ADVANCE_TIME"; minutes: number };
+  | { type: "ADVANCE_TIME"; minutes: number }
+  | { type: "SET_PLAYER_BUSY"; player_id: string; activity: string; minutes: number; reward_preview?: string }
+  | { type: "UPDATE_ENTITY_COORDS"; entity_type: "player" | "npc"; id: string; pos_x: number; pos_y: number }
+  | { type: "SET_PLAYER_SUBZONE"; player_id: string; subzone_id: string | null };
 
 // ============================================
 // Результат одного действия

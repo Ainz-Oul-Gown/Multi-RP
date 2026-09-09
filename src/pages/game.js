@@ -494,6 +494,9 @@ export async function renderGame(container, sessionId, user) {
               <button class="btn btn-ghost btn-icon" id="npcBtn" title="NPC и Окружение" aria-label="Окружение и NPC">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
+              <button class="btn btn-ghost btn-icon" id="mapBtn" title="Карта и Радар" aria-label="Карта">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg>
+              </button>
               <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Настройки" aria-label="Настройки">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               </button>
@@ -541,6 +544,20 @@ export async function renderGame(container, sessionId, user) {
             ` : ''}
           </div>
         </main>
+
+        <!-- Busy State Banner (Если персонаж занят длительным действием) -->
+        <div id="busyStateBanner" class="busy-state-banner" style="display: ${currentPlayer?.is_busy ? 'flex' : 'none'};">
+          <div class="busy-state-info">
+            <span class="busy-icon">⏳</span>
+            <div class="busy-text">
+              <strong>${escapeHtml(currentPlayer?.busy_activity || 'Длительное занятие')}</strong>
+              <small>Осталось: <span id="busyMinutesLeft">${currentPlayer?.busy_remaining_minutes || 0}</span> мин.</small>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="interruptBusyBtn" title="Прервать и забрать накопленный результат">
+            ⏹️ Прервать
+          </button>
+        </div>
 
         <!-- Input Area -->
         <footer class="game-input-area">
@@ -614,6 +631,42 @@ export async function renderGame(container, sessionId, user) {
           </div>
           <div class="side-panel-content" id="npcContent">
             ${cachedNpcData.length ? renderNpcList(cachedNpcData) : '<div style="padding: 1rem; text-align: center; color: var(--text-muted);">Загрузка персонажей...</div>'}
+          </div>
+        </div>
+
+        <!-- Map & Radar Panel -->
+        <div class="side-panel ${activePanel === 'map' ? 'open' : ''}" id="mapPanel">
+          <div class="side-panel-header">
+            <h2>🗺️ Карта и Радар</h2>
+            <button class="btn btn-ghost btn-icon" id="closeMapBtn">✕</button>
+          </div>
+          <div class="side-panel-content" id="mapContent" style="padding: 1rem; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+            <div style="font-size: var(--fs-xs); color: var(--text-muted); align-self: flex-start;">
+              Масштаб мира: <strong>${escapeHtml(session?.scale_unit || 'метры')}</strong> • Сложность: <strong>${escapeHtml(session?.difficulty || 'normal')}</strong>
+            </div>
+            <div class="radar-container" style="position: relative; width: 280px; height: 280px; background: radial-gradient(circle, rgba(20, 35, 25, 0.9) 0%, rgba(10, 18, 14, 0.95) 100%); border: 2px solid var(--accent-gold); border-radius: 50%; box-shadow: 0 0 20px rgba(0,0,0,0.8), inset 0 0 15px rgba(34, 197, 94, 0.2); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+              <!-- Radar Grid Rings -->
+              <div style="position: absolute; width: 200px; height: 200px; border: 1px dashed rgba(34, 197, 94, 0.25); border-radius: 50%;"></div>
+              <div style="position: absolute; width: 100px; height: 100px; border: 1px dashed rgba(34, 197, 94, 0.35); border-radius: 50%;"></div>
+              <div style="position: absolute; width: 100%; height: 1px; background: rgba(34, 197, 94, 0.2);"></div>
+              <div style="position: absolute; height: 100%; width: 1px; background: rgba(34, 197, 94, 0.2);"></div>
+              
+              <!-- Player Blip (Center) -->
+              <div style="position: absolute; width: 12px; height: 12px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 8px #22c55e; z-index: 5;" title="Вы: (${currentPlayer?.pos_x ?? 0}, ${currentPlayer?.pos_y ?? 0})"></div>
+              
+              <!-- Party Fellows Blips -->
+              ${(allPlayers || []).filter(p => p.id !== currentPlayer?.id).map((p, idx) => {
+                const dx = Math.max(-120, Math.min(120, ((p.pos_x ?? 0) - (currentPlayer?.pos_x ?? 0)) * 2));
+                const dy = Math.max(-120, Math.min(120, ((p.pos_y ?? 0) - (currentPlayer?.pos_y ?? 0)) * 2));
+                return `
+                  <div style="position: absolute; transform: translate(${dx}px, ${dy}px); width: 10px; height: 10px; background: #38bdf8; border-radius: 50%; box-shadow: 0 0 6px #38bdf8; z-index: 4;" title="${escapeHtml(p.name || 'Напарник')}"></div>
+                `;
+              }).join('')}
+            </div>
+            <div style="display: flex; gap: 1rem; font-size: var(--fs-xs); color: var(--text-muted);">
+              <span>🟢 Вы</span>
+              <span>🔵 Напарники</span>
+            </div>
           </div>
         </div>
 
@@ -1603,6 +1656,7 @@ export async function renderGame(container, sessionId, user) {
     document.getElementById('profileBtn')?.addEventListener('click', () => togglePanel('profile'));
     document.getElementById('inventoryBtn')?.addEventListener('click', () => togglePanel('inventory'));
     document.getElementById('npcBtn')?.addEventListener('click', () => togglePanel('npc'));
+    document.getElementById('mapBtn')?.addEventListener('click', () => togglePanel('map'));
     document.getElementById('settingsBtn')?.addEventListener('click', () => togglePanel('settings'));
 
     // Close panels
@@ -1610,12 +1664,37 @@ export async function renderGame(container, sessionId, user) {
     document.getElementById('closeProfileBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeInventoryBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeNpcBtn')?.addEventListener('click', () => togglePanel(null));
+    document.getElementById('closeMapBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('closeSettingsBtn')?.addEventListener('click', () => togglePanel(null));
     document.getElementById('panelOverlay')?.addEventListener('click', () => togglePanel(null));
 
     if (activePanel === 'story') {
       bindStoryEvents();
     }
+
+    // Busy state: interrupt long term activity
+    document.getElementById('interruptBusyBtn')?.addEventListener('click', async () => {
+      if (!currentPlayer?.is_busy) return;
+      try {
+        toast.info('Прерывание деятельности...');
+        const { data, error } = await supabase.rpc('interrupt_busy_activity', {
+          p_player_id: currentPlayer.id,
+        });
+        if (error) {
+          toast.error('Не удалось прервать: ' + error.message);
+          return;
+        }
+        toast.success(`Деятельность "${data.interrupted_activity || 'Занятие'}" прервана. Прошло времени: ${data.time_spent_minutes || 0} мин.`);
+        currentPlayer.is_busy = false;
+        currentPlayer.busy_activity = null;
+        currentPlayer.busy_remaining_minutes = 0;
+        const banner = document.getElementById('busyStateBanner');
+        if (banner) banner.style.display = 'none';
+        updateInputState();
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
 
     // Multi-player: take turn button
     document.getElementById('takeTurnBtn')?.addEventListener('click', async () => {
@@ -1760,7 +1839,7 @@ export async function renderGame(container, sessionId, user) {
     }
   }
 
-  const PANEL_IDS = ['story', 'profile', 'inventory', 'npc', 'settings'];
+  const PANEL_IDS = ['story', 'profile', 'inventory', 'npc', 'map', 'settings'];
 
   async function togglePanel(panel) {
     activePanel = activePanel === panel ? null : panel;

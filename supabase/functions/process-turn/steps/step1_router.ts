@@ -140,6 +140,24 @@ export function buildRouterSystemPrompt(): string {
    - null: действие бесшумное и скрытое (осмотр, медитация, чтение, созерцание).
    ВАЖНО: оценивай действие по реальному размаху фантазии игрока без искусственных ограничений.
 
+15. **Длительные действия (long_term_activity / Busy State)**:
+   - Если игрок заявляет длительное занятие, требующее часов, дней или недель непрерывного труда или ожидания (например: "копаю руду 2 недели", "изучаю свиток 3 дня", "сплю 8 часов в таверне", "медитирую сутки"):
+   - Укажи объект \`long_term_activity\`:
+     * is_long_term: true
+     * activity_name: краткое название занятия (например: "Добыча руды в шахте", "Изучение заклинания")
+     * duration_minutes: реальная длительность в минутах (например, 2 недели = 20160 минут, 3 дня = 4320 минут, 8 часов = 480 минут)
+     * reward_preview: что игрок рассчитывает получить при успехе
+   - actions: [] (пустой массив или одиночный action_type: "harvest_ambient" / "craft_custom")
+   - status: "success"
+
+16. **Перемещение и Скорость (move, coordinates, speed_modifier)**:
+   - Если игрок перемещается ("иду к стойке", "лечу на драконе на север", "еду на автобусе", "направляю крейсер к планете"):
+   - action_type: "move"
+   - target_subzone_id: UUID подзоны из блока "## Физические подзоны рядом" (если направляется к ней)
+   - target_item_name: название места назначения
+   - speed_modifier: множитель скорости относительно пешего шага (пешком = 1.0; скрытно = 0.5; верхом на коне = 2.5; на драконе/спорткаре/автобусе = 5.0 - 15.0; на звездолете/крейсере = 50.0+)
+   - stealth_factor: уровень скрытности (0.2 = крадется в тенях; 1.0 = обычный шаг; 2.0 = ревущие двигатели крейсера, шумная толпа)
+
 ## ФОРМАТ ОТВЕТА
 
 Отвечай ТОЛЬКО валидным JSON без markdown-разметки (без \`\`\`json).
@@ -153,6 +171,7 @@ export function buildRouterSystemPrompt(): string {
     {
       "action_type": "attack" | "stealth_attack" | "move" | "loot" | "craft_recipe" | "craft_custom" | "transfer" | "drop" | "talk" | "search" | "harvest_ambient",
       "target_entity_id": "uuid персонажа/игрока/npc или null",
+      "target_subzone_id": "uuid подзоны или null",
       "target_name": "Точное имя цели на русском языке (например: 'Ирис' или 'Бран') или null",
       "target_item_name": "string или null",
       "item_type": "string или null",
@@ -160,6 +179,8 @@ export function buildRouterSystemPrompt(): string {
       "consumed_materials": [{"id": "uuid", "quantity": 1}] или null,
       "stat_to_check": "strength" | "dexterity" | "stealth" | "survival" | "investigation" | "insight" | "none",
       "ai_custom_dc": 10-40 или null,
+      "speed_modifier": 1.0,
+      "stealth_factor": 1.0,
       "improper_tool_usage": {
         "is_improper": true,
         "durability_penalty": 1,
@@ -168,6 +189,12 @@ export function buildRouterSystemPrompt(): string {
       } или null
     }
   ],
+  "long_term_activity": {
+    "is_long_term": true,
+    "activity_name": "Добыча руды",
+    "duration_minutes": 20160,
+    "reward_preview": "Железная руда"
+  } или null,
   "encounter_intent": {
     "type": "targeted" | "random" | "none",
     "target_name": "string или null"
@@ -273,6 +300,15 @@ export function buildUserMessage(input: any): string {
   if (players.length > 0) {
     const playerNames = players.map((p: any) => `"${p.name}"`).join(", ");
     lines.push(`СТРОГОЕ ПРАВИЛО: Если игрок произносит фразу или обращается к персонажу с именем из списка живых игроков (${playerNames}) — например: "Ирис, давай...", целью ЯВЛЯЕТСЯ ИГРОК! target_entity_id ОБЯЗАН быть равен UUID этого игрока! КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО указывать NPC (трактирщика, бармена и т.д.), если в тексте упомянут живой игрок!`);
+    lines.push("");
+  }
+
+  const subzones = Array.isArray(input?.available_subzones) ? input.available_subzones : [];
+  if (subzones.length > 0) {
+    lines.push(`## Физические подзоны рядом (используй их точный target_subzone_id при движении):`);
+    for (const sz of subzones) {
+      lines.push(`- [ID:${sz.id}] "${sz.name}" (координаты: x=${sz.pos_x ?? 0}, y=${sz.pos_y ?? 0}, радиус=${sz.radius ?? 10}м)`);
+    }
     lines.push("");
   }
 

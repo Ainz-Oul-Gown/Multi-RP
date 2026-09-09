@@ -141,6 +141,21 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
   }
 
   // ============================================
+  // Длительное действие (Busy State)
+  // ============================================
+  if (router_output.long_term_activity?.is_long_term) {
+    const lta = router_output.long_term_activity;
+    mutations.push({
+      type: "SET_PLAYER_BUSY",
+      player_id: acting_player.id,
+      activity: lta.activity_name,
+      minutes: lta.duration_minutes,
+      reward_preview: lta.reward_preview,
+    });
+    raw_system_facts.push(`Персонаж ${acting_player.name} начал длительное занятие: "${lta.activity_name}" (займет ${lta.duration_minutes} мин).`);
+  }
+
+  // ============================================
   // ADVANCE_TIME
   // ============================================
   if (router_output.time_estimate_minutes > 0) {
@@ -152,12 +167,26 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
   }
 
   // ============================================
-  // Случайный энкаунтер
+  // Случайный энкаунтер (с учетом сложности сессии, времени и скрытности)
   // ============================================
   let encounter_triggered: EncounterTriggered = { triggered: false };
-  if (router_output.encounter_intent.type === "random") {
-    encounter_triggered = rollEncounter(session.difficulty);
-    if (encounter_triggered.triggered) {
+  if (router_output.encounter_intent.type === "random" || router_output.actions.some(a => a.action_type === "move")) {
+    const moveAction = router_output.actions.find(a => a.action_type === "move");
+    const stealthFactor = moveAction?.stealth_factor ?? 1.0;
+    const timeHours = Math.max(0.1, (router_output.time_estimate_minutes || 30) / 60);
+
+    // Базовый порог по сложности сессии ('easy' = 5, 'normal' = 10, 'hard' = 15)
+    let dynamicThreshold = ENCOUNTER_THRESHOLDS[session.difficulty] * stealthFactor * Math.min(3, timeHours);
+
+    const roll = rollD100();
+    if (roll < dynamicThreshold) {
+      const tierRoll = rollD100();
+      const tier = getEncounterTier(tierRoll);
+      encounter_triggered = {
+        triggered: true,
+        tier: tier.tier,
+        creature_name: tier.name,
+      };
       raw_system_facts.push(
         `🎲 Случайный энкаунтер! Появилось: ${encounter_triggered.creature_name} (тир ${encounter_triggered.tier}).`
       );

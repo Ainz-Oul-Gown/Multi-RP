@@ -67,8 +67,26 @@ export class MoveHandler extends BaseActionHandler {
 
     // ============================================
     // Свободное перемещение без проверки (DC = null или 0)
-    // Локация/время уже обрабатываются GPS-стадией.
     // ============================================
+    const mutations: EngineMutation[] = [];
+    if (action.target_subzone_id) {
+      mutations.push({
+        type: "SET_PLAYER_SUBZONE",
+        player_id: player.id,
+        subzone_id: action.target_subzone_id,
+      });
+    }
+
+    if (action.target_coords) {
+      mutations.push({
+        type: "UPDATE_ENTITY_COORDS",
+        entity_type: "player",
+        id: player.id,
+        pos_x: action.target_coords.x,
+        pos_y: action.target_coords.y,
+      });
+    }
+
     const result: ActionResult = {
       action_type: this.action_type,
       success: true,
@@ -76,7 +94,7 @@ export class MoveHandler extends BaseActionHandler {
     };
     return {
       result,
-      mutations: [],
+      mutations,
       system_facts: [`${player.name} переместился в направлении: ${destination}.`],
     };
   }

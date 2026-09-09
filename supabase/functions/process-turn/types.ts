@@ -134,6 +134,11 @@ export interface ImproperToolUsage {
   reason: string;
 }
 
+export interface TargetCoords {
+  x: number;
+  y: number;
+}
+
 export interface RouterAction {
   action_type: ActionType;
   target_entity_id: string | null;
@@ -147,6 +152,10 @@ export interface RouterAction {
   improper_tool_usage: ImproperToolUsage | null;
   dynamic_blueprint?: any | null;
   raw_action_text?: string | null;
+  target_coords?: TargetCoords | null;
+  target_subzone_id?: string | null;
+  speed_modifier?: number | null;
+  stealth_factor?: number | null;
 }
 
 export interface EncounterIntent {
@@ -161,6 +170,13 @@ export interface Atmosphere {
 
 export type RouterStatus = "success" | "clarification_needed" | "impossible";
 
+export interface LongTermActivity {
+  is_long_term: boolean;
+  activity_name: string;
+  duration_minutes: number;
+  reward_preview?: string;
+}
+
 export interface RouterOutputPayload {
   status: RouterStatus;
   clarification_msg: string | null;
@@ -170,6 +186,7 @@ export interface RouterOutputPayload {
   atmosphere: Atmosphere;
   skill_hint?: string | null;
   event_type?: string | null;
+  long_term_activity?: LongTermActivity | null;
 }
 
 // ============================================

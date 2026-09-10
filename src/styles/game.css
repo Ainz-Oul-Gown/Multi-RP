@@ -2935,7 +2935,7 @@
   opacity: 0.2;
 }
 .map-zoom-micro .map-marker {
-  transform: translate(var(--lx), var(--ly)) scale(calc(var(--inverse-zoom, 1) * 0.4)) !important;
+  transform: scale(calc(var(--inverse-zoom, 1) * 0.4)) !important;
 }
 
 .map-state-label-text {
@@ -2945,6 +2945,6 @@
 }
 
 /* Also add non-scaling-stroke to SVG elements */
-svg.map-svg polygon, svg.map-svg circle, svg.map-svg line, svg.map-svg path {
+svg.map-grid-svg polygon, svg.map-grid-svg circle, svg.map-grid-svg line, svg.map-grid-svg path {
   vector-effect: non-scaling-stroke;
 }

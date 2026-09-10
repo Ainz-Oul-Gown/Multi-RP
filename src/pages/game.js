@@ -2320,13 +2320,12 @@ export async function renderGame(container, sessionId, user) {
         const szx = (sz.pos_x ?? 0) * scale;
         const szy = -(sz.pos_y ?? 0) * scale;
         
+        const outerG = document.createElementNS(SVG_NS, 'g');
+        outerG.setAttribute('transform', `translate(${szx}, ${szy})`);
+        
         const sg = document.createElementNS(SVG_NS, 'g');
         sg.setAttribute('class', 'map-subzone-marker');
-        sg.style.setProperty('--lx', `${szx}px`);
-        sg.style.setProperty('--ly', `${szy}px`);
-        sg.style.transform = `translate(${szx}px, ${szy}px) scale(var(--inverse-zoom, 1))`;
         
-        // Dot
         const sdot = document.createElementNS(SVG_NS, 'circle');
         sdot.setAttribute('r', '3');
         sdot.setAttribute('fill', '#38bdf8');
@@ -2334,31 +2333,32 @@ export async function renderGame(container, sessionId, user) {
         sdot.setAttribute('stroke-width', '1');
         sg.appendChild(sdot);
         
-        // Label
         const stext = document.createElementNS(SVG_NS, 'text');
         stext.setAttribute('y', '12');
         stext.setAttribute('text-anchor', 'middle');
         stext.setAttribute('font-size', '9px');
         stext.setAttribute('fill', '#f1f5f9');
         stext.setAttribute('class', 'map-marker-label');
-        stext.style.display = showMapLabels ? 'block' : 'none';
+        stext.style.display = showMapLabels ? '' : 'none';
         stext.style.textShadow = '0px 1px 3px rgba(0,0,0,0.8)';
         stext.textContent = sz.name;
         sg.appendChild(stext);
         
-        markersG.appendChild(sg);
+        outerG.appendChild(sg);
+        markersG.appendChild(outerG);
       });
 
       // City Marker
+      const outerG = document.createElementNS(SVG_NS, 'g');
+      outerG.setAttribute('transform', `translate(${lx}, ${ly})`);
+      
       const g = document.createElementNS(SVG_NS, 'g');
       g.setAttribute('class', 'map-marker');
       g.setAttribute('data-type', loc.type || '');
-      g.style.setProperty('--lx', `${lx}px`);
-      g.style.setProperty('--ly', `${ly}px`);
-      g.style.transform = `translate(${lx}px, ${ly}px) scale(var(--inverse-zoom, 1))`;
       g.style.cursor = 'pointer';
       
       const pinCirc = document.createElementNS(SVG_NS, 'circle');
+      pinCirc.setAttribute('cy', '-11'); // Center of pin
       pinCirc.setAttribute('r', '11');
       pinCirc.setAttribute('fill', pinBg);
       pinCirc.setAttribute('stroke', '#ffffff');
@@ -2367,7 +2367,7 @@ export async function renderGame(container, sessionId, user) {
       g.appendChild(pinCirc);
       
       const iconText = document.createElementNS(SVG_NS, 'text');
-      iconText.setAttribute('y', '1'); // offset slightly down for emoji visual center
+      iconText.setAttribute('y', '-10'); // text center
       iconText.setAttribute('text-anchor', 'middle');
       iconText.setAttribute('dominant-baseline', 'middle');
       iconText.setAttribute('font-size', '12px');
@@ -2377,13 +2377,13 @@ export async function renderGame(container, sessionId, user) {
       g.appendChild(iconText);
       
       const labelText = document.createElementNS(SVG_NS, 'text');
-      labelText.setAttribute('y', '20');
+      labelText.setAttribute('y', '9');
       labelText.setAttribute('text-anchor', 'middle');
       labelText.setAttribute('font-size', '10px');
       labelText.setAttribute('fill', '#f1f5f9');
       labelText.setAttribute('font-weight', '600');
       labelText.setAttribute('class', 'map-marker-label');
-      labelText.style.display = showMapLabels ? 'block' : 'none';
+      labelText.style.display = showMapLabels ? '' : 'none';
       labelText.style.textShadow = '0px 1px 4px rgba(0,0,0,0.9)';
       labelText.textContent = loc.name;
       g.appendChild(labelText);
@@ -2392,15 +2392,18 @@ export async function renderGame(container, sessionId, user) {
         e.stopPropagation();
         showLocationPopup(loc);
       });
-      markersG.appendChild(g);
+      outerG.appendChild(g);
+      markersG.appendChild(outerG);
     });
 
     // ── 7. Player markers (SVG) ─────────────────────────────────────
     (allPlayers || []).filter(p => p.id !== currentPlayer?.id).forEach(p => {
       const px = (p.pos_x ?? 0) * scale, py = -(p.pos_y ?? 0) * scale;
+      const outerG = document.createElementNS(SVG_NS, 'g');
+      outerG.setAttribute('transform', `translate(${px}, ${py})`);
+      
       const g = document.createElementNS(SVG_NS, 'g');
       g.setAttribute('class', 'map-player-beacon');
-      g.style.transform = `translate(${px}px, ${py}px) scale(var(--inverse-zoom, 1))`;
       
       const dot = document.createElementNS(SVG_NS, 'circle');
       dot.setAttribute('r', '5');
@@ -2417,14 +2420,18 @@ export async function renderGame(container, sessionId, user) {
       lbl.style.textShadow = '0px 1px 3px rgba(0,0,0,0.8)';
       lbl.textContent = p.name || 'Игрок';
       g.appendChild(lbl);
-      markersG.appendChild(g);
+      
+      outerG.appendChild(g);
+      markersG.appendChild(outerG);
     });
 
     // Current player
     if (currentPlayer) {
+      const outerG = document.createElementNS(SVG_NS, 'g');
+      outerG.setAttribute('transform', `translate(${playerPt.x}, ${playerPt.y})`);
+      
       const g = document.createElementNS(SVG_NS, 'g');
       g.setAttribute('class', 'map-player-beacon');
-      g.style.transform = `translate(${playerPt.x}px, ${playerPt.y}px) scale(var(--inverse-zoom, 1))`;
       
       const dot = document.createElementNS(SVG_NS, 'circle');
       dot.setAttribute('r', '5');
@@ -2442,7 +2449,9 @@ export async function renderGame(container, sessionId, user) {
       lbl.style.textShadow = '0px 1px 3px rgba(0,0,0,0.8)';
       lbl.textContent = '📍 Вы';
       g.appendChild(lbl);
-      markersG.appendChild(g);
+      
+      outerG.appendChild(g);
+      markersG.appendChild(outerG);
     }
     
     rootG.appendChild(markersG);
@@ -2616,7 +2625,7 @@ export async function renderGame(container, sessionId, user) {
       const btn = document.getElementById('mapToggleLabelsBtn');
       if (btn) btn.textContent = showMapLabels ? '🏷️ Вкл' : '🏷️ Выкл';
       document.querySelectorAll('.map-marker-label').forEach((el) => {
-        el.style.display = showMapLabels ? 'block' : 'none';
+        el.style.display = showMapLabels ? '' : 'none';
       });
     });
 

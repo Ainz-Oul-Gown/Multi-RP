@@ -2206,11 +2206,40 @@ export async function renderGame(container, sessionId, user) {
       const fillColor = color + '30'; // 19% opacity
       const strokeColor = color + 'bb'; // 73% opacity
 
-      let hullPts = [];
+      if (state.border_shape === 'none') return;
 
-      if (state.border_shape === 'polygon' && state.border_data?.points?.length >= 3) {
-        // Use explicit vertices from DB (set by migration from Этерия 2.6.json)
-        hullPts = state.border_data.points.map(p => ({ x: p.x * scale, y: -p.y * scale }));
+      if (state.border_shape === 'polygon') {
+        const polyRings = (state.border_data?.polygons && Array.isArray(state.border_data.polygons) && state.border_data.polygons.length > 0)
+          ? state.border_data.polygons
+          : (state.border_data?.points?.length >= 3 ? [state.border_data.points] : []);
+
+        if (polyRings.length === 0) return;
+
+        polyRings.forEach(ring => {
+          if (ring.length < 3) return;
+          const hullPts = ring.map(p => ({ x: p.x * scale, y: -p.y * scale }));
+          const polygon = document.createElementNS(SVG_NS, 'polygon');
+          polygon.setAttribute('points', hullPts.map(p => `${p.x},${p.y}`).join(' '));
+          polygon.setAttribute('fill', fillColor);
+          polygon.setAttribute('stroke', strokeColor);
+          polygon.setAttribute('stroke-width', '2');
+          polygon.setAttribute('stroke-dasharray', '10,5');
+          polygon.setAttribute('class', 'map-state-polygon');
+          bordersG.appendChild(polygon);
+        });
+
+        // State label at centroid of main ring
+        const mainPts = (state.border_data?.points || polyRings[0] || []).map(p => ({ x: p.x * scale, y: -p.y * scale }));
+        if (mainPts.length >= 3) {
+          const centroid = polygonCentroid(mainPts);
+          const t = document.createElementNS(SVG_NS, 'text');
+          t.setAttribute('x', centroid.x); t.setAttribute('y', centroid.y);
+          t.setAttribute('class', 'map-state-label-text');
+          t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle');
+          t.textContent = state.name;
+          labelsG.appendChild(t);
+        }
+        return;
       } else if (state.border_shape === 'circle' && state.border_data?.radius) {
         // Explicit circle
         const cx = (state.border_data.center_x ?? 0) * scale;
@@ -2237,29 +2266,28 @@ export async function renderGame(container, sessionId, user) {
         if (stateLocs.length === 0) return;
         const rawPts = stateLocs.map(l => ({ x: l.pos_x * scale, y: -(l.pos_y) * scale }));
         const hull = computeConvexHull(rawPts);
-        hullPts = inflateHull(hull, 350 * scale);
+        const hullPts = inflateHull(hull, 350 * scale);
+        if (hullPts.length < 3) return;
+
+        // Draw polygon
+        const polygon = document.createElementNS(SVG_NS, 'polygon');
+        polygon.setAttribute('points', hullPts.map(p => `${p.x},${p.y}`).join(' '));
+        polygon.setAttribute('fill', fillColor);
+        polygon.setAttribute('stroke', strokeColor);
+        polygon.setAttribute('stroke-width', '2');
+        polygon.setAttribute('stroke-dasharray', '10,5');
+        polygon.setAttribute('class', 'map-state-polygon');
+        bordersG.appendChild(polygon);
+
+        // State label at centroid
+        const centroid = polygonCentroid(hullPts);
+        const t = document.createElementNS(SVG_NS, 'text');
+        t.setAttribute('x', centroid.x); t.setAttribute('y', centroid.y);
+        t.setAttribute('class', 'map-state-label-text');
+        t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle');
+        t.textContent = state.name;
+        labelsG.appendChild(t);
       }
-
-      if (hullPts.length < 3) return;
-
-      // Draw polygon
-      const polygon = document.createElementNS(SVG_NS, 'polygon');
-      polygon.setAttribute('points', hullPts.map(p => `${p.x},${p.y}`).join(' '));
-      polygon.setAttribute('fill', fillColor);
-      polygon.setAttribute('stroke', strokeColor);
-      polygon.setAttribute('stroke-width', '2');
-      polygon.setAttribute('stroke-dasharray', '10,5');
-      polygon.setAttribute('class', 'map-state-polygon');
-      bordersG.appendChild(polygon);
-
-      // State label at centroid
-      const centroid = polygonCentroid(hullPts);
-      const t = document.createElementNS(SVG_NS, 'text');
-      t.setAttribute('x', centroid.x); t.setAttribute('y', centroid.y);
-      t.setAttribute('class', 'map-state-label-text');
-      t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle');
-      t.textContent = state.name;
-      labelsG.appendChild(t);
     });
 
     rootG.appendChild(bordersG);

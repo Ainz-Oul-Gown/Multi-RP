@@ -9,7 +9,7 @@ async function syncBorders() {
   console.log('📖 Загружаем сгенерированные границы из scripts/generated_borders.json...');
   const borders = JSON.parse(fs.readFileSync('scripts/generated_borders.json', 'utf8'));
 
-  // Получаем мир Этерия 2.6
+  // Получаем миры Этерия 2.6
   const { data: worlds, error: wErr } = await supabase
     .from('worlds')
     .select('id, name')
@@ -37,28 +37,43 @@ async function syncBorders() {
 
     for (const state of states) {
       const stateName = state.name;
-      const points = borders[stateName];
-      if (points && points.length >= 30) {
+      const bInfo = borders[stateName];
+      if (bInfo && bInfo.points && bInfo.points.length >= 30) {
         const { error: updErr } = await supabase
           .from('states')
           .update({
             border_shape: 'polygon',
-            border_data: { points: points }
+            border_data: { points: bInfo.points, polygons: bInfo.polygons },
+            map_color: bInfo.color
           })
           .eq('id', state.id);
 
         if (updErr) {
           console.error(`❌ Ошибка обновления ${stateName}:`, updErr.message);
         } else {
-          console.log(`  ✅ ${stateName}: обновлен (${points.length} вершин)`);
+          console.log(`  ✅ ${stateName}: обновлен (${bInfo.points.length} вершин, цвет: ${bInfo.color})`);
         }
       } else {
-        console.warn(`  ⚠️ Нет границы для ${stateName}`);
+        // Neutral regions / grey zones: polygon with empty points so no borders are drawn
+        const { error: updErr } = await supabase
+          .from('states')
+          .update({
+            border_shape: 'polygon',
+            border_data: { points: [] },
+            map_color: null
+          })
+          .eq('id', state.id);
+
+        if (updErr) {
+          console.error(`❌ Ошибка обновления нейтральной зоны ${stateName}:`, updErr.message);
+        } else {
+          console.log(`  ⚪ ${stateName}: нейтральная серая зона (points=[])`);
+        }
       }
     }
   }
 
-  console.log('\n🎉 Все границы в БД успешно синхронизированы!');
+  console.log('\n🎉 Все границы и цвета в БД успешно синхронизированы!');
 }
 
 syncBorders().catch(err => {

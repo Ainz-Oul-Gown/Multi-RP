@@ -2282,8 +2282,11 @@ export async function renderGame(container, sessionId, user) {
     originDot.setAttribute('fill', '#d4a359');
     rootG.appendChild(originDot);
 
-    // ── 6. HTML Markers for locations ─────────────────────────
-    locLayer.innerHTML = locations.map(loc => {
+    // ── 6. SVG Markers for locations (no blur on iOS) ─────────────────────────
+    const markersG = document.createElementNS(SVG_NS, 'g');
+    markersG.setAttribute('class', 'map-svg-markers-layer');
+    
+    locations.forEach(loc => {
       const lx = (loc.pos_x ?? 0) * scale;
       const ly = -(loc.pos_y ?? 0) * scale;
 
@@ -2296,45 +2299,140 @@ export async function renderGame(container, sessionId, user) {
       else if (loc.type === 'dungeon') { icon = '⛩️'; pinBg = '#e11d48'; }
       else if (loc.type === 'village') { icon = '🏘️'; pinBg = '#22c55e'; }
 
-      // subzone markers (close zoom only, hidden via CSS)
-      const subHTML = (loc.subzones || []).map(sz => {
+      // Subzones
+      (loc.subzones || []).forEach(sz => {
         const szx = (sz.pos_x ?? 0) * scale;
         const szy = -(sz.pos_y ?? 0) * scale;
-        return `<div class="map-subzone-marker" style="left:${szx}px;top:${szy}px" title="${escapeHtml(sz.name)}">
-          <div class="map-subzone-dot"></div>
-          <span class="map-marker-label" style="font-size:9px;display:${showMapLabels ? 'block' : 'none'}">${escapeHtml(sz.name)}</span>
-        </div>`;
-      }).join('');
-
-      return `<div class="map-marker" data-type="${escapeHtml(loc.type)}" data-loc-id="${escapeHtml(loc.id)}"
-          style="left:${lx}px;top:${ly}px" title="${escapeHtml(loc.name)} (${loc.pos_x},${loc.pos_y})">
-          <div class="map-marker-pin" style="background:${pinBg}">${icon}</div>
-          <span class="map-marker-label" style="display:${showMapLabels ? 'block' : 'none'}">${escapeHtml(loc.name)}</span>
-        </div>${subHTML}`;
-    }).join('');
-
-    locLayer.querySelectorAll('.map-marker').forEach(el => {
-      el.addEventListener('click', e => {
-        e.stopPropagation();
-        const loc = locations.find(l => l.id === el.dataset.locId);
-        if (loc) showLocationPopup(loc);
+        
+        const sg = document.createElementNS(SVG_NS, 'g');
+        sg.setAttribute('class', 'map-subzone-marker');
+        sg.style.setProperty('--lx', `${szx}px`);
+        sg.style.setProperty('--ly', `${szy}px`);
+        sg.style.transform = `translate(${szx}px, ${szy}px) scale(var(--inverse-zoom, 1))`;
+        
+        // Dot
+        const sdot = document.createElementNS(SVG_NS, 'circle');
+        sdot.setAttribute('r', '3');
+        sdot.setAttribute('fill', '#38bdf8');
+        sdot.setAttribute('stroke', '#ffffff');
+        sdot.setAttribute('stroke-width', '1');
+        sg.appendChild(sdot);
+        
+        // Label
+        const stext = document.createElementNS(SVG_NS, 'text');
+        stext.setAttribute('y', '12');
+        stext.setAttribute('text-anchor', 'middle');
+        stext.setAttribute('font-size', '9px');
+        stext.setAttribute('fill', '#f1f5f9');
+        stext.setAttribute('class', 'map-marker-label');
+        stext.style.display = showMapLabels ? 'block' : 'none';
+        stext.style.textShadow = '0px 1px 3px rgba(0,0,0,0.8)';
+        stext.textContent = sz.name;
+        sg.appendChild(stext);
+        
+        markersG.appendChild(sg);
       });
+
+      // City Marker
+      const g = document.createElementNS(SVG_NS, 'g');
+      g.setAttribute('class', 'map-marker');
+      g.setAttribute('data-type', loc.type || '');
+      g.style.setProperty('--lx', `${lx}px`);
+      g.style.setProperty('--ly', `${ly}px`);
+      g.style.transform = `translate(${lx}px, ${ly}px) scale(var(--inverse-zoom, 1))`;
+      g.style.cursor = 'pointer';
+      
+      const pinCirc = document.createElementNS(SVG_NS, 'circle');
+      pinCirc.setAttribute('r', '11');
+      pinCirc.setAttribute('fill', pinBg);
+      pinCirc.setAttribute('stroke', '#ffffff');
+      pinCirc.setAttribute('stroke-width', '1.5');
+      pinCirc.setAttribute('class', 'map-marker-pin');
+      g.appendChild(pinCirc);
+      
+      const iconText = document.createElementNS(SVG_NS, 'text');
+      iconText.setAttribute('y', '1'); // offset slightly down for emoji visual center
+      iconText.setAttribute('text-anchor', 'middle');
+      iconText.setAttribute('dominant-baseline', 'middle');
+      iconText.setAttribute('font-size', '12px');
+      iconText.setAttribute('class', 'map-marker-pin');
+      iconText.style.pointerEvents = 'none';
+      iconText.textContent = icon;
+      g.appendChild(iconText);
+      
+      const labelText = document.createElementNS(SVG_NS, 'text');
+      labelText.setAttribute('y', '20');
+      labelText.setAttribute('text-anchor', 'middle');
+      labelText.setAttribute('font-size', '10px');
+      labelText.setAttribute('fill', '#f1f5f9');
+      labelText.setAttribute('font-weight', '600');
+      labelText.setAttribute('class', 'map-marker-label');
+      labelText.style.display = showMapLabels ? 'block' : 'none';
+      labelText.style.textShadow = '0px 1px 4px rgba(0,0,0,0.9)';
+      labelText.textContent = loc.name;
+      g.appendChild(labelText);
+      
+      g.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showLocationPopup(loc);
+      });
+      markersG.appendChild(g);
     });
 
-    // ── 7. Player markers ─────────────────────────────────────
-    const othersHtml = (allPlayers || []).filter(p => p.id !== currentPlayer?.id).map(p => {
+    // ── 7. Player markers (SVG) ─────────────────────────────────────
+    (allPlayers || []).filter(p => p.id !== currentPlayer?.id).forEach(p => {
       const px = (p.pos_x ?? 0) * scale, py = -(p.pos_y ?? 0) * scale;
-      return `<div class="map-player-beacon" style="left:${px}px;top:${py}px" title="${escapeHtml(p.name||'Игрок')}">
-        <div class="map-party-dot"></div>
-        <span class="map-marker-label" style="background:rgba(14,38,64,0.9);color:#7dd3fc">${escapeHtml(p.name||'Игрок')}</span>
-      </div>`;
-    }).join('');
+      const g = document.createElementNS(SVG_NS, 'g');
+      g.setAttribute('class', 'map-player-beacon');
+      g.style.transform = `translate(${px}px, ${py}px) scale(var(--inverse-zoom, 1))`;
+      
+      const dot = document.createElementNS(SVG_NS, 'circle');
+      dot.setAttribute('r', '5');
+      dot.setAttribute('fill', '#3b82f6');
+      dot.setAttribute('stroke', '#7dd3fc');
+      dot.setAttribute('stroke-width', '1.5');
+      g.appendChild(dot);
+      
+      const lbl = document.createElementNS(SVG_NS, 'text');
+      lbl.setAttribute('y', '15');
+      lbl.setAttribute('text-anchor', 'middle');
+      lbl.setAttribute('font-size', '10px');
+      lbl.setAttribute('fill', '#7dd3fc');
+      lbl.style.textShadow = '0px 1px 3px rgba(0,0,0,0.8)';
+      lbl.textContent = p.name || 'Игрок';
+      g.appendChild(lbl);
+      markersG.appendChild(g);
+    });
 
-    plLayer.innerHTML = `${othersHtml}
-      <div class="map-player-beacon" style="left:${playerPt.x}px;top:${playerPt.y}px" title="Вы (${currentPlayer?.pos_x??0}, ${currentPlayer?.pos_y??0})">
-        <div class="map-player-dot"></div>
-        <span class="map-marker-label" style="background:rgba(10,40,20,0.95);color:#4ade80;font-weight:700">📍 Вы (${currentPlayer?.name||'Герой'})</span>
-      </div>`;
+    // Current player
+    if (currentPlayer) {
+      const g = document.createElementNS(SVG_NS, 'g');
+      g.setAttribute('class', 'map-player-beacon');
+      g.style.transform = `translate(${playerPt.x}px, ${playerPt.y}px) scale(var(--inverse-zoom, 1))`;
+      
+      const dot = document.createElementNS(SVG_NS, 'circle');
+      dot.setAttribute('r', '5');
+      dot.setAttribute('fill', '#10b981');
+      dot.setAttribute('stroke', '#4ade80');
+      dot.setAttribute('stroke-width', '1.5');
+      g.appendChild(dot);
+      
+      const lbl = document.createElementNS(SVG_NS, 'text');
+      lbl.setAttribute('y', '15');
+      lbl.setAttribute('text-anchor', 'middle');
+      lbl.setAttribute('font-size', '10px');
+      lbl.setAttribute('font-weight', 'bold');
+      lbl.setAttribute('fill', '#4ade80');
+      lbl.style.textShadow = '0px 1px 3px rgba(0,0,0,0.8)';
+      lbl.textContent = '📍 Вы';
+      g.appendChild(lbl);
+      markersG.appendChild(g);
+    }
+    
+    rootG.appendChild(markersG);
+    locLayer.innerHTML = '';
+    plLayer.innerHTML = '';
+
   }
 
 

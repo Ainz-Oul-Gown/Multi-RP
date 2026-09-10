@@ -1925,6 +1925,18 @@ export async function renderGame(container, sessionId, user) {
   // ============================================
   let cachedCityMarkers = [];
   let cachedOtherMarkers = [];
+  let cachedVw = 0;
+  let cachedVh = 0;
+  let lastRenderedZoom = null;
+  let lastZoomClass = null;
+
+  function updateViewportDimensions() {
+    const viewport = document.getElementById('mapViewport');
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    cachedVw = (rect && rect.width > 0) ? rect.width : ((viewport.clientWidth > 0) ? viewport.clientWidth : window.innerWidth);
+    cachedVh = (rect && rect.height > 0) ? rect.height : ((viewport.clientHeight > 0) ? viewport.clientHeight : window.innerHeight);
+  }
 
   function getCoordScale() {
     const unit = (session?.scale_unit || 'километры').toLowerCase();
@@ -1932,27 +1944,41 @@ export async function renderGame(container, sessionId, user) {
     return isKm ? 0.35 : 1.5;
   }
 
-  function applyMapTransform() {
+  function applyMapTransform(forceScaleUpdate = false) {
     const stage = document.getElementById('mapStage');
     const svg = document.getElementById('mapGridSvg');
-    if (stage && svg) {
-      // Manage zoom classes
-      stage.classList.remove('map-zoom-far', 'map-zoom-mid', 'map-zoom-close', 'map-zoom-micro');
-      if (mapZoom < 0.3) stage.classList.add('map-zoom-far');
-      else if (mapZoom < 0.9) stage.classList.add('map-zoom-mid');
-      else if (mapZoom < 2.5) stage.classList.add('map-zoom-close');
-      else stage.classList.add('map-zoom-micro');
-      
+    if (!stage || !svg) return;
+
+    if (!cachedVw || !cachedVh) {
+      updateViewportDimensions();
+    }
+
+    const zoomChanged = (lastRenderedZoom !== mapZoom) || forceScaleUpdate;
+    if (zoomChanged) {
+      lastRenderedZoom = mapZoom;
+
+      // Manage zoom classes only when zoom tier changes
+      let zoomClass = 'map-zoom-micro';
+      if (mapZoom < 0.3) zoomClass = 'map-zoom-far';
+      else if (mapZoom < 0.9) zoomClass = 'map-zoom-mid';
+      else if (mapZoom < 2.5) zoomClass = 'map-zoom-close';
+
+      if (lastZoomClass !== zoomClass) {
+        stage.classList.remove('map-zoom-far', 'map-zoom-mid', 'map-zoom-close', 'map-zoom-micro');
+        stage.classList.add(zoomClass);
+        lastZoomClass = zoomClass;
+      }
+
       const markerScale = 1 / mapZoom;
       svg.style.setProperty('--inverse-zoom', markerScale);
       svg.style.setProperty('--marker-scale', markerScale);
-      
+
       // Fix for Blink/Safari SVG CSS transform-origin bugs:
       // Apply scale directly as an SVG attribute to elements that need it
       // Using cached arrays eliminates the massive querySelector lag during zoom/pan!
       const isMicro = mapZoom >= 2.5;
       const cityScale = markerScale * (isMicro ? 0.4 : 1);
-      
+
       for (let i = 0; i < cachedCityMarkers.length; i++) {
         cachedCityMarkers[i].setAttribute('transform', `scale(${cityScale})`);
       }
@@ -1960,37 +1986,31 @@ export async function renderGame(container, sessionId, user) {
         cachedOtherMarkers[i].setAttribute('transform', `scale(${markerScale})`);
       }
 
-      // We remove the blurry CSS transform from stage entirely
-      stage.style.transform = 'none';
-
-      // And apply pure vector scaling and panning via SVG viewBox!
-      const viewport = document.getElementById('mapViewport');
-      const rect = viewport ? viewport.getBoundingClientRect() : null;
-      const vw = (rect && rect.width > 0) ? rect.width : ((viewport && viewport.clientWidth > 0) ? viewport.clientWidth : window.innerWidth);
-      const vh = (rect && rect.height > 0) ? rect.height : ((viewport && viewport.clientHeight > 0) ? viewport.clientHeight : window.innerHeight);
-      
-      const vbX = -mapPanX / mapZoom;
-      const vbY = -mapPanY / mapZoom;
-      const vbW = vw / mapZoom;
-      const vbH = vh / mapZoom;
-      
-      if (!isNaN(vbX) && !isNaN(vbY) && !isNaN(vbW) && !isNaN(vbH) && vbW > 0 && vbH > 0) {
-        svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+      const zoomText = document.getElementById('mapZoomLevelText');
+      if (zoomText) {
+        zoomText.textContent = `${Math.round(mapZoom * 100)}%`;
       }
     }
-    const zoomText = document.getElementById('mapZoomLevelText');
-    if (zoomText) {
-      zoomText.textContent = `${Math.round(mapZoom * 100)}%`;
+
+    // We remove the blurry CSS transform from stage entirely
+    stage.style.transform = 'none';
+
+    // And apply pure vector scaling and panning via SVG viewBox!
+    const vbX = -mapPanX / mapZoom;
+    const vbY = -mapPanY / mapZoom;
+    const vbW = cachedVw / mapZoom;
+    const vbH = cachedVh / mapZoom;
+
+    if (!isNaN(vbX) && !isNaN(vbY) && !isNaN(vbW) && !isNaN(vbH) && vbW > 0 && vbH > 0) {
+      svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
     }
   }
 
 
   function recenterMapOnPlayer() {
-    const viewport = document.getElementById('mapViewport');
-    if (!viewport) return;
-    const rect = viewport.getBoundingClientRect();
-    const vw = rect.width || 340;
-    const vh = rect.height || 400;
+    updateViewportDimensions();
+    const vw = cachedVw || 340;
+    const vh = cachedVh || 400;
 
     const scale = getCoordScale();
     const px = (currentPlayer?.pos_x ?? 0) * scale;
@@ -2002,11 +2022,9 @@ export async function renderGame(container, sessionId, user) {
   }
 
   function fitWorldMap() {
-    const viewport = document.getElementById('mapViewport');
-    if (!viewport) return;
-    const rect = viewport.getBoundingClientRect();
-    const vw = rect.width || 340;
-    const vh = rect.height || 400;
+    updateViewportDimensions();
+    const vw = cachedVw || 340;
+    const vh = cachedVh || 400;
 
     const scale = getCoordScale();
     const locations = cachedWorldMapData?.locations || [];
@@ -2293,6 +2311,7 @@ export async function renderGame(container, sessionId, user) {
     // Wild zone ring around player
     if (session?.current_wild_zone) {
       const wg = document.createElementNS(SVG_NS, 'g');
+      wg.setAttribute('class', 'map-wildzone-layer');
       const wc = document.createElementNS(SVG_NS, 'circle');
       wc.setAttribute('cx', playerPt.x); wc.setAttribute('cy', playerPt.y);
       wc.setAttribute('r', 400 * scale);
@@ -2309,9 +2328,6 @@ export async function renderGame(container, sessionId, user) {
       wg.appendChild(wc); wg.appendChild(wt);
       rootG.appendChild(wg);
     }
-
-    // State labels drawn last (above fills)
-    rootG.appendChild(labelsG);
 
     // Origin dot + label
     const originDot = document.createElementNS(SVG_NS, 'circle');
@@ -2476,6 +2492,8 @@ export async function renderGame(container, sessionId, user) {
     }
     
     rootG.appendChild(markersG);
+    // State labels drawn AFTER markers so state names appear ON TOP of capital markers
+    rootG.appendChild(labelsG);
     locLayer.innerHTML = '';
     plLayer.innerHTML = '';
 
@@ -2484,8 +2502,12 @@ export async function renderGame(container, sessionId, user) {
     cachedOtherMarkers = Array.from(gridSvg.querySelectorAll('.map-subzone-marker, .map-player-beacon'));
     // Note: .map-state-label-text is intentionally EXCLUDED so state labels zoom naturally with the terrain!
 
+    // Reset render cache so newly rendered DOM gets fresh scale applied
+    lastRenderedZoom = null;
+    lastZoomClass = null;
+
     // Apply transform synchronously so viewBox is ready immediately
-    applyMapTransform();
+    applyMapTransform(true);
   }
 
 
@@ -2582,6 +2604,16 @@ export async function renderGame(container, sessionId, user) {
       }
     });
 
+    let transformRafPending = false;
+    function scheduleMapTransform() {
+      if (transformRafPending) return;
+      transformRafPending = true;
+      requestAnimationFrame(() => {
+        transformRafPending = false;
+        applyMapTransform();
+      });
+    }
+
     viewport.addEventListener('pointermove', (e) => {
       if (!activePointers.has(e.pointerId)) return;
       activePointers.set(e.pointerId, e);
@@ -2589,7 +2621,7 @@ export async function renderGame(container, sessionId, user) {
       if (activePointers.size === 1 && isDragging) {
         mapPanX = Math.round(e.clientX - dragStartX);
         mapPanY = Math.round(e.clientY - dragStartY);
-        applyMapTransform();
+        scheduleMapTransform();
       } else if (activePointers.size === 2 && initialPinchDist) {
         const [p1, p2] = Array.from(activePointers.values());
         const currentDist = getDistance(p1, p2);
@@ -2604,7 +2636,7 @@ export async function renderGame(container, sessionId, user) {
           mapPanX = Math.round(mid.x - stageX * newZoom);
           mapPanY = Math.round(mid.y - stageY * newZoom);
           mapZoom = newZoom;
-          applyMapTransform();
+          scheduleMapTransform();
         }
       }
     });
@@ -2626,6 +2658,10 @@ export async function renderGame(container, sessionId, user) {
       } else if (activePointers.size === 0) {
         isDragging = false;
         initialPinchDist = null;
+      }
+
+      if (transformRafPending) {
+        applyMapTransform();
       }
     };
 
@@ -2702,6 +2738,7 @@ export async function renderGame(container, sessionId, user) {
       viewport.dataset.resizeObserverBound = 'true';
       const observer = new ResizeObserver(() => {
         if (activePanel === 'map') {
+          updateViewportDimensions();
           applyMapTransform();
         }
       });

@@ -1959,16 +1959,6 @@ export async function renderGame(container, sessionId, user) {
       for (let i = 0; i < cachedOtherMarkers.length; i++) {
         cachedOtherMarkers[i].setAttribute('transform', `scale(${markerScale})`);
       }
-      
-      // Update stroke widths dynamically to replace performance-killing vector-effect: non-scaling-stroke
-      const gridG = svg.querySelector('.map-grid-lines');
-      if (gridG) gridG.setAttribute('stroke-width', String(1 * markerScale));
-      
-      const bordersG = svg.querySelector('.map-state-borders');
-      if (bordersG) bordersG.setAttribute('stroke-width', String(2 * markerScale));
-      
-      const locBordersG = svg.querySelector('.map-loc-borders');
-      if (locBordersG) locBordersG.setAttribute('stroke-width', String(1 * markerScale));
 
       // We remove the blurry CSS transform from stage entirely
       stage.style.transform = 'none';
@@ -2162,14 +2152,14 @@ export async function renderGame(container, sessionId, user) {
       const l = document.createElementNS(SVG_NS, 'line');
       l.setAttribute('x1', x); l.setAttribute('y1', -gridSize);
       l.setAttribute('x2', x); l.setAttribute('y2', gridSize);
-      l.setAttribute('stroke', 'rgba(34,197,94,0.08)');
+      l.setAttribute('stroke', 'rgba(34,197,94,0.08)'); l.setAttribute('stroke-width', '1');
       gridG.appendChild(l);
     }
     for (let y = -gridSize; y <= gridSize; y += step) {
       const l = document.createElementNS(SVG_NS, 'line');
       l.setAttribute('x1', -gridSize); l.setAttribute('y1', y);
       l.setAttribute('x2', gridSize); l.setAttribute('y2', y);
-      l.setAttribute('stroke', 'rgba(34,197,94,0.08)');
+      l.setAttribute('stroke', 'rgba(34,197,94,0.08)'); l.setAttribute('stroke-width', '1');
       gridG.appendChild(l);
     }
     // Axis lines
@@ -2179,7 +2169,7 @@ export async function renderGame(container, sessionId, user) {
       const l = document.createElementNS(SVG_NS, 'line');
       l.setAttribute('x1', x1); l.setAttribute('y1', y1);
       l.setAttribute('x2', x2); l.setAttribute('y2', y2);
-      l.setAttribute('stroke', 'rgba(212,163,89,0.35)');
+      l.setAttribute('stroke', 'rgba(212,163,89,0.35)'); l.setAttribute('stroke-width', '1.5');
       l.setAttribute('stroke-dasharray', '4,4');
       gridG.appendChild(l);
     }
@@ -2211,12 +2201,11 @@ export async function renderGame(container, sessionId, user) {
         const circle = document.createElementNS(SVG_NS, 'circle');
         circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
         circle.setAttribute('fill', fillColor); circle.setAttribute('stroke', strokeColor);
-        circle.setAttribute('stroke-dasharray', '10,5');
+        circle.setAttribute('stroke-width', '2'); circle.setAttribute('stroke-dasharray', '10,5');
         bordersG.appendChild(circle);
         // label
         const t = document.createElementNS(SVG_NS, 'text');
-        // Offset Y so it doesn't perfectly overlap the capital
-        t.setAttribute('x', cx); t.setAttribute('y', cy - (90 * scale));
+        t.setAttribute('x', cx); t.setAttribute('y', cy);
         t.setAttribute('class', 'map-state-label-text');
         t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle');
         t.textContent = state.name;
@@ -2240,6 +2229,7 @@ export async function renderGame(container, sessionId, user) {
       polygon.setAttribute('points', hullPts.map(p => `${p.x},${p.y}`).join(' '));
       polygon.setAttribute('fill', fillColor);
       polygon.setAttribute('stroke', strokeColor);
+      polygon.setAttribute('stroke-width', '2');
       polygon.setAttribute('stroke-dasharray', '10,5');
       polygon.setAttribute('class', 'map-state-polygon');
       bordersG.appendChild(polygon);
@@ -2247,8 +2237,7 @@ export async function renderGame(container, sessionId, user) {
       // State label at centroid
       const centroid = polygonCentroid(hullPts);
       const t = document.createElementNS(SVG_NS, 'text');
-      // Offset Y so it doesn't overlap capital
-      t.setAttribute('x', centroid.x); t.setAttribute('y', centroid.y - (90 * scale));
+      t.setAttribute('x', centroid.x); t.setAttribute('y', centroid.y);
       t.setAttribute('class', 'map-state-label-text');
       t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle');
       t.textContent = state.name;
@@ -2270,7 +2259,7 @@ export async function renderGame(container, sessionId, user) {
         c.setAttribute('cx', lx); c.setAttribute('cy', ly); c.setAttribute('r', r);
         c.setAttribute('fill', 'rgba(255,255,255,0.04)');
         c.setAttribute('stroke', 'rgba(255,255,255,0.18)');
-        c.setAttribute('stroke-dasharray', '4,4');
+        c.setAttribute('stroke-width', '1'); c.setAttribute('stroke-dasharray', '4,4');
         c.setAttribute('class', 'map-loc-border');
         locBordersG.appendChild(c);
       } else if (loc.bounds_shape === 'polygon' && loc.bounds_data?.points?.length >= 3) {
@@ -2278,7 +2267,7 @@ export async function renderGame(container, sessionId, user) {
         poly.setAttribute('points', loc.bounds_data.points.map(p => `${p.x * scale},${-p.y * scale}`).join(' '));
         poly.setAttribute('fill', 'rgba(255,255,255,0.04)');
         poly.setAttribute('stroke', 'rgba(255,255,255,0.18)');
-        poly.setAttribute('stroke-dasharray', '4,4');
+        poly.setAttribute('stroke-width', '1'); poly.setAttribute('stroke-dasharray', '4,4');
         poly.setAttribute('class', 'map-loc-border');
         locBordersG.appendChild(poly);
       }
@@ -2293,6 +2282,7 @@ export async function renderGame(container, sessionId, user) {
           sc.setAttribute('r', szr);
           sc.setAttribute('fill', 'rgba(255,255,255,0.03)');
           sc.setAttribute('stroke', 'rgba(255,255,255,0.12)');
+          sc.setAttribute('stroke-width', '0.5');
           sc.setAttribute('class', 'map-subzone-border');
           locBordersG.appendChild(sc);
         });

@@ -1923,6 +1923,9 @@ export async function renderGame(container, sessionId, user) {
   // ============================================
   // ИНТЕРАКТИВНАЯ КАРТА МИРА
   // ============================================
+  let cachedCityMarkers = [];
+  let cachedOtherMarkers = [];
+
   function getCoordScale() {
     const unit = (session?.scale_unit || 'километры').toLowerCase();
     const isKm = unit.startsWith('кил') || unit.startsWith('km') || unit === 'км';
@@ -1946,14 +1949,15 @@ export async function renderGame(container, sessionId, user) {
       
       // Fix for Blink/Safari SVG CSS transform-origin bugs:
       // Apply scale directly as an SVG attribute to elements that need it
-      const scalable = svg.querySelectorAll('.map-marker, .map-subzone-marker, .map-player-beacon, .map-state-label-text');
+      // Using cached arrays eliminates the massive querySelector lag during zoom/pan!
       const isMicro = mapZoom >= 2.5;
-      for (let i = 0; i < scalable.length; i++) {
-        let elScale = markerScale;
-        if (isMicro && scalable[i].classList.contains('map-marker')) {
-          elScale = markerScale * 0.4;
-        }
-        scalable[i].setAttribute('transform', `scale(${elScale})`);
+      const cityScale = markerScale * (isMicro ? 0.4 : 1);
+      
+      for (let i = 0; i < cachedCityMarkers.length; i++) {
+        cachedCityMarkers[i].setAttribute('transform', `scale(${cityScale})`);
+      }
+      for (let i = 0; i < cachedOtherMarkers.length; i++) {
+        cachedOtherMarkers[i].setAttribute('transform', `scale(${markerScale})`);
       }
 
       // We remove the blurry CSS transform from stage entirely
@@ -2474,6 +2478,11 @@ export async function renderGame(container, sessionId, user) {
     rootG.appendChild(markersG);
     locLayer.innerHTML = '';
     plLayer.innerHTML = '';
+
+    // Cache markers to prevent lag during zoom/pan
+    cachedCityMarkers = Array.from(gridSvg.querySelectorAll('.map-marker'));
+    cachedOtherMarkers = Array.from(gridSvg.querySelectorAll('.map-subzone-marker, .map-player-beacon'));
+    // Note: .map-state-label-text is intentionally EXCLUDED so state labels zoom naturally with the terrain!
 
     // Apply transform synchronously so viewBox is ready immediately
     applyMapTransform();

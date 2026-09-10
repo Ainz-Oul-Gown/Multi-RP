@@ -2847,12 +2847,6 @@
 
 /* Subzone HTML marker */
 .map-subzone-marker {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  z-index: 5;
   pointer-events: none;
   transition: opacity 0.3s ease;
 }
@@ -2932,13 +2926,11 @@
   opacity: 0.2;
 }
 .map-zoom-micro .map-marker {
-  transform: scale(calc(var(--inverse-zoom, 1) * 0.4)) !important;
+  /* Scale handled by JS attribute */
 }
 
 .map-state-label-text {
-  transform: scale(var(--inverse-zoom, 1));
-  transform-box: fill-box;
-  transform-origin: center;
+  /* Scale applied via JS attribute */
 }
 
 /* Also add non-scaling-stroke to SVG elements */

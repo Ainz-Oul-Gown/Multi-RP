@@ -1943,6 +1943,18 @@ export async function renderGame(container, sessionId, user) {
       const markerScale = 1 / mapZoom;
       svg.style.setProperty('--inverse-zoom', markerScale);
       svg.style.setProperty('--marker-scale', markerScale);
+      
+      // Fix for Blink/Safari SVG CSS transform-origin bugs:
+      // Apply scale directly as an SVG attribute to elements that need it
+      const scalable = svg.querySelectorAll('.map-marker, .map-subzone-marker, .map-player-beacon, .map-state-label-text');
+      const isMicro = mapZoom >= 2.5;
+      for (let i = 0; i < scalable.length; i++) {
+        let elScale = markerScale;
+        if (isMicro && scalable[i].classList.contains('map-marker')) {
+          elScale = markerScale * 0.4;
+        }
+        scalable[i].setAttribute('transform', `scale(${elScale})`);
+      }
 
       // We remove the blurry CSS transform from stage entirely
       stage.style.transform = 'none';

@@ -1931,15 +1931,31 @@ export async function renderGame(container, sessionId, user) {
 
   function applyMapTransform() {
     const stage = document.getElementById('mapStage');
-    if (stage) {
-      stage.style.transform = `translate(${mapPanX}px, ${mapPanY}px) scale(${mapZoom})`;
-      stage.style.setProperty('--inverse-zoom', 1 / mapZoom);
-      
+    const svg = document.getElementById('mapGridSvg');
+    if (stage && svg) {
+      // Manage zoom classes
       stage.classList.remove('map-zoom-far', 'map-zoom-mid', 'map-zoom-close', 'map-zoom-micro');
       if (mapZoom < 0.3) stage.classList.add('map-zoom-far');
       else if (mapZoom < 0.9) stage.classList.add('map-zoom-mid');
       else if (mapZoom < 2.5) stage.classList.add('map-zoom-close');
       else stage.classList.add('map-zoom-micro');
+      
+      stage.style.setProperty('--inverse-zoom', 1 / mapZoom);
+
+      // We remove the blurry CSS transform from stage entirely
+      stage.style.transform = 'none';
+
+      // And apply pure vector scaling and panning via SVG viewBox!
+      const viewport = document.getElementById('mapViewport');
+      const vw = viewport ? viewport.clientWidth : 340;
+      const vh = viewport ? viewport.clientHeight : 400;
+      
+      const vbX = -mapPanX / mapZoom;
+      const vbY = -mapPanY / mapZoom;
+      const vbW = vw / mapZoom;
+      const vbH = vh / mapZoom;
+      
+      svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
     }
     const zoomText = document.getElementById('mapZoomLevelText');
     if (zoomText) {
@@ -2096,15 +2112,15 @@ export async function renderGame(container, sessionId, user) {
     );
 
     // ── 2. Rebuild SVG using DOM API (fixes encoding issues) ───
-    gridSvg.setAttribute('width', String(gridSize * 2));
-    gridSvg.setAttribute('height', String(gridSize * 2));
-    gridSvg.style.left = `${-gridSize}px`;
-    gridSvg.style.top = `${-gridSize}px`;
+    gridSvg.style.width = '100%';
+    gridSvg.style.height = '100%';
+    gridSvg.style.left = '0';
+    gridSvg.style.top = '0';
 
     // Clear and create root group
     while (gridSvg.firstChild) gridSvg.removeChild(gridSvg.firstChild);
     const rootG = document.createElementNS(SVG_NS, 'g');
-    rootG.setAttribute('transform', `translate(${gridSize},${gridSize})`);
+    // NO translate needed! The SVG viewBox handles the coordinate system natively.
     gridSvg.appendChild(rootG);
 
     // ── 3. Grid lines ──────────────────────────────────────────

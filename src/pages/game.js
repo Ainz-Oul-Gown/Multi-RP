@@ -1933,6 +1933,7 @@ export async function renderGame(container, sessionId, user) {
     const stage = document.getElementById('mapStage');
     if (stage) {
       stage.style.transform = `translate(${mapPanX}px, ${mapPanY}px) scale(${mapZoom})`;
+      stage.style.setProperty('--inverse-zoom', 1 / mapZoom);
       
       stage.classList.remove('map-zoom-far', 'map-zoom-mid', 'map-zoom-close', 'map-zoom-micro');
       if (mapZoom < 0.3) stage.classList.add('map-zoom-far');
@@ -2004,7 +2005,7 @@ export async function renderGame(container, sessionId, user) {
     const stageX = (cx - mapPanX) / mapZoom;
     const stageY = (cy - mapPanY) / mapZoom;
 
-    const newZoom = Math.max(0.05, Math.min(250.0, mapZoom * factor));
+    const newZoom = Math.max(0.05, Math.min(2500.0, mapZoom * factor));
     mapPanX = Math.round(cx - stageX * newZoom);
     mapPanY = Math.round(cy - stageY * newZoom);
     mapZoom = newZoom;
@@ -2448,7 +2449,7 @@ export async function renderGame(container, sessionId, user) {
           const stageX = (mid.x - mapPanX) / mapZoom;
           const stageY = (mid.y - mapPanY) / mapZoom;
 
-          const newZoom = Math.max(0.05, Math.min(250.0, initialPinchZoom * factor));
+          const newZoom = Math.max(0.05, Math.min(2500.0, initialPinchZoom * factor));
           mapPanX = Math.round(mid.x - stageX * newZoom);
           mapPanY = Math.round(mid.y - stageY * newZoom);
           mapZoom = newZoom;

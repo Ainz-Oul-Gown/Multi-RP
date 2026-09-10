@@ -2806,3 +2806,30 @@
   animation: fadeIn 0.2s ease;
 }
 
+
+.map-marker-hidden { display: none !important; }
+.map-marker-visible { display: flex; }
+.map-subzone-marker { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; z-index: 5; pointer-events: none; }
+.map-subzone-dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; border: 1px solid #333; }
+
+
+/* Semantic Zoom Rules */
+.map-zoom-far .map-marker:not([data-type="capital"]) {
+    display: none !important;
+}
+.map-zoom-far .map-svg-loc-border {
+    display: none !important;
+}
+.map-zoom-mid .map-subzone-marker {
+    display: none !important;
+}
+.map-zoom-mid .map-svg-subzone-border {
+    display: none !important;
+}
+.map-zoom-close .map-svg-state-border {
+    opacity: 0.1;
+}
+.map-zoom-close .map-svg-state-label {
+    display: none !important;
+}
+

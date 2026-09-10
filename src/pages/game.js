@@ -1947,8 +1947,8 @@ export async function renderGame(container, sessionId, user) {
 
       // And apply pure vector scaling and panning via SVG viewBox!
       const viewport = document.getElementById('mapViewport');
-      const vw = viewport ? viewport.clientWidth : 340;
-      const vh = viewport ? viewport.clientHeight : 400;
+      const vw = (viewport && viewport.clientWidth > 0) ? viewport.clientWidth : (window.innerWidth || 340);
+      const vh = (viewport && viewport.clientHeight > 0) ? viewport.clientHeight : (window.innerHeight || 400);
       
       const vbX = -mapPanX / mapZoom;
       const vbY = -mapPanY / mapZoom;

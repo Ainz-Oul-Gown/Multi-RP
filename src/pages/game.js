@@ -1940,22 +1940,27 @@ export async function renderGame(container, sessionId, user) {
       else if (mapZoom < 2.5) stage.classList.add('map-zoom-close');
       else stage.classList.add('map-zoom-micro');
       
-      stage.style.setProperty('--inverse-zoom', 1 / mapZoom);
+      const markerScale = 1 / mapZoom;
+      svg.style.setProperty('--inverse-zoom', markerScale);
+      svg.style.setProperty('--marker-scale', markerScale);
 
       // We remove the blurry CSS transform from stage entirely
       stage.style.transform = 'none';
 
       // And apply pure vector scaling and panning via SVG viewBox!
       const viewport = document.getElementById('mapViewport');
-      const vw = (viewport && viewport.clientWidth > 0) ? viewport.clientWidth : (window.innerWidth || 340);
-      const vh = (viewport && viewport.clientHeight > 0) ? viewport.clientHeight : (window.innerHeight || 400);
+      const rect = viewport ? viewport.getBoundingClientRect() : null;
+      const vw = (rect && rect.width > 0) ? rect.width : ((viewport && viewport.clientWidth > 0) ? viewport.clientWidth : window.innerWidth);
+      const vh = (rect && rect.height > 0) ? rect.height : ((viewport && viewport.clientHeight > 0) ? viewport.clientHeight : window.innerHeight);
       
       const vbX = -mapPanX / mapZoom;
       const vbY = -mapPanY / mapZoom;
       const vbW = vw / mapZoom;
       const vbH = vh / mapZoom;
       
-      svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+      if (!isNaN(vbX) && !isNaN(vbY) && !isNaN(vbW) && !isNaN(vbH) && vbW > 0 && vbH > 0) {
+        svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+      }
     }
     const zoomText = document.getElementById('mapZoomLevelText');
     if (zoomText) {
@@ -2458,6 +2463,8 @@ export async function renderGame(container, sessionId, user) {
     locLayer.innerHTML = '';
     plLayer.innerHTML = '';
 
+    // Apply transform synchronously so viewBox is ready immediately
+    applyMapTransform();
   }
 
 
@@ -2666,8 +2673,18 @@ export async function renderGame(container, sessionId, user) {
         recenterMapOnPlayer();
         mapHasBeenCentered = true;
       }, 60);
-    } else {
-      applyMapTransform();
+    }
+
+    // Attach ResizeObserver to mapViewport to handle slide-in transitions cleanly
+    const viewport = document.getElementById('mapViewport');
+    if (viewport && !viewport.dataset.resizeObserverBound) {
+      viewport.dataset.resizeObserverBound = 'true';
+      const observer = new ResizeObserver(() => {
+        if (activePanel === 'map') {
+          applyMapTransform();
+        }
+      });
+      observer.observe(viewport);
     }
   }
 

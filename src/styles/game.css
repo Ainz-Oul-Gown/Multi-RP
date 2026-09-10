@@ -2931,17 +2931,21 @@
 }
 
 /* Add inverse zoom for markers so they stay constant size visually */
+/* We translate Y based on the radius of the pin so the PIN's center is exactly at the coordinate. */
 .map-marker {
-  transform: translate(-50%, -50%) scale(var(--inverse-zoom, 1)) !important;
+  transform: translate(-50%, -11px) scale(var(--inverse-zoom, 1)) !important;
+  transform-origin: 50% 11px !important;
 }
 .map-marker:hover {
-  transform: translate(-50%, -50%) scale(calc(var(--inverse-zoom, 1) * 1.15)) !important;
+  transform: translate(-50%, -11px) scale(calc(var(--inverse-zoom, 1) * 1.15)) !important;
 }
 .map-subzone-marker {
-  transform: translate(-50%, -50%) scale(var(--inverse-zoom, 1)) !important;
+  transform: translate(-50%, -3px) scale(var(--inverse-zoom, 1)) !important;
+  transform-origin: 50% 3px !important;
 }
 .map-player-beacon {
-  transform: translate(-50%, -50%) scale(var(--inverse-zoom, 1)) !important;
+  transform: translate(-50%, -5px) scale(var(--inverse-zoom, 1)) !important;
+  transform-origin: 50% 5px !important;
 }
 
 /* Micro zoom classes override */
@@ -2949,16 +2953,16 @@
   opacity: 0.2;
 }
 .map-zoom-micro .map-marker {
-  transform: translate(-50%, -50%) scale(calc(var(--inverse-zoom, 1) * 0.4)) !important;
-}
-
-/* Also add non-scaling-stroke to SVG elements */
-svg.map-svg polygon, svg.map-svg circle, svg.map-svg line, svg.map-svg path {
-  vector-effect: non-scaling-stroke;
+  transform: translate(-50%, -11px) scale(calc(var(--inverse-zoom, 1) * 0.4)) !important;
 }
 
 .map-state-label-text {
   transform: scale(var(--inverse-zoom, 1));
   transform-box: fill-box;
   transform-origin: center;
+}
+
+/* Also add non-scaling-stroke to SVG elements */
+svg.map-svg polygon, svg.map-svg circle, svg.map-svg line, svg.map-svg path {
+  vector-effect: non-scaling-stroke;
 }

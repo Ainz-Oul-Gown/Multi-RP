@@ -38,7 +38,7 @@ async function syncBorders() {
     for (const state of states) {
       const stateName = state.name;
       const bInfo = borders[stateName];
-      if (bInfo && bInfo.points && bInfo.points.length >= 30) {
+      if (bInfo && bInfo.points && bInfo.points.length >= 10) {
         const { error: updErr } = await supabase
           .from('states')
           .update({

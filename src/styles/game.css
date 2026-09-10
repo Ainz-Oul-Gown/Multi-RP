@@ -2929,3 +2929,28 @@
 .map-zoom-micro .map-marker-label {
   opacity: 0.5;
 }
+
+/* Add inverse zoom for markers so they stay constant size visually */
+.map-marker {
+  transform: scale(var(--inverse-zoom, 1));
+}
+.map-subzone-marker {
+  transform: scale(var(--inverse-zoom, 1));
+}
+.map-player-beacon {
+  transform: scale(var(--inverse-zoom, 1));
+}
+.map-state-label {
+  transform: scale(var(--inverse-zoom, 1));
+}
+
+/* Add inverse zoom to zoom micro classes too */
+.map-zoom-micro .map-marker-pin {
+  opacity: 0.2;
+  transform: scale(0.4) scale(var(--inverse-zoom, 1));
+}
+
+/* Also add non-scaling-stroke to SVG elements */
+svg.map-svg polygon, svg.map-svg circle, svg.map-svg line, svg.map-svg path {
+  vector-effect: non-scaling-stroke;
+}

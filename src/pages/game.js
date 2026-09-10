@@ -2004,7 +2004,7 @@ export async function renderGame(container, sessionId, user) {
     const stageX = (cx - mapPanX) / mapZoom;
     const stageY = (cy - mapPanY) / mapZoom;
 
-    const newZoom = Math.max(0.05, Math.min(25.0, mapZoom * factor));
+    const newZoom = Math.max(0.05, Math.min(250.0, mapZoom * factor));
     mapPanX = Math.round(cx - stageX * newZoom);
     mapPanY = Math.round(cy - stageY * newZoom);
     mapZoom = newZoom;
@@ -2216,7 +2216,7 @@ export async function renderGame(container, sessionId, user) {
       const ly = -(loc.pos_y ?? 0) * scale;
       if (loc.bounds_shape === 'circle' && loc.bounds_data?.radius) {
         const r = loc.bounds_data.radius * scale;
-        if (r < 2) return; // too small to draw
+        
         const c = document.createElementNS(SVG_NS, 'circle');
         c.setAttribute('cx', lx); c.setAttribute('cy', ly); c.setAttribute('r', r);
         c.setAttribute('fill', 'rgba(255,255,255,0.04)');
@@ -2237,7 +2237,7 @@ export async function renderGame(container, sessionId, user) {
       if (loc.subzones) {
         loc.subzones.forEach(sz => {
           const szr = (sz.radius || 0) * scale;
-          if (szr < 1) return;
+          
           const sc = document.createElementNS(SVG_NS, 'circle');
           sc.setAttribute('cx', (sz.pos_x ?? 0) * scale);
           sc.setAttribute('cy', -(sz.pos_y ?? 0) * scale);

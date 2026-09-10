@@ -1,4 +1,4 @@
-﻿// src/pages/game.js вЂ” РРіСЂРѕРІРѕР№ СЌРєСЂР°РЅ (Р§Р°С‚ + РРЅРІРµРЅС‚Р°СЂСЊ + РџСЂРѕС„РёР»СЊ)
+// src/pages/game.js — Игровой экран (Чат + Инвентарь + Профиль)
 import {
   supabase,
   subscribeToSessionMessages,
@@ -43,7 +43,7 @@ export async function renderGame(container, sessionId, user) {
   let expandedMemoryNpcId = null;
   let cachedMemories = {};
   let isSubmitting = false;
-  let isMyTurn = true; // РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ СЂР°Р·СЂРµС€Р°РµРј РІРІРѕРґ
+  let isMyTurn = true; // По умолчанию разрешаем ввод
   let activePlayerName = '';
   let playerSkills = [];
   let unsubMessages = null;
@@ -65,30 +65,30 @@ export async function renderGame(container, sessionId, user) {
   const instanceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5); // unique per render call
 
   // ============================================
-  // РўРЈРњРђРќ Р’РћР™РќР«: С„РёР»СЊС‚СЂ РІРёРґРёРјРѕСЃС‚Рё СЃРѕРѕР±С‰РµРЅРёР№
-  // РџРµСЂСЃРѕРЅР°Р»СЊРЅС‹Рµ СЃРѕРѕР±С‰РµРЅРёСЏ РњР°СЃС‚РµСЂР° (СЃ metadata.target_player_id)
-  // РІРёРґРЅС‹ РўРћР›Р¬РљРћ СѓРєР°Р·Р°РЅРЅРѕРјСѓ РёРіСЂРѕРєСѓ. Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ РЅР°СЂСЂР°С‚РёРІ (Р±РµР· target)
-  // Рё СЃРёСЃС‚РµРјРЅС‹Рµ СЃРѕРѕР±С‰РµРЅРёСЏ РІРёРґСЏС‚ РІСЃРµ.
-  // fog_perception вЂ” РІРёРґРёС‚ С‚РѕР»СЊРєРѕ Р°РґСЂРµСЃР°С‚ (РґСЂСѓРіРѕР№ РёРіСЂРѕРє-РЅР°Р±Р»СЋРґР°С‚РµР»СЊ)
+  // ТУМАН ВОЙНЫ: фильтр видимости сообщений
+  // Персональные сообщения Мастера (с metadata.target_player_id)
+  // видны ТОЛЬКО указанному игроку. Глобальный нарратив (без target)
+  // и системные сообщения видят все.
+  // fog_perception — видит только адресат (другой игрок-наблюдатель)
   // ============================================
   function isMessageVisibleToCurrentPlayer(msg) {
     if (!msg) return false;
 
-    // РЎРёСЃС‚РµРјРЅС‹Рµ СЃРѕРѕР±С‰РµРЅРёСЏ вЂ” РІСЃРµ
+    // Системные сообщения — все
     if (msg.sender_type === 'system') return true;
 
-    // РЎРІРѕРё РґРµР№СЃС‚РІРёСЏ РІРёРґРёС‚ С‚РѕР»СЊРєРѕ Р°РІС‚РѕСЂ (РїСЂРѕРІРµСЂСЏРµРј РєР°Рє auth user.id, С‚Р°Рє Рё player.id)
+    // Свои действия видит только автор (проверяем как auth user.id, так и player.id)
     if (msg.sender_type === 'player') {
       const myUserId = user?.id;
       const myPlayerId = currentPlayer?.id;
       return (myUserId && msg.sender_id === myUserId) || (myPlayerId && msg.sender_id === myPlayerId);
     }
 
-    // РЎРѕРѕР±С‰РµРЅРёСЏ РњР°СЃС‚РµСЂР°: РїСЂРѕРІРµСЂСЏРµРј target_player_id
+    // Сообщения Мастера: проверяем target_player_id
     if (msg.sender_type === 'master') {
       const targetPlayerId = msg.metadata?.target_player_id;
-      // Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ Р»РѕРі: РІРёРґРµРЅ РёРіСЂРѕРєР°Рј РІ С‚РѕР№ Р¶Рµ Р·РѕРЅРµ, РєСЂРѕРјРµ Р°РІС‚РѕСЂР° РґРµР№СЃС‚РІРёСЏ (Р°РІС‚РѕСЂ СѓР¶Рµ РІРёРґРёС‚ Р»РёС‡РЅС‹Р№ РЅР°СЂСЂР°С‚РёРІ)
-      // РРіСЂРѕРєРё РІ РґСЂСѓРіРёС… Р·РѕРЅР°С… РЅРµ РІРёРґСЏС‚ РґРµС‚Р°Р»Рё С‡СѓР¶РёС… РґРµР№СЃС‚РІРёР№ вЂ” СЃРѕР±С‹С‚РёСЏ РґРѕС…РѕРґСЏС‚ С‚РѕР»СЊРєРѕ С‡РµСЂРµР· fog_perception
+      // Глобальный лог: виден игрокам в той же зоне, кроме автора действия (автор уже видит личный нарратив)
+      // Игроки в других зонах не видят детали чужих действий — события доходят только через fog_perception
       if (msg.metadata?.is_global === true) {
         if (msg.metadata?.initiator_player_id && currentPlayer && msg.metadata.initiator_player_id === currentPlayer.id) {
           return false;
@@ -100,18 +100,18 @@ export async function renderGame(container, sessionId, user) {
         }
         return true;
       }
-      // Fog-СЃРѕРѕР±С‰РµРЅРёРµ: РІРёРґРёС‚ РўРћР›Р¬РљРћ Р°РґСЂРµСЃР°С‚
+      // Fog-сообщение: видит ТОЛЬКО адресат
       if (msg.metadata?.fog_filtered === true) {
         return currentPlayer && targetPlayerId === currentPlayer.id;
       }
       if (!targetPlayerId) {
         return true;
       }
-      // РџРµСЂСЃРѕРЅР°Р»СЊРЅС‹Р№ РЅР°СЂСЂР°С‚РёРІ вЂ” С‚РѕР»СЊРєРѕ Р°РґСЂРµСЃР°С‚Сѓ
+      // Персональный нарратив — только адресату
       return currentPlayer && targetPlayerId === currentPlayer.id;
     }
 
-    // РЎРѕРѕР±С‰РµРЅРёСЏ NPC (РґРёР°Р»РѕРіРё, СЃРїСѓС‚РЅРёРєРё, СЂРµРїР»РёРєРё РІ СЃС†РµРЅРµ) вЂ” РІРёРґРЅС‹ РІСЃРµРј РёРіСЂРѕРєР°Рј
+    // Сообщения NPC (диалоги, спутники, реплики в сцене) — видны всем игрокам
     if (msg.sender_type === 'npc') {
       return true;
     }
@@ -125,14 +125,14 @@ export async function renderGame(container, sessionId, user) {
       session = await getSession(sessionId);
       if (isCancelled) return;
       if (!session) {
-        toast.error('РЎРµСЃСЃРёСЏ РЅРµ РЅР°Р№РґРµРЅР°');
+        toast.error('Сессия не найдена');
         router.navigate('/');
         return;
       }
       allPlayers = await getSessionPlayers(sessionId);
       if (isCancelled) return;
 
-      // РћРїСЂРµРґРµР»СЏРµРј С‚РµРєСѓС‰РµРіРѕ РёРіСЂРѕРєР° РґР»СЏ РґР°РЅРЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (СЃ fallback РЅР° getUser)
+      // Определяем текущего игрока для данного пользователя (с fallback на getUser)
       const currentUserId = user?.id || (await supabase.auth.getUser().catch(() => null))?.data?.user?.id;
       currentPlayer = currentUserId ? allPlayers.find((p) => p.user_id === currentUserId) : null;
       if (!currentPlayer && allPlayers.length === 1 && !allPlayers[0].user_id) {
@@ -141,7 +141,7 @@ export async function renderGame(container, sessionId, user) {
       messages = await getSessionMessages(sessionId);
       if (isCancelled) return;
 
-      // Р•СЃР»Рё РїРµСЂСЃРѕРЅР°Р¶ СѓР¶Рµ РµСЃС‚СЊ, РїСЂРѕРІРµСЂСЏРµРј РѕС‡РµСЂРµРґСЊ С…РѕРґРѕРІ Рё Р·Р°РіСЂСѓР¶Р°РµРј РЅР°РІС‹РєРё
+      // Если персонаж уже есть, проверяем очередь ходов и загружаем навыки
       if (currentPlayer) {
         try {
           playerSkills = await getPlayerSkills(currentPlayer.id);
@@ -151,7 +151,7 @@ export async function renderGame(container, sessionId, user) {
         await checkTurnQueue();
       }
 
-      // РџСЂРµРґР·Р°РіСЂСѓР·РєР° РґР°РЅРЅС‹С… РєР°СЂС‚С‹ РјРёСЂР°
+      // Предзагрузка данных карты мира
       if (session?.world_id) {
         getWorldMapData(session.world_id)
           .then((data) => { cachedWorldMapData = data; })
@@ -159,7 +159,7 @@ export async function renderGame(container, sessionId, user) {
       }
     } catch (err) {
       if (isCancelled) return;
-      toast.error('РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё: ' + err.message);
+      toast.error('Ошибка загрузки: ' + err.message);
       router.navigate('/');
       return;
     }
@@ -175,15 +175,15 @@ export async function renderGame(container, sessionId, user) {
   }
 
   // ============================================
-  // РћР§Р•Р Р•Р”Р¬ РҐРћР”РћР’: РїСЂРѕРІРµСЂРєР° Рё РїРѕРґРїРёСЃРєР°
+  // ОЧЕРЕДЬ ХОДОВ: проверка и подписка
   // ============================================
   async function checkTurnQueue() {
     if (!currentPlayer) return;
 
-    // Р•СЃР»Рё РІ СЃРµСЃСЃРёРё 1 РёРіСЂРѕРє вЂ” РІСЃРµРіРґР° РµРіРѕ С…РѕРґ
+    // Если в сессии 1 игрок — всегда его ход
     if (allPlayers.length <= 1) {
       isMyTurn = true;
-      activePlayerName = currentPlayer.name || 'Р“РµСЂРѕР№';
+      activePlayerName = currentPlayer.name || 'Герой';
       updateInputState();
       return;
     }
@@ -191,28 +191,28 @@ export async function renderGame(container, sessionId, user) {
     try {
       let currentTurn = await getCurrentTurn(sessionId);
       if (!currentTurn) {
-        // РћС‡РµСЂРµРґСЊ РїСѓСЃС‚Р° РёР»Рё РЅРµС‚ Р°РєС‚РёРІРЅРѕРіРѕ С…РѕРґР° вЂ” СЃР°РјРѕРёСЃС†РµР»РµРЅРёРµ/РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ
+        // Очередь пуста или нет активного хода — самоисцеление/инициализация
         currentTurn = await initTurnQueue(sessionId, allPlayers);
       }
       if (currentTurn) {
         activeTurnEntityType = currentTurn.entity_type || (currentTurn.npc_id ? 'npc' : 'player');
         if (activeTurnEntityType === 'npc') {
           isMyTurn = false;
-          activePlayerName = 'Р’СЂР°Рі / NPC';
+          activePlayerName = 'Враг / NPC';
         } else {
           isMyTurn = currentTurn.player_id === currentPlayer.id;
           const activeP = allPlayers.find((p) => p.id === currentTurn.player_id);
-          activePlayerName = activeP ? (activeP.name || 'Р“РµСЂРѕР№') : 'РќР°РїР°СЂРЅРёРє';
+          activePlayerName = activeP ? (activeP.name || 'Герой') : 'Напарник';
         }
       } else {
-        // РќРµС‚ Р°РєС‚РёРІРЅРѕРіРѕ С…РѕРґР° вЂ” СЂР°Р·СЂРµС€Р°РµРј РІРІРѕРґ
+        // Нет активного хода — разрешаем ввод
         isMyTurn = true;
-        activePlayerName = currentPlayer.name || 'Р“РµСЂРѕР№';
+        activePlayerName = currentPlayer.name || 'Герой';
       }
     } catch (err) {
       console.warn('checkTurnQueue fallback:', err);
       isMyTurn = true;
-      activePlayerName = currentPlayer.name || 'Р“РµСЂРѕР№';
+      activePlayerName = currentPlayer.name || 'Герой';
     }
     updateInputState();
   }
@@ -226,12 +226,12 @@ export async function renderGame(container, sessionId, user) {
         const msg = payload.new;
         if (!msg) return;
 
-        // Р•СЃР»Рё РїСЂРёС€Р»Рѕ СЃРѕРѕР±С‰РµРЅРёРµ РѕС‚ РњР°СЃС‚РµСЂР° РёР»Рё NPC, СЃСЂР°Р·Сѓ СЃРєСЂС‹РІР°РµРј РёРЅРґРёРєР°С‚РѕСЂ РіРµРЅРµСЂР°С†РёРё
+        // Если пришло сообщение от Мастера или NPC, сразу скрываем индикатор генерации
         if (msg.sender_type === 'master' || msg.sender_type === 'npc') {
           removeDmTypingIndicator();
         }
 
-        // РњРіРЅРѕРІРµРЅРЅР°СЏ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ РёРіСЂРѕРІРѕРіРѕ РІСЂРµРјРµРЅРё РёР· РјРµС‚Р°РґР°РЅРЅС‹С… РІС…РѕРґСЏС‰РµРіРѕ СЃРѕРѕР±С‰РµРЅРёСЏ
+        // Мгновенная синхронизация игрового времени из метаданных входящего сообщения
         if (msg.metadata?.game_time) {
           const gt = msg.metadata.game_time;
           session = {
@@ -244,7 +244,7 @@ export async function renderGame(container, sessionId, user) {
           };
           updatePlayerUI();
         } else if (msg.sender_type === 'master' || msg.sender_type === 'system') {
-          // Р¤РѕРЅРѕРІРѕРµ РѕР±РЅРѕРІР»РµРЅРёРµ СЃРµСЃСЃРёРё РЅР° СЃР»СѓС‡Р°Р№ РёР·РјРµРЅРµРЅРёР№ РІ Р‘Р”
+          // Фоновое обновление сессии на случай изменений в БД
           getSession(sessionId).then((fresh) => {
             if (fresh) {
               session = fresh;
@@ -253,7 +253,7 @@ export async function renderGame(container, sessionId, user) {
           }).catch(() => {});
         }
 
-        // Р•СЃР»Рё СЌС‚Рѕ СЃРѕРѕР±С‰РµРЅРёРµ РёРіСЂРѕРєР°, РїСЂРѕРІРµСЂСЏРµРј, РЅРµ Р±С‹Р»Рѕ Р»Рё РѕРЅРѕ СѓР¶Рµ РѕС‚РѕР±СЂР°Р¶РµРЅРѕ РѕРїС‚РёРјРёСЃС‚РёС‡РЅРѕ
+        // Если это сообщение игрока, проверяем, не было ли оно уже отображено оптимистично
         if (msg.sender_type === 'player') {
           const tempIdx = messages.findIndex((m) => m.id && String(m.id).startsWith('temp-') && m.content === msg.content);
           if (tempIdx !== -1) {
@@ -267,7 +267,7 @@ export async function renderGame(container, sessionId, user) {
           }
         }
 
-        // Р—Р°С‰РёС‚Р° РѕС‚ РґСѓР±Р»РёСЂРѕРІР°РЅРёСЏ СЃРѕРѕР±С‰РµРЅРёР№ РІ РјР°СЃСЃРёРІРµ РёСЃС‚РѕСЂРёРё
+        // Защита от дублирования сообщений в массиве истории
         if (msg.id && messages.some((m) => m.id === msg.id)) {
           return;
         }
@@ -284,9 +284,9 @@ export async function renderGame(container, sessionId, user) {
         const exists = allPlayers.some((p) => p.id === newPlayer.id);
         if (!exists) {
           allPlayers.push(newPlayer);
-          toast.info(`РРіСЂРѕРє В«${newPlayer.name || 'Р“РµСЂРѕР№'}В» РїСЂРёСЃРѕРµРґРёРЅРёР»СЃСЏ Рє СЃРµСЃСЃРёРё!`);
+          toast.info(`Игрок «${newPlayer.name || 'Герой'}» присоединился к сессии!`);
           const countEl = document.getElementById('participantsCount');
-          if (countEl) countEl.textContent = `РЈС‡Р°СЃС‚РЅРёРєРё (${allPlayers.length})`;
+          if (countEl) countEl.textContent = `Участники (${allPlayers.length})`;
           const listEl = document.getElementById('sessionPlayersList');
           if (listEl) listEl.innerHTML = renderSessionParticipants(allPlayers);
           await checkTurnQueue();
@@ -303,13 +303,13 @@ export async function renderGame(container, sessionId, user) {
         if (deletedId) {
           allPlayers = allPlayers.filter((p) => p.id !== deletedId);
           const countEl = document.getElementById('participantsCount');
-          if (countEl) countEl.textContent = `РЈС‡Р°СЃС‚РЅРёРєРё (${allPlayers.length})`;
+          if (countEl) countEl.textContent = `Участники (${allPlayers.length})`;
           const listEl = document.getElementById('sessionPlayersList');
           if (listEl) listEl.innerHTML = renderSessionParticipants(allPlayers);
           bindParticipantEvents();
 
           if (currentPlayer && currentPlayer.id === deletedId) {
-            toast.warning('Р’С‹ Р±С‹Р»Рё РёСЃРєР»СЋС‡РµРЅС‹ РёР· СЃРµСЃСЃРёРё');
+            toast.warning('Вы были исключены из сессии');
             router.navigate('/');
             return;
           }
@@ -318,7 +318,7 @@ export async function renderGame(container, sessionId, user) {
       }
     });
 
-    // РџРѕРґРїРёСЃРєР° РЅР° РёР·РјРµРЅРµРЅРёРµ РїР°СЂР°РјРµС‚СЂРѕРІ СЃРµСЃСЃРёРё (РІСЂРµРјСЏ, РєР°Р»РµРЅРґР°СЂСЊ, Р»РѕРєР°С†РёСЏ, РѕС‚СЂСЏРґС‹)
+    // Подписка на изменение параметров сессии (время, календарь, локация, отряды)
     unsubSession = subscribeToSession(sessionId, async (payload) => {
       if (payload.eventType === 'UPDATE' && payload.new) {
         const updated = payload.new;
@@ -343,7 +343,7 @@ export async function renderGame(container, sessionId, user) {
       }
     });
 
-    // РџРѕРґРїРёСЃРєР° РЅР° РѕС‡РµСЂРµРґСЊ С…РѕРґРѕРІ
+    // Подписка на очередь ходов
     unsubTurnQueue = subscribeToSessionTurnQueue(sessionId, (payload) => {
       handleTurnUpdate(payload);
     });
@@ -361,16 +361,16 @@ export async function renderGame(container, sessionId, user) {
         activeTurnEntityType = turn.entity_type || (turn.npc_id ? 'npc' : 'player');
         if (activeTurnEntityType === 'npc') {
           isMyTurn = false;
-          activePlayerName = 'Р’СЂР°Рі / NPC';
+          activePlayerName = 'Враг / NPC';
         } else {
           isMyTurn = turn.player_id === currentPlayer.id;
           const activeP = allPlayers.find((p) => p.id === turn.player_id);
-          activePlayerName = activeP ? (activeP.name || 'Р“РµСЂРѕР№') : 'РќР°РїР°СЂРЅРёРє';
+          activePlayerName = activeP ? (activeP.name || 'Герой') : 'Напарник';
         }
 
-        // РЎРЅРёРјР°РµРј Р±Р»РѕРєРёСЂРѕРІРєСѓ, РєРѕРіРґР° РЅР°СЃС‚СѓРїР°РµС‚ РЅР°С€ С…РѕРґ
+        // Снимаем блокировку, когда наступает наш ход
         if (!wasMyTurn && isMyTurn) {
-          toast.info('Р’Р°С€ С…РѕРґ!');
+          toast.info('Ваш ход!');
         }
 
         updateInputState();
@@ -394,13 +394,13 @@ export async function renderGame(container, sessionId, user) {
 
     if (turnIndicator) {
       if (activeTurnEntityType === 'npc') {
-        turnIndicator.innerHTML = '<span class="badge badge-error" style="display: inline-flex; align-items: center; gap: 4px;">вљ”пёЏ РҐРѕРґ РїСЂРѕС‚РёРІРЅРёРєР° / NPC</span>';
+        turnIndicator.innerHTML = '<span class="badge badge-error" style="display: inline-flex; align-items: center; gap: 4px;">⚔️ Ход противника / NPC</span>';
       } else if (!hasMultiplePlayers) {
         turnIndicator.innerHTML = '';
       } else if (isMyTurn) {
-        turnIndicator.innerHTML = '<span class="badge badge-success" style="display: inline-flex; align-items: center; gap: 4px;">рџџў Р’Р°С€ С…РѕРґ</span>';
+        turnIndicator.innerHTML = '<span class="badge badge-success" style="display: inline-flex; align-items: center; gap: 4px;">🟢 Ваш ход</span>';
       } else {
-        turnIndicator.innerHTML = `<span class="badge badge-warning" style="display: inline-flex; align-items: center; gap: 4px;">вЏі РҐРѕРґ: ${escapeHtml(activePlayerName || 'РќР°РїР°СЂРЅРёРє')}</span>`;
+        turnIndicator.innerHTML = `<span class="badge badge-warning" style="display: inline-flex; align-items: center; gap: 4px;">⏳ Ход: ${escapeHtml(activePlayerName || 'Напарник')}</span>`;
       }
     }
 
@@ -413,12 +413,12 @@ export async function renderGame(container, sessionId, user) {
     if (!isMyTurn || isSubmitting) {
       input.disabled = true;
       input.placeholder = isSubmitting
-        ? 'РћР±СЂР°Р±РѕС‚РєР° РґРµР№СЃС‚РІРёСЏ...'
-        : (activeTurnEntityType === 'npc' ? 'РҐРѕРґ РїСЂРѕС‚РёРІРЅРёРєР° / NPC...' : `РћР¶РёРґР°РЅРёРµ РґРµР№СЃС‚РІРёР№ РЅР°РїР°СЂРЅРёРєР° (${activePlayerName || 'РґСЂСѓРіРѕР№ РёРіСЂРѕРє'})...`);
+        ? 'Обработка действия...'
+        : (activeTurnEntityType === 'npc' ? 'Ход противника / NPC...' : `Ожидание действий напарника (${activePlayerName || 'другой игрок'})...`);
       sendBtn.disabled = true;
     } else {
       input.disabled = false;
-      input.placeholder = 'РћРїРёС€РёС‚Рµ РґРµР№СЃС‚РІРёРµ РІР°С€РµРіРѕ РіРµСЂРѕСЏ...';
+      input.placeholder = 'Опишите действие вашего героя...';
       sendBtn.disabled = false;
     }
   }
@@ -442,7 +442,7 @@ export async function renderGame(container, sessionId, user) {
     const minute = session?.game_minute ?? session?.game_time?.minute ?? 0;
     const timeStr = formatGameCalendarDate(day, month, year, hour, minute);
     const locationStr = session?.current_wild_zone
-      ? `рџЊІ ${session.current_wild_zone}`
+      ? `🌲 ${session.current_wild_zone}`
       : (session?.current_location_name || '');
 
 
@@ -451,33 +451,33 @@ export async function renderGame(container, sessionId, user) {
         <!-- Header -->
         <header class="game-header">
           <div class="game-header-top">
-            <button class="btn btn-ghost btn-icon" id="backBtn" title="Р’ Р»РѕР±Р±Рё" aria-label="Р’РµСЂРЅСѓС‚СЊСЃСЏ РІ Р»РѕР±Р±Рё">
+            <button class="btn btn-ghost btn-icon" id="backBtn" title="В лобби" aria-label="Вернуться в лобби">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             </button>
             <div class="game-header-center game-header-hero">
-              <span class="game-header-name" title="${currentPlayer?.name || 'Р“РµСЂРѕР№'}">${currentPlayer?.name || 'Р“РµСЂРѕР№'}</span>
+              <span class="game-header-name" title="${currentPlayer?.name || 'Герой'}">${currentPlayer?.name || 'Герой'}</span>
               <div class="hp-bar-container" title="HP: ${currentPlayer?.hp || 0}/${currentPlayer?.max_hp || 0}">
                 <div class="hp-bar ${hpClass}" style="width: ${hpPercent}%"></div>
               </div>
               <span class="game-header-hp">${currentPlayer?.hp || 0}/${currentPlayer?.max_hp || 0}</span>
             </div>
             <div class="game-header-actions">
-              <button class="btn btn-ghost btn-icon" id="storyBtn" title="РЎСЋР¶РµС‚" aria-label="РЎСЋР¶РµС‚">
+              <button class="btn btn-ghost btn-icon" id="storyBtn" title="Сюжет" aria-label="Сюжет">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
               </button>
-              <button class="btn btn-ghost btn-icon" id="profileBtn" title="РџСЂРѕС„РёР»СЊ РіРµСЂРѕСЏ" aria-label="РџСЂРѕС„РёР»СЊ">
+              <button class="btn btn-ghost btn-icon" id="profileBtn" title="Профиль героя" aria-label="Профиль">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               </button>
-              <button class="btn btn-ghost btn-icon" id="inventoryBtn" title="РРЅРІРµРЅС‚Р°СЂСЊ" aria-label="РРЅРІРµРЅС‚Р°СЂСЊ">
+              <button class="btn btn-ghost btn-icon" id="inventoryBtn" title="Инвентарь" aria-label="Инвентарь">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
               </button>
-              <button class="btn btn-ghost btn-icon" id="npcBtn" title="NPC Рё РћРєСЂСѓР¶РµРЅРёРµ" aria-label="РћРєСЂСѓР¶РµРЅРёРµ Рё NPC">
+              <button class="btn btn-ghost btn-icon" id="npcBtn" title="NPC и Окружение" aria-label="Окружение и NPC">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
-              <button class="btn btn-ghost btn-icon" id="mapBtn" title="РљР°СЂС‚Р° Рё Р Р°РґР°СЂ" aria-label="РљР°СЂС‚Р°">
+              <button class="btn btn-ghost btn-icon" id="mapBtn" title="Карта и Радар" aria-label="Карта">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg>
               </button>
-              <button class="btn btn-ghost btn-icon" id="settingsBtn" title="РќР°СЃС‚СЂРѕР№РєРё" aria-label="РќР°СЃС‚СЂРѕР№РєРё">
+              <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Настройки" aria-label="Настройки">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               </button>
             </div>
@@ -504,13 +504,13 @@ export async function renderGame(container, sessionId, user) {
                   .join('')
               : `
               <div class="chat-empty">
-                <div class="empty-icon">рџ“њ</div>
-                <p>РСЃС‚РѕСЂРёСЏ РїРѕРєР° РїСѓСЃС‚Р°. РќР°С‡РЅРёС‚Рµ РґРµР№СЃС‚РІРёРµ!</p>
+                <div class="empty-icon">📜</div>
+                <p>История пока пуста. Начните действие!</p>
               </div>
             `}
             ${isSubmitting ? `
               <div id="dmTypingIndicator" class="message message-master typing-indicator-bubble">
-                <div class="message-avatar">рџЋ­</div>
+                <div class="message-avatar">🎭</div>
                 <div class="message-body">
                   <div class="message-text">
                     <div class="typing-dots">
@@ -525,17 +525,17 @@ export async function renderGame(container, sessionId, user) {
           </div>
         </main>
 
-        <!-- Busy State Banner (Р•СЃР»Рё РїРµСЂСЃРѕРЅР°Р¶ Р·Р°РЅСЏС‚ РґР»РёС‚РµР»СЊРЅС‹Рј РґРµР№СЃС‚РІРёРµРј) -->
+        <!-- Busy State Banner (Если персонаж занят длительным действием) -->
         <div id="busyStateBanner" class="busy-state-banner" style="display: ${currentPlayer?.is_busy ? 'flex' : 'none'};">
           <div class="busy-state-info">
-            <span class="busy-icon">вЏі</span>
+            <span class="busy-icon">⏳</span>
             <div class="busy-text">
-              <strong>${escapeHtml(currentPlayer?.busy_activity || 'Р”Р»РёС‚РµР»СЊРЅРѕРµ Р·Р°РЅСЏС‚РёРµ')}</strong>
-              <small>РћСЃС‚Р°Р»РѕСЃСЊ: <span id="busyMinutesLeft">${currentPlayer?.busy_remaining_minutes || 0}</span> РјРёРЅ.</small>
+              <strong>${escapeHtml(currentPlayer?.busy_activity || 'Длительное занятие')}</strong>
+              <small>Осталось: <span id="busyMinutesLeft">${currentPlayer?.busy_remaining_minutes || 0}</span> мин.</small>
             </div>
           </div>
-          <button class="btn btn-secondary btn-sm" id="interruptBusyBtn" title="РџСЂРµСЂРІР°С‚СЊ Рё Р·Р°Р±СЂР°С‚СЊ РЅР°РєРѕРїР»РµРЅРЅС‹Р№ СЂРµР·СѓР»СЊС‚Р°С‚">
-            вЏ№пёЏ РџСЂРµСЂРІР°С‚СЊ
+          <button class="btn btn-secondary btn-sm" id="interruptBusyBtn" title="Прервать и забрать накопленный результат">
+            ⏹️ Прервать
           </button>
         </div>
 
@@ -545,24 +545,24 @@ export async function renderGame(container, sessionId, user) {
             <div id="turnIndicator" style="display: flex; align-items: center; gap: 0.5rem;">
               ${allPlayers.length > 1
                 ? (isMyTurn
-                    ? '<span class="badge badge-success" style="display: inline-flex; align-items: center; gap: 4px;">рџџў Р’Р°С€ С…РѕРґ</span>'
-                    : `<span class="badge badge-warning" style="display: inline-flex; align-items: center; gap: 4px;">вЏі РҐРѕРґ: ${escapeHtml(activePlayerName || 'РќР°РїР°СЂРЅРёРє')}</span>`)
+                    ? '<span class="badge badge-success" style="display: inline-flex; align-items: center; gap: 4px;">🟢 Ваш ход</span>'
+                    : `<span class="badge badge-warning" style="display: inline-flex; align-items: center; gap: 4px;">⏳ Ход: ${escapeHtml(activePlayerName || 'Напарник')}</span>`)
                 : ''}
             </div>
-            <button class="btn btn-ghost btn-xs" id="takeTurnBtn" style="display: ${allPlayers.length > 1 && !isMyTurn ? 'inline-flex' : 'none'}; font-size: var(--fs-xs); padding: 2px 8px;" title="Р•СЃР»Рё РЅР°РїР°СЂРЅРёРє РґРѕР»РіРѕ РЅРµ РѕС‚РІРµС‡Р°РµС‚, РІС‹ РјРѕР¶РµС‚Рµ РїРµСЂРµС…РІР°С‚РёС‚СЊ С…РѕРґ">
-              вЏ­пёЏ Р’Р·СЏС‚СЊ С…РѕРґ
+            <button class="btn btn-ghost btn-xs" id="takeTurnBtn" style="display: ${allPlayers.length > 1 && !isMyTurn ? 'inline-flex' : 'none'}; font-size: var(--fs-xs); padding: 2px 8px;" title="Если напарник долго не отвечает, вы можете перехватить ход">
+              ⏭️ Взять ход
             </button>
           </div>
           <div class="game-input-wrapper">
             <textarea
               class="game-input"
               id="actionInput"
-              placeholder="${isMyTurn ? 'РћРїРёС€РёС‚Рµ РґРµР№СЃС‚РІРёРµ РІР°С€РµРіРѕ РіРµСЂРѕСЏ...' : `РћР¶РёРґР°РЅРёРµ РґРµР№СЃС‚РІРёР№ РЅР°РїР°СЂРЅРёРєР° (${activePlayerName || 'РґСЂСѓРіРѕР№ РёРіСЂРѕРє'})...`}"
+              placeholder="${isMyTurn ? 'Опишите действие вашего героя...' : `Ожидание действий напарника (${activePlayerName || 'другой игрок'})...`}"
               rows="1"
               ${isSubmitting || !isMyTurn ? 'disabled' : ''}
             ></textarea>
             <button class="btn btn-primary btn-icon" id="sendBtn" ${isSubmitting || !isMyTurn ? 'disabled' : ''}>
-              ${isSubmitting ? 'вЏі' : 'в–¶'}
+              ${isSubmitting ? '⏳' : '▶'}
             </button>
           </div>
         </footer>
@@ -573,8 +573,8 @@ export async function renderGame(container, sessionId, user) {
         <!-- Storyline Panel -->
         <div class="side-panel ${activePanel === 'story' ? 'open' : ''}" id="storyPanel">
           <div class="side-panel-header">
-            <h2>рџ“– РЎСЋР¶РµС‚РЅР°СЏ Р»РёРЅРёСЏ</h2>
-            <button class="btn btn-ghost btn-icon" id="closeStoryBtn">вњ•</button>
+            <h2>📖 Сюжетная линия</h2>
+            <button class="btn btn-ghost btn-icon" id="closeStoryBtn">✕</button>
           </div>
           <div class="side-panel-content" id="storyContent">
             ${renderStoryPanel(session?.storyline)}
@@ -584,8 +584,8 @@ export async function renderGame(container, sessionId, user) {
         <!-- Profile Panel -->
         <div class="side-panel ${activePanel === 'profile' ? 'open' : ''}" id="profilePanel">
           <div class="side-panel-header">
-            <h2>рџ‘¤ РџСЂРѕС„РёР»СЊ</h2>
-            <button class="btn btn-ghost btn-icon" id="closeProfileBtn">вњ•</button>
+            <h2>👤 Профиль</h2>
+            <button class="btn btn-ghost btn-icon" id="closeProfileBtn">✕</button>
           </div>
           <div class="side-panel-content" id="profileContent">
             ${currentPlayer ? renderProfile(currentPlayer) : ''}
@@ -595,8 +595,8 @@ export async function renderGame(container, sessionId, user) {
         <!-- Inventory Panel -->
         <div class="side-panel ${activePanel === 'inventory' ? 'open' : ''}" id="inventoryPanel">
           <div class="side-panel-header">
-            <h2>рџЋ’ РРЅРІРµРЅС‚Р°СЂСЊ</h2>
-            <button class="btn btn-ghost btn-icon" id="closeInventoryBtn">вњ•</button>
+            <h2>🎒 Инвентарь</h2>
+            <button class="btn btn-ghost btn-icon" id="closeInventoryBtn">✕</button>
           </div>
           <div class="side-panel-content" id="inventoryContent">
             ${currentPlayer ? renderInventory(currentPlayer) : ''}
@@ -606,11 +606,11 @@ export async function renderGame(container, sessionId, user) {
         <!-- NPC Relationships Panel -->
         <div class="side-panel ${activePanel === 'npc' ? 'open' : ''}" id="npcPanel">
           <div class="side-panel-header">
-            <h2>рџ‘Ґ РћРєСЂСѓР¶РµРЅРёРµ Рё NPC</h2>
-            <button class="btn btn-ghost btn-icon" id="closeNpcBtn">вњ•</button>
+            <h2>👥 Окружение и NPC</h2>
+            <button class="btn btn-ghost btn-icon" id="closeNpcBtn">✕</button>
           </div>
           <div class="side-panel-content" id="npcContent">
-            ${cachedNpcData.length ? renderNpcList(cachedNpcData) : '<div style="padding: 1rem; text-align: center; color: var(--text-muted);">Р—Р°РіСЂСѓР·РєР° РїРµСЂСЃРѕРЅР°Р¶РµР№...</div>'}
+            ${cachedNpcData.length ? renderNpcList(cachedNpcData) : '<div style="padding: 1rem; text-align: center; color: var(--text-muted);">Загрузка персонажей...</div>'}
           </div>
         </div>
 
@@ -618,32 +618,32 @@ export async function renderGame(container, sessionId, user) {
         <div class="side-panel ${activePanel === 'map' ? 'open' : ''} ${isMapWide ? 'map-wide' : ''} ${isMapFullscreen ? 'map-fullscreen' : ''}" id="mapPanel">
           <div class="side-panel-header">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <h2>рџ—єпёЏ РљР°СЂС‚Р° РјРёСЂР°</h2>
-              <span id="mapScaleBadge" class="badge badge-info" style="font-size: 0.65rem;">${escapeHtml(session?.scale_unit || 'РєРёР»РѕРјРµС‚СЂС‹')}</span>
+              <h2>🗺️ Карта мира</h2>
+              <span id="mapScaleBadge" class="badge badge-info" style="font-size: 0.65rem;">${escapeHtml(session?.scale_unit || 'километры')}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 4px;">
-              <button class="btn btn-ghost btn-icon" id="toggleMapWideBtn" title="РЁРёСЂРѕРєРёР№ СЂРµР¶РёРј / РѕР±С‹С‡РЅС‹Р№" aria-label="РЁРёСЂРµ" style="font-size: 0.85rem;">
-                ${isMapWide ? 'в—Ђв–¶' : 'в–¶в—Ђ'}
+              <button class="btn btn-ghost btn-icon" id="toggleMapWideBtn" title="Широкий режим / обычный" aria-label="Шире" style="font-size: 0.85rem;">
+                ${isMapWide ? '◀▶' : '▶◀'}
               </button>
-              <button class="btn btn-ghost btn-icon" id="toggleMapFullscreenBtn" title="Р’Рѕ РІРµСЃСЊ СЌРєСЂР°РЅ" aria-label="Р’Рѕ РІРµСЃСЊ СЌРєСЂР°РЅ" style="font-size: 0.85rem;">
-                ${isMapFullscreen ? 'рџ——' : 'в›¶'}
+              <button class="btn btn-ghost btn-icon" id="toggleMapFullscreenBtn" title="Во весь экран" aria-label="Во весь экран" style="font-size: 0.85rem;">
+                ${isMapFullscreen ? '🗗' : '⛶'}
               </button>
-              <button class="btn btn-ghost btn-icon" id="closeMapBtn" title="Р—Р°РєСЂС‹С‚СЊ">вњ•</button>
+              <button class="btn btn-ghost btn-icon" id="closeMapBtn" title="Закрыть">✕</button>
             </div>
           </div>
           <div class="side-panel-content map-panel-content" id="mapContent">
             <!-- Toolbar -->
             <div class="map-toolbar">
               <div class="map-status-info">
-                <span>рџ“Ќ <strong>(${currentPlayer?.pos_x ?? 0}, ${currentPlayer?.pos_y ?? 0})</strong></span>
+                <span>📍 <strong>(${currentPlayer?.pos_x ?? 0}, ${currentPlayer?.pos_y ?? 0})</strong></span>
                 <span id="mapZoomLevelText" style="color: var(--accent-gold); font-weight: 600;">100%</span>
               </div>
               <div class="map-controls-group">
-                <button class="btn btn-ghost btn-xs" id="mapRecenterBtn" title="РћС‚С†РµРЅС‚СЂРѕРІР°С‚СЊ РЅР° РјРѕС‘Рј РіРµСЂРѕРµ">рџЋЇ РЇ</button>
-                <button class="btn btn-ghost btn-xs" id="mapFitWorldBtn" title="РџРѕРєР°Р·Р°С‚СЊ РІРµСЃСЊ РјРёСЂ">рџЊђ РњРёСЂ</button>
-                <button class="btn btn-ghost btn-xs" id="mapZoomInBtn" title="РџСЂРёР±Р»РёР·РёС‚СЊ">вћ•</button>
-                <button class="btn btn-ghost btn-xs" id="mapZoomOutBtn" title="РћС‚РґР°Р»РёС‚СЊ">вћ–</button>
-                <button class="btn btn-ghost btn-xs" id="mapToggleLabelsBtn" title="РџРѕРєР°Р·Р°С‚СЊ/СЃРєСЂС‹С‚СЊ РЅР°Р·РІР°РЅРёСЏ">${showMapLabels ? 'рџЏ·пёЏ Р’РєР»' : 'рџЏ·пёЏ Р’С‹РєР»'}</button>
+                <button class="btn btn-ghost btn-xs" id="mapRecenterBtn" title="Отцентровать на моём герое">🎯 Я</button>
+                <button class="btn btn-ghost btn-xs" id="mapFitWorldBtn" title="Показать весь мир">🌐 Мир</button>
+                <button class="btn btn-ghost btn-xs" id="mapZoomInBtn" title="Приблизить">➕</button>
+                <button class="btn btn-ghost btn-xs" id="mapZoomOutBtn" title="Отдалить">➖</button>
+                <button class="btn btn-ghost btn-xs" id="mapToggleLabelsBtn" title="Показать/скрыть названия">${showMapLabels ? '🏷️ Вкл' : '🏷️ Выкл'}</button>
               </div>
             </div>
 
@@ -663,8 +663,8 @@ export async function renderGame(container, sessionId, user) {
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-xs); color: var(--text-muted); padding: 0 4px;">
-              <span>рџ–±пёЏ РЎРєСЂРѕР»Р» / рџ¤Џ Р©РёРїРѕРє: Р—СѓРј вЂў вњ‹ РЎРІР°Р№Рї: РЎРґРІРёРі</span>
-              <span>рџџў Р’С‹ вЂў рџ”µ РќР°РїР°СЂРЅРёРєРё вЂў рџЏ° Р“РѕСЂРѕРґР°</span>
+              <span>🖱️ Скролл / 🤏 Щипок: Зум • ✋ Свайп: Сдвиг</span>
+              <span>🟢 Вы • 🔵 Напарники • 🏰 Города</span>
             </div>
           </div>
         </div>
@@ -672,8 +672,8 @@ export async function renderGame(container, sessionId, user) {
         <!-- Settings Panel -->
         <div class="side-panel ${activePanel === 'settings' ? 'open' : ''}" id="settingsPanel">
           <div class="side-panel-header">
-            <h2>вљ™пёЏ РЎРµСЃСЃРёСЏ</h2>
-            <button class="btn btn-ghost btn-icon" id="closeSettingsBtn">вњ•</button>
+            <h2>⚙️ Сессия</h2>
+            <button class="btn btn-ghost btn-icon" id="closeSettingsBtn">✕</button>
           </div>
           <div class="side-panel-content">
             ${renderSessionSettings(session)}
@@ -732,13 +732,13 @@ export async function renderGame(container, sessionId, user) {
           <div class="stat-card-value">${displayValue}</div>
           <div class="stat-card-modifier">${mod >= 0 ? '+' : ''}${mod}</div>
           ${freeStatPoints > 0 ? `
-            <button class="btn btn-xs btn-primary allocate-stat-btn" data-stat="${stat}" style="margin-top: 4px; padding: 1px 8px; font-size: 11px; width: 100%;" title="РџРѕРІС‹СЃРёС‚СЊ ${stat} РЅР° +1 (Р‘Р•Р— Р»РёРјРёС‚Р° РІ 20)">+1</button>
+            <button class="btn btn-xs btn-primary allocate-stat-btn" data-stat="${stat}" style="margin-top: 4px; padding: 1px 8px; font-size: 11px; width: 100%;" title="Повысить ${stat} на +1 (БЕЗ лимита в 20)">+1</button>
           ` : ''}
         </div>
       `;
     }).join('');
 
-    const derived = calculateDerivedStats(stats, player.race || 'Р§РµР»РѕРІРµРє', player.inventory || [], player.race_ac_bonus);
+    const derived = calculateDerivedStats(stats, player.race || 'Человек', player.inventory || [], player.race_ac_bonus);
     const initiative = derived.initiative;
     const armorClass = derived.armor_class;
     const savingThrows = derived.saving_throws;
@@ -759,18 +759,18 @@ export async function renderGame(container, sessionId, user) {
     const activeInjuries = (player.injuries || []).filter(i => !i.cured_at);
     const injuriesHtml = activeInjuries.length ? `
       <div class="profile-section">
-        <h4 class="profile-section-title">вљ пёЏ РўСЂР°РІРјС‹</h4>
+        <h4 class="profile-section-title">⚠️ Травмы</h4>
         ${activeInjuries.map(injury => `
           <div class="profile-injuries" style="margin-bottom: 0.5rem;">
             <div style="font-weight: 600;">${escapeHtml(injury.injury_type)}</div>
             <div style="font-size: var(--fs-sm); margin-top: 0.25rem;">${escapeHtml(injury.description || '')}</div>
             ${injury.stat_penalties && Object.keys(injury.stat_penalties).length > 0 ? `
               <div style="font-size: var(--fs-xs); margin-top: 0.25rem; color: var(--text-muted);">
-                РЁС‚СЂР°С„С‹: ${Object.entries(injury.stat_penalties).map(([k, v]) => `${k} ${Number(v) >= 0 ? '+' : ''}${Number(v)}`).join(', ')}
+                Штрафы: ${Object.entries(injury.stat_penalties).map(([k, v]) => `${k} ${Number(v) >= 0 ? '+' : ''}${Number(v)}`).join(', ')}
               </div>
             ` : ''}
-            ${injury.duration_hours ? `<div style="font-size: var(--fs-xs); color: var(--text-muted);">Р”Р»РёС‚РµР»СЊРЅРѕСЃС‚СЊ: ${injury.duration_hours}С‡</div>` : ''}
-            ${injury.is_permanent ? '<div style="font-size: var(--fs-xs); font-weight: 600;">РџРѕСЃС‚РѕСЏРЅРЅР°СЏ</div>' : ''}
+            ${injury.duration_hours ? `<div style="font-size: var(--fs-xs); color: var(--text-muted);">Длительность: ${injury.duration_hours}ч</div>` : ''}
+            ${injury.is_permanent ? '<div style="font-size: var(--fs-xs); font-weight: 600;">Постоянная</div>' : ''}
           </div>
         `).join('')}
       </div>
@@ -778,24 +778,24 @@ export async function renderGame(container, sessionId, user) {
 
     return `
       <div class="profile-card">
-        <!-- РљРѕРјРїР°РєС‚РЅС‹Р№ Р·Р°РіРѕР»РѕРІРѕРє: СЃР»РµРІР° РёРјСЏ, СѓСЂРѕРІРµРЅСЊ, РјРµС‚Р°, РѕРїС‹С‚; СЃРїСЂР°РІР° Р°РІР°С‚Р°СЂРєР° -->
+        <!-- Компактный заголовок: слева имя, уровень, мета, опыт; справа аватарка -->
         <div class="profile-header-compact">
           <div class="profile-header-info">
             <div class="profile-name-row">
-              <h3 class="profile-name">${escapeHtml(player?.name || 'Р“РµСЂРѕР№')}</h3>
-              <span class="profile-lvl-badge">рџЋ–пёЏ РЈСЂ. ${currentLvl}</span>
+              <h3 class="profile-name">${escapeHtml(player?.name || 'Герой')}</h3>
+              <span class="profile-lvl-badge">🎖️ Ур. ${currentLvl}</span>
             </div>
             <div class="profile-sub-row">
-              <span class="profile-meta-tag">${escapeHtml(player?.race || 'Р§РµР»РѕРІРµРє')}</span>
-              <span class="profile-meta-separator">вЂў</span>
-              <span class="profile-meta-tag">${escapeHtml(player?.class || 'Р’РѕРёРЅ')}</span>
-              <span class="profile-meta-separator">вЂў</span>
-              <span class="profile-money-chip">рџ’° ${player.money || 0} Р·.</span>
+              <span class="profile-meta-tag">${escapeHtml(player?.race || 'Человек')}</span>
+              <span class="profile-meta-separator">•</span>
+              <span class="profile-meta-tag">${escapeHtml(player?.class || 'Воин')}</span>
+              <span class="profile-meta-separator">•</span>
+              <span class="profile-money-chip">💰 ${player.money || 0} з.</span>
             </div>
-            <!-- РљРѕРјРїР°РєС‚РЅР°СЏ РїРѕР»РѕСЃР° РѕРїС‹С‚Р° -->
+            <!-- Компактная полоса опыта -->
             <div class="profile-xp-block">
               <div class="profile-xp-labels">
-                <span>РћРїС‹С‚</span>
+                <span>Опыт</span>
                 <span>${currentXp} / ${xpNeeded} XP</span>
               </div>
               <div class="profile-bar-track xp-track">
@@ -803,15 +803,15 @@ export async function renderGame(container, sessionId, user) {
               </div>
             </div>
           </div>
-          <div class="profile-avatar">вљ”пёЏ</div>
+          <div class="profile-avatar">⚔️</div>
         </div>
 
-        <!-- HP & MP (РЅР° РІСЃСЋ С€РёСЂРёРЅСѓ, РґРѕС…РѕРґСЏС‚ РґРѕ РїСЂР°РІРѕРіРѕ РєСЂР°СЏ) -->
+        <!-- HP & MP (на всю ширину, доходят до правого края) -->
         <div class="profile-vitals-group">
           <!-- HP Bar -->
           <div class="vital-bar-item">
             <div class="vital-bar-labels">
-              <span class="vital-label-hp">вќ¤пёЏ Р—РґРѕСЂРѕРІСЊРµ (HP)</span>
+              <span class="vital-label-hp">❤️ Здоровье (HP)</span>
               <span class="vital-val">${player.hp} / ${player.max_hp}</span>
             </div>
             <div class="profile-bar-track hp-track">
@@ -822,7 +822,7 @@ export async function renderGame(container, sessionId, user) {
           <!-- MP Bar -->
           <div class="vital-bar-item">
             <div class="vital-bar-labels">
-              <span class="vital-label-mp">рџ’™ РњР°РЅР° (MP)</span>
+              <span class="vital-label-mp">💙 Мана (MP)</span>
               <span class="vital-val">${player.mp ?? 50} / ${player.max_mp ?? 50}</span>
             </div>
             <div class="profile-bar-track mp-track">
@@ -831,46 +831,46 @@ export async function renderGame(container, sessionId, user) {
           </div>
         </div>
 
-        <!-- Р‘РѕРµРІС‹Рµ С…Р°СЂР°РєС‚РµСЂРёСЃС‚РёРєРё (AC Рё РРЅРёС†РёР°С‚РёРІР° РєРѕРјРїР°РєС‚РЅРѕ РІ РѕРґРЅСѓ СЃС‚СЂРѕРєСѓ) -->
+        <!-- Боевые характеристики (AC и Инициатива компактно в одну строку) -->
         <div class="profile-combat-row">
           <div class="combat-stat-pill">
-            <span class="combat-stat-icon">рџ›ЎпёЏ</span>
-            <span class="combat-stat-label">РљР»Р°СЃСЃ Р±СЂРѕРЅРё (AC)</span>
+            <span class="combat-stat-icon">🛡️</span>
+            <span class="combat-stat-label">Класс брони (AC)</span>
             <span class="combat-stat-value">${armorClass}</span>
           </div>
           <div class="combat-stat-pill">
-            <span class="combat-stat-icon">вљЎ</span>
-            <span class="combat-stat-label">РРЅРёС†РёР°С‚РёРІР°</span>
+            <span class="combat-stat-icon">⚡</span>
+            <span class="combat-stat-label">Инициатива</span>
             <span class="combat-stat-value">${initiative >= 0 ? '+' : ''}${initiative}</span>
           </div>
         </div>
 
         ${freeStatPoints > 0 ? `
           <div class="profile-free-points-banner">
-            <span>в­ђ РЎРІРѕР±РѕРґРЅС‹С… РѕС‡РєРѕРІ (РћРҐ): <strong>${freeStatPoints}</strong></span>
-            <span style="font-size: 10px; opacity: 0.85;">(РЅР°Р¶РјРёС‚Рµ +1 Сѓ РЅСѓР¶РЅРѕРіРѕ РїР°СЂР°РјРµС‚СЂР°)</span>
+            <span>⭐ Свободных очков (ОХ): <strong>${freeStatPoints}</strong></span>
+            <span style="font-size: 10px; opacity: 0.85;">(нажмите +1 у нужного параметра)</span>
           </div>
         ` : ''}
 
-        <!-- РҐР°СЂР°РєС‚РµСЂРёСЃС‚РёРєРё -->
+        <!-- Характеристики -->
         <div class="profile-section">
-          <h4 class="profile-section-title">РҐР°СЂР°РєС‚РµСЂРёСЃС‚РёРєРё</h4>
+          <h4 class="profile-section-title">Характеристики</h4>
           <div class="stats-grid-3">
             ${statsHtml}
           </div>
         </div>
 
-        <!-- РЎРїР°СЃР±СЂРѕСЃРєРё -->
+        <!-- Спасброски -->
         <div class="profile-section">
-          <h4 class="profile-section-title">РЎРїР°СЃР±СЂРѕСЃРєРё</h4>
+          <h4 class="profile-section-title">Спасброски</h4>
           <div class="stats-grid-3">
             ${savingThrowsHtml}
           </div>
         </div>
 
-        <!-- РќР°РІС‹РєРё -->
+        <!-- Навыки -->
         <div class="profile-section">
-          <h4 class="profile-section-title">рџ—ЎпёЏ РќР°РІС‹РєРё (1..100)</h4>
+          <h4 class="profile-section-title">🗡️ Навыки (1..100)</h4>
           ${playerSkills && playerSkills.length > 0 ? `
             <div style="display: flex; flex-direction: column; gap: 5px;">
               ${playerSkills.map((s) => {
@@ -882,14 +882,14 @@ export async function renderGame(container, sessionId, user) {
                   <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 5px 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
                       <span style="font-weight: 600; font-size: var(--fs-xs);">${escapeHtml(s.name || s.skill_key)}</span>
-                      <span class="badge badge-primary" style="font-size: 10px; font-weight: 700; padding: 1px 5px;">РЈСЂ. ${sLvl}</span>
+                      <span class="badge badge-primary" style="font-size: 10px; font-weight: 700; padding: 1px 5px;">Ур. ${sLvl}</span>
                     </div>
                     <div class="profile-bar-track" style="height: 4px; margin-bottom: 2px;">
                       <div class="profile-bar-fill" style="width: ${sPct}%; background: #3b82f6; height: 100%; border-radius: var(--radius-full);"></div>
                     </div>
                     <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted);">
                       <span>${sXp} / ${sNext} XP</span>
-                      <span>+${sLvl}% Рє СЌС„С„.</span>
+                      <span>+${sLvl}% к эфф.</span>
                     </div>
                   </div>
                 `;
@@ -897,7 +897,7 @@ export async function renderGame(container, sessionId, user) {
             </div>
           ` : `
             <p style="font-size: 11px; color: var(--text-muted); line-height: 1.35; margin: 0;">
-              РќР°РІС‹РєРё СЂР°СЃС‚СѓС‚ РѕС‚ РІР°С€РёС… РґРµР№СЃС‚РІРёР№ РІ РјРёСЂРµ (РєСЂР°С„С‚, СЃР±РѕСЂ С‚СЂР°РІ, Р±РѕР№, СЃРєСЂС‹С‚РЅРѕСЃС‚СЊ).
+              Навыки растут от ваших действий в мире (крафт, сбор трав, бой, скрытность).
             </p>
           `}
         </div>
@@ -906,14 +906,14 @@ export async function renderGame(container, sessionId, user) {
 
         ${player.appearance ? `
           <div class="profile-section">
-            <h4 class="profile-section-title">Р’РЅРµС€РЅРѕСЃС‚СЊ</h4>
+            <h4 class="profile-section-title">Внешность</h4>
             <p class="profile-bio">${escapeHtml(player.appearance)}</p>
           </div>
         ` : ''}
 
         ${player.bio ? `
           <div class="profile-section">
-            <h4 class="profile-section-title">Р‘РёРѕРіСЂР°С„РёСЏ</h4>
+            <h4 class="profile-section-title">Биография</h4>
             <p class="profile-bio">${escapeHtml(player.bio)}</p>
           </div>
         ` : ''}
@@ -928,8 +928,8 @@ export async function renderGame(container, sessionId, user) {
     return `
       <div class="inventory-content">
         <div class="inventory-summary">
-          <span>рџ’° ${player.money || 0} Р·РѕР»РѕС‚Р°</span>
-          <span>рџ“¦ ${totalWeight} РїСЂРµРґРјРµС‚РѕРІ</span>
+          <span>💰 ${player.money || 0} золота</span>
+          <span>📦 ${totalWeight} предметов</span>
         </div>
 
         <div class="inventory-list">
@@ -953,7 +953,7 @@ export async function renderGame(container, sessionId, user) {
             `;
           }).join('') : `
             <div class="empty-state">
-              <p class="text-muted">РРЅРІРµРЅС‚Р°СЂСЊ РїСѓСЃС‚</p>
+              <p class="text-muted">Инвентарь пуст</p>
             </div>
           `}
         </div>
@@ -974,16 +974,16 @@ export async function renderGame(container, sessionId, user) {
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-success); flex-shrink: 0;"></span>
             <span style="font-size: var(--fs-sm); font-weight: ${isCurrent ? '700' : '400'};">
-              ${escapeHtml(p?.name || 'Р“РµСЂРѕР№')}${isCurrent ? ' (Р’С‹)' : ''}
+              ${escapeHtml(p?.name || 'Герой')}${isCurrent ? ' (Вы)' : ''}
             </span>
             <span class="text-muted" style="font-size: var(--fs-xs);">${escapeHtml(p?.race || '')}/${escapeHtml(p?.class || '')}</span>
-            ${isInParty ? `<span class="badge" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35);">рџ¤ќ Р’ РѕС‚СЂСЏРґРµ</span>` : ''}
+            ${isInParty ? `<span class="badge" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35);">🤝 В отряде</span>` : ''}
             ${p?.current_zone ? `<span style="font-size: 10px; color: var(--text-muted); opacity: 0.85;">[${escapeHtml(p.current_zone)}]</span>` : ''}
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
-            <span style="font-size: var(--fs-xs); color: var(--accent-gold);">вќ¤пёЏ ${p?.hp || 0}/${p?.max_hp || 0}</span>
+            <span style="font-size: var(--fs-xs); color: var(--accent-gold);">❤️ ${p?.hp || 0}/${p?.max_hp || 0}</span>
             ${isCreator && !isCurrent ? `
-              <button class="btn btn-danger btn-xs remove-participant-btn" data-player-id="${p.id}" data-player-name="${escapeHtml(p?.name || 'РРіСЂРѕРє')}" style="padding: 1px 6px; font-size: 10px; line-height: 1.2;" title="РЈРґР°Р»РёС‚СЊ СѓС‡Р°СЃС‚РЅРёРєР° РёР· СЃРµСЃСЃРёРё">вќЊ</button>
+              <button class="btn btn-danger btn-xs remove-participant-btn" data-player-id="${p.id}" data-player-name="${escapeHtml(p?.name || 'Игрок')}" style="padding: 1px 6px; font-size: 10px; line-height: 1.2;" title="Удалить участника из сессии">❌</button>
             ` : ''}
           </div>
         </div>
@@ -995,42 +995,42 @@ export async function renderGame(container, sessionId, user) {
     return `
       <div class="session-info">
         <div class="form-group" style="margin-bottom: 1rem;">
-          <label class="form-label">РњСѓР»СЊС‚РёРїР»РµРµСЂ Рё РїСЂРёРіР»Р°С€РµРЅРёСЏ</label>
+          <label class="form-label">Мультиплеер и приглашения</label>
           <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
             <button class="btn btn-primary btn-sm" id="copyInviteBtnGame" style="width: 100%;">
-              рџ”— РЎРєРѕРїРёСЂРѕРІР°С‚СЊ СЃСЃС‹Р»РєСѓ РґР»СЏ РЅР°РїР°СЂРЅРёРєР°
+              🔗 Скопировать ссылку для напарника
             </button>
             <button class="btn btn-ghost btn-sm" id="copyIdBtnGame" style="width: 100%; border: 1px solid var(--border-color);">
-              рџ“‹ РЎРєРѕРїРёСЂРѕРІР°С‚СЊ ID СЃРµСЃСЃРёРё
+              📋 Скопировать ID сессии
             </button>
           </div>
         </div>
         <div class="form-group" style="margin-bottom: 1rem;">
-          <label class="form-label">РњРёСЂ</label>
-          <p>${session.worlds?.name || 'РќРµ Р·Р°РґР°РЅ'}</p>
+          <label class="form-label">Мир</label>
+          <p>${session.worlds?.name || 'Не задан'}</p>
         </div>
         <div class="form-group" style="margin-bottom: 1rem;">
-          <label class="form-label">РЎР»РѕР¶РЅРѕСЃС‚СЊ</label>
-          <p>${session.difficulty === 'easy' ? 'Р›РµРіРєРѕ' : session.difficulty === 'hard' ? 'РҐР°СЂРґРєРѕСЂ' : 'РќРѕСЂРјР°Р»СЊРЅРѕ'}</p>
+          <label class="form-label">Сложность</label>
+          <p>${session.difficulty === 'easy' ? 'Легко' : session.difficulty === 'hard' ? 'Хардкор' : 'Нормально'}</p>
         </div>
         <div class="form-group" style="margin-bottom: 1rem;">
           <label class="form-label">PvP</label>
-          <p>${session.is_pvp_enabled ? 'вљ”пёЏ Р’РєР»СЋС‡РµРЅРѕ' : 'рџ›ЎпёЏ Р’С‹РєР»СЋС‡РµРЅРѕ'}</p>
+          <p>${session.is_pvp_enabled ? '⚔️ Включено' : '🛡️ Выключено'}</p>
         </div>
         <div class="form-group" style="margin-bottom: 1rem;">
-          <label class="form-label">Р РµР¶РёРј</label>
-          <p>${session.current_plot_stage ? `рџ“– РЎСЋР¶РµС‚ (${session.current_plot_stage})` : 'рџЋ­ РџРµСЃРѕС‡РЅРёС†Р°'}</p>
+          <label class="form-label">Режим</label>
+          <p>${session.current_plot_stage ? `📖 Сюжет (${session.current_plot_stage})` : '🎭 Песочница'}</p>
         </div>
         <div class="form-group" style="margin-bottom: 1rem;">
-          <label class="form-label">РћРїР»Р°С‚Р° Рё РјРѕРґРµР»Рё РР</label>
+          <label class="form-label">Оплата и модели ИИ</label>
           <p style="font-size: var(--fs-xs); color: var(--accent-gold);">
             ${session.ai_key_mode === 'individual' 
-              ? 'рџ‘¤ РЈ РєР°Р¶РґРѕРіРѕ РёРіСЂРѕРєР° СЃРІРѕР№ РєР»СЋС‡' 
-              : 'рџ‘‘ РћР±С‰РёР№ РєР»СЋС‡ Рё РјРѕРґРµР»Рё РҐРѕСЃС‚Р°'}
+              ? '👤 У каждого игрока свой ключ' 
+              : '👑 Общий ключ и модели Хоста'}
           </p>
         </div>
         <div class="form-group">
-          <label class="form-label" id="participantsCount">РЈС‡Р°СЃС‚РЅРёРєРё (${allPlayers.length})</label>
+          <label class="form-label" id="participantsCount">Участники (${allPlayers.length})</label>
           <div id="sessionPlayersList" style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.5rem;">
             ${renderSessionParticipants(allPlayers)}
           </div>
@@ -1056,8 +1056,8 @@ export async function renderGame(container, sessionId, user) {
     if (!items || items.length === 0) {
       return `
         <div class="empty-state" style="padding: 2rem 1rem; text-align: center;">
-          <div style="font-size: 2rem; margin-bottom: 0.5rem;">рџ‘Ґ</div>
-          <p class="text-muted">Р’ СЌС‚РѕР№ Р»РѕРєР°С†РёРё РЅРµС‚ РёР·РІРµСЃС‚РЅС‹С… NPC</p>
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">👥</div>
+          <p class="text-muted">В этой локации нет известных NPC</p>
         </div>
       `;
     }
@@ -1093,19 +1093,19 @@ export async function renderGame(container, sessionId, user) {
         <div class="npc-rel-header">
           <div>
             <div class="npc-rel-name">${escapeHtml(npc.name)}</div>
-            <div class="npc-rel-meta">${escapeHtml(npc.race || 'Р“СѓРјР°РЅРѕРёРґ')} В· ${escapeHtml(npc.role || 'Р–РёС‚РµР»СЊ')}</div>
+            <div class="npc-rel-meta">${escapeHtml(npc.race || 'Гуманоид')} · ${escapeHtml(npc.role || 'Житель')}</div>
           </div>
           <span class="npc-tier-badge" style="background: ${tierColor}20; color: ${tierColor}; border: 1px solid ${tierColor}50;">
             ${escapeHtml(tierLabel)}
           </span>
         </div>
 
-        <!-- РЁРєР°Р»Р° РѕС‚РЅРѕС€РµРЅРёР№ (-100..+100) -->
+        <!-- Шкала отношений (-100..+100) -->
         <div class="rel-bar-wrapper">
           <div class="rel-bar-labels">
-            <span>Р’СЂР°Рі (-100)</span>
+            <span>Враг (-100)</span>
             <span style="font-weight: 700; color: ${tierColor};">${score > 0 ? `+${score}` : score} / 100</span>
-            <span>РџСЂРµРґР°РЅ (+100)</span>
+            <span>Предан (+100)</span>
           </div>
           <div class="rel-bar-track">
             <div class="rel-bar-center-marker"></div>
@@ -1121,19 +1121,19 @@ export async function renderGame(container, sessionId, user) {
 
         ${(npc.current_activity || npc.current_mood || npc.temperament) ? `
           <div class="npc-personality-info" style="margin: 6px 0; padding: 6px 8px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.72rem; line-height: 1.4; border: 1px solid rgba(255,255,255,0.06);">
-            ${npc.current_activity ? `<div style="color: #c084fc; margin-bottom: 2px;">рџ“Ќ <strong>Р—Р°РЅСЏС‚:</strong> ${escapeHtml(npc.current_activity)}</div>` : ''}
+            ${npc.current_activity ? `<div style="color: #c084fc; margin-bottom: 2px;">📍 <strong>Занят:</strong> ${escapeHtml(npc.current_activity)}</div>` : ''}
             <div style="color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap;">
-              ${npc.current_mood ? `<span>РќР°СЃС‚СЂРѕРµРЅРёРµ: <strong style="color: var(--text-secondary);">${escapeHtml(npc.current_mood)}</strong></span>` : ''}
-              ${npc.temperament ? `<span>РўРµРјРїРµСЂР°РјРµРЅС‚: <strong style="color: var(--text-secondary);">${escapeHtml(npc.temperament)}</strong></span>` : ''}
+              ${npc.current_mood ? `<span>Настроение: <strong style="color: var(--text-secondary);">${escapeHtml(npc.current_mood)}</strong></span>` : ''}
+              ${npc.temperament ? `<span>Темперамент: <strong style="color: var(--text-secondary);">${escapeHtml(npc.temperament)}</strong></span>` : ''}
             </div>
           </div>
         ` : ''}
 
-        <!-- РђРєРєРѕСЂРґРµРѕРЅ РІРѕСЃРїРѕРјРёРЅР°РЅРёР№ -->
+        <!-- Аккордеон воспоминаний -->
         <div class="npc-memories-wrapper" style="margin-top: 4px;">
           <button class="npc-memories-toggle" data-toggle-memories="${npc.id}">
-            <span>рџ’­ Р’РѕСЃРїРѕРјРёРЅР°РЅРёСЏ NPC (${memories.length})</span>
-            <span>${isExpanded ? 'в–І' : 'в–ј'}</span>
+            <span>💭 Воспоминания NPC (${memories.length})</span>
+            <span>${isExpanded ? '▲' : '▼'}</span>
           </button>
           <div class="npc-memories-body" id="memories-body-${npc.id}" style="display: ${isExpanded ? 'flex' : 'none'};">
             ${renderMemoriesBody(npc.id)}
@@ -1146,24 +1146,24 @@ export async function renderGame(container, sessionId, user) {
   function renderMemoriesBody(npcId) {
     const list = cachedMemories[npcId];
     if (list === undefined) {
-      return '<div style="color: var(--text-muted); text-align: center;">Р—Р°РіСЂСѓР·РєР° РІРѕСЃРїРѕРјРёРЅР°РЅРёР№...</div>';
+      return '<div style="color: var(--text-muted); text-align: center;">Загрузка воспоминаний...</div>';
     }
     if (!list || list.length === 0) {
-      return '<div style="color: var(--text-muted); font-style: italic;">РџРѕРєР° РЅРµС‚ РІРѕСЃРїРѕРјРёРЅР°РЅРёР№ РѕР± РѕР±С‰РµРЅРёРё СЃ СЌС‚РёРј РіРµСЂРѕРµРј.</div>';
+      return '<div style="color: var(--text-muted); font-style: italic;">Пока нет воспоминаний об общении с этим героем.</div>';
     }
 
     return list.map((m) => {
       const typeClass = m.memory_type || (m.vividness >= 8 ? 'vivid' : m.vividness <= 3 ? 'impression' : 'regular');
-      const icon = typeClass === 'vivid' ? 'рџЊџ' : typeClass === 'belief' ? 'рџ”®' : typeClass === 'impression' ? 'рџ’­' : 'рџ“њ';
-      const typeLabel = typeClass === 'vivid' ? 'РЇСЂРєРѕРµ' : typeClass === 'belief' ? 'РЈР±РµР¶РґРµРЅРёРµ' : typeClass === 'impression' ? 'Р’РїРµС‡Р°С‚Р»РµРЅРёРµ' : 'РћР±С‹С‡РЅРѕРµ';
+      const icon = typeClass === 'vivid' ? '🌟' : typeClass === 'belief' ? '🔮' : typeClass === 'impression' ? '💭' : '📜';
+      const typeLabel = typeClass === 'vivid' ? 'Яркое' : typeClass === 'belief' ? 'Убеждение' : typeClass === 'impression' ? 'Впечатление' : 'Обычное';
       return `
         <div class="memory-item ${typeClass}">
           <div class="memory-item-header">
-            <span>${icon} ${typeLabel}${m.vividness ? ` В· РЇСЂРєРѕСЃС‚СЊ ${m.vividness}/10` : ''}</span>
+            <span>${icon} ${typeLabel}${m.vividness ? ` · Яркость ${m.vividness}/10` : ''}</span>
             ${m.emotional_tone ? `<span>[${escapeHtml(m.emotional_tone)}]</span>` : ''}
           </div>
-          <div class="memory-item-text">В«${escapeHtml(m.memory_text || m.content || '')}В»</div>
-          ${m.significance_reason ? `<div style="font-size: 0.68rem; color: var(--text-muted);">РџСЂРёС‡РёРЅР°: ${escapeHtml(m.significance_reason)}</div>` : ''}
+          <div class="memory-item-text">«${escapeHtml(m.memory_text || m.content || '')}»</div>
+          ${m.significance_reason ? `<div style="font-size: 0.68rem; color: var(--text-muted);">Причина: ${escapeHtml(m.significance_reason)}</div>` : ''}
         </div>
       `;
     }).join('');
@@ -1173,7 +1173,7 @@ export async function renderGame(container, sessionId, user) {
     if (!currentPlayer || !sessionId) return;
     const content = document.getElementById('npcContent');
     if (content && (!cachedNpcData || cachedNpcData.length === 0)) {
-      content.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-muted);">Р—Р°РіСЂСѓР·РєР° РїРµСЂСЃРѕРЅР°Р¶РµР№...</div>';
+      content.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-muted);">Загрузка персонажей...</div>';
     }
     try {
       cachedNpcData = await getNpcRelationships(sessionId, currentPlayer.id);
@@ -1183,7 +1183,7 @@ export async function renderGame(container, sessionId, user) {
       }
     } catch (err) {
       console.warn('Failed to load NPC relationships:', err);
-      if (content) content.innerHTML = '<div style="padding: 1rem; color: var(--accent-danger);">РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё NPC</div>';
+      if (content) content.innerHTML = '<div style="padding: 1rem; color: var(--accent-danger);">Ошибка загрузки NPC</div>';
     }
   }
 
@@ -1219,17 +1219,17 @@ export async function renderGame(container, sessionId, user) {
     if (!story || !story.arcs || story.arcs.length === 0 || story.status === 'sandbox') {
       return `
         <div class="story-panel-empty" style="padding: 1.5rem 1rem; text-align: center;">
-          <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">рџ—єпёЏ</div>
-          <h3 style="margin-bottom: 0.5rem; font-size: 1.1rem; color: #fff;">Р РµР¶РёРј СЃРІРѕР±РѕРґРЅРѕР№ РїРµСЃРѕС‡РЅРёС†С‹</h3>
+          <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🗺️</div>
+          <h3 style="margin-bottom: 0.5rem; font-size: 1.1rem; color: #fff;">Режим свободной песочницы</h3>
           <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.4; margin-bottom: 1.25rem;">
-            РЈ СЌС‚РѕР№ СЃРµСЃСЃРёРё СЃРµР№С‡Р°СЃ РЅРµС‚ СЃСЋР¶РµС‚РЅС‹С… РѕСЂРёРµРЅС‚РёСЂРѕРІ. Р’С‹ РјРѕР¶РµС‚Рµ СЃРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ СЃСЋР¶РµС‚РЅСѓСЋ РєР°РјРїР°РЅРёСЋ РЅР° РѕСЃРЅРѕРІРµ РіРµРѕРіСЂР°С„РёРё, Р»РѕСЂР° Рё NPC СЌС‚РѕРіРѕ РјРёСЂР° (В«Р»С‹Р¶Рё, РЅРѕ РЅРµ РїСЂР°РІРёР»РѕВ»).
+            У этой сессии сейчас нет сюжетных ориентиров. Вы можете сгенерировать сюжетную кампанию на основе географии, лора и NPC этого мира («лыжи, но не правило»).
           </p>
           <div style="text-align: left; margin-bottom: 1rem;">
-            <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">РџРѕР¶РµР»Р°РЅРёСЏ Рє СЃСЋР¶РµС‚Сѓ (РЅРµРѕР±СЏР·Р°С‚РµР»СЊРЅРѕ):</label>
-            <textarea id="storyWishesInput" class="input" style="width: 100%; min-height: 70px; resize: vertical; font-size: 0.85rem; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #fff;" placeholder="РќР°РїСЂРёРјРµСЂ: С‚С‘РјРЅС‹Р№ РєСѓР»СЊС‚, РґСЂРµРІРЅРёРµ СЂСѓРёРЅС‹, РєРёР±РµСЂ-РёРјРїР»Р°РЅС‚С‹, РґРµС‚РµРєС‚РёРІ РІ Р РёРІРµСЂРІСѓРґРµ..."></textarea>
+            <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Пожелания к сюжету (необязательно):</label>
+            <textarea id="storyWishesInput" class="input" style="width: 100%; min-height: 70px; resize: vertical; font-size: 0.85rem; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #fff;" placeholder="Например: тёмный культ, древние руины, кибер-импланты, детектив в Ривервуде..."></textarea>
           </div>
           <button class="btn btn-primary" id="generateStoryBtn" style="width: 100%;">
-            вњЁ РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ СЃСЋР¶РµС‚ РїРѕ РјРёСЂСѓ
+            ✨ Сгенерировать сюжет по миру
           </button>
         </div>
       `;
@@ -1241,15 +1241,15 @@ export async function renderGame(container, sessionId, user) {
 
     return `
       <div class="story-panel-container" style="display: flex; flex-direction: column; gap: 1rem; padding: 0.5rem 0;">
-        <!-- Р—Р°РіРѕР»РѕРІРѕРє Рё СЃС‚Р°С‚СѓСЃ -->
+        <!-- Заголовок и статус -->
         <div class="card" style="padding: 1rem; border-left: 3px solid #6366f1; background: rgba(30, 30, 46, 0.9); border-radius: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
             <div>
-              <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">РЎСЋР¶РµС‚РЅР°СЏ РєР°РјРїР°РЅРёСЏ</div>
-              <h3 style="font-size: 1.15rem; margin: 4px 0 6px 0; font-weight: 700; color: #fff;">${escapeHtml(story.title || 'Р‘РµР·С‹РјСЏРЅРЅР°СЏ РєР°РјРїР°РЅРёСЏ')}</h3>
+              <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Сюжетная кампания</div>
+              <h3 style="font-size: 1.15rem; margin: 4px 0 6px 0; font-weight: 700; color: #fff;">${escapeHtml(story.title || 'Безымянная кампания')}</h3>
             </div>
             <span class="badge ${story.status === 'completed' ? 'badge-success' : 'badge-primary'}" style="font-size: 0.7rem;">
-              ${story.status === 'completed' ? 'Р—Р°РІРµСЂС€РµРЅРѕ' : 'РђРєС‚РёРІРµРЅ'}
+              ${story.status === 'completed' ? 'Завершено' : 'Активен'}
             </span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-top: 6px;">
@@ -1257,11 +1257,11 @@ export async function renderGame(container, sessionId, user) {
           </p>
         </div>
 
-        <!-- РџСЂРѕР»РѕРі / РџРѕСЏРІР»РµРЅРёРµ РІ РјРёСЂРµ -->
+        <!-- Пролог / Появление в мире -->
         ${story.prologue ? `
           <details class="story-prologue-details" style="border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.2);">
             <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); outline: none;">
-              рџЋ­ РџРѕСЏРІР»РµРЅРёРµ РІ РјРёСЂРµ (РџСЂРѕР»РѕРі)
+              🎭 Появление в мире (Пролог)
             </summary>
             <div style="margin-top: 0.5rem; font-size: 0.82rem; line-height: 1.5; color: rgba(255,255,255,0.85); white-space: pre-line; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.5rem;">
               ${escapeHtml(story.prologue)}
@@ -1269,31 +1269,31 @@ export async function renderGame(container, sessionId, user) {
           </details>
         ` : ''}
 
-        <!-- РђРєС‚РёРІРЅР°СЏ Р°СЂРєР° (РўРµРєСѓС‰Р°СЏ) -->
+        <!-- Активная арка (Текущая) -->
         <div class="card" style="padding: 1rem; border: 1px solid rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.05); border-radius: 10px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <span style="font-size: 0.75rem; font-weight: 700; color: #818cf8; text-transform: uppercase;">
-              РўРµРєСѓС‰Р°СЏ Р°СЂРєР° (РђРєС‚ ${currentArc.act || (currentArcIdx + 1)})
+              Текущая арка (Акт ${currentArc.act || (currentArcIdx + 1)})
             </span>
             <span style="font-size: 0.75rem; color: var(--text-muted);">
-              Р¦РµР»Рё: ${completedGoals.length} / ${(currentArc.goals || []).length}
+              Цели: ${completedGoals.length} / ${(currentArc.goals || []).length}
             </span>
           </div>
           <h4 style="font-size: 1.05rem; font-weight: 700; margin: 0 0 8px 0; color: #fff;">
-            ${escapeHtml(currentArc.title || `РђРєС‚ ${currentArcIdx + 1}`)}
+            ${escapeHtml(currentArc.title || `Акт ${currentArcIdx + 1}`)}
           </h4>
           <p style="font-size: 0.85rem; line-height: 1.4; color: rgba(255,255,255,0.8); margin-bottom: 12px;">
             ${escapeHtml(currentArc.description || '')}
           </p>
 
-          <!-- Р¦РµР»Рё Р°СЂРєРё (С‡РµРєР»РёСЃС‚ СЃ РєР»РёРєРѕРј РґР»СЏ РїРµСЂРµРєР»СЋС‡РµРЅРёСЏ) -->
+          <!-- Цели арки (чеклист с кликом для переключения) -->
           <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
-            <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">РћСЂРёРµРЅС‚РёСЂС‹ Рё С†РµР»Рё (РЅР°Р¶РјРёС‚Рµ РґР»СЏ РѕС‚РјРµС‚РєРё):</div>
+            <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Ориентиры и цели (нажмите для отметки):</div>
             ${(currentArc.goals || []).map((goal) => {
               const isDone = completedGoals.includes(goal);
               return `
                 <div class="story-goal-item" data-arc-index="${currentArcIdx}" data-goal-title="${escapeHtml(goal)}" style="display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 6px; background: ${isDone ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.04)'}; border: 1px solid ${isDone ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.06)'}; cursor: pointer; transition: all 0.2s ease;">
-                  <span style="font-size: 1rem; line-height: 1.2;">${isDone ? 'вњ…' : 'в¬њ'}</span>
+                  <span style="font-size: 1rem; line-height: 1.2;">${isDone ? '✅' : '⬜'}</span>
                   <span style="font-size: 0.82rem; line-height: 1.35; ${isDone ? 'text-decoration: line-through; color: var(--text-muted);' : 'color: #fff;'}">
                     ${escapeHtml(goal)}
                   </span>
@@ -1302,20 +1302,20 @@ export async function renderGame(container, sessionId, user) {
             }).join('')}
           </div>
 
-          <!-- РљР»СЋС‡РµРІС‹Рµ NPC Рё Р»РѕРєР°С†РёРё -->
+          <!-- Ключевые NPC и локации -->
           <div style="display: flex; flex-wrap: wrap; gap: 6px;">
             ${(currentArc.key_npcs || []).map((npc) => `
-              <span class="badge" style="font-size: 0.7rem; background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">рџ‘¤ ${escapeHtml(npc)}</span>
+              <span class="badge" style="font-size: 0.7rem; background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">👤 ${escapeHtml(npc)}</span>
             `).join('')}
             ${(currentArc.key_locations || []).map((loc) => `
-              <span class="badge" style="font-size: 0.7rem; background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.3);">рџ“Ќ ${escapeHtml(loc)}</span>
+              <span class="badge" style="font-size: 0.7rem; background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.3);">📍 ${escapeHtml(loc)}</span>
             `).join('')}
           </div>
         </div>
 
-        <!-- Р’СЃРµ Р°СЂРєРё РєР°РјРїР°РЅРёРё (Р°РєРєРѕСЂРґРµРѕРЅ) -->
+        <!-- Все арки кампании (аккордеон) -->
         <div style="display: flex; flex-direction: column; gap: 6px;">
-          <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Р’СЃРµ Р°РєС‚С‹ РєР°РјРїР°РЅРёРё:</div>
+          <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Все акты кампании:</div>
           ${(story.arcs || []).map((arc, aIdx) => {
             const isCurrent = aIdx === currentArcIdx;
             const isPast = aIdx < currentArcIdx;
@@ -1324,7 +1324,7 @@ export async function renderGame(container, sessionId, user) {
               <details style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 6px 10px; background: rgba(0,0,0,0.15);" ${isCurrent ? 'open' : ''}>
                 <summary style="cursor: pointer; font-size: 0.82rem; font-weight: 600; outline: none; display: flex; justify-content: space-between; align-items: center;">
                   <span style="${isCurrent ? 'color: #818cf8;' : isPast ? 'color: #4ade80;' : 'color: var(--text-muted);'}">
-                    ${isPast ? 'вњ“ ' : isCurrent ? 'в–¶ ' : 'рџ”’ '} РђРєС‚ ${arc.act || (aIdx + 1)}: ${escapeHtml(arc.title)}
+                    ${isPast ? '✓ ' : isCurrent ? '▶ ' : '🔒 '} Акт ${arc.act || (aIdx + 1)}: ${escapeHtml(arc.title)}
                   </span>
                   <span style="font-size: 0.7rem; color: var(--text-muted);">${arcDoneGoals.length}/${(arc.goals || []).length}</span>
                 </summary>
@@ -1341,37 +1341,37 @@ export async function renderGame(container, sessionId, user) {
           }).join('')}
         </div>
 
-        <!-- РџРѕРґСЃРєР°Р·РєР°: Р›С‹Р¶Рё, РЅРѕ РЅРµ РїСЂР°РІРёР»Рѕ -->
+        <!-- Подсказка: Лыжи, но не правило -->
         <div style="padding: 8px 10px; background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.2); border-radius: 8px; font-size: 0.75rem; color: #fde047; line-height: 1.35;">
-          рџ’Ў <strong>В«Р›С‹Р¶Рё, РЅРѕ РЅРµ РїСЂР°РІРёР»РѕВ»:</strong> РѕСЂРёРµРЅС‚РёСЂС‹ РїРѕРјРѕРіР°СЋС‚ РјРёСЂСѓ Р¶РёС‚СЊ РІРѕРєСЂСѓРі РІР°СЃ. Р’С‹ РјРѕР¶РµС‚Рµ РёСЃСЃР»РµРґРѕРІР°С‚СЊ Р»СЋР±С‹Рµ РјРµСЃС‚Р°, РєСЂР°С„С‚РёС‚СЊ, СЃРѕР±РёСЂР°С‚СЊ СЂРµСЃСѓСЂСЃС‹ РёР»Рё РїСЂРѕСЃС‚Рѕ РѕС‚РґС‹С…Р°С‚СЊ. РР Р°РґР°РїС‚РёСЂСѓРµС‚СЃСЏ Рє РІР°С€РµРјСѓ РІС‹Р±РѕСЂСѓ!
+          💡 <strong>«Лыжи, но не правило»:</strong> ориентиры помогают миру жить вокруг вас. Вы можете исследовать любые места, крафтить, собирать ресурсы или просто отдыхать. ИИ адаптируется к вашему выбору!
         </div>
 
-        <!-- РџР°РЅРµР»СЊ РґРµР№СЃС‚РІРёР№ -->
+        <!-- Панель действий -->
         <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 0.5rem;">
           <button class="btn btn-secondary" id="rewriteStoryBtn" style="width: 100%; font-size: 0.85rem;">
-            рџ”„ РџРµСЂРµРїРёСЃР°С‚СЊ СЃСЋР¶РµС‚ СЃ РР
+            🔄 Переписать сюжет с ИИ
           </button>
           <div id="rewriteStoryPromptContainer" style="display: none; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.2);">
-            <textarea id="rewriteStoryWishes" class="input" style="width: 100%; min-height: 60px; font-size: 0.82rem; padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #fff;" placeholder="РџРѕР¶РµР»Р°РЅРёСЏ Рє РЅРѕРІРѕРјСѓ СЃСЋР¶РµС‚Сѓ (РЅР°РїСЂРёРјРµСЂ: РґРѕР±Р°РІРёС‚СЊ РєРёР±РµСЂРїР°РЅРє, РґСЂРµРІРЅРёР№ РѕСЂРґРµРЅ, СЂР°СЃСЃР»РµРґРѕРІР°РЅРёРµ)..."></textarea>
+            <textarea id="rewriteStoryWishes" class="input" style="width: 100%; min-height: 60px; font-size: 0.82rem; padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #fff;" placeholder="Пожелания к новому сюжету (например: добавить киберпанк, древний орден, расследование)..."></textarea>
             <div style="display: flex; gap: 6px;">
-              <button class="btn btn-primary" id="confirmRewriteStoryBtn" style="flex: 1; font-size: 0.8rem;">РџРµСЂРµРїРёСЃР°С‚СЊ</button>
-              <button class="btn btn-ghost" id="cancelRewriteStoryBtn" style="font-size: 0.8rem;">РћС‚РјРµРЅР°</button>
+              <button class="btn btn-primary" id="confirmRewriteStoryBtn" style="flex: 1; font-size: 0.8rem;">Переписать</button>
+              <button class="btn btn-ghost" id="cancelRewriteStoryBtn" style="font-size: 0.8rem;">Отмена</button>
             </div>
           </div>
 
           <button class="btn btn-ghost" id="editStoryJsonBtn" style="width: 100%; font-size: 0.85rem; color: var(--text-muted);">
-            вњЏпёЏ Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ РІСЂСѓС‡РЅСѓСЋ (JSON)
+            ✏️ Редактировать вручную (JSON)
           </button>
           <div id="editStoryJsonContainer" style="display: none; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.2);">
             <textarea id="editStoryJsonArea" class="input" style="width: 100%; min-height: 180px; font-family: monospace; font-size: 0.75rem; padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.4); color: #fff;"></textarea>
             <div style="display: flex; gap: 6px;">
-              <button class="btn btn-primary" id="saveStoryJsonBtn" style="flex: 1; font-size: 0.8rem;">РЎРѕС…СЂР°РЅРёС‚СЊ РёР·РјРµРЅРµРЅРёСЏ</button>
-              <button class="btn btn-ghost" id="cancelEditStoryJsonBtn" style="font-size: 0.8rem;">РћС‚РјРµРЅР°</button>
+              <button class="btn btn-primary" id="saveStoryJsonBtn" style="flex: 1; font-size: 0.8rem;">Сохранить изменения</button>
+              <button class="btn btn-ghost" id="cancelEditStoryJsonBtn" style="font-size: 0.8rem;">Отмена</button>
             </div>
           </div>
 
           <button class="btn btn-ghost" id="deleteStoryBtn" style="width: 100%; font-size: 0.85rem; color: #f87171;">
-            рџ—‘пёЏ РЈРґР°Р»РёС‚СЊ СЃСЋР¶РµС‚ (РІ РїРµСЃРѕС‡РЅРёС†Сѓ)
+            🗑️ Удалить сюжет (в песочницу)
           </button>
         </div>
       </div>
@@ -1401,22 +1401,22 @@ export async function renderGame(container, sessionId, user) {
       try {
         if (btn) {
           btn.disabled = true;
-          btn.textContent = 'вЏі Р“РµРЅРµСЂР°С†РёСЏ СЃСЋР¶РµС‚Р°...';
+          btn.textContent = '⏳ Генерация сюжета...';
         }
-        toast.info('РР СЃРѕР·РґР°С‘С‚ СЃСЋР¶РµС‚РЅСѓСЋ РєР°РјРїР°РЅРёСЋ РїРѕ РјРёСЂСѓ...');
+        toast.info('ИИ создаёт сюжетную кампанию по миру...');
         const newStory = await generateStorylineForSession({
           sessionId,
           worldId: session?.world_id,
           customWishes: wishes,
         });
         session.storyline = newStory;
-        toast.success('РЎСЋР¶РµС‚РЅР°СЏ Р»РёРЅРёСЏ СѓСЃРїРµС€РЅРѕ СЃРѕР·РґР°РЅР°!');
+        toast.success('Сюжетная линия успешно создана!');
         await refreshStoryPanel();
       } catch (err) {
-        toast.error('РћС€РёР±РєР° РіРµРЅРµСЂР°С†РёРё СЃСЋР¶РµС‚Р°: ' + (err.message || err));
+        toast.error('Ошибка генерации сюжета: ' + (err.message || err));
         if (btn) {
           btn.disabled = false;
-          btn.textContent = 'вњЁ РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ СЃСЋР¶РµС‚ РїРѕ РјРёСЂСѓ';
+          btn.textContent = '✨ Сгенерировать сюжет по миру';
         }
       }
     });
@@ -1442,9 +1442,9 @@ export async function renderGame(container, sessionId, user) {
       try {
         if (confirmBtn) {
           confirmBtn.disabled = true;
-          confirmBtn.textContent = 'вЏі РџРµСЂРµРїРёСЃС‹РІР°СЋ...';
+          confirmBtn.textContent = '⏳ Переписываю...';
         }
-        toast.info('РР РїРµСЂРµРїРёСЃС‹РІР°РµС‚ СЃСЋР¶РµС‚...');
+        toast.info('ИИ переписывает сюжет...');
         const updated = await rewriteStoryline({
           sessionId,
           worldId: session?.world_id,
@@ -1452,13 +1452,13 @@ export async function renderGame(container, sessionId, user) {
           currentStoryline: session?.storyline,
         });
         session.storyline = updated;
-        toast.success('РЎСЋР¶РµС‚ РѕР±РЅРѕРІР»РµРЅ!');
+        toast.success('Сюжет обновлен!');
         await refreshStoryPanel();
       } catch (err) {
-        toast.error('РћС€РёР±РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ СЃСЋР¶РµС‚Р°: ' + (err.message || err));
+        toast.error('Ошибка обновления сюжета: ' + (err.message || err));
         if (confirmBtn) {
           confirmBtn.disabled = false;
-          confirmBtn.textContent = 'РџРµСЂРµРїРёСЃР°С‚СЊ';
+          confirmBtn.textContent = 'Переписать';
         }
       }
     });
@@ -1487,23 +1487,23 @@ export async function renderGame(container, sessionId, user) {
         const parsed = JSON.parse(editJsonArea.value);
         await updateStoryline(sessionId, parsed);
         session.storyline = parsed;
-        toast.success('РЎСЋР¶РµС‚ СЃРѕС…СЂР°РЅС‘РЅ!');
+        toast.success('Сюжет сохранён!');
         await refreshStoryPanel();
       } catch (err) {
-        toast.error('РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ JSON: ' + (err.message || err));
+        toast.error('Ошибка сохранения JSON: ' + (err.message || err));
       }
     });
 
     // Delete Story (Sandbox)
     document.getElementById('deleteStoryBtn')?.addEventListener('click', async () => {
-      if (!confirm('РџРµСЂРµР№С‚Рё РІ СЂРµР¶РёРј СЃРІРѕР±РѕРґРЅРѕР№ РїРµСЃРѕС‡РЅРёС†С‹ Рё СѓРґР°Р»РёС‚СЊ С‚РµРєСѓС‰РёР№ СЃСЋР¶РµС‚?')) return;
+      if (!confirm('Перейти в режим свободной песочницы и удалить текущий сюжет?')) return;
       try {
         await deleteStoryline(sessionId);
         session.storyline = null;
-        toast.info('РЎСЋР¶РµС‚ СѓРґР°Р»С‘РЅ. РђРєС‚РёРІРµРЅ СЂРµР¶РёРј СЃРІРѕР±РѕРґРЅРѕР№ РїРµСЃРѕС‡РЅРёС†С‹.');
+        toast.info('Сюжет удалён. Активен режим свободной песочницы.');
         await refreshStoryPanel();
       } catch (err) {
-        toast.error('РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ: ' + (err.message || err));
+        toast.error('Ошибка удаления: ' + (err.message || err));
       }
     });
 
@@ -1520,7 +1520,7 @@ export async function renderGame(container, sessionId, user) {
           session.storyline = updated;
           await refreshStoryPanel();
         } catch (err) {
-          toast.error('РћС€РёР±РєР° РїРµСЂРµРєР»СЋС‡РµРЅРёСЏ С†РµР»Рё: ' + (err.message || err));
+          toast.error('Ошибка переключения цели: ' + (err.message || err));
         }
       });
     });
@@ -1558,15 +1558,15 @@ export async function renderGame(container, sessionId, user) {
     document.getElementById('interruptBusyBtn')?.addEventListener('click', async () => {
       if (!currentPlayer?.is_busy) return;
       try {
-        toast.info('РџСЂРµСЂС‹РІР°РЅРёРµ РґРµСЏС‚РµР»СЊРЅРѕСЃС‚Рё...');
+        toast.info('Прерывание деятельности...');
         const { data, error } = await supabase.rpc('interrupt_busy_activity', {
           p_player_id: currentPlayer.id,
         });
         if (error) {
-          toast.error('РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРµСЂРІР°С‚СЊ: ' + error.message);
+          toast.error('Не удалось прервать: ' + error.message);
           return;
         }
-        toast.success(`Р”РµСЏС‚РµР»СЊРЅРѕСЃС‚СЊ "${data.interrupted_activity || 'Р—Р°РЅСЏС‚РёРµ'}" РїСЂРµСЂРІР°РЅР°. РџСЂРѕС€Р»Рѕ РІСЂРµРјРµРЅРё: ${data.time_spent_minutes || 0} РјРёРЅ.`);
+        toast.success(`Деятельность "${data.interrupted_activity || 'Занятие'}" прервана. Прошло времени: ${data.time_spent_minutes || 0} мин.`);
         currentPlayer.is_busy = false;
         currentPlayer.busy_activity = null;
         currentPlayer.busy_remaining_minutes = 0;
@@ -1574,20 +1574,20 @@ export async function renderGame(container, sessionId, user) {
         if (banner) banner.style.display = 'none';
         updateInputState();
       } catch (err) {
-        toast.error('РћС€РёР±РєР°: ' + err.message);
+        toast.error('Ошибка: ' + err.message);
       }
     });
 
     // Multi-player: take turn button
     document.getElementById('takeTurnBtn')?.addEventListener('click', async () => {
       try {
-        toast.info('РџРµСЂРµРєР»СЋС‡РµРЅРёРµ С…РѕРґР°...');
+        toast.info('Переключение хода...');
         await passTurn(sessionId, currentPlayer.id);
         isMyTurn = true;
-        activePlayerName = currentPlayer.name || 'Р“РµСЂРѕР№';
+        activePlayerName = currentPlayer.name || 'Герой';
         updateInputState();
       } catch (err) {
-        toast.error('РќРµ СѓРґР°Р»РѕСЃСЊ РїРµСЂРµРєР»СЋС‡РёС‚СЊ С…РѕРґ: ' + err.message);
+        toast.error('Не удалось переключить ход: ' + err.message);
       }
     });
 
@@ -1596,12 +1596,12 @@ export async function renderGame(container, sessionId, user) {
       const base = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
       const url = `${window.location.origin}${base}#/session/${sessionId}`;
       navigator.clipboard.writeText(url);
-      toast.success('РРЅРІР°Р№С‚-СЃСЃС‹Р»РєР° СЃРєРѕРїРёСЂРѕРІР°РЅР°!');
+      toast.success('Инвайт-ссылка скопирована!');
     });
 
     document.getElementById('copyIdBtnGame')?.addEventListener('click', () => {
       navigator.clipboard.writeText(sessionId);
-      toast.success('ID СЃРµСЃСЃРёРё СЃРєРѕРїРёСЂРѕРІР°РЅ!');
+      toast.success('ID сессии скопирован!');
     });
 
     // Auto-resize textarea
@@ -1626,9 +1626,9 @@ export async function renderGame(container, sessionId, user) {
       try {
         const data = await exportPlayer(currentPlayer.id);
         downloadJSON(data, `${currentPlayer?.name || 'hero'}_character.json`);
-        toast.success('РџРµСЂСЃРѕРЅР°Р¶ СЌРєСЃРїРѕСЂС‚РёСЂРѕРІР°РЅ!');
+        toast.success('Персонаж экспортирован!');
       } catch (err) {
-        toast.error('РћС€РёР±РєР° СЌРєСЃРїРѕСЂС‚Р°: ' + err.message);
+        toast.error('Ошибка экспорта: ' + err.message);
       }
     });
 
@@ -1642,24 +1642,24 @@ export async function renderGame(container, sessionId, user) {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const playerId = btn.dataset.playerId;
-        const playerName = btn.dataset.playerName || 'РРіСЂРѕРє';
+        const playerName = btn.dataset.playerName || 'Игрок';
         if (!playerId) return;
 
-        if (!window.confirm(`РЈРґР°Р»РёС‚СЊ СѓС‡Р°СЃС‚РЅРёРєР° В«${playerName}В» РёР· СЌС‚РѕР№ СЃРµСЃСЃРёРё?`)) return;
+        if (!window.confirm(`Удалить участника «${playerName}» из этой сессии?`)) return;
 
         try {
           btn.disabled = true;
           await removeSessionPlayer(sessionId, playerId);
-          toast.success(`РЈС‡Р°СЃС‚РЅРёРє В«${playerName}В» СѓРґР°Р»РµРЅ РёР· СЃРµСЃСЃРёРё`);
+          toast.success(`Участник «${playerName}» удален из сессии`);
           allPlayers = allPlayers.filter((p) => p.id !== playerId);
           const countEl = document.getElementById('participantsCount');
-          if (countEl) countEl.textContent = `РЈС‡Р°СЃС‚РЅРёРєРё (${allPlayers.length})`;
+          if (countEl) countEl.textContent = `Участники (${allPlayers.length})`;
           const listEl = document.getElementById('sessionPlayersList');
           if (listEl) listEl.innerHTML = renderSessionParticipants(allPlayers);
           bindParticipantEvents();
           await checkTurnQueue();
         } catch (err) {
-          toast.error('РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ СѓС‡Р°СЃС‚РЅРёРєР°: ' + (err.message || err));
+          toast.error('Ошибка удаления участника: ' + (err.message || err));
           btn.disabled = false;
         }
       });
@@ -1673,16 +1673,16 @@ export async function renderGame(container, sessionId, user) {
         const statName = btn.getAttribute('data-stat');
         if (!statName || !currentPlayer) return;
         try {
-          toast.info(`Р’РєР»Р°РґС‹РІР°РµРј 1 РѕС‡РєРѕ РІ ${statName}...`);
+          toast.info(`Вкладываем 1 очко в ${statName}...`);
           const res = await allocateStatPoints(currentPlayer.id, statName, 1);
           if (res?.success) {
-            toast.success(`${statName} РїРѕРІС‹С€РµРЅР° РґРѕ ${res.new_value}!`);
+            toast.success(`${statName} повышена до ${res.new_value}!`);
             await refreshProfile();
           } else {
-            toast.error(res?.error || 'РќРµ СѓРґР°Р»РѕСЃСЊ СЂР°СЃРїСЂРµРґРµР»РёС‚СЊ РѕС‡РєРё');
+            toast.error(res?.error || 'Не удалось распределить очки');
           }
         } catch (err) {
-          toast.error('РћС€РёР±РєР°: ' + err.message);
+          toast.error('Ошибка: ' + err.message);
         }
       });
     });
@@ -1722,11 +1722,11 @@ export async function renderGame(container, sessionId, user) {
   }
 
   // ============================================
-  // РРќРўР•Р РђРљРўРР’РќРђРЇ РљРђР РўРђ РњРР Рђ
+  // ИНТЕРАКТИВНАЯ КАРТА МИРА
   // ============================================
   function getCoordScale() {
-    const unit = (session?.scale_unit || 'РєРёР»РѕРјРµС‚СЂС‹').toLowerCase();
-    const isKm = unit.startsWith('РєРёР»') || unit.startsWith('km') || unit === 'РєРј';
+    const unit = (session?.scale_unit || 'километры').toLowerCase();
+    const isKm = unit.startsWith('кил') || unit.startsWith('km') || unit === 'км';
     return isKm ? 0.35 : 1.5;
   }
 
@@ -1745,6 +1745,7 @@ export async function renderGame(container, sessionId, user) {
       zoomText.textContent = `${Math.round(mapZoom * 100)}%`;
     }
   }
+
 
   function recenterMapOnPlayer() {
     const viewport = document.getElementById('mapViewport');
@@ -1828,7 +1829,7 @@ export async function renderGame(container, sessionId, user) {
     return PALETTE[Math.abs(hash) % PALETTE.length];
   }
 
-  /** Convex Hull (Andrew's Monotone Chain) вЂ” returns ordered vertices */
+  /** Convex Hull (Andrew's Monotone Chain) — returns ordered vertices */
   function computeConvexHull(pts) {
     if (pts.length < 3) return [...pts];
     const sorted = [...pts].sort((a, b) => a.x !== b.x ? a.x - b.x : a.y - b.y);
@@ -1880,7 +1881,7 @@ export async function renderGame(container, sessionId, user) {
     const locations = cachedWorldMapData?.locations || [];
     const states = cachedWorldMapData?.states || [];
 
-    // в”Ђв”Ђ 1. Bounding box for dynamic grid size в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // ── 1. Bounding box for dynamic grid size ──────────────────
     const allPts = locations.map(l => ({ x: (l.pos_x ?? 0) * scale, y: (l.pos_y ?? 0) * scale }));
     const playerPt = { x: (currentPlayer?.pos_x ?? 0) * scale, y: (currentPlayer?.pos_y ?? 0) * scale };
     allPts.push(playerPt);
@@ -1893,7 +1894,7 @@ export async function renderGame(container, sessionId, user) {
       3000 * scale
     );
 
-    // в”Ђв”Ђ 2. Rebuild SVG using DOM API (fixes encoding issues) в”Ђв”Ђв”Ђ
+    // ── 2. Rebuild SVG using DOM API (fixes encoding issues) ───
     gridSvg.setAttribute('width', String(gridSize * 2));
     gridSvg.setAttribute('height', String(gridSize * 2));
     gridSvg.style.left = `${-gridSize}px`;
@@ -1905,7 +1906,7 @@ export async function renderGame(container, sessionId, user) {
     rootG.setAttribute('transform', `translate(${gridSize},${gridSize})`);
     gridSvg.appendChild(rootG);
 
-    // в”Ђв”Ђ 3. Grid lines в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // ── 3. Grid lines ──────────────────────────────────────────
     const gridG = document.createElementNS(SVG_NS, 'g');
     gridG.setAttribute('class', 'map-grid-lines');
     const step = 500 * scale;
@@ -1934,7 +1935,7 @@ export async function renderGame(container, sessionId, user) {
     });
     rootG.appendChild(gridG);
 
-    // в”Ђв”Ђ 4. State polygon borders в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // ── 4. State polygon borders ───────────────────────────────
     const bordersG = document.createElementNS(SVG_NS, 'g');
     bordersG.setAttribute('class', 'map-state-borders');
 
@@ -1950,7 +1951,7 @@ export async function renderGame(container, sessionId, user) {
       let hullPts = [];
 
       if (state.border_shape === 'polygon' && state.border_data?.points?.length >= 3) {
-        // Use explicit vertices from DB (set by migration from Р­С‚РµСЂРёСЏ 2.6.json)
+        // Use explicit vertices from DB (set by migration from Этерия 2.6.json)
         hullPts = state.border_data.points.map(p => ({ x: p.x * scale, y: p.y * scale }));
       } else if (state.border_shape === 'circle' && state.border_data?.radius) {
         // Explicit circle
@@ -2005,7 +2006,7 @@ export async function renderGame(container, sessionId, user) {
 
     rootG.appendChild(bordersG);
 
-    // в”Ђв”Ђ 5. Location borders (small circles) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // ── 5. Location borders (small circles) ───────────────────
     const locBordersG = document.createElementNS(SVG_NS, 'g');
     locBordersG.setAttribute('class', 'map-loc-borders');
     locations.forEach(loc => {
@@ -2078,19 +2079,19 @@ export async function renderGame(container, sessionId, user) {
     originDot.setAttribute('fill', '#d4a359');
     rootG.appendChild(originDot);
 
-    // в”Ђв”Ђ 6. HTML Markers for locations в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // ── 6. HTML Markers for locations ─────────────────────────
     locLayer.innerHTML = locations.map(loc => {
       const lx = (loc.pos_x ?? 0) * scale;
       const ly = (loc.pos_y ?? 0) * scale;
 
-      let icon = 'рџЏ›', pinBg = '#3b82f6';
-      if (loc.danger_level === 'lethal' || loc.danger_level === 'deadly') { icon = 'рџ’Ђ'; pinBg = '#ef4444'; }
-      else if (loc.danger_level === 'danger' || loc.danger_level === 'hard') { icon = 'вљ”пёЏ'; pinBg = '#f59e0b'; }
-      else if (loc.type === 'capital') { icon = 'рџ‘‘'; pinBg = '#8b5cf6'; }
-      else if (loc.type === 'ruins') { icon = 'рџЄЁ'; pinBg = '#78716c'; }
-      else if (loc.type === 'landmark' || loc.type === 'wilderness') { icon = 'рџЊІ'; pinBg = '#10b981'; }
-      else if (loc.type === 'dungeon') { icon = 'в›©пёЏ'; pinBg = '#e11d48'; }
-      else if (loc.type === 'village') { icon = 'рџЏпёЏ'; pinBg = '#22c55e'; }
+      let icon = '🏛', pinBg = '#3b82f6';
+      if (loc.danger_level === 'lethal' || loc.danger_level === 'deadly') { icon = '💀'; pinBg = '#ef4444'; }
+      else if (loc.danger_level === 'danger' || loc.danger_level === 'hard') { icon = '⚔️'; pinBg = '#f59e0b'; }
+      else if (loc.type === 'capital') { icon = '👑'; pinBg = '#8b5cf6'; }
+      else if (loc.type === 'ruins') { icon = '🪨'; pinBg = '#78716c'; }
+      else if (loc.type === 'landmark' || loc.type === 'wilderness') { icon = '🌲'; pinBg = '#10b981'; }
+      else if (loc.type === 'dungeon') { icon = '⛩️'; pinBg = '#e11d48'; }
+      else if (loc.type === 'village') { icon = '🏘️'; pinBg = '#22c55e'; }
 
       // subzone markers (close zoom only, hidden via CSS)
       const subHTML = (loc.subzones || []).map(sz => {
@@ -2117,21 +2118,23 @@ export async function renderGame(container, sessionId, user) {
       });
     });
 
-    // в”Ђв”Ђ 7. Player markers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // ── 7. Player markers ─────────────────────────────────────
     const othersHtml = (allPlayers || []).filter(p => p.id !== currentPlayer?.id).map(p => {
       const px = (p.pos_x ?? 0) * scale, py = (p.pos_y ?? 0) * scale;
-      return `<div class="map-player-beacon" style="left:${px}px;top:${py}px" title="${escapeHtml(p.name||'РРіСЂРѕРє')}">
+      return `<div class="map-player-beacon" style="left:${px}px;top:${py}px" title="${escapeHtml(p.name||'Игрок')}">
         <div class="map-party-dot"></div>
-        <span class="map-marker-label" style="background:rgba(14,38,64,0.9);color:#7dd3fc">${escapeHtml(p.name||'РРіСЂРѕРє')}</span>
+        <span class="map-marker-label" style="background:rgba(14,38,64,0.9);color:#7dd3fc">${escapeHtml(p.name||'Игрок')}</span>
       </div>`;
     }).join('');
 
     plLayer.innerHTML = `${othersHtml}
-      <div class="map-player-beacon" style="left:${playerPt.x}px;top:${playerPt.y}px" title="Р’С‹ (${currentPlayer?.pos_x??0}, ${currentPlayer?.pos_y??0})">
+      <div class="map-player-beacon" style="left:${playerPt.x}px;top:${playerPt.y}px" title="Вы (${currentPlayer?.pos_x??0}, ${currentPlayer?.pos_y??0})">
         <div class="map-player-dot"></div>
-        <span class="map-marker-label" style="background:rgba(10,40,20,0.95);color:#4ade80;font-weight:700">рџ“Ќ Р’С‹ (${currentPlayer?.name||'Р“РµСЂРѕР№'})</span>
+        <span class="map-marker-label" style="background:rgba(10,40,20,0.95);color:#4ade80;font-weight:700">📍 Вы (${currentPlayer?.name||'Герой'})</span>
       </div>`;
   }
+
+
   function showLocationPopup(loc) {
     const popup = document.getElementById('mapLocationPopup');
     if (!popup) return;
@@ -2140,12 +2143,12 @@ export async function renderGame(container, sessionId, user) {
       <span class="badge badge-info" style="font-size: 0.65rem;">
         ${escapeHtml(sz.name)} (R:${sz.radius || 10})
       </span>
-    `).join(' ') || '<span style="color: var(--text-muted); font-size: 0.75rem;">РќРµС‚ СЃР°Р±Р·РѕРЅ</span>';
+    `).join(' ') || '<span style="color: var(--text-muted); font-size: 0.75rem;">Нет сабзон</span>';
 
     const dx = (loc.pos_x ?? 0) - (currentPlayer?.pos_x ?? 0);
     const dy = (loc.pos_y ?? 0) - (currentPlayer?.pos_y ?? 0);
     const dist = Math.round(Math.sqrt(dx * dx + dy * dy));
-    const unit = session?.scale_unit || 'РєРј';
+    const unit = session?.scale_unit || 'км';
 
     popup.style.display = 'flex';
     popup.innerHTML = `
@@ -2156,15 +2159,15 @@ export async function renderGame(container, sessionId, user) {
             ${escapeHtml(loc.danger_level || 'normal')}
           </span>
         </div>
-        <button class="btn btn-ghost btn-icon btn-xs" id="closeLocPopupBtn" style="font-size: 0.75rem; width: 22px; height: 22px;">вњ•</button>
+        <button class="btn btn-ghost btn-icon btn-xs" id="closeLocPopupBtn" style="font-size: 0.75rem; width: 22px; height: 22px;">✕</button>
       </div>
       <div style="font-size: var(--fs-xs); color: var(--text-muted); display: flex; justify-content: space-between; margin-top: 2px;">
-        <span>РљРѕРѕСЂРґРёРЅР°С‚С‹: <strong>[${loc.pos_x ?? 0}, ${loc.pos_y ?? 0}]</strong></span>
-        <span>Р”РёСЃС‚Р°РЅС†РёСЏ: <strong style="color: #38bdf8;">${dist} ${escapeHtml(unit)}</strong></span>
+        <span>Координаты: <strong>[${loc.pos_x ?? 0}, ${loc.pos_y ?? 0}]</strong></span>
+        <span>Дистанция: <strong style="color: #38bdf8;">${dist} ${escapeHtml(unit)}</strong></span>
       </div>
       ${loc.description ? `<p style="font-size: var(--fs-xs); color: var(--text-main); margin: 3px 0; line-height: 1.3;">${escapeHtml(loc.description)}</p>` : ''}
       <div style="margin-top: 4px;">
-        <small style="color: var(--text-muted); display: block; margin-bottom: 2px;">РЎР°Р±Р·РѕРЅС‹:</small>
+        <small style="color: var(--text-muted); display: block; margin-bottom: 2px;">Сабзоны:</small>
         <div style="display: flex; flex-wrap: wrap; gap: 4px;">
           ${subzonesList}
         </div>
@@ -2294,7 +2297,7 @@ export async function renderGame(container, sessionId, user) {
     document.getElementById('mapToggleLabelsBtn')?.addEventListener('click', () => {
       showMapLabels = !showMapLabels;
       const btn = document.getElementById('mapToggleLabelsBtn');
-      if (btn) btn.textContent = showMapLabels ? 'рџЏ·пёЏ Р’РєР»' : 'рџЏ·пёЏ Р’С‹РєР»';
+      if (btn) btn.textContent = showMapLabels ? '🏷️ Вкл' : '🏷️ Выкл';
       document.querySelectorAll('.map-marker-label').forEach((el) => {
         el.style.display = showMapLabels ? 'block' : 'none';
       });
@@ -2305,7 +2308,7 @@ export async function renderGame(container, sessionId, user) {
       const panel = document.getElementById('mapPanel');
       if (panel) panel.classList.toggle('map-wide', isMapWide);
       const btn = document.getElementById('toggleMapWideBtn');
-      if (btn) btn.textContent = isMapWide ? 'в—Ђв–¶' : 'в–¶в—Ђ';
+      if (btn) btn.textContent = isMapWide ? '◀▶' : '▶◀';
       setTimeout(recenterMapOnPlayer, 100);
     });
 
@@ -2314,7 +2317,7 @@ export async function renderGame(container, sessionId, user) {
       const panel = document.getElementById('mapPanel');
       if (panel) panel.classList.toggle('map-fullscreen', isMapFullscreen);
       const btn = document.getElementById('toggleMapFullscreenBtn');
-      if (btn) btn.textContent = isMapFullscreen ? 'рџ——' : 'в›¶';
+      if (btn) btn.textContent = isMapFullscreen ? '🗗' : '⛶';
       setTimeout(recenterMapOnPlayer, 100);
     });
   }
@@ -2385,21 +2388,21 @@ export async function renderGame(container, sessionId, user) {
     input.style.height = 'auto';
     updateInputState();
 
-    // 1. РњРіРЅРѕРІРµРЅРЅРѕ РѕС‚РѕР±СЂР°Р¶Р°РµРј СЃРѕРѕР±С‰РµРЅРёРµ РёРіСЂРѕРєР° РІ С‡Р°С‚Рµ
+    // 1. Мгновенно отображаем сообщение игрока в чате
     const tempMsgId = 'temp-' + Date.now();
     const optimisticPlayerMsg = {
       id: tempMsgId,
       session_id: sessionId,
       sender_type: 'player',
       sender_id: user?.id || currentPlayer?.id,
-      sender_name: currentPlayer?.name || 'Р“РµСЂРѕР№',
+      sender_name: currentPlayer?.name || 'Герой',
       content: text,
       created_at: new Date().toISOString(),
     };
     messages.push(optimisticPlayerMsg);
     appendMessage(optimisticPlayerMsg);
 
-    // 2. РЎСЂР°Р·Сѓ Р·Р°РїСѓСЃРєР°РµРј Р°РЅРёРјР°С†РёСЋ РіРµРЅРµСЂР°С†РёРё РѕС‚РІРµС‚Р° РІ РѕР±Р»Р°С‡РєРµ Р”Рњ
+    // 2. Сразу запускаем анимацию генерации ответа в облачке ДМ
     showDmTypingIndicator();
 
     try {
@@ -2417,12 +2420,12 @@ export async function renderGame(container, sessionId, user) {
 
       if (result.rest_result?.is_rest) {
         const restInfo = result.rest_result;
-        let restMessage = `РћС‚РґС‹С…: ${restInfo.rest_quality || 'normal'} (${restInfo.rest_duration_hours || 0}С‡)`;
+        let restMessage = `Отдых: ${restInfo.rest_quality || 'normal'} (${restInfo.rest_duration_hours || 0}ч)`;
         if (restInfo.hp_recovery) {
-          restMessage += `. Р’РѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРѕ HP: ${restInfo.hp_recovery}`;
+          restMessage += `. Восстановлено HP: ${restInfo.hp_recovery}`;
         }
         if (restInfo.injuries?.length) {
-          restMessage += `. РџРѕР»СѓС‡РµРЅС‹ С‚СЂР°РІРјС‹: ${restInfo.injuries.map(i => i.type).join(', ')}`;
+          restMessage += `. Получены травмы: ${restInfo.injuries.map(i => i.type).join(', ')}`;
         }
         toast.info(restMessage);
 
@@ -2441,7 +2444,7 @@ export async function renderGame(container, sessionId, user) {
         currentPlayer = { ...currentPlayer, hp: (currentPlayer.hp || 0) + result.hp_change };
       }
 
-      // РћР±РЅРѕРІР»РµРЅРёРµ РІСЂРµРјРµРЅРё СЃРµСЃСЃРёРё РїСЂРё РЅР°Р»РёС‡РёРё
+      // Обновление времени сессии при наличии
       if (result.game_time) {
         session = {
           ...session,
@@ -2454,7 +2457,7 @@ export async function renderGame(container, sessionId, user) {
         updatePlayerUI();
       }
 
-      // РћР±РЅРѕРІР»РµРЅРёРµ Р»РѕРєР°С†РёРё РїСЂРё СЃРјРµРЅРµ РёР»Рё РіРµРЅРµСЂР°С†РёРё РЅР°С‡Р°Р»СЊРЅРѕР№ Р»РѕРєР°С†РёРё
+      // Обновление локации при смене или генерации начальной локации
       if (result.current_location_name || result.current_wild_zone !== undefined) {
         session = {
           ...session,
@@ -2467,7 +2470,7 @@ export async function renderGame(container, sessionId, user) {
       }
 
 
-      // РћР±РЅРѕРІР»РµРЅРёРµ Р»РѕРєР°С†РёРё РїСЂРё СЃРјРµРЅРµ
+      // Обновление локации при смене
       if (result.location_changed) {
         try {
           const freshSession = await getSession(sessionId);
@@ -2479,11 +2482,11 @@ export async function renderGame(container, sessionId, user) {
         }
       }
 
-      // РћРїРѕРІРµС‰РµРЅРёСЏ РѕР± РёР·РјРµРЅРµРЅРёРё РѕС‚РЅРѕС€РµРЅРёР№ Рё РїР°РјСЏС‚Рё NPC
+      // Оповещения об изменении отношений и памяти NPC
       if (Array.isArray(result.npc_updates) && result.npc_updates.length > 0) {
         for (const update of result.npc_updates) {
           const deltaSign = update.delta > 0 ? `+${update.delta}` : `${update.delta}`;
-          const toneIcon = update.delta > 0 ? 'рџ’љ' : update.delta < 0 ? 'рџ’”' : 'рџ’¬';
+          const toneIcon = update.delta > 0 ? '💚' : update.delta < 0 ? '💔' : '💬';
           toast.info(`${toneIcon} ${update.npc_name}: ${update.tier_label} (${update.score}/100, ${deltaSign})`);
         }
         if (activePanel === 'npc') {
@@ -2491,16 +2494,16 @@ export async function renderGame(container, sessionId, user) {
         }
       }
 
-      // РћРїРѕРІРµС‰РµРЅРёСЏ Рѕ СЃСЋР¶РµС‚РЅРѕРј РїСЂРѕРіСЂРµСЃСЃРµ (Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРµ РѕС‚СЃР»РµР¶РёРІР°РЅРёРµ)
+      // Оповещения о сюжетном прогрессе (автоматическое отслеживание)
       if (result.story_progress) {
         try {
           const freshSession = await getSession(sessionId);
           if (freshSession) session = freshSession;
           if (result.story_progress.completed_goals?.length > 0) {
-            toast.success(`рџЋЇ Р¦РµР»СЊ СЃСЋР¶РµС‚Р° РІС‹РїРѕР»РЅРµРЅР°: ${result.story_progress.completed_goals.join(', ')}`);
+            toast.success(`🎯 Цель сюжета выполнена: ${result.story_progress.completed_goals.join(', ')}`);
           }
           if (result.story_progress.advanced_arc) {
-            toast.success(`рџ“њ РЎСЋР¶РµС‚ РїСЂРѕРґРІРёРЅСѓР»СЃСЏ Рє СЃР»РµРґСѓСЋС‰РµРјСѓ Р°РєС‚Сѓ!`);
+            toast.success(`📜 Сюжет продвинулся к следующему акту!`);
           }
           if (activePanel === 'story') {
             await refreshStoryPanel();
@@ -2510,18 +2513,18 @@ export async function renderGame(container, sessionId, user) {
         }
       }
 
-      // РЈРІРµРґРѕРјР»РµРЅРёСЏ Рѕ СЃРїСѓС‚РЅРёРєР°С…, РЅР°РІС‹РєР°С… Рё СѓСЂРѕРІРЅСЏС…
+      // Уведомления о спутниках, навыках и уровнях
       if (result.companion_action) {
-        toast.info(`рџ¤ќ ${result.companion_action.npc_name}: ${result.companion_action.dialogue}`);
+        toast.info(`🤝 ${result.companion_action.npc_name}: ${result.companion_action.dialogue}`);
       }
       if (result.skill_progress?.leveled_up) {
-        toast.success(`рџ”” РќР°РІС‹Рє РїРѕРІС‹С€РµРЅ! ${result.skill_progress.name} СѓСЂ. ${result.skill_progress.level}!`);
+        toast.success(`🔔 Навык повышен! ${result.skill_progress.name} ур. ${result.skill_progress.level}!`);
       }
       if (result.level_up) {
-        toast.success(`рџЋ‰ РќРѕРІС‹Р№ СѓСЂРѕРІРµРЅСЊ ${result.level_up.new_level}! РџРѕР»СѓС‡РµРЅРѕ +2 СЃРІРѕР±РѕРґРЅС‹С… РѕС‡РєР° С…Р°СЂР°РєС‚РµСЂРёСЃС‚РёРє (РћРҐ)!`);
+        toast.success(`🎉 Новый уровень ${result.level_up.new_level}! Получено +2 свободных очка характеристик (ОХ)!`);
       }
 
-      // РћР±РЅРѕРІР»РµРЅРёРµ РґР°РЅРЅС‹С… РёРіСЂРѕРєР°, РЅР°РІС‹РєРѕРІ Рё РёРЅРІРµРЅС‚Р°СЂСЏ
+      // Обновление данных игрока, навыков и инвентаря
       try {
         const [freshPlayer, freshSkills] = await Promise.all([
           getPlayer(currentPlayer.id),
@@ -2540,9 +2543,9 @@ export async function renderGame(container, sessionId, user) {
       render();
     } catch (err) {
       if (err.message === 'MISSING_API_KEY') {
-        toast.error('РќРµ Р·Р°РґР°РЅ OpenRouter API Key. РћС‚РєСЂРѕР№С‚Рµ В«вљ™пёЏ РђРєРєР°СѓРЅС‚В» РІ Р»РѕР±Р±Рё Рё РІРІРµРґРёС‚Рµ РєР»СЋС‡.');
+        toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» в лобби и введите ключ.');
       } else {
-        toast.error('РћС€РёР±РєР° РѕР±СЂР°Р±РѕС‚РєРё: ' + err.message);
+        toast.error('Ошибка обработки: ' + err.message);
       }
     } finally {
       removeDmTypingIndicator();
@@ -2564,7 +2567,7 @@ export async function renderGame(container, sessionId, user) {
     indicator.id = 'dmTypingIndicator';
     indicator.className = 'message message-master typing-indicator-bubble';
     indicator.innerHTML = `
-      <div class="message-avatar">рџЋ­</div>
+      <div class="message-avatar">🎭</div>
       <div class="message-body">
         <div class="message-text">
           <div class="typing-dots">
@@ -2587,13 +2590,13 @@ export async function renderGame(container, sessionId, user) {
   }
 
   function appendMessage(msg) {
-    // РўРЈРњРђРќ Р’РћР™РќР«: РµРґРёРЅР°СЏ С„СѓРЅРєС†РёСЏ РїСЂРѕРІРµСЂРєРё РІРёРґРёРјРѕСЃС‚Рё
+    // ТУМАН ВОЙНЫ: единая функция проверки видимости
     if (!isMessageVisibleToCurrentPlayer(msg)) return;
 
     const chatMessages = document.getElementById('chatMessages');
     if (!chatMessages) return;
 
-    // Р—Р°С‰РёС‚Р° РѕС‚ РґСѓР±Р»РёРєР°С‚РѕРІ РІ DOM
+    // Защита от дубликатов в DOM
     if (msg.id && chatMessages.querySelector(`[data-message-id="${msg.id}"]`)) {
       return;
     }
@@ -2638,7 +2641,7 @@ export async function renderGame(container, sessionId, user) {
 
     // Update location and time in header without full re-render
     const locEl = document.querySelector('.game-header-location');
-    const locStr = session?.current_wild_zone ? `рџЊІ ${session.current_wild_zone}` : (session?.current_location_name || '');
+    const locStr = session?.current_wild_zone ? `🌲 ${session.current_wild_zone}` : (session?.current_location_name || '');
 
     if (locStr) {
       if (locEl) {
@@ -2646,7 +2649,7 @@ export async function renderGame(container, sessionId, user) {
         if (textSpan) {
           textSpan.textContent = locStr;
         } else {
-          locEl.textContent = `рџ“Ќ ${locStr}`;
+          locEl.textContent = `📍 ${locStr}`;
         }
         locEl.title = locStr;
         locEl.style.display = '';
@@ -2677,7 +2680,7 @@ export async function renderGame(container, sessionId, user) {
         if (textSpan) {
           textSpan.textContent = timeStr;
         } else {
-          timeEl.textContent = `рџ•ђ ${timeStr}`;
+          timeEl.textContent = `🕐 ${timeStr}`;
         }
         timeEl.title = timeStr;
         timeEl.style.display = '';
@@ -2718,28 +2721,28 @@ export async function renderGame(container, sessionId, user) {
     container.innerHTML = `
       <div class="page page-centered">
         <div class="card" style="max-width: 600px; width: 100%;">
-          <h2 class="card-title" style="margin-bottom: 0.5rem;">вљ”пёЏ РЎРѕР·РґР°РЅРёРµ РїРµСЂСЃРѕРЅР°Р¶Р°</h2>
-          <p class="form-hint" style="margin-bottom: 1rem;">Р’С‹Р±РµСЂРёС‚Рµ СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµРіРѕ РіРµСЂРѕСЏ РёР»Рё СЃРѕР·РґР°Р№С‚Рµ РЅРѕРІРѕРіРѕ</p>
+          <h2 class="card-title" style="margin-bottom: 0.5rem;">⚔️ Создание персонажа</h2>
+          <p class="form-hint" style="margin-bottom: 1rem;">Выберите существующего героя или создайте нового</p>
 
-          <!-- Р’С‹Р±РѕСЂ С‚РѕС‡РєРё СЃРїР°РІРЅР° РІ РјСѓР»СЊС‚РёРїР»РµРµСЂРµ -->
+          <!-- Выбор точки спавна в мультиплеере -->
           ${allPlayers.length > 1 ? `
             <div class="spawn-selection-box" style="margin-bottom: 1.25rem; padding: 0.85rem; background: rgba(30, 24, 20, 0.6); border: 1px solid var(--border); border-radius: var(--radius-md);">
               <label class="form-label" style="display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--accent); margin-bottom: 0.5rem;">
-                рџ“Ќ Р’С‹Р±РµСЂРёС‚Рµ, СЂСЏРґРѕРј СЃ РєРµРј РїРѕСЏРІРёС‚СЊСЃСЏ:
+                📍 Выберите, рядом с кем появиться:
               </label>
               <div style="display: flex; flex-direction: column; gap: 0.5rem;" id="spawnChoicesContainer">
                 ${allPlayers.map((p, idx) => {
-                  const pLoc = `${session?.current_wild_zone ? 'рџЊІ ' + session.current_wild_zone : (session?.current_location_name || 'Р›РѕРєР°С†РёСЏ')}${p.current_zone ? ` вЂў рџ“Ќ ${p.current_zone}` : ' вЂў РћСЃРЅРѕРІРЅР°СЏ Р·РѕРЅР°'}`;
+                  const pLoc = `${session?.current_wild_zone ? '🌲 ' + session.current_wild_zone : (session?.current_location_name || 'Локация')}${p.current_zone ? ` • 📍 ${p.current_zone}` : ' • Основная зона'}`;
                   return `
                     <label class="spawn-radio-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid ${idx === 0 ? 'var(--primary)' : 'var(--border)'}; border-radius: var(--radius-sm); cursor: pointer; background: rgba(0,0,0,0.25);">
                       <input type="radio" name="spawnTargetPlayerId" value="${p.id}" ${idx === 0 ? 'checked' : ''} />
                       <div style="flex: 1;">
                         <div style="font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
-                          вљ”пёЏ ${escapeHtml(p.name)}
-                          <span class="badge badge-info" style="font-size: 0.7rem;">${escapeHtml(p.race || 'Р“РµСЂРѕР№')} / ${escapeHtml(p.class || '')}</span>
+                          ⚔️ ${escapeHtml(p.name)}
+                          <span class="badge badge-info" style="font-size: 0.7rem;">${escapeHtml(p.race || 'Герой')} / ${escapeHtml(p.class || '')}</span>
                         </div>
                         <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-                          рџ“Ќ ${escapeHtml(pLoc)}
+                          📍 ${escapeHtml(pLoc)}
                         </div>
                       </div>
                     </label>
@@ -2750,50 +2753,50 @@ export async function renderGame(container, sessionId, user) {
           ` : (allPlayers.length === 1 ? `
             <div class="spawn-info-box" style="margin-bottom: 1.25rem; padding: 0.75rem; background: rgba(30, 24, 20, 0.5); border-left: 3px solid var(--primary); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;">
               <div style="font-size: 0.85rem; color: var(--text-main);">
-                рџ“Ќ Р’С‹ РїРѕСЏРІРёС‚РµСЃСЊ СЂСЏРґРѕРј СЃ РіРµСЂРѕРµРј <strong>${escapeHtml(allPlayers[0].name)}</strong> (${escapeHtml(allPlayers[0].race || 'Р“РµСЂРѕР№')} / ${escapeHtml(allPlayers[0].class || '')}):
+                📍 Вы появитесь рядом с героем <strong>${escapeHtml(allPlayers[0].name)}</strong> (${escapeHtml(allPlayers[0].race || 'Герой')} / ${escapeHtml(allPlayers[0].class || '')}):
               </div>
               <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-                рџ“Ќ ${escapeHtml(`${session?.current_wild_zone ? 'рџЊІ ' + session.current_wild_zone : (session?.current_location_name || 'Р›РѕРєР°С†РёСЏ')}${allPlayers[0].current_zone ? ` вЂў ${allPlayers[0].current_zone}` : ' вЂў РћСЃРЅРѕРІРЅР°СЏ Р·РѕРЅР°'}`)}
+                📍 ${escapeHtml(`${session?.current_wild_zone ? '🌲 ' + session.current_wild_zone : (session?.current_location_name || 'Локация')}${allPlayers[0].current_zone ? ` • ${allPlayers[0].current_zone}` : ' • Основная зона'}`)}
               </div>
             </div>
           ` : '')}
 
-          <!-- РЎСѓС‰РµСЃС‚РІСѓСЋС‰РёРµ РєР°СЂС‚РѕС‡РєРё -->
+          <!-- Существующие карточки -->
           <div id="existingCardsList" class="char-select-grid" style="margin-bottom: 1.5rem;">
-            <p class="text-muted" style="text-align: center;">Р—Р°РіСЂСѓР·РєР° РєР°СЂС‚РѕС‡РµРє...</p>
+            <p class="text-muted" style="text-align: center;">Загрузка карточек...</p>
           </div>
 
-          <div class="auth-divider" style="margin: 1rem 0;"><span>РёР»Рё СЃРѕР·РґР°Р№С‚Рµ РЅРѕРІРѕРіРѕ</span></div>
+          <div class="auth-divider" style="margin: 1rem 0;"><span>или создайте нового</span></div>
 
-          <!-- РЎРѕР·РґР°РЅРёРµ РЅРѕРІРѕРіРѕ -->
+          <!-- Создание нового -->
            <form id="createCharacterForm">
             <input type="hidden" id="charRaceAcBonus" value="0" />
             <div class="form-group" style="margin-bottom: 0.75rem;">
-              <label class="form-label">РРјСЏ РіРµСЂРѕСЏ *</label>
-              <input class="input" id="charName" placeholder="Р­Р»СЊРґСЂРёРЅ" required />
+              <label class="form-label">Имя героя *</label>
+              <input class="input" id="charName" placeholder="Эльдрин" required />
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
               <div class="form-group">
-                <label class="form-label">Р Р°СЃР°</label>
-                <input class="input" id="charRace" placeholder="Р§РµР»РѕРІРµРє" required />
+                <label class="form-label">Раса</label>
+                <input class="input" id="charRace" placeholder="Человек" required />
               </div>
               <div class="form-group">
-                <label class="form-label">РљР»Р°СЃСЃ</label>
-                <input class="input" id="charClass" placeholder="Р’РѕРёРЅ" required />
+                <label class="form-label">Класс</label>
+                <input class="input" id="charClass" placeholder="Воин" required />
               </div>
             </div>
             <div class="form-group" style="margin-bottom: 0.75rem;">
-              <label class="form-label">Р’РЅРµС€РЅРѕСЃС‚СЊ</label>
-              <textarea class="input" id="charAppearance" rows="2" placeholder="Р’С‹СЃРѕРєРёР№ РјСѓР¶С‡РёРЅР° СЃ С€СЂР°РјРѕРј РЅР° Р»РµРІРѕРј РіР»Р°Р·Сѓ..."></textarea>
+              <label class="form-label">Внешность</label>
+              <textarea class="input" id="charAppearance" rows="2" placeholder="Высокий мужчина с шрамом на левом глазу..."></textarea>
             </div>
             <div class="form-group" style="margin-bottom: 0.75rem;">
-              <label class="form-label">Р‘РёРѕРіСЂР°С„РёСЏ</label>
-              <textarea class="input" id="charBio" rows="3" placeholder="Р РѕРґРёР»СЃСЏ РІ РґРµСЂРµРІРЅРµ РЅР° РєСЂР°СЋ РјРёСЂР°..."></textarea>
+              <label class="form-label">Биография</label>
+              <textarea class="input" id="charBio" rows="3" placeholder="Родился в деревне на краю мира..."></textarea>
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                <label class="form-label" style="margin: 0;">РҐР°СЂР°РєС‚РµСЂРёСЃС‚РёРєРё</label>
-                <button type="button" class="btn btn-secondary btn-sm" id="generateStatsBtn">вњЁ AI</button>
+                <label class="form-label" style="margin: 0;">Характеристики</label>
+                <button type="button" class="btn btn-secondary btn-sm" id="generateStatsBtn">✨ AI</button>
               </div>
               <div class="stats-grid-6" id="statsGrid">
                 ${STATS.map((stat) => `
@@ -2804,13 +2807,13 @@ export async function renderGame(container, sessionId, user) {
                 `).join('')}
               </div>
               <div id="statsLoading" style="display: none; text-align: center; margin-top: 0.5rem;">
-                <span class="form-hint">вЏі Р“РµРЅРµСЂР°С†РёСЏ...</span>
+                <span class="form-hint">⏳ Генерация...</span>
               </div>
               <div style="text-align: center; margin-top: 0.75rem;">
-                <span class="stats-sum" id="statsSum">РЎСѓРјРјР°: <strong>60</strong> / 72</span>
+                <span class="stats-sum" id="statsSum">Сумма: <strong>60</strong> / 72</span>
               </div>
             </div>
-            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">РќР°С‡Р°С‚СЊ РїСЂРёРєР»СЋС‡РµРЅРёРµ</button>
+            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">Начать приключение</button>
           </form>
         </div>
       </div>
@@ -2851,13 +2854,13 @@ export async function renderGame(container, sessionId, user) {
             return `
               <div class="card char-select-card" data-card-id="${c.id}">
                 <div class="card-header">
-                  <h3 style="font-weight: 700;">вљ”пёЏ ${c.name}</h3>
+                  <h3 style="font-weight: 700;">⚔️ ${c.name}</h3>
                   <span class="badge badge-info">${c.race} / ${c.class}</span>
                 </div>
-                <p class="form-hint">вќ¤пёЏ ${c.hp}/${c.max_hp} &nbsp;вЂў&nbsp; рџ’° ${c.money} &nbsp;вЂў&nbsp; рџ“Љ ${total}</p>
-                <p class="char-select-bio">${c.bio || 'Р‘РµР· Р±РёРѕРіСЂР°С„РёРё'}</p>
+                <p class="form-hint">❤️ ${c.hp}/${c.max_hp} &nbsp;•&nbsp; 💰 ${c.money} &nbsp;•&nbsp; 📊 ${total}</p>
+                <p class="char-select-bio">${c.bio || 'Без биографии'}</p>
                 <div class="char-select-actions">
-                  <button class="btn btn-primary char-select-btn" data-card-id="${c.id}">Р’С‹Р±СЂР°С‚СЊ СЌС‚РѕРіРѕ РіРµСЂРѕСЏ</button>
+                  <button class="btn btn-primary char-select-btn" data-card-id="${c.id}">Выбрать этого героя</button>
                 </div>
               </div>
             `;
@@ -2875,17 +2878,17 @@ export async function renderGame(container, sessionId, user) {
                 b.disabled = true;
                 b.style.opacity = '0.6';
               });
-              btn.textContent = 'вЏі Р’С‹Р±РѕСЂ РіРµСЂРѕСЏ...';
+              btn.textContent = '⏳ Выбор героя...';
 
               try {
-                // Р—Р°С‰РёС‚Р° РѕС‚ Р·Р°РґРІРѕРµРЅРёСЏ: РїСЂРѕРІРµСЂСЏРµРј, РЅРµ Р±С‹Р» Р»Рё РїРµСЂСЃРѕРЅР°Р¶ СѓР¶Рµ СЃРѕР·РґР°РЅ (РІ РґСЂСѓРіРѕР№ РІРєР»Р°РґРєРµ РёР»Рё РіРѕРЅРєРµ Р·Р°РїСЂРѕСЃРѕРІ)
+                // Защита от задвоения: проверяем, не был ли персонаж уже создан (в другой вкладке или гонке запросов)
                 const activeUserId = user?.id || (await supabase.auth.getUser().catch(() => null))?.data?.user?.id;
                 const freshPlayers = await getSessionPlayers(sessionId);
                 const existingPlayer = activeUserId ? freshPlayers.find((p) => p.user_id === activeUserId) : null;
                 if (existingPlayer) {
                   currentPlayer = existingPlayer;
                   allPlayers = freshPlayers;
-                  toast.info(`РџРµСЂСЃРѕРЅР°Р¶ В«${existingPlayer.name}В» СѓР¶Рµ СѓС‡Р°СЃС‚РІСѓРµС‚ РІ РёРіСЂРµ!`);
+                  toast.info(`Персонаж «${existingPlayer.name}» уже участвует в игре!`);
                   render();
                   subscribeRealtime();
                   return;
@@ -2893,7 +2896,7 @@ export async function renderGame(container, sessionId, user) {
 
                 console.log('[character-card] select card:', { cardId, name: card.name, stats: card.stats });
 
-                const cardRace = card.race || 'Р§РµР»РѕРІРµРє';
+                const cardRace = card.race || 'Человек';
                 const cardRaceAcBonus = Number(card.race_ac_bonus ?? getRaceAcBonus(cardRace));
                 const spawnTarget = getSelectedSpawnTarget();
                 currentPlayer = await createPlayer({
@@ -2922,12 +2925,12 @@ export async function renderGame(container, sessionId, user) {
                 console.log('[character-card] player created:', currentPlayer.id);
                 if (allPlayers.length > 0) {
                   try {
-                    const nearText = spawnTarget.targetName ? `СЂСЏРґРѕРј СЃ РіРµСЂРѕРµРј ${spawnTarget.targetName}` : 'РІ Р»РѕРєР°С†РёРё';
+                    const nearText = spawnTarget.targetName ? `рядом с героем ${spawnTarget.targetName}` : 'в локации';
                     await supabase.from('messages').insert({
                       session_id: sessionId,
                       sender_type: 'system',
-                      sender_name: 'РЎРёСЃС‚РµРјР°',
-                      content: `рџ‘‹ Р’ РїРѕР»Рµ Р·СЂРµРЅРёСЏ РїРѕСЏРІР»СЏРµС‚СЃСЏ СЃС‚СЂР°РЅРЅРёРє: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class}), Р·Р°РјРµС‡РµРЅРЅС‹Р№ ${nearText}. Р’С‹ РµС‰С‘ РЅРµ Р·РЅР°РєРѕРјС‹ СЃ РЅРёРј.`,
+                      sender_name: 'Система',
+                      content: `👋 В поле зрения появляется странник: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class}), замеченный ${nearText}. Вы ещё не знакомы с ним.`,
                     });
                   } catch (annErr) {
                     console.warn('Failed to announce join:', annErr);
@@ -2936,30 +2939,30 @@ export async function renderGame(container, sessionId, user) {
                 allPlayers.push(currentPlayer);
                 await initTurnQueue(sessionId, allPlayers);
                 await checkTurnQueue();
-                toast.success(`Р“РµСЂРѕР№ В«${card.name}В» РІС‹Р±СЂР°РЅ!`);
+                toast.success(`Герой «${card.name}» выбран!`);
                 render();
                 subscribeRealtime();
               } catch (err) {
                 console.error('[character-card] select error:', err);
-                toast.error('РћС€РёР±РєР°: ' + err.message);
+                toast.error('Ошибка: ' + err.message);
                 isSelectingCharacter = false;
                 cardsEl.querySelectorAll('.char-select-btn').forEach((b) => {
                   b.disabled = false;
                   b.style.opacity = '1';
                 });
-                btn.textContent = 'Р’С‹Р±СЂР°С‚СЊ СЌС‚РѕРіРѕ РіРµСЂРѕСЏ';
+                btn.textContent = 'Выбрать этого героя';
               }
             });
           });
         } else {
-          cardsEl.innerHTML = '<p class="text-muted" style="text-align: center;">РЈ РІР°СЃ РїРѕРєР° РЅРµС‚ РєР°СЂС‚РѕС‡РµРє. РЎРѕР·РґР°Р№С‚Рµ РЅРѕРІРѕРіРѕ РіРµСЂРѕСЏ РЅРёР¶Рµ.</p>';
+          cardsEl.innerHTML = '<p class="text-muted" style="text-align: center;">У вас пока нет карточек. Создайте нового героя ниже.</p>';
         }
       }
     } catch (err) {
       console.warn('[character-creation] Failed to load cards:', err);
       const cardsEl = document.getElementById('existingCardsList');
       if (cardsEl) {
-        cardsEl.innerHTML = '<p class="text-muted" style="text-align: center;">РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРѕС…СЂР°РЅС‘РЅРЅС‹Рµ РєР°СЂС‚РѕС‡РєРё. РЎРѕР·РґР°Р№С‚Рµ РЅРѕРІРѕРіРѕ РіРµСЂРѕСЏ РЅРёР¶Рµ.</p>';
+        cardsEl.innerHTML = '<p class="text-muted" style="text-align: center;">Не удалось загрузить сохранённые карточки. Создайте нового героя ниже.</p>';
       }
     }
 
@@ -2972,7 +2975,7 @@ export async function renderGame(container, sessionId, user) {
       isSelectingCharacter = true;
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.textContent = 'вЏі РЎРѕР·РґР°РЅРёРµ РіРµСЂРѕСЏ...';
+        submitBtn.textContent = '⏳ Создание героя...';
       }
 
       try {
@@ -2982,7 +2985,7 @@ export async function renderGame(container, sessionId, user) {
         if (existingPlayer) {
           currentPlayer = existingPlayer;
           allPlayers = freshPlayers;
-          toast.info(`РџРµСЂСЃРѕРЅР°Р¶ В«${existingPlayer.name}В» СѓР¶Рµ СѓС‡Р°СЃС‚РІСѓРµС‚ РІ РёРіСЂРµ!`);
+          toast.info(`Персонаж «${existingPlayer.name}» уже участвует в игре!`);
           render();
           subscribeRealtime();
           return;
@@ -2993,7 +2996,7 @@ export async function renderGame(container, sessionId, user) {
           stats[stat] = parseInt(document.getElementById(`stat_${stat}`).value) || 10;
         });
 
-        const charRace = document.getElementById('charRace').value || 'Р§РµР»РѕРІРµРє';
+        const charRace = document.getElementById('charRace').value || 'Человек';
         const raceAcBonus = getRaceAcBonus(charRace);
         const derived = calculateDerivedStats(stats, charRace, [], raceAcBonus);
         const spawnTarget = getSelectedSpawnTarget();
@@ -3026,12 +3029,12 @@ export async function renderGame(container, sessionId, user) {
         console.log('[create-character] player created:', currentPlayer.id);
         if (allPlayers.length > 0) {
           try {
-            const nearText = spawnTarget.targetName ? `СЂСЏРґРѕРј СЃ РіРµСЂРѕРµРј ${spawnTarget.targetName}` : 'РІ Р»РѕРєР°С†РёРё';
+            const nearText = spawnTarget.targetName ? `рядом с героем ${spawnTarget.targetName}` : 'в локации';
             await supabase.from('messages').insert({
               session_id: sessionId,
               sender_type: 'system',
-              sender_name: 'РЎРёСЃС‚РµРјР°',
-              content: `рџ‘‹ Р’ РїРѕР»Рµ Р·СЂРµРЅРёСЏ РїРѕСЏРІР»СЏРµС‚СЃСЏ СЃС‚СЂР°РЅРЅРёРє: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class}), Р·Р°РјРµС‡РµРЅРЅС‹Р№ ${nearText}. Р’С‹ РµС‰С‘ РЅРµ Р·РЅР°РєРѕРјС‹ СЃ РЅРёРј.`,
+              sender_name: 'Система',
+              content: `👋 В поле зрения появляется странник: ${currentPlayer.name} (${currentPlayer.race} ${currentPlayer.class}), замеченный ${nearText}. Вы ещё не знакомы с ним.`,
             });
           } catch (annErr) {
             console.warn('Failed to announce join:', annErr);
@@ -3040,16 +3043,16 @@ export async function renderGame(container, sessionId, user) {
         allPlayers.push(currentPlayer);
         await initTurnQueue(sessionId, allPlayers);
         await checkTurnQueue();
-        toast.success('РџРµСЂСЃРѕРЅР°Р¶ СЃРѕР·РґР°РЅ!');
+        toast.success('Персонаж создан!');
         render();
         subscribeRealtime();
       } catch (err) {
         console.error('[create-character] error:', err);
-        toast.error('РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ: ' + err.message);
+        toast.error('Ошибка создания: ' + err.message);
         isSelectingCharacter = false;
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.textContent = 'РќР°С‡Р°С‚СЊ РїСЂРёРєР»СЋС‡РµРЅРёРµ';
+          submitBtn.textContent = 'Начать приключение';
         }
       }
     });
@@ -3062,7 +3065,7 @@ export async function renderGame(container, sessionId, user) {
       });
       const sumEl = document.getElementById('statsSum');
       if (sumEl) {
-        sumEl.textContent = `РЎСѓРјРјР°: ${sum} / 72`;
+        sumEl.textContent = `Сумма: ${sum} / 72`;
         sumEl.style.color = sum === 72 ? 'var(--accent-success)' : sum > 72 ? 'var(--accent-danger)' : 'var(--text-muted)';
       }
     }
@@ -3076,14 +3079,14 @@ export async function renderGame(container, sessionId, user) {
     document.getElementById('generateStatsBtn')?.addEventListener('click', async () => {
       const bio = document.getElementById('charBio')?.value?.trim();
       if (!bio) {
-        toast.warning('РЎРЅР°С‡Р°Р»Р° Р·Р°РїРѕР»РЅРёС‚Рµ РїРѕР»Рµ В«Р‘РёРѕРіСЂР°С„РёСЏВ» вЂ” РЅРµР№СЂРѕСЃРµС‚СЊ РїСЂРѕР°РЅР°Р»РёР·РёСЂСѓРµС‚ РµС‘ РґР»СЏ РіРµРЅРµСЂР°С†РёРё СЃС‚Р°С‚РѕРІ.');
+        toast.warning('Сначала заполните поле «Биография» — нейросеть проанализирует её для генерации статов.');
         return;
       }
 
       const btn = document.getElementById('generateStatsBtn');
       const loading = document.getElementById('statsLoading');
       btn.disabled = true;
-      btn.textContent = 'вЏі Р“РµРЅРµСЂР°С†РёСЏ...';
+      btn.textContent = '⏳ Генерация...';
       loading.style.display = 'block';
 
       try {
@@ -3109,22 +3112,22 @@ export async function renderGame(container, sessionId, user) {
             }
           });
           updateStatsSum();
-          toast.success('РЎС‚Р°С‚С‹ СЃРіРµРЅРµСЂРёСЂРѕРІР°РЅС‹!');
+          toast.success('Статы сгенерированы!');
         } else {
           console.warn('[generate-character] response without stats:', response);
         }
       } catch (err) {
         console.error('[generate-character] error:', err);
         if (err?.data?.code === 'MISSING_API_KEY') {
-          toast.error('РќРµ Р·Р°РґР°РЅ OpenRouter API Key. РћС‚РєСЂРѕР№С‚Рµ В«вљ™пёЏ РђРєРєР°СѓРЅС‚В» РІ Р»РѕР±Р±Рё Рё РІРІРµРґРёС‚Рµ РєР»СЋС‡.');
+          toast.error('Не задан OpenRouter API Key. Откройте «⚙️ Аккаунт» в лобби и введите ключ.');
         } else {
-          const detail = err?.data?.details || err?.data?.error || err.message || 'РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР°';
-          toast.error('РћС€РёР±РєР° РіРµРЅРµСЂР°С†РёРё: ' + detail);
+          const detail = err?.data?.details || err?.data?.error || err.message || 'Неизвестная ошибка';
+          toast.error('Ошибка генерации: ' + detail);
         }
       } finally {
         console.log('[generate-character] finally: reset UI');
         btn.disabled = false;
-        btn.textContent = 'вњЁ РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РЅРµР№СЂРѕСЃРµС‚СЊСЋ';
+        btn.textContent = '✨ Сгенерировать нейросетью';
         loading.style.display = 'none';
       }
     });

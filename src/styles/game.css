@@ -1,6 +1,6 @@
-﻿/* src/styles/game.css вЂ” РђС‚РјРѕСЃС„РµСЂРЅС‹Рµ СЃС‚РёР»Рё С‚Р°РІРµСЂРЅС‹ (В«РџСѓС‚РЅРёРє Рё Р”СЂР°РєРѕРЅВ») */
+/* src/styles/game.css — Атмосферные стили таверны («Путник и Дракон») */
 
-/* ===================== Auth Page (Р’С…РѕРґ РІ С‚Р°РІРµСЂРЅСѓ) ===================== */
+/* ===================== Auth Page (Вход в таверну) ===================== */
 .auth-page {
   justify-content: safe center;
   align-items: center;
@@ -231,7 +231,7 @@
 }
 
 
-/* ===================== Lobby (Р—Р°Р» Р“РёР»СЊРґРёРё Рё Р”РѕСЃРєР° Р—Р°РєР°Р·РѕРІ) ===================== */
+/* ===================== Lobby (Зал Гильдии и Доска Заказов) ===================== */
 .lobby-header {
   display: flex;
   align-items: center;
@@ -308,7 +308,7 @@
   overflow-y: auto;
 }
 
-/* Card Grid (Р”РѕСЃРєР° РѕР±СЉСЏРІР»РµРЅРёР№) */
+/* Card Grid (Доска объявлений) */
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -470,7 +470,7 @@
   flex-shrink: 0;
 }
 
-/* ===================== Game Screen (РџРѕС…РѕРґРЅР°СЏ РџР°РЅРµР»СЊ) ===================== */
+/* ===================== Game Screen (Походная Панель) ===================== */
 .game-page {
   height: 100vh;
   display: flex;
@@ -524,7 +524,7 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
-/* HP Vial (РЎРєР»СЏРЅРєР° Р¶РёР·РЅРµРЅРЅРѕР№ СЃРёР»С‹) */
+/* HP Vial (Склянка жизненной силы) */
 .hp-bar-container {
   width: 100%;
   max-width: 140px;
@@ -611,7 +611,7 @@
   transform: translateY(1px);
 }
 
-/* Dedicated Sub-bar for Location & Time (РљРѕРјРїР°СЃ Рё Р§Р°СЃС‹) */
+/* Dedicated Sub-bar for Location & Time (Компас и Часы) */
 .game-status-bar {
   display: flex;
   align-items: center;
@@ -664,7 +664,7 @@
   flex-shrink: 0;
 }
 
-/* ===================== Chat Area (РҐСЂРѕРЅРёРєР° РїСЂРёРєР»СЋС‡РµРЅРёР№) ===================== */
+/* ===================== Chat Area (Хроника приключений) ===================== */
 .game-chat {
   flex: 1;
   overflow-y: auto;
@@ -740,7 +740,7 @@
   color: #7fb3d5;
 }
 
-/* Master message (РџРµСЂРіР°РјРµРЅС‚РЅР°СЏ Р»РµС‚РѕРїРёСЃСЊ) */
+/* Master message (Пергаментная летопись) */
 .message-master .message-text {
   font-size: var(--fs-base);
   line-height: 1.75;
@@ -807,7 +807,7 @@
   }
 }
 
-/* System message (РЎР»СѓС…Рё С‚Р°РІРµСЂРЅС‹) */
+/* System message (Слухи таверны) */
 .message-system {
   justify-content: center;
 }
@@ -823,7 +823,7 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-/* Self message (РљРѕР¶Р°РЅС‹Р№ РїСѓС‚РµРІРѕР№ РґРЅРµРІРЅРёРє) */
+/* Self message (Кожаный путевой дневник) */
 .message-self {
   justify-content: flex-end;
 }
@@ -849,7 +849,7 @@
   line-height: 1.6;
 }
 
-/* ===================== Input Area (РћС‡Р°Рі РґРµР№СЃС‚РІРёР№) ===================== */
+/* ===================== Input Area (Очаг действий) ===================== */
 .game-input-area {
   padding: var(--space-sm) var(--space-md);
   background: linear-gradient(180deg, rgba(28, 21, 16, 0.96) 0%, rgba(18, 14, 11, 0.98) 100%);
@@ -897,7 +897,7 @@
   cursor: not-allowed;
 }
 
-/* ===================== Side Panels (Р¤РѕР»РёР°РЅС‚С‹ Рё Р“СЂРёРјСѓР°СЂС‹) ===================== */
+/* ===================== Side Panels (Фолианты и Гримуары) ===================== */
 .side-panel-overlay {
   position: fixed;
   inset: 0;
@@ -964,7 +964,7 @@
   padding: var(--space-lg);
 }
 
-/* Profile (РљРѕРјРїР°РєС‚РЅР°СЏ РіСЂР°РјРѕС‚Р° РіРµСЂРѕСЏ) */
+/* Profile (Компактная грамота героя) */
 #profilePanel .side-panel-content {
   padding: 0.75rem 0.85rem;
 }
@@ -983,7 +983,7 @@
   max-width: 100% !important;
 }
 
-/* РљРѕРјРїР°РєС‚РЅС‹Р№ Р·Р°РіРѕР»РѕРІРѕРє: РёРјСЏ Рё СѓСЂРѕРІРµРЅСЊ СЃР»РµРІР°, Р°РІР°С‚Р°СЂРєР° СЃРїСЂР°РІР° */
+/* Компактный заголовок: имя и уровень слева, аватарка справа */
 .profile-header-compact {
   display: flex;
   align-items: center;
@@ -1274,7 +1274,7 @@
   color: var(--accent-gold-bright);
 }
 
-/* Inventory (Р’РµС‰РјРµС€РѕРє Р°РІР°РЅС‚СЋСЂРёСЃС‚Р°) */
+/* Inventory (Вещмешок авантюриста) */
 .inventory-summary {
   display: flex;
   justify-content: space-between;
@@ -1324,7 +1324,7 @@
   margin-top: 2px;
 }
 
-/* ===================== NPC Bestiary (Р‘РµСЃС‚РёР°СЂРёР№ Рё Р–РёС‚РµР»Рё) ===================== */
+/* ===================== NPC Bestiary (Бестиарий и Жители) ===================== */
 .npc-card {
   padding: 0;
   overflow: hidden;
@@ -1909,7 +1909,7 @@
   gap: var(--space-sm);
 }
 
-/* File Drop Zone (РЎСЋР¶РµС‚РЅС‹Р№ СЃРІРёС‚РѕРє) */
+/* File Drop Zone (Сюжетный свиток) */
 .plot-details {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -2804,33 +2804,6 @@
   gap: 0.35rem;
   backdrop-filter: blur(8px);
   animation: fadeIn 0.2s ease;
-}
-
-
-.map-marker-hidden { display: none !important; }
-.map-marker-visible { display: flex; }
-.map-subzone-marker { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; z-index: 5; pointer-events: none; }
-.map-subzone-dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; border: 1px solid #333; }
-
-
-/* Semantic Zoom Rules */
-.map-zoom-far .map-marker:not([data-type="capital"]) {
-    display: none !important;
-}
-.map-zoom-far .map-svg-loc-border {
-    display: none !important;
-}
-.map-zoom-mid .map-subzone-marker {
-    display: none !important;
-}
-.map-zoom-mid .map-svg-subzone-border {
-    display: none !important;
-}
-.map-zoom-close .map-svg-state-border {
-    opacity: 0.1;
-}
-.map-zoom-close .map-svg-state-label {
-    display: none !important;
 }
 
 

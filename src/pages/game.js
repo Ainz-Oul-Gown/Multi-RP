@@ -1620,6 +1620,205 @@ export async function renderGame(container, sessionId, user) {
       }
     });
 
+    // Toggle Rewrite Container
+    const rewriteBtn = document.getElementById('rewriteStoryBtn');
+    const rewriteContainer = document.getElementById('rewriteStoryPromptContainer');
+    rewriteBtn?.addEventListener('click', () => {
+      if (rewriteContainer) {
+        const isHidden = rewriteContainer.style.display === 'none';
+        rewriteContainer.style.display = isHidden ? 'flex' : 'none';
+      }
+    });
+    document.getElementById('cancelRewriteStoryBtn')?.addEventListener('click', () => {
+      if (rewriteContainer) rewriteContainer.style.display = 'none';
+    });
+
+    // Confirm Rewrite Story
+    document.getElementById('confirmRewriteStoryBtn')?.addEventListener('click', async () => {
+      const wishesInput = document.getElementById('rewriteStoryWishes');
+      const wishes = wishesInput?.value?.trim() || '';
+      const confirmBtn = document.getElementById('confirmRewriteStoryBtn');
+      try {
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = '⏳ Переписываю...';
+        }
+        toast.info('ИИ переписывает сюжет...');
+        const updated = await rewriteStoryline({
+          sessionId,
+          worldId: session?.world_id,
+          customWishes: wishes,
+          currentStoryline: session?.storyline,
+        });
+        session.storyline = updated;
+        toast.success('Сюжет обновлен!');
+        await refreshStoryPanel();
+      } catch (err) {
+        toast.error('Ошибка обновления сюжета: ' + (err.message || err));
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Переписать';
+        }
+      }
+    });
+
+    // Toggle Edit JSON Container
+    const editJsonBtn = document.getElementById('editStoryJsonBtn');
+    const editJsonContainer = document.getElementById('editStoryJsonContainer');
+    const editJsonArea = document.getElementById('editStoryJsonArea');
+    editJsonBtn?.addEventListener('click', () => {
+      if (editJsonContainer) {
+        const isHidden = editJsonContainer.style.display === 'none';
+        editJsonContainer.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden && editJsonArea && session?.storyline) {
+          editJsonArea.value = JSON.stringify(session.storyline, null, 2);
+        }
+      }
+    });
+    document.getElementById('cancelEditStoryJsonBtn')?.addEventListener('click', () => {
+      if (editJsonContainer) editJsonContainer.style.display = 'none';
+    });
+
+    // Save Edit JSON
+    document.getElementById('saveStoryJsonBtn')?.addEventListener('click', async () => {
+      if (!editJsonArea) return;
+      try {
+        const parsed = JSON.parse(editJsonArea.value);
+        await updateStoryline(sessionId, parsed);
+        session.storyline = parsed;
+        toast.success('Сюжет сохранён!');
+        await refreshStoryPanel();
+      } catch (err) {
+        toast.error('Ошибка сохранения JSON: ' + (err.message || err));
+      }
+    });
+
+    // Delete Story (Sandbox)
+    document.getElementById('deleteStoryBtn')?.addEventListener('click', async () => {
+      if (!confirm('Перейти в режим свободной песочницы и удалить текущий сюжет?')) return;
+      try {
+        await deleteStoryline(sessionId);
+        session.storyline = null;
+        toast.info('Сюжет удалён. Активен режим свободной песочницы.');
+        await refreshStoryPanel();
+      } catch (err) {
+        toast.error('Ошибка удаления: ' + (err.message || err));
+      }
+    });
+
+    // Interactive Goal Toggle Checkbox
+    document.querySelectorAll('.story-goal-item').forEach((itemEl) => {
+      itemEl.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const arcIdx = parseInt(itemEl.dataset.arcIndex, 10);
+        const goalTitle = itemEl.dataset.goalTitle;
+        if (isNaN(arcIdx) || !goalTitle || !session?.storyline) return;
+
+        try {
+          const updated = await toggleGoalCompletion(sessionId, session.storyline, arcIdx, goalTitle);
+          session.storyline = updated;
+          await refreshStoryPanel();
+        } catch (err) {
+          toast.error('Ошибка переключения цели: ' + (err.message || err));
+        }
+      });
+    });
+  }
+
+  function bindEvents() {
+    // Back
+    document.getElementById('backBtn')?.addEventListener('click', () => router.navigate('/'));
+
+    // Panel toggles
+    document.getElementById('storyBtn')?.addEventListener('click', () => togglePanel('story'));
+    document.getElementById('profileBtn')?.addEventListener('click', () => togglePanel('profile'));
+    document.getElementById('inventoryBtn')?.addEventListener('click', () => togglePanel('inventory'));
+    document.getElementById('npcBtn')?.addEventListener('click', () => togglePanel('npc'));
+    document.getElementById('mapBtn')?.addEventListener('click', () => togglePanel('map'));
+    document.getElementById('settingsBtn')?.addEventListener('click', () => togglePanel('settings'));
+
+    // Close panels
+    document.getElementById('closeStoryBtn')?.addEventListener('click', () => togglePanel(null));
+    document.getElementById('closeProfileBtn')?.addEventListener('click', () => togglePanel(null));
+    document.getElementById('closeInventoryBtn')?.addEventListener('click', () => togglePanel(null));
+    document.getElementById('closeNpcBtn')?.addEventListener('click', () => togglePanel(null));
+    document.getElementById('closeMapBtn')?.addEventListener('click', () => togglePanel(null));
+    document.getElementById('closeSettingsBtn')?.addEventListener('click', () => togglePanel(null));
+    document.getElementById('panelOverlay')?.addEventListener('click', () => togglePanel(null));
+
+    if (activePanel === 'story') {
+      bindStoryEvents();
+    }
+    if (activePanel === 'map') {
+      refreshMapPanel();
+    }
+
+    // Busy state: interrupt long term activity
+    document.getElementById('interruptBusyBtn')?.addEventListener('click', async () => {
+      if (!currentPlayer?.is_busy) return;
+      try {
+        toast.info('Прерывание деятельности...');
+        const { data, error } = await supabase.rpc('interrupt_busy_activity', {
+          p_player_id: currentPlayer.id,
+        });
+        if (error) {
+          toast.error('Не удалось прервать: ' + error.message);
+          return;
+        }
+        toast.success(`Деятельность "${data.interrupted_activity || 'Занятие'}" прервана. Прошло времени: ${data.time_spent_minutes || 0} мин.`);
+        currentPlayer.is_busy = false;
+        currentPlayer.busy_activity = null;
+        currentPlayer.busy_remaining_minutes = 0;
+        const banner = document.getElementById('busyStateBanner');
+        if (banner) banner.style.display = 'none';
+        updateInputState();
+      } catch (err) {
+        toast.error('Ошибка: ' + err.message);
+      }
+    });
+
+    // Multi-player: take turn button
+    document.getElementById('takeTurnBtn')?.addEventListener('click', async () => {
+      try {
+        toast.info('Переключение хода...');
+        await passTurn(sessionId, currentPlayer.id);
+        isMyTurn = true;
+        activePlayerName = currentPlayer.name || 'Герой';
+        updateInputState();
+      } catch (err) {
+        toast.error('Не удалось переключить ход: ' + err.message);
+      }
+    });
+
+    // Multi-player: copy invite link & ID
+    document.getElementById('copyInviteBtnGame')?.addEventListener('click', () => {
+      const base = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+      const url = `${window.location.origin}${base}#/session/${sessionId}`;
+      navigator.clipboard.writeText(url);
+      toast.success('Инвайт-ссылка скопирована!');
+    });
+
+    document.getElementById('copyIdBtnGame')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(sessionId);
+      toast.success('ID сессии скопирован!');
+    });
+
+    // Auto-resize textarea
+    const input = document.getElementById('actionInput');
+    input?.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    });
+
+    // Submit action
+    document.getElementById('sendBtn')?.addEventListener('click', handleSend);
+    input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    });
+
     // Export player
     document.getElementById('exportPlayerBtn')?.addEventListener('click', async () => {
       if (!currentPlayer) return;
@@ -1735,10 +1934,11 @@ export async function renderGame(container, sessionId, user) {
     if (stage) {
       stage.style.transform = `translate(${mapPanX}px, ${mapPanY}px) scale(${mapZoom})`;
       
-      stage.classList.remove('map-zoom-far', 'map-zoom-mid', 'map-zoom-close');
+      stage.classList.remove('map-zoom-far', 'map-zoom-mid', 'map-zoom-close', 'map-zoom-micro');
       if (mapZoom < 0.3) stage.classList.add('map-zoom-far');
       else if (mapZoom < 0.9) stage.classList.add('map-zoom-mid');
-      else stage.classList.add('map-zoom-close');
+      else if (mapZoom < 2.5) stage.classList.add('map-zoom-close');
+      else stage.classList.add('map-zoom-micro');
     }
     const zoomText = document.getElementById('mapZoomLevelText');
     if (zoomText) {
@@ -1756,7 +1956,7 @@ export async function renderGame(container, sessionId, user) {
 
     const scale = getCoordScale();
     const px = (currentPlayer?.pos_x ?? 0) * scale;
-    const py = (currentPlayer?.pos_y ?? 0) * scale;
+    const py = -(currentPlayer?.pos_y ?? 0) * scale;
 
     mapPanX = Math.round(vw / 2 - px * mapZoom);
     mapPanY = Math.round(vh / 2 - py * mapZoom);
@@ -1773,9 +1973,9 @@ export async function renderGame(container, sessionId, user) {
     const scale = getCoordScale();
     const locations = cachedWorldMapData?.locations || [];
     const allX = locations.map(l => (l.pos_x ?? 0) * scale);
-    const allY = locations.map(l => (l.pos_y ?? 0) * scale);
+    const allY = locations.map(l => -(l.pos_y ?? 0) * scale);
     allX.push((currentPlayer?.pos_x ?? 0) * scale);
-    allY.push((currentPlayer?.pos_y ?? 0) * scale);
+    allY.push(-(currentPlayer?.pos_y ?? 0) * scale);
 
     const minX = Math.min(...allX);
     const maxX = Math.max(...allX);
@@ -1804,7 +2004,7 @@ export async function renderGame(container, sessionId, user) {
     const stageX = (cx - mapPanX) / mapZoom;
     const stageY = (cy - mapPanY) / mapZoom;
 
-    const newZoom = Math.max(0.05, Math.min(5.0, mapZoom * factor));
+    const newZoom = Math.max(0.05, Math.min(25.0, mapZoom * factor));
     mapPanX = Math.round(cx - stageX * newZoom);
     mapPanY = Math.round(cy - stageY * newZoom);
     mapZoom = newZoom;
@@ -1882,8 +2082,8 @@ export async function renderGame(container, sessionId, user) {
     const states = cachedWorldMapData?.states || [];
 
     // ── 1. Bounding box for dynamic grid size ──────────────────
-    const allPts = locations.map(l => ({ x: (l.pos_x ?? 0) * scale, y: (l.pos_y ?? 0) * scale }));
-    const playerPt = { x: (currentPlayer?.pos_x ?? 0) * scale, y: (currentPlayer?.pos_y ?? 0) * scale };
+    const allPts = locations.map(l => ({ x: (l.pos_x ?? 0) * scale, y: -(l.pos_y ?? 0) * scale }));
+    const playerPt = { x: (currentPlayer?.pos_x ?? 0) * scale, y: -(currentPlayer?.pos_y ?? 0) * scale };
     allPts.push(playerPt);
 
     const allX = allPts.map(p => p.x), allY = allPts.map(p => p.y);
@@ -1925,14 +2125,16 @@ export async function renderGame(container, sessionId, user) {
       gridG.appendChild(l);
     }
     // Axis lines
-    [['x', -gridSize, 0, gridSize, 0], ['y', 0, -gridSize, 0, gridSize]].forEach(([, x1, y1, x2, y2]) => {
+    const axes = [['x', -gridSize, 0, gridSize, 0], ['y', 0, -gridSize, 0, gridSize]];
+    for (const axis of axes) {
+      const x1 = axis[1], y1 = axis[2], x2 = axis[3], y2 = axis[4];
       const l = document.createElementNS(SVG_NS, 'line');
       l.setAttribute('x1', x1); l.setAttribute('y1', y1);
       l.setAttribute('x2', x2); l.setAttribute('y2', y2);
       l.setAttribute('stroke', 'rgba(212,163,89,0.35)'); l.setAttribute('stroke-width', '1.5');
       l.setAttribute('stroke-dasharray', '4,4');
       gridG.appendChild(l);
-    });
+    }
     rootG.appendChild(gridG);
 
     // ── 4. State polygon borders ───────────────────────────────
@@ -1952,11 +2154,11 @@ export async function renderGame(container, sessionId, user) {
 
       if (state.border_shape === 'polygon' && state.border_data?.points?.length >= 3) {
         // Use explicit vertices from DB (set by migration from Этерия 2.6.json)
-        hullPts = state.border_data.points.map(p => ({ x: p.x * scale, y: p.y * scale }));
+        hullPts = state.border_data.points.map(p => ({ x: p.x * scale, y: -p.y * scale }));
       } else if (state.border_shape === 'circle' && state.border_data?.radius) {
         // Explicit circle
         const cx = (state.border_data.center_x ?? 0) * scale;
-        const cy = (state.border_data.center_y ?? 0) * scale;
+        const cy = -(state.border_data.center_y ?? 0) * scale;
         const r = state.border_data.radius * scale;
         const circle = document.createElementNS(SVG_NS, 'circle');
         circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
@@ -1977,7 +2179,7 @@ export async function renderGame(container, sessionId, user) {
           l => typeof l.pos_x === 'number' && typeof l.pos_y === 'number'
         );
         if (stateLocs.length === 0) return;
-        const rawPts = stateLocs.map(l => ({ x: l.pos_x * scale, y: l.pos_y * scale }));
+        const rawPts = stateLocs.map(l => ({ x: l.pos_x * scale, y: -(l.pos_y) * scale }));
         const hull = computeConvexHull(rawPts);
         hullPts = inflateHull(hull, 350 * scale);
       }
@@ -2011,7 +2213,7 @@ export async function renderGame(container, sessionId, user) {
     locBordersG.setAttribute('class', 'map-loc-borders');
     locations.forEach(loc => {
       const lx = (loc.pos_x ?? 0) * scale;
-      const ly = (loc.pos_y ?? 0) * scale;
+      const ly = -(loc.pos_y ?? 0) * scale;
       if (loc.bounds_shape === 'circle' && loc.bounds_data?.radius) {
         const r = loc.bounds_data.radius * scale;
         if (r < 2) return; // too small to draw
@@ -2024,7 +2226,7 @@ export async function renderGame(container, sessionId, user) {
         locBordersG.appendChild(c);
       } else if (loc.bounds_shape === 'polygon' && loc.bounds_data?.points?.length >= 3) {
         const poly = document.createElementNS(SVG_NS, 'polygon');
-        poly.setAttribute('points', loc.bounds_data.points.map(p => `${p.x * scale},${p.y * scale}`).join(' '));
+        poly.setAttribute('points', loc.bounds_data.points.map(p => `${p.x * scale},${-p.y * scale}`).join(' '));
         poly.setAttribute('fill', 'rgba(255,255,255,0.04)');
         poly.setAttribute('stroke', 'rgba(255,255,255,0.18)');
         poly.setAttribute('stroke-width', '1'); poly.setAttribute('stroke-dasharray', '4,4');
@@ -2038,7 +2240,7 @@ export async function renderGame(container, sessionId, user) {
           if (szr < 1) return;
           const sc = document.createElementNS(SVG_NS, 'circle');
           sc.setAttribute('cx', (sz.pos_x ?? 0) * scale);
-          sc.setAttribute('cy', (sz.pos_y ?? 0) * scale);
+          sc.setAttribute('cy', -(sz.pos_y ?? 0) * scale);
           sc.setAttribute('r', szr);
           sc.setAttribute('fill', 'rgba(255,255,255,0.03)');
           sc.setAttribute('stroke', 'rgba(255,255,255,0.12)');
@@ -2082,7 +2284,7 @@ export async function renderGame(container, sessionId, user) {
     // ── 6. HTML Markers for locations ─────────────────────────
     locLayer.innerHTML = locations.map(loc => {
       const lx = (loc.pos_x ?? 0) * scale;
-      const ly = (loc.pos_y ?? 0) * scale;
+      const ly = -(loc.pos_y ?? 0) * scale;
 
       let icon = '🏛', pinBg = '#3b82f6';
       if (loc.danger_level === 'lethal' || loc.danger_level === 'deadly') { icon = '💀'; pinBg = '#ef4444'; }
@@ -2096,7 +2298,7 @@ export async function renderGame(container, sessionId, user) {
       // subzone markers (close zoom only, hidden via CSS)
       const subHTML = (loc.subzones || []).map(sz => {
         const szx = (sz.pos_x ?? 0) * scale;
-        const szy = (sz.pos_y ?? 0) * scale;
+        const szy = -(sz.pos_y ?? 0) * scale;
         return `<div class="map-subzone-marker" style="left:${szx}px;top:${szy}px" title="${escapeHtml(sz.name)}">
           <div class="map-subzone-dot"></div>
           <span class="map-marker-label" style="font-size:9px;display:${showMapLabels ? 'block' : 'none'}">${escapeHtml(sz.name)}</span>
@@ -2120,7 +2322,7 @@ export async function renderGame(container, sessionId, user) {
 
     // ── 7. Player markers ─────────────────────────────────────
     const othersHtml = (allPlayers || []).filter(p => p.id !== currentPlayer?.id).map(p => {
-      const px = (p.pos_x ?? 0) * scale, py = (p.pos_y ?? 0) * scale;
+      const px = (p.pos_x ?? 0) * scale, py = -(p.pos_y ?? 0) * scale;
       return `<div class="map-player-beacon" style="left:${px}px;top:${py}px" title="${escapeHtml(p.name||'Игрок')}">
         <div class="map-party-dot"></div>
         <span class="map-marker-label" style="background:rgba(14,38,64,0.9);color:#7dd3fc">${escapeHtml(p.name||'Игрок')}</span>

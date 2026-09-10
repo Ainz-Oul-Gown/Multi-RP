@@ -2908,3 +2908,24 @@
 .map-zoom-close .map-subzone-marker {
   opacity: 1;
 }
+
+
+/* MICRO (> 250%): Hide main city icons to reveal boundaries and subzones cleanly */
+.map-zoom-micro .map-state-polygon {
+  opacity: 0.1;
+}
+.map-zoom-micro .map-state-label-text {
+  opacity: 0;
+}
+.map-zoom-micro .map-loc-border,
+.map-zoom-micro .map-subzone-border,
+.map-zoom-micro .map-subzone-marker {
+  opacity: 1;
+}
+.map-zoom-micro .map-marker-pin {
+  opacity: 0.2;
+  transform: scale(0.4);
+}
+.map-zoom-micro .map-marker-label {
+  opacity: 0.5;
+}

@@ -2448,7 +2448,7 @@ export async function renderGame(container, sessionId, user) {
           const stageX = (mid.x - mapPanX) / mapZoom;
           const stageY = (mid.y - mapPanY) / mapZoom;
 
-          const newZoom = Math.max(0.05, Math.min(5.0, initialPinchZoom * factor));
+          const newZoom = Math.max(0.05, Math.min(250.0, initialPinchZoom * factor));
           mapPanX = Math.round(mid.x - stageX * newZoom);
           mapPanY = Math.round(mid.y - stageY * newZoom);
           mapZoom = newZoom;

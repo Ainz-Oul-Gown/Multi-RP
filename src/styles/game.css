@@ -2932,25 +2932,33 @@
 
 /* Add inverse zoom for markers so they stay constant size visually */
 .map-marker {
-  transform: scale(var(--inverse-zoom, 1));
+  transform: translate(-50%, -50%) scale(var(--inverse-zoom, 1)) !important;
+}
+.map-marker:hover {
+  transform: translate(-50%, -50%) scale(calc(var(--inverse-zoom, 1) * 1.15)) !important;
 }
 .map-subzone-marker {
-  transform: scale(var(--inverse-zoom, 1));
+  transform: translate(-50%, -50%) scale(var(--inverse-zoom, 1)) !important;
 }
 .map-player-beacon {
-  transform: scale(var(--inverse-zoom, 1));
-}
-.map-state-label {
-  transform: scale(var(--inverse-zoom, 1));
+  transform: translate(-50%, -50%) scale(var(--inverse-zoom, 1)) !important;
 }
 
-/* Add inverse zoom to zoom micro classes too */
+/* Micro zoom classes override */
 .map-zoom-micro .map-marker-pin {
   opacity: 0.2;
-  transform: scale(0.4) scale(var(--inverse-zoom, 1));
+}
+.map-zoom-micro .map-marker {
+  transform: translate(-50%, -50%) scale(calc(var(--inverse-zoom, 1) * 0.4)) !important;
 }
 
 /* Also add non-scaling-stroke to SVG elements */
 svg.map-svg polygon, svg.map-svg circle, svg.map-svg line, svg.map-svg path {
   vector-effect: non-scaling-stroke;
+}
+
+.map-state-label-text {
+  transform: scale(var(--inverse-zoom, 1));
+  transform-box: fill-box;
+  transform-origin: center;
 }

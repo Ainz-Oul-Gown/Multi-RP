@@ -1,12 +1,12 @@
-// supabase/functions/process-turn/index.ts
-// 5-С€Р°РіРѕРІС‹Р№ РєРѕРЅРІРµР№РµСЂ process-turn: Router в†’ Engine в†’ Persistence в†’ SystemTruth в†’ Narrator
+﻿// supabase/functions/process-turn/index.ts
+// 5-РЎв‚¬Р В°Р С–Р С•Р Р†РЎвЂ№Р в„– Р С”Р С•Р Р…Р Р†Р ВµР в„–Р ВµРЎР‚ process-turn: Router РІвЂ вЂ™ Engine РІвЂ вЂ™ Persistence РІвЂ вЂ™ SystemTruth РІвЂ вЂ™ Narrator
 //
-// РЁР°РіРё:
-//   1. AI Router  (step1_router.ts)        вЂ” РїР°СЂСЃРёРЅРі РЅР°РјРµСЂРµРЅРёР№ РёРіСЂРѕРєР° в†’ JSON actions
-//   2. Game Engine (engine/step2_engine.ts) вЂ” Р±СЂРѕСЃРєРё РєСѓР±РёРєРѕРІ, РїСЂРѕРІРµСЂРєРё, РјСѓС‚Р°С†РёРё
-//   3. Persistence (step3_persistence.ts)   вЂ” Р°С‚РѕРјР°СЂРЅРѕРµ РїСЂРёРјРµРЅРµРЅРёРµ РјСѓС‚Р°С†РёР№ С‡РµСЂРµР· RPC
-//   4. System Truth (step4_system_truth.ts) вЂ” РўСѓРјР°РЅ Р’РѕР№РЅС‹, СЂР°Р·РґРµР»РµРЅРёРµ РІРёРґРёРјРѕСЃС‚Рё, RAG
-//   5. Narrator  (step5_narrator.ts)        вЂ” LLM-РЅР°СЂСЂР°С‚РѕСЂ (РёР»Рё fallback)
+// Р РЃР В°Р С–Р С‘:
+//   1. AI Router  (step1_router.ts)        РІР‚вЂќ Р С—Р В°РЎР‚РЎРѓР С‘Р Р…Р С– Р Р…Р В°Р СР ВµРЎР‚Р ВµР Р…Р С‘Р в„– Р С‘Р С–РЎР‚Р С•Р С”Р В° РІвЂ вЂ™ JSON actions
+//   2. Game Engine (engine/step2_engine.ts) РІР‚вЂќ Р В±РЎР‚Р С•РЎРѓР С”Р С‘ Р С”РЎС“Р В±Р С‘Р С”Р С•Р Р†, Р С—РЎР‚Р С•Р Р†Р ВµРЎР‚Р С”Р С‘, Р СРЎС“РЎвЂљР В°РЎвЂ Р С‘Р С‘
+//   3. Persistence (step3_persistence.ts)   РІР‚вЂќ Р В°РЎвЂљР С•Р СР В°РЎР‚Р Р…Р С•Р Вµ Р С—РЎР‚Р С‘Р СР ВµР Р…Р ВµР Р…Р С‘Р Вµ Р СРЎС“РЎвЂљР В°РЎвЂ Р С‘Р в„– РЎвЂЎР ВµРЎР‚Р ВµР В· RPC
+//   4. System Truth (step4_system_truth.ts) РІР‚вЂќ Р СћРЎС“Р СР В°Р Р… Р вЂ™Р С•Р в„–Р Р…РЎвЂ№, РЎР‚Р В°Р В·Р Т‘Р ВµР В»Р ВµР Р…Р С‘Р Вµ Р Р†Р С‘Р Т‘Р С‘Р СР С•РЎРѓРЎвЂљР С‘, RAG
+//   5. Narrator  (step5_narrator.ts)        РІР‚вЂќ LLM-Р Р…Р В°РЎР‚РЎР‚Р В°РЎвЂљР С•РЎР‚ (Р С‘Р В»Р С‘ fallback)
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -98,10 +98,10 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
       }
       const data = await response.json();
       const content = data?.choices?.[0]?.message?.content;
-      // OpenRouter sometimes returns null/empty content вЂ” treat as transient error, retry
+      // OpenRouter sometimes returns null/empty content РІР‚вЂќ treat as transient error, retry
       if (!content || content.trim() === "") {
-        lastError = new Error("AI Router: РїСѓСЃС‚РѕР№ РѕС‚РІРµС‚ РѕС‚ LLM");
-        console.warn(`[callAI] attempt ${attempt + 1}/${retries} вЂ” empty content, retrying...`);
+        lastError = new Error("AI Router: Р С—РЎС“РЎРѓРЎвЂљР С•Р в„– Р С•РЎвЂљР Р†Р ВµРЎвЂљ Р С•РЎвЂљ LLM");
+        console.warn(`[callAI] attempt ${attempt + 1}/${retries} РІР‚вЂќ empty content, retrying...`);
         continue;
       }
       return content;
@@ -109,14 +109,14 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
       lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
-  throw new Error(`AI Router: РЅРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РІР°Р»РёРґРЅС‹Р№ РѕС‚РІРµС‚ РїРѕСЃР»Рµ ${retries} РїРѕРїС‹С‚РѕРє. РџРѕСЃР»РµРґРЅСЏСЏ РѕС€РёР±РєР°: ${lastError?.message || "unknown"}`);
+  throw new Error(`AI Router: Р Р…Р Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ Р С—Р С•Р В»РЎС“РЎвЂЎР С‘РЎвЂљРЎРЉ Р Р†Р В°Р В»Р С‘Р Т‘Р Р…РЎвЂ№Р в„– Р С•РЎвЂљР Р†Р ВµРЎвЂљ Р С—Р С•РЎРѓР В»Р Вµ ${retries} Р С—Р С•Р С—РЎвЂ№РЎвЂљР С•Р С”. Р СџР С•РЎРѓР В»Р ВµР Т‘Р Р…РЎРЏРЎРЏ Р С•РЎв‚¬Р С‘Р В±Р С”Р В°: ${lastError?.message || "unknown"}`);
 }
 
 
 // ============================================
 
 // ============================================
-// Main Handler вЂ” 5-С€Р°РіРѕРІС‹Р№ РєРѕРЅРІРµР№РµСЂ
+// Main Handler РІР‚вЂќ 5-РЎв‚¬Р В°Р С–Р С•Р Р†РЎвЂ№Р в„– Р С”Р С•Р Р…Р Р†Р ВµР в„–Р ВµРЎР‚
 // ============================================
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -124,7 +124,7 @@ serve(async (req) => {
   }
 
   const requestId = crypto.randomUUID().slice(0, 8);
-  console.log(`\n[${requestId}] в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ PROCESS-TURN (5-step pipeline) START в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ`);
+  console.log(`\n[${requestId}] РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’ PROCESS-TURN (5-step pipeline) START РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’`);
 
   try {
     const { session_id, player_id, action_text } = await req.json();
@@ -138,7 +138,7 @@ serve(async (req) => {
 
     const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
     if (imagePattern.test(safeActionText)) {
-      return new Response(JSON.stringify({ error: "РћР±РЅР°СЂСѓР¶РµРЅС‹ СЃСЃС‹Р»РєРё РЅР° РёР·РѕР±СЂР°Р¶РµРЅРёСЏ. РЈРґР°Р»РёС‚Рµ РёС… Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°." }), {
+      return new Response(JSON.stringify({ error: "Р С›Р В±Р Р…Р В°РЎР‚РЎС“Р В¶Р ВµР Р…РЎвЂ№ РЎРѓРЎРѓРЎвЂ№Р В»Р С”Р С‘ Р Р…Р В° Р С‘Р В·Р С•Р В±РЎР‚Р В°Р В¶Р ВµР Р…Р С‘РЎРЏ. Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљР Вµ Р С‘РЎвЂ¦ Р С‘ Р С—Р С•Р С—РЎР‚Р С•Р В±РЎС“Р в„–РЎвЂљР Вµ РЎРѓР Р…Р С•Р Р†Р В°." }), {
         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
@@ -169,16 +169,16 @@ serve(async (req) => {
     const sessionStoryline = session.storyline || session.worlds?.settings?.storyline || null;
 
     // Resolve API key + models:
-    // РџРѕРґРґРµСЂР¶РєР° СЂРµР¶РёРјР° РѕР±С‰РµРіРѕ РєР»СЋС‡Р° С…РѕСЃС‚Р° (ai_key_mode: 'host' | 'individual')
-    // РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ 'host': С…РѕРґС‹ РІСЃРµС… РёРіСЂРѕРєРѕРІ РёСЃРїРѕР»СЊР·СѓСЋС‚ РєР»СЋС‡ Рё РјРѕРґРµР»Рё СЃРѕР·РґР°С‚РµР»СЏ СЃРµСЃСЃРёРё/РјРёСЂР°,
-    // РµСЃР»Рё РЅРµ РІС‹Р±СЂР°РЅ СЂРµР¶РёРј 'individual' (РєР°Р¶РґС‹Р№ СЃРѕ СЃРІРѕРёРј).
+    // Р СџР С•Р Т‘Р Т‘Р ВµРЎР‚Р В¶Р С”Р В° РЎР‚Р ВµР В¶Р С‘Р СР В° Р С•Р В±РЎвЂ°Р ВµР С–Р С• Р С”Р В»РЎР‹РЎвЂЎР В° РЎвЂ¦Р С•РЎРѓРЎвЂљР В° (ai_key_mode: 'host' | 'individual')
+    // Р СџР С• РЎС“Р СР С•Р В»РЎвЂЎР В°Р Р…Р С‘РЎР‹ 'host': РЎвЂ¦Р С•Р Т‘РЎвЂ№ Р Р†РЎРѓР ВµРЎвЂ¦ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р† Р С‘РЎРѓР С—Р С•Р В»РЎРЉР В·РЎС“РЎР‹РЎвЂљ Р С”Р В»РЎР‹РЎвЂЎ Р С‘ Р СР С•Р Т‘Р ВµР В»Р С‘ РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљР ВµР В»РЎРЏ РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘/Р СР С‘РЎР‚Р В°,
+    // Р ВµРЎРѓР В»Р С‘ Р Р…Р Вµ Р Р†РЎвЂ№Р В±РЎР‚Р В°Р Р… РЎР‚Р ВµР В¶Р С‘Р С 'individual' (Р С”Р В°Р В¶Р Т‘РЎвЂ№Р в„– РЎРѓР С• РЎРѓР Р†Р С•Р С‘Р С).
     const aiKeyMode = session.ai_key_mode || 'host';
     const hostUserId = session.worlds?.owner_id || null;
 
     let openrouterApiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
     let satelliteModel = AI_MODEL, gpsModel = AI_MODEL, dmModel = AI_MODEL;
 
-    // 1. Р—Р°РіСЂСѓР·РєР° РЅР°СЃС‚СЂРѕРµРє С‚РµРєСѓС‰РµРіРѕ РёРіСЂРѕРєР° (РµСЃР»Рё РµСЃС‚СЊ)
+    // 1. Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР С” РЎвЂљР ВµР С”РЎС“РЎвЂ°Р ВµР С–Р С• Р С‘Р С–РЎР‚Р С•Р С”Р В° (Р ВµРЎРѓР В»Р С‘ Р ВµРЎРѓРЎвЂљРЎРЉ)
     let playerSettings: any = null;
     if (player.user_id) {
       const { data: us } = await supabase.from("user_settings")
@@ -187,7 +187,7 @@ serve(async (req) => {
       playerSettings = us;
     }
 
-    // 2. Р—Р°РіСЂСѓР·РєР° РЅР°СЃС‚СЂРѕРµРє С…РѕСЃС‚Р° (СЃРѕР·РґР°С‚РµР»СЏ РјРёСЂР°/СЃРµСЃСЃРёРё)
+    // 2. Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР С” РЎвЂ¦Р С•РЎРѓРЎвЂљР В° (РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљР ВµР В»РЎРЏ Р СР С‘РЎР‚Р В°/РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘)
     let hostSettings: any = null;
     if (hostUserId && hostUserId !== player.user_id) {
       const { data: hs } = await supabase.from("user_settings")
@@ -198,16 +198,16 @@ serve(async (req) => {
       hostSettings = playerSettings;
     }
 
-    // 3. Р’С‹Р±РѕСЂ РёСЃС‚РѕС‡РЅРёРєР° РєР»СЋС‡Р° Рё РјРѕРґРµР»РµР№ РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ ai_key_mode
+    // 3. Р вЂ™РЎвЂ№Р В±Р С•РЎР‚ Р С‘РЎРѓРЎвЂљР С•РЎвЂЎР Р…Р С‘Р С”Р В° Р С”Р В»РЎР‹РЎвЂЎР В° Р С‘ Р СР С•Р Т‘Р ВµР В»Р ВµР в„– Р Р† Р В·Р В°Р Р†Р С‘РЎРѓР С‘Р СР С•РЎРѓРЎвЂљР С‘ Р С•РЎвЂљ ai_key_mode
     if (aiKeyMode === 'host') {
-      // РџСЂРёРѕСЂРёС‚РµС‚ РҐРѕСЃС‚Р°: СЃРЅР°С‡Р°Р»Р° РєР»СЋС‡ Рё РјРѕРґРµР»Рё СЃРѕР·РґР°С‚РµР»СЏ СЃРµСЃСЃРёРё
+      // Р СџРЎР‚Р С‘Р С•РЎР‚Р С‘РЎвЂљР ВµРЎвЂљ Р ТђР С•РЎРѓРЎвЂљР В°: РЎРѓР Р…Р В°РЎвЂЎР В°Р В»Р В° Р С”Р В»РЎР‹РЎвЂЎ Р С‘ Р СР С•Р Т‘Р ВµР В»Р С‘ РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљР ВµР В»РЎРЏ РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘
       const targetSettings = hostSettings?.openrouter_key ? hostSettings : playerSettings;
       if (targetSettings?.openrouter_key) openrouterApiKey = sanitizeKey(targetSettings.openrouter_key);
       if (targetSettings?.satellite_model) satelliteModel = targetSettings.satellite_model;
       if (targetSettings?.gps_model) gpsModel = targetSettings.gps_model;
       if (targetSettings?.dm_model) dmModel = targetSettings.dm_model;
     } else {
-      // Р РµР¶РёРј 'individual': РєР°Р¶РґС‹Р№ РёРіСЂРѕРє РёСЃРїРѕР»СЊР·СѓРµС‚ СЃРІРѕР№ РєР»СЋС‡; РµСЃР»Рё Сѓ РёРіСЂРѕРєР° РЅРµС‚ РєР»СЋС‡Р° вЂ” С„РѕР»Р»Р±СЌРє РЅР° РєР»СЋС‡ С…РѕСЃС‚Р°
+      // Р В Р ВµР В¶Р С‘Р С 'individual': Р С”Р В°Р В¶Р Т‘РЎвЂ№Р в„– Р С‘Р С–РЎР‚Р С•Р С” Р С‘РЎРѓР С—Р С•Р В»РЎРЉР В·РЎС“Р ВµРЎвЂљ РЎРѓР Р†Р С•Р в„– Р С”Р В»РЎР‹РЎвЂЎ; Р ВµРЎРѓР В»Р С‘ РЎС“ Р С‘Р С–РЎР‚Р С•Р С”Р В° Р Р…Р ВµРЎвЂљ Р С”Р В»РЎР‹РЎвЂЎР В° РІР‚вЂќ РЎвЂћР С•Р В»Р В»Р В±РЎРЊР С” Р Р…Р В° Р С”Р В»РЎР‹РЎвЂЎ РЎвЂ¦Р С•РЎРѓРЎвЂљР В°
       const targetSettings = playerSettings?.openrouter_key ? playerSettings : hostSettings;
       if (targetSettings?.openrouter_key) openrouterApiKey = sanitizeKey(targetSettings.openrouter_key);
       if (targetSettings?.satellite_model) satelliteModel = targetSettings.satellite_model;
@@ -217,8 +217,8 @@ serve(async (req) => {
 
     if (!openrouterApiKey) {
       const errorMsg = aiKeyMode === 'host'
-        ? "РќРµ Р·Р°РґР°РЅ OpenRouter API Key СЃРѕР·РґР°С‚РµР»СЏ СЃРµСЃСЃРёРё. РҐРѕСЃС‚ РґРѕР»Р¶РµРЅ СѓРєР°Р·Р°С‚СЊ РєР»СЋС‡ РІ РЅР°СЃС‚СЂРѕР№РєР°С… Р°РєРєР°СѓРЅС‚Р°."
-        : "РЈРєР°Р¶РёС‚Рµ РІР°С€ OpenRouter API Key РІ РЅР°СЃС‚СЂРѕР№РєР°С… Р°РєРєР°СѓРЅС‚Р°.";
+        ? "Р СњР Вµ Р В·Р В°Р Т‘Р В°Р Р… OpenRouter API Key РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљР ВµР В»РЎРЏ РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘. Р ТђР С•РЎРѓРЎвЂљ Р Т‘Р С•Р В»Р В¶Р ВµР Р… РЎС“Р С”Р В°Р В·Р В°РЎвЂљРЎРЉ Р С”Р В»РЎР‹РЎвЂЎ Р Р† Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р в„–Р С”Р В°РЎвЂ¦ Р В°Р С”Р С”Р В°РЎС“Р Р…РЎвЂљР В°."
+        : "Р Р€Р С”Р В°Р В¶Р С‘РЎвЂљР Вµ Р Р†Р В°РЎв‚¬ OpenRouter API Key Р Р† Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р в„–Р С”Р В°РЎвЂ¦ Р В°Р С”Р С”Р В°РЎС“Р Р…РЎвЂљР В°.";
       return new Response(JSON.stringify({ error: errorMsg, code: "MISSING_API_KEY" }), {
         status: 402, headers: { ...CORS, "Content-Type": "application/json" },
       });
@@ -226,10 +226,10 @@ serve(async (req) => {
 
     // Load location, available locations, lore
     let currentLocationName: string | null = null, currentStateName: string | null = null, currentLocationType: string | null = null;
-    // Wild zone вЂ” РїСЂРёСЂРѕРґРЅР°СЏ Р·РѕРЅР° РІРЅРµ РёРјРµРЅРЅС‹С… Р»РѕРєР°С†РёР№ (Р»РµСЃ, РїРµС‰РµСЂР°, РїРѕР»Рµ)
+    // Wild zone РІР‚вЂќ Р С—РЎР‚Р С‘РЎР‚Р С•Р Т‘Р Р…Р В°РЎРЏ Р В·Р С•Р Р…Р В° Р Р†Р Р…Р Вµ Р С‘Р СР ВµР Р…Р Р…РЎвЂ№РЎвЂ¦ Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р в„– (Р В»Р ВµРЎРѓ, Р С—Р ВµРЎвЂ°Р ВµРЎР‚Р В°, Р С—Р С•Р В»Р Вµ)
     const currentWildZone: string | null = session.current_wild_zone || null;
     if (currentWildZone) {
-      // Player is in open world / wild zone вЂ” use currentWildZone as location name
+      // Player is in open world / wild zone РІР‚вЂќ use currentWildZone as location name
       currentLocationName = currentWildZone;
       currentLocationType = "wild";
     } else if (session.current_location_id) {
@@ -302,13 +302,13 @@ serve(async (req) => {
       }
     }
     const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type").eq("session_id", session_id).order("created_at", { ascending: false }).limit(10);
-    const recentMessages = (recentMsgs || []).reverse().map((m) => `[${m.sender_type === "master" ? "РњР°СЃС‚РµСЂ" : "РРіСЂРѕРє"}]: ${cleanTextForAI(m.content).slice(0, 200)}`);
+    const recentMessages = (recentMsgs || []).reverse().map((m) => `[${m.sender_type === "master" ? "Р СљР В°РЎРѓРЎвЂљР ВµРЎР‚" : "Р ВР С–РЎР‚Р С•Р С”"}]: ${cleanTextForAI(m.content).slice(0, 200)}`);
 
     // Load all players in session (for router, engine and system truth context)
     const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*), current_zone").eq("session_id", session_id).order("created_at", { ascending: true });
     const allPlayers = allPlayersData || [];
 
-    // Р—Р°РіСЂСѓР¶Р°РµРј РєР°СЂС‚Сѓ СЂР°СЃСЃС‚РѕСЏРЅРёР№ Р·РѕРЅ Рё С‚РёРї РјРµСЃС‚РЅРѕСЃС‚Рё РёР· РєСЌС€Р° СЃРµСЃСЃРёРё (Р·Р°РїРѕР»РЅСЏРµС‚СЃСЏ РїСЂРё СЃРѕР·РґР°РЅРёРё/СЃРјРµРЅРµ Р»РѕРєР°С†РёРё)
+    // Р вЂ”Р В°Р С–РЎР‚РЎС“Р В¶Р В°Р ВµР С Р С”Р В°РЎР‚РЎвЂљРЎС“ РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р В·Р С•Р Р… Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р С‘Р В· Р С”РЎРЊРЎв‚¬Р В° РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘ (Р В·Р В°Р С—Р С•Р В»Р Р…РЎРЏР ВµРЎвЂљРЎРѓРЎРЏ Р С—РЎР‚Р С‘ РЎРѓР С•Р В·Р Т‘Р В°Р Р…Р С‘Р С‘/РЎРѓР СР ВµР Р…Р Вµ Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘)
     let locationMap: Record<string, Record<string, number>> = session.location_map || {};
     let currentTerrain: string | null = session.current_terrain_type || null;
 
@@ -330,25 +330,25 @@ serve(async (req) => {
     const isCompanionNpc = (n: any) => {
       const role = (n.role || "").toLowerCase();
       const tags = Array.isArray(n.status_tags) ? n.status_tags.map((t: string) => String(t).toLowerCase()) : [];
-      return role === "companion" || role === "СЃРїСѓС‚РЅРёРє" || tags.some((t: string) => ["companion", "СЃРїСѓС‚РЅРёРє", "РІ_РѕС‚СЂСЏРґРµ", "РїРёС‚РѕРјРµС†", "РїСЂРёСЂСѓС‡РµРЅ"].includes(t));
+      return role === "companion" || role === "РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”" || tags.some((t: string) => ["companion", "РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”", "Р Р†_Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р Вµ", "Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ", "Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…"].includes(t));
     };
 
-    // Р•СЃР»Рё РёРіСЂРѕРє РЅР°С…РѕРґРёС‚СЃСЏ РІ РґРёРєРѕР№ Р·РѕРЅРµ (Р»РµСЃ, РїРµС‰РµСЂР°, РїСѓСЃС‚РѕС€СЊ), РіРѕСЂРѕРґСЃРєРёРµ NPC (С‚РѕСЂРіРѕРІС†С‹, Р¶РёС‚РµР»Рё) РѕСЃС‚Р°СЋС‚СЃСЏ РІ РіРѕСЂРѕРґРµ!
-    // Р’ СЃС†РµРЅРµ СЃ РёРіСЂРѕРєРѕРј РїСЂРёСЃСѓС‚СЃС‚РІСѓСЋС‚ РўРћР›Р¬РљРћ СЃРїСѓС‚РЅРёРєРё/РїРёС‚РѕРјС†С‹ РёР»Рё РґРёРєРёРµ РІСЂР°РіРё/СЃСѓС‰РµСЃС‚РІР°.
+    // Р вЂўРЎРѓР В»Р С‘ Р С‘Р С–РЎР‚Р С•Р С” Р Р…Р В°РЎвЂ¦Р С•Р Т‘Р С‘РЎвЂљРЎРѓРЎРЏ Р Р† Р Т‘Р С‘Р С”Р С•Р в„– Р В·Р С•Р Р…Р Вµ (Р В»Р ВµРЎРѓ, Р С—Р ВµРЎвЂ°Р ВµРЎР‚Р В°, Р С—РЎС“РЎРѓРЎвЂљР С•РЎв‚¬РЎРЉ), Р С–Р С•РЎР‚Р С•Р Т‘РЎРѓР С”Р С‘Р Вµ NPC (РЎвЂљР С•РЎР‚Р С–Р С•Р Р†РЎвЂ РЎвЂ№, Р В¶Р С‘РЎвЂљР ВµР В»Р С‘) Р С•РЎРѓРЎвЂљР В°РЎР‹РЎвЂљРЎРѓРЎРЏ Р Р† Р С–Р С•РЎР‚Р С•Р Т‘Р Вµ!
+    // Р вЂ™ РЎРѓРЎвЂ Р ВµР Р…Р Вµ РЎРѓ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р С Р С—РЎР‚Р С‘РЎРѓРЎС“РЎвЂљРЎРѓРЎвЂљР Р†РЎС“РЎР‹РЎвЂљ Р СћР С›Р вЂєР В¬Р С™Р С› РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”Р С‘/Р С—Р С‘РЎвЂљР С•Р СРЎвЂ РЎвЂ№ Р С‘Р В»Р С‘ Р Т‘Р С‘Р С”Р С‘Р Вµ Р Р†РЎР‚Р В°Р С–Р С‘/РЎРѓРЎС“РЎвЂ°Р ВµРЎРѓРЎвЂљР Р†Р В°.
     if (currentWildZone) {
       const totalLoaded = allNpcs.length;
       allNpcs = allNpcs.filter((n: any) =>
         isCompanionNpc(n) ||
         n.is_hostile === true ||
-        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["РґРёРєРёР№", "РјРѕРЅСЃС‚СЂ", "РґРёРєР°СЏ_Р·РѕРЅР°", "Р·РІРµСЂСЊ", "С…РёС‰РЅРёРє"].includes(String(t).toLowerCase())))
+        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р Т‘Р С‘Р С”Р С‘Р в„–", "Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚", "Р Т‘Р С‘Р С”Р В°РЎРЏ_Р В·Р С•Р Р…Р В°", "Р В·Р Р†Р ВµРЎР‚РЎРЉ", "РЎвЂ¦Р С‘РЎвЂ°Р Р…Р С‘Р С”"].includes(String(t).toLowerCase())))
       );
       console.log(`[${requestId}] [WILD_ZONE] In wild zone "${currentWildZone}": filtered out town NPCs (${totalLoaded} -> ${allNpcs.length} present)`);
     }
 
-    console.log(`[${requestId}] [START] рџЋЇ Turn for player "${player.name}" (${player.id}) in session "${session_id}". Action: "${safeActionText}"`);
-    console.log(`[${requestId}] [LOCATION] рџ“Ќ LocationID=${session.current_location_id}, Name="${currentLocationName}", WildZone="${session.current_wild_zone || 'none'}", NPCs present=${allNpcs.length} (${allNpcs.map((n: any) => n.name).join(', ') || 'none'})`);
+    console.log(`[${requestId}] [START] СЂСџР‹Р‡ Turn for player "${player.name}" (${player.id}) in session "${session_id}". Action: "${safeActionText}"`);
+    console.log(`[${requestId}] [LOCATION] СЂСџвЂњРЊ LocationID=${session.current_location_id}, Name="${currentLocationName}", WildZone="${session.current_wild_zone || 'none'}", NPCs present=${allNpcs.length} (${allNpcs.map((n: any) => n.name).join(', ') || 'none'})`);
 
-    // РџСЂРѕРІРµСЂСЏРµРј, РїРµСЂРІС‹Р№ Р»Рё СЌС‚Рѕ С…РѕРґ РІ СЃРµСЃСЃРёРё (РЅРµС‚ СЃРѕРѕР±С‰РµРЅРёР№ РёРіСЂРѕРєР° РёР»Рё Р»РѕРєР°С†РёСЏ РЅРµ Р·Р°РґР°РЅР°)
+    // Р СџРЎР‚Р С•Р Р†Р ВµРЎР‚РЎРЏР ВµР С, Р С—Р ВµРЎР‚Р Р†РЎвЂ№Р в„– Р В»Р С‘ РЎРЊРЎвЂљР С• РЎвЂ¦Р С•Р Т‘ Р Р† РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘ (Р Р…Р ВµРЎвЂљ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘Р в„– Р С‘Р С–РЎР‚Р С•Р С”Р В° Р С‘Р В»Р С‘ Р В»Р С•Р С”Р В°РЎвЂ Р С‘РЎРЏ Р Р…Р Вµ Р В·Р В°Р Т‘Р В°Р Р…Р В°)
     const isFirstTurn = !session.current_location_id || !(recentMsgs || []).some((m: any) => m.sender_type === "player");
     let startingLocationGenerated = false;
 
@@ -360,7 +360,7 @@ serve(async (req) => {
           session,
           player: {
             id: player.id,
-            name: player.name || "Р“РµСЂРѕР№",
+            name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
             race: player.race,
             class: player.class,
             appearance: player.appearance,
@@ -420,14 +420,14 @@ serve(async (req) => {
       }
     }
 
-    // Р•СЃР»Рё РєР°СЂС‚Р° СЂР°СЃСЃС‚РѕСЏРЅРёР№ РёР»Рё С‚РёРї РјРµСЃС‚РЅРѕСЃС‚Рё РµС‰С‘ РЅРµ СЃРѕР·РґР°РЅС‹ вЂ” РіРµРЅРµСЂРёСЂСѓРµРј С‡РµСЂРµР· РР
+    // Р вЂўРЎРѓР В»Р С‘ Р С”Р В°РЎР‚РЎвЂљР В° РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р С‘Р В»Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р ВµРЎвЂ°РЎвЂ Р Р…Р Вµ РЎРѓР С•Р В·Р Т‘Р В°Р Р…РЎвЂ№ РІР‚вЂќ Р С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚РЎС“Р ВµР С РЎвЂЎР ВµРЎР‚Р ВµР В· Р ВР В
     if (Object.keys(locationMap).length === 0 && (session.current_location_id || currentWildZone || currentLocationName)) {
       try {
         const initLocMap = await ensureLocationMapAndTerrain({
           supabase,
           sessionId: session_id,
           locationId: session.current_location_id,
-          locationName: currentLocationName || "Р›РѕРєР°С†РёСЏ",
+          locationName: currentLocationName || "Р вЂєР С•Р С”Р В°РЎвЂ Р С‘РЎРЏ",
           isWildZone: Boolean(currentWildZone),
           openrouterApiKey,
           model: satelliteModel,
@@ -442,7 +442,7 @@ serve(async (req) => {
     }
 
     // ============================================
-    // Р§Р°С‚: СЂР°СЃРїСЂРµРґРµР»РµРЅРёРµ РѕС‡РєРѕРІ С…Р°СЂР°РєС‚РµСЂРёСЃС‚РёРє
+    // Р В§Р В°РЎвЂљ: РЎР‚Р В°РЎРѓР С—РЎР‚Р ВµР Т‘Р ВµР В»Р ВµР Р…Р С‘Р Вµ Р С•РЎвЂЎР С”Р С•Р Р† РЎвЂ¦Р В°РЎР‚Р В°Р С”РЎвЂљР ВµРЎР‚Р С‘РЎРѓРЎвЂљР С‘Р С”
     // ============================================
     let statAllocatedFact: string | null = null;
     const statAllocIntent = parseStatAllocationIntent(safeActionText);
@@ -459,11 +459,11 @@ serve(async (req) => {
         } else if (rpcRes && rpcRes.success) {
           console.log(`[${requestId}] [STAT_ALLOC] Successfully allocated:`, rpcRes);
           const statNamesRu: Record<string, string> = {
-            STR: "СЃРёР»Сѓ", DEX: "Р»РѕРІРєРѕСЃС‚СЊ", CON: "РІС‹РЅРѕСЃР»РёРІРѕСЃС‚СЊ",
-            INT: "РёРЅС‚РµР»Р»РµРєС‚", WIS: "РјСѓРґСЂРѕСЃС‚СЊ", CHA: "С…Р°СЂРёР·РјСѓ"
+            STR: "РЎРѓР С‘Р В»РЎС“", DEX: "Р В»Р С•Р Р†Р С”Р С•РЎРѓРЎвЂљРЎРЉ", CON: "Р Р†РЎвЂ№Р Р…Р С•РЎРѓР В»Р С‘Р Р†Р С•РЎРѓРЎвЂљРЎРЉ",
+            INT: "Р С‘Р Р…РЎвЂљР ВµР В»Р В»Р ВµР С”РЎвЂљ", WIS: "Р СРЎС“Р Т‘РЎР‚Р С•РЎРѓРЎвЂљРЎРЉ", CHA: "РЎвЂ¦Р В°РЎР‚Р С‘Р В·Р СРЎС“"
           };
           const statRu = statNamesRu[statAllocIntent.stat] || statAllocIntent.stat;
-          statAllocatedFact = `${player.name} СѓСЃРїРµС€РЅРѕ РІР»РѕР¶РёР» ${statAllocIntent.points} РѕС‡Рє. РІ С…Р°СЂР°РєС‚РµСЂРёСЃС‚РёРєСѓ ${statRu} (РЅРѕРІРѕРµ Р·РЅР°С‡РµРЅРёРµ: ${rpcRes.new_value}, СЃРІРѕР±РѕРґРЅРѕ РѕС‡РєРѕРІ: ${rpcRes.remaining_points}).`;
+          statAllocatedFact = `${player.name} РЎС“РЎРѓР С—Р ВµРЎв‚¬Р Р…Р С• Р Р†Р В»Р С•Р В¶Р С‘Р В» ${statAllocIntent.points} Р С•РЎвЂЎР С”. Р Р† РЎвЂ¦Р В°РЎР‚Р В°Р С”РЎвЂљР ВµРЎР‚Р С‘РЎРѓРЎвЂљР С‘Р С”РЎС“ ${statRu} (Р Р…Р С•Р Р†Р С•Р Вµ Р В·Р Р…Р В°РЎвЂЎР ВµР Р…Р С‘Р Вµ: ${rpcRes.new_value}, РЎРѓР Р†Р С•Р В±Р С•Р Т‘Р Р…Р С• Р С•РЎвЂЎР С”Р С•Р Р†: ${rpcRes.remaining_points}).`;
 
           player.stat_points = rpcRes.remaining_points;
           if (!player.stats) player.stats = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
@@ -476,7 +476,7 @@ serve(async (req) => {
           }
         } else if (rpcRes && !rpcRes.success) {
           console.log(`[${requestId}] [STAT_ALLOC] Allocation rejected: ${rpcRes.error}`);
-          statAllocatedFact = `${player.name} РїРѕРїС‹С‚Р°Р»СЃСЏ СЂР°СЃРїСЂРµРґРµР»РёС‚СЊ РѕС‡РєРё РІ ${statAllocIntent.stat}, РЅРѕ РЅРµ СЃРјРѕРі: ${rpcRes.error}`;
+          statAllocatedFact = `${player.name} Р С—Р С•Р С—РЎвЂ№РЎвЂљР В°Р В»РЎРѓРЎРЏ РЎР‚Р В°РЎРѓР С—РЎР‚Р ВµР Т‘Р ВµР В»Р С‘РЎвЂљРЎРЉ Р С•РЎвЂЎР С”Р С‘ Р Р† ${statAllocIntent.stat}, Р Р…Р С• Р Р…Р Вµ РЎРѓР СР С•Р С–: ${rpcRes.error}`;
         }
       } catch (allocEx) {
         console.warn(`[${requestId}] [STAT_ALLOC] Exception:`, allocEx);
@@ -484,19 +484,13 @@ serve(async (req) => {
     }
 
     // ============================================
-    // РЁРђР“ 1: AI Router (parsePlayerIntent)
+    // Р РЃР С’Р вЂњ 1: AI Router (parsePlayerIntent)
     // ============================================
     console.log(`[${requestId}] [STEP 1] AI Router...`);
-    // РџРѕРґРіСЂСѓР¶Р°РµРј РёСЃС‚РѕСЂРёСЋ РґР»СЏ РєРѕРЅС‚РµРєСЃС‚Р° РѕР±С‰РµРЅРёСЏ СЃ NPC/РёРіСЂРѕРєР°РјРё
+    // Р СџР С•Р Т‘Р С–РЎР‚РЎС“Р В¶Р В°Р ВµР С Р С‘РЎРѓРЎвЂљР С•РЎР‚Р С‘РЎР‹ Р Т‘Р В»РЎРЏ Р С”Р С•Р Р…РЎвЂљР ВµР С”РЎРѓРЎвЂљР В° Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘РЎРЏ РЎРѓ NPC/Р С‘Р С–РЎР‚Р С•Р С”Р В°Р СР С‘
     let recentHistoryStr = "";
-    const { data: recentMsgs } = await supabase
-      .from("messages")
-      .select("sender_name, content, sender_type")
-      .eq("session_id", session_id)
-      .order("created_at", { ascending: false })
-      .limit(3);
-    if (recentMsgs && recentMsgs.length > 0) {
-      recentHistoryStr = recentMsgs.reverse().map((m: any) => `${m.sender_name || (m.sender_type === 'master' ? 'Р”Рњ' : 'РЎРёСЃС‚РµРјР°')}: "${m.content}"`).join("\n");
+    const { data: routerRecentMsgs } = await supabase.from("messages").select("sender_name, content, sender_type").eq("session_id", session_id).order("created_at", { ascending: false }).limit(3); if (routerRecentMsgs && routerRecentMsgs.length > 0) {
+      recentHistoryStr = routerRecentMsgs.reverse().map((m: any) => `${m.sender_name || (m.sender_type === 'master' ? 'Р вЂќР Сљ' : 'Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°')}: "${m.content}"`).join("\n");
     }
 
     const routerInput: RouterInputContext = {
@@ -504,9 +498,9 @@ serve(async (req) => {
       recent_history: recentHistoryStr,
       player: {
         id: player.id,
-        name: player.name || "Р“РµСЂРѕР№",
-        race: player.race || "Р§РµР»РѕРІРµРє",
-        class: player.class || "Р’РѕРёРЅ",
+        name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+        race: player.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
+        class: player.class || "Р вЂ™Р С•Р С‘Р Р…",
         level: player.level || 1,
         hp: player.hp ?? 100,
         max_hp: player.max_hp ?? 100,
@@ -516,7 +510,7 @@ serve(async (req) => {
       },
       inventory: (player.inventory || []).map((i: any) => ({
         id: i.id,
-        item_name: i.item_name || i.name || "РџСЂРµРґРјРµС‚",
+        item_name: i.item_name || i.name || "Р СџРЎР‚Р ВµР Т‘Р СР ВµРЎвЂљ",
         item_type: i.type || i.item_type || "misc",
         quantity: i.quantity || 1,
         condition: i.condition ?? null,
@@ -526,7 +520,7 @@ serve(async (req) => {
       nearby_npcs: allNpcs.map((n: any) => ({
         id: n.id,
         name: n.name || "NPC",
-        race: n.race || "Р“СѓРјР°РЅРѕРёРґ",
+        race: n.race || "Р вЂњРЎС“Р СР В°Р Р…Р С•Р С‘Р Т‘",
         is_hostile: n.is_hostile || false,
         hp: n.hp ?? 10,
         max_hp: n.max_hp ?? 10,
@@ -536,16 +530,16 @@ serve(async (req) => {
         .filter((p: any) => p.id !== player.id)
         .map((p: any) => ({
           id: p.id,
-          name: p.name || "Р“РµСЂРѕР№",
-          race: p.race || "Р§РµР»РѕРІРµРє",
-          class: p.class || "РРіСЂРѕРє",
+          name: p.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+          race: p.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
+          class: p.class || "Р ВР С–РЎР‚Р С•Р С”",
           level: p.level || 1,
           hp: p.hp ?? 100,
           max_hp: p.max_hp ?? 100,
           current_zone: p.current_zone || null,
         })),
       weather: {
-        description: "РЇСЃРЅРѕ",
+        description: "Р Р‡РЎРѓР Р…Р С•",
         temperature: 20,
         is_raining: false,
         is_night: ((session.game_hour ?? 8) < 6 || (session.game_hour ?? 8) >= 22),
@@ -588,7 +582,7 @@ serve(async (req) => {
       }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
-    console.log(`[${requestId}] [STEP 1] рџ§­ Router: status="${routerResult.status}", actions=${JSON.stringify(routerResult.actions.map((a: any) => ({ type: a.action_type, target: a.target_item_name || a.target_entity_id, stat: a.stat_to_check })))}`);
+    console.log(`[${requestId}] [STEP 1] СЂСџВ§В­ Router: status="${routerResult.status}", actions=${JSON.stringify(routerResult.actions.map((a: any) => ({ type: a.action_type, target: a.target_item_name || a.target_entity_id, stat: a.stat_to_check })))}`);
 
     // Apply GPS time/location (still here, as it's pre-engine)
     let time_passed_minutes = 0;
@@ -598,13 +592,13 @@ serve(async (req) => {
       wild_zone_changed = false,
       travel_description = "";
 
-    // Р”РµС‚РµРєС‚РѕСЂ РЅР°РјРµСЂРµРЅРёСЏ РїРµСЂРµРјРµС‰РµРЅРёСЏ РёР»Рё РІС‹С…РѕРґР° РёР· РїРѕРјРµС‰РµРЅРёСЏ
+    // Р вЂќР ВµРЎвЂљР ВµР С”РЎвЂљР С•РЎР‚ Р Р…Р В°Р СР ВµРЎР‚Р ВµР Р…Р С‘РЎРЏ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ Р С‘Р В»Р С‘ Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘Р В° Р С‘Р В· Р С—Р С•Р СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ
     const isMovementAction = routerResult.actions?.some((a: any) => a.action_type === "move") ||
-      /РІС‹С…РѕРґ|РІС‹Р№С‚Рё|РІС‹С…РѕР¶Сѓ|РїРѕРєРёРЅСѓС‚СЊ|РїРѕРєРёРґР°СЋ|СѓР№С‚Рё|СѓС…РѕР¶Сѓ|РѕС‚РїСЂР°РІРёС‚СЊСЃСЏ|РёРґСѓ |РµРґСѓ |Р±РµРіСѓ |РЅР° СѓР»РёС†|РЅР°СЂСѓР¶Сѓ|Р·Р° РїСЂРµРґРµР»С‹|РЅР° С‚СЂР°РєС‚|РІ Р»РµСЃ|РІ РіРѕСЂРѕРґ|Рє РѕР·РµСЂСѓ|РІ РїСѓС‚СЊ|Р·Р°Р№С‚Рё РІ |РІРµСЂРЅСѓС‚СЊСЃСЏ/i.test(safeActionText);
+      /Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘|Р Р†РЎвЂ№Р в„–РЎвЂљР С‘|Р Р†РЎвЂ№РЎвЂ¦Р С•Р В¶РЎС“|Р С—Р С•Р С”Р С‘Р Р…РЎС“РЎвЂљРЎРЉ|Р С—Р С•Р С”Р С‘Р Т‘Р В°РЎР‹|РЎС“Р в„–РЎвЂљР С‘|РЎС“РЎвЂ¦Р С•Р В¶РЎС“|Р С•РЎвЂљР С—РЎР‚Р В°Р Р†Р С‘РЎвЂљРЎРЉРЎРѓРЎРЏ|Р С‘Р Т‘РЎС“ |Р ВµР Т‘РЎС“ |Р В±Р ВµР С–РЎС“ |Р Р…Р В° РЎС“Р В»Р С‘РЎвЂ |Р Р…Р В°РЎР‚РЎС“Р В¶РЎС“|Р В·Р В° Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎвЂ№|Р Р…Р В° РЎвЂљРЎР‚Р В°Р С”РЎвЂљ|Р Р† Р В»Р ВµРЎРѓ|Р Р† Р С–Р С•РЎР‚Р С•Р Т‘|Р С” Р С•Р В·Р ВµРЎР‚РЎС“|Р Р† Р С—РЎС“РЎвЂљРЎРЉ|Р В·Р В°Р в„–РЎвЂљР С‘ Р Р† |Р Р†Р ВµРЎР‚Р Р…РЎС“РЎвЂљРЎРЉРЎРѓРЎРЏ/i.test(safeActionText);
 
     try {
       const gpsSystemPrompt = buildGpsPrompt({
-        playerName: cleanTextForAI(player.name || "Р“РµСЂРѕР№"),
+        playerName: cleanTextForAI(player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–"),
         actionText: safeActionText,
         intentType: "router",
         intentDescription: safeActionText,
@@ -616,62 +610,62 @@ serve(async (req) => {
         wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
         availableLocations,
       });
-      const gpsResp = await callAI(gpsSystemPrompt, "РћРїСЂРµРґРµР»Рё РІСЂРµРјСЏ.", openrouterApiKey, 2, gpsModel);
+      const gpsResp = await callAI(gpsSystemPrompt, "Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»Р С‘ Р Р†РЎР‚Р ВµР СРЎРЏ.", openrouterApiKey, 2, gpsModel);
       const gpsParsed = parseAIJson(gpsResp);
       if (gpsParsed) {
         time_passed_minutes = Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0));
         if (gpsParsed.location_changed === true) {
           if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
-            // РџРµСЂРµС…РѕРґ РІ РґРёРєСѓСЋ Р·РѕРЅСѓ (Р»РµСЃ, РїРµС‰РµСЂР°, РїРѕР»Рµ, С‚СЂР°РєС‚)
+            // Р СџР ВµРЎР‚Р ВµРЎвЂ¦Р С•Р Т‘ Р Р† Р Т‘Р С‘Р С”РЎС“РЎР‹ Р В·Р С•Р Р…РЎС“ (Р В»Р ВµРЎРѓ, Р С—Р ВµРЎвЂ°Р ВµРЎР‚Р В°, Р С—Р С•Р В»Р Вµ, РЎвЂљРЎР‚Р В°Р С”РЎвЂљ)
             wild_zone_changed = true;
             new_wild_zone = gpsParsed.new_location_name;
             travel_description = gpsParsed.travel_description || "";
             console.log(`[${requestId}] [GPS] Wild zone: ${new_wild_zone}`);
           } else if (gpsParsed.new_location_id) {
-            // РџРµСЂРµС…РѕРґ РІ РёРјРµРЅРѕРІР°РЅРЅСѓСЋ Р»РѕРєР°С†РёСЋ
+            // Р СџР ВµРЎР‚Р ВµРЎвЂ¦Р С•Р Т‘ Р Р† Р С‘Р СР ВµР Р…Р С•Р Р†Р В°Р Р…Р Р…РЎС“РЎР‹ Р В»Р С•Р С”Р В°РЎвЂ Р С‘РЎР‹
             location_changed = true;
             new_location_id = gpsParsed.new_location_id;
             wild_zone_changed = true;
-            new_wild_zone = null; // РѕС‡РёС‰Р°РµРј РґРёРєСѓСЋ Р·РѕРЅСѓ
+            new_wild_zone = null; // Р С•РЎвЂЎР С‘РЎвЂ°Р В°Р ВµР С Р Т‘Р С‘Р С”РЎС“РЎР‹ Р В·Р С•Р Р…РЎС“
             travel_description = gpsParsed.travel_description || "";
-            console.log(`[${requestId}] [GPS] Location change в†’ ${new_location_id}`);
+            console.log(`[${requestId}] [GPS] Location change РІвЂ вЂ™ ${new_location_id}`);
           }
         }
       }
     } catch (e) { /* ignore GPS errors, game continues */ }
 
-    // Р”РµС‚РµСЂРјРёРЅРёСЂРѕРІР°РЅРЅР°СЏ РіР°СЂР°РЅС‚РёСЏ: РІС‹С…РѕРґ РёР· Р·РґР°РЅРёСЏ/С‚Р°РІРµСЂРЅС‹ РЅР°СЂСѓР¶Сѓ, РµСЃР»Рё GPS РЅРµ РїРµСЂРµРєР»СЋС‡РёР» Р·РѕРЅСѓ
-    const isBuildingLocation = /С‚Р°РІРµСЂРЅ|С‚СЂР°РєС‚РёСЂ|РїРѕСЃС‚РѕСЏР»|РґРѕРј|РїРѕРґРІР°Р»|РіСЂРѕС‚|РєР°С‚Р°РєРѕРјР±|РїРѕРіСЂРµР±|tavern|building|dungeon/i.test(currentLocationType || "") ||
-      /С‚Р°РІРµСЂРЅ|С‚СЂР°РєС‚РёСЂ|РїРѕСЃС‚РѕСЏР»|РґРѕРј|Р±Р°С€РЅ|РєР°С‚Р°РєРѕРјР±|РїРѕРіСЂРµР±/i.test(currentLocationName || "");
-    const isExitingBuilding = /РІС‹С…РѕРґ|РІС‹Р№С‚Рё|РІС‹С…РѕР¶Сѓ|РїРѕРєРёРґР°|РЅР°СЂСѓР¶Сѓ|РЅР° СѓР»РёС†|РЅР° РІРѕР·РґСѓС…|РІРѕ РґРІРѕСЂ|РЅР° РґРІРѕСЂ|РЅР° С‚СЂР°РєС‚|РЅР° РґРѕСЂРѕРі|РІ РїСѓС‚СЊ/i.test(safeActionText);
-    const isEnteringBuilding = /Р·Р°Р№С‚Рё РІ С‚Р°РІРµСЂРЅСѓ|Р·Р°С…РѕР¶Сѓ РІ С‚Р°РІРµСЂРЅСѓ|РІРµСЂРЅСѓС‚СЊСЃСЏ РІ С‚Р°РІРµСЂРЅСѓ|РІС…РѕР¶Сѓ РІ С‚Р°РІРµСЂРЅСѓ|Р·Р°Р№С‚Рё РІРЅСѓС‚СЂСЊ|РІРµСЂРЅСѓС‚СЊСЃСЏ РІРЅСѓС‚СЂСЊ/i.test(safeActionText);
+    // Р вЂќР ВµРЎвЂљР ВµРЎР‚Р СР С‘Р Р…Р С‘РЎР‚Р С•Р Р†Р В°Р Р…Р Р…Р В°РЎРЏ Р С–Р В°РЎР‚Р В°Р Р…РЎвЂљР С‘РЎРЏ: Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘ Р С‘Р В· Р В·Р Т‘Р В°Р Р…Р С‘РЎРЏ/РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎвЂ№ Р Р…Р В°РЎР‚РЎС“Р В¶РЎС“, Р ВµРЎРѓР В»Р С‘ GPS Р Р…Р Вµ Р С—Р ВµРЎР‚Р ВµР С”Р В»РЎР‹РЎвЂЎР С‘Р В» Р В·Р С•Р Р…РЎС“
+    const isBuildingLocation = /РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…|РЎвЂљРЎР‚Р В°Р С”РЎвЂљР С‘РЎР‚|Р С—Р С•РЎРѓРЎвЂљР С•РЎРЏР В»|Р Т‘Р С•Р С|Р С—Р С•Р Т‘Р Р†Р В°Р В»|Р С–РЎР‚Р С•РЎвЂљ|Р С”Р В°РЎвЂљР В°Р С”Р С•Р СР В±|Р С—Р С•Р С–РЎР‚Р ВµР В±|tavern|building|dungeon/i.test(currentLocationType || "") ||
+      /РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…|РЎвЂљРЎР‚Р В°Р С”РЎвЂљР С‘РЎР‚|Р С—Р С•РЎРѓРЎвЂљР С•РЎРЏР В»|Р Т‘Р С•Р С|Р В±Р В°РЎв‚¬Р Р…|Р С”Р В°РЎвЂљР В°Р С”Р С•Р СР В±|Р С—Р С•Р С–РЎР‚Р ВµР В±/i.test(currentLocationName || "");
+    const isExitingBuilding = /Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘|Р Р†РЎвЂ№Р в„–РЎвЂљР С‘|Р Р†РЎвЂ№РЎвЂ¦Р С•Р В¶РЎС“|Р С—Р С•Р С”Р С‘Р Т‘Р В°|Р Р…Р В°РЎР‚РЎС“Р В¶РЎС“|Р Р…Р В° РЎС“Р В»Р С‘РЎвЂ |Р Р…Р В° Р Р†Р С•Р В·Р Т‘РЎС“РЎвЂ¦|Р Р†Р С• Р Т‘Р Р†Р С•РЎР‚|Р Р…Р В° Р Т‘Р Р†Р С•РЎР‚|Р Р…Р В° РЎвЂљРЎР‚Р В°Р С”РЎвЂљ|Р Р…Р В° Р Т‘Р С•РЎР‚Р С•Р С–|Р Р† Р С—РЎС“РЎвЂљРЎРЉ/i.test(safeActionText);
+    const isEnteringBuilding = /Р В·Р В°Р в„–РЎвЂљР С‘ Р Р† РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎС“|Р В·Р В°РЎвЂ¦Р С•Р В¶РЎС“ Р Р† РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎС“|Р Р†Р ВµРЎР‚Р Р…РЎС“РЎвЂљРЎРЉРЎРѓРЎРЏ Р Р† РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎС“|Р Р†РЎвЂ¦Р С•Р В¶РЎС“ Р Р† РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎС“|Р В·Р В°Р в„–РЎвЂљР С‘ Р Р†Р Р…РЎС“РЎвЂљРЎР‚РЎРЉ|Р Р†Р ВµРЎР‚Р Р…РЎС“РЎвЂљРЎРЉРЎРѓРЎРЏ Р Р†Р Р…РЎС“РЎвЂљРЎР‚РЎРЉ/i.test(safeActionText);
 
     if (isBuildingLocation && isExitingBuilding && !location_changed && !wild_zone_changed) {
       wild_zone_changed = true;
-      new_wild_zone = `РўСЂР°РєС‚ Сѓ ${currentLocationName || "С‚Р°РІРµСЂРЅС‹"}`;
-      travel_description = `Р’С‹ СЂР°СЃРїР°С…РёРІР°РµС‚Рµ РґСѓР±РѕРІСѓСЋ РґРІРµСЂСЊ Рё РІС‹С…РѕРґРёС‚Рµ РёР· ${currentLocationName || "РїРѕРјРµС‰РµРЅРёСЏ"} РЅР°СЂСѓР¶Сѓ РЅР° СЃРІРµР¶РёР№ РІРѕР·РґСѓС… РїСЂРёРґРѕСЂРѕР¶РЅРѕРіРѕ С‚СЂР°РєС‚Р°.`;
+      new_wild_zone = `Р СћРЎР‚Р В°Р С”РЎвЂљ РЎС“ ${currentLocationName || "РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎвЂ№"}`;
+      travel_description = `Р вЂ™РЎвЂ№ РЎР‚Р В°РЎРѓР С—Р В°РЎвЂ¦Р С‘Р Р†Р В°Р ВµРЎвЂљР Вµ Р Т‘РЎС“Р В±Р С•Р Р†РЎС“РЎР‹ Р Т‘Р Р†Р ВµРЎР‚РЎРЉ Р С‘ Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘Р С‘РЎвЂљР Вµ Р С‘Р В· ${currentLocationName || "Р С—Р С•Р СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ"} Р Р…Р В°РЎР‚РЎС“Р В¶РЎС“ Р Р…Р В° РЎРѓР Р†Р ВµР В¶Р С‘Р в„– Р Р†Р С•Р В·Р Т‘РЎС“РЎвЂ¦ Р С—РЎР‚Р С‘Р Т‘Р С•РЎР‚Р С•Р В¶Р Р…Р С•Р С–Р С• РЎвЂљРЎР‚Р В°Р С”РЎвЂљР В°.`;
       time_passed_minutes = Math.max(time_passed_minutes, 5);
       console.log(`[${requestId}] [EXIT_BUILDING] Player stepped outside: ${new_wild_zone}`);
     } else if (currentWildZone && isEnteringBuilding && !location_changed) {
       wild_zone_changed = true;
       new_wild_zone = null;
-      travel_description = `Р’С‹ РІРѕР·РІСЂР°С‰Р°РµС‚РµСЃСЊ РІРЅСѓС‚СЂСЊ С‚Р°РІРµСЂРЅС‹ РІ С‚С‘РїР»РѕРµ РїРѕРјРµС‰РµРЅРёРµ.`;
+      travel_description = `Р вЂ™РЎвЂ№ Р Р†Р С•Р В·Р Р†РЎР‚Р В°РЎвЂ°Р В°Р ВµРЎвЂљР ВµРЎРѓРЎРЉ Р Р†Р Р…РЎС“РЎвЂљРЎР‚РЎРЉ РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎвЂ№ Р Р† РЎвЂљРЎвЂР С—Р В»Р С•Р Вµ Р С—Р С•Р СР ВµРЎвЂ°Р ВµР Р…Р С‘Р Вµ.`;
       time_passed_minutes = Math.max(time_passed_minutes, 5);
       console.log(`[${requestId}] [ENTER_BUILDING] Player stepped back inside tavern`);
     }
 
 
     // ============================================
-    // РЈРџР РђР’Р›Р•РќРР• РћРўР РЇР”РћРњ Р РЎРћРџРћРЎРўРђР’Р›Р•РќРР• РР“Р РћРљРћР’ (Party & Player Resolution)
+    // Р Р€Р СџР В Р С’Р вЂ™Р вЂєР вЂўР СњР ВР вЂў Р С›Р СћР В Р Р‡Р вЂќР С›Р Сљ Р В Р РЋР С›Р СџР С›Р РЋР СћР С’Р вЂ™Р вЂєР вЂўР СњР ВР вЂў Р ВР вЂњР В Р С›Р С™Р С›Р вЂ™ (Party & Player Resolution)
     // ============================================
     let partyEventFact: string | null = null;
     const lowerAct = safeActionText.toLowerCase();
 
-    // Р”РµС‚РµСЂРјРёРЅРёСЂРѕРІР°РЅРЅРѕРµ СЃРѕРїРѕСЃС‚Р°РІР»РµРЅРёРµ С†РµР»Рё СЃ Р¶РёРІС‹РјРё РёРіСЂРѕРєР°РјРё РїРѕ РёРјРµРЅРё РІ С‚РµРєСЃС‚Рµ
+    // Р вЂќР ВµРЎвЂљР ВµРЎР‚Р СР С‘Р Р…Р С‘РЎР‚Р С•Р Р†Р В°Р Р…Р Р…Р С•Р Вµ РЎРѓР С•Р С—Р С•РЎРѓРЎвЂљР В°Р Р†Р В»Р ВµР Р…Р С‘Р Вµ РЎвЂ Р ВµР В»Р С‘ РЎРѓ Р В¶Р С‘Р Р†РЎвЂ№Р СР С‘ Р С‘Р С–РЎР‚Р С•Р С”Р В°Р СР С‘ Р С—Р С• Р С‘Р СР ВµР Р…Р С‘ Р Р† РЎвЂљР ВµР С”РЎРѓРЎвЂљР Вµ
     const targetedOtherPlayer = (allPlayers || []).filter((p: any) => p.id !== player.id).find((p: any) => {
       if (!p.name) return false;
       const pNameLower = p.name.trim().toLowerCase();
-      const nameRegex = new RegExp(`(^|[\\s,."В«*!?])${pNameLower}[Р°-СЏ]*([\\s,."В»*!?]|$)`, 'i');
+      const nameRegex = new RegExp(`(^|[\\s,."Р’В«*!?])${pNameLower}[Р В°-РЎРЏ]*([\\s,."Р’В»*!?]|$)`, 'i');
       return nameRegex.test(lowerAct) || lowerAct.includes(pNameLower);
     });
 
@@ -701,8 +695,8 @@ serve(async (req) => {
       }
     }
 
-    const isPartyInviteOrJoin = /(?:РѕР±СЉРµРґРёРЅРё(?:С‚СЊСЃСЏ|РјСЃСЏ)|СЃРѕР·РґР°(?:С‚СЊ|РґРёРј) РѕС‚СЂСЏРґ|РїРѕР№Рґ[РµС‘]Рј РІРјРµСЃС‚Рµ|РёРґ[РµС‘]Рј РІРјРµСЃС‚Рµ|РґР°РІР°Р№(?:С‚Рµ)?.*(?:РІРјРµСЃС‚Рµ|РїСѓС‚РµС€РµСЃС‚РІ|РѕС‚СЂСЏРґ)|Р±СѓРґРµРј РІРјРµСЃС‚Рµ|РїСѓС‚РµС€РµСЃС‚РІ(?:РѕРІР°С‚СЊ|СѓРµРј).*РІРјРµСЃС‚Рµ|РІРјРµСЃС‚Рµ.*РїСѓС‚РµС€РµСЃС‚РІ|РґРµСЂР¶РёРјСЃСЏ РІРјРµСЃС‚Рµ|РІ РѕС‚СЂСЏРґ|РІРѕР·СЊРјРё РІ РѕС‚СЂСЏРґ|Р±РµСЂСѓ Р·Р° СЂСѓРєСѓ|РїСЂРµРґР»Р°РіР°СЋ.*(?:РѕС‚СЂСЏРґ|РІРјРµСЃС‚Рµ))/i.test(lowerAct);
-    const isPartyLeave = /(?:РїРѕРєРёРґР°СЋ РѕС‚СЂСЏРґ|РІС‹С…РѕР¶Сѓ РёР· РѕС‚СЂСЏРґР°|РѕС‚РґРµР»СЏСЋСЃСЊ РѕС‚ РѕС‚СЂСЏРґР°|РёРґСѓ РѕРґРёРЅ|РїРѕР№РґСѓ РѕРґРёРЅ|СЂР°Р·РґРµР»СЏРµРјСЃСЏ)/i.test(lowerAct);
+    const isPartyInviteOrJoin = /(?:Р С•Р В±РЎР‰Р ВµР Т‘Р С‘Р Р…Р С‘(?:РЎвЂљРЎРЉРЎРѓРЎРЏ|Р СРЎРѓРЎРЏ)|РЎРѓР С•Р В·Р Т‘Р В°(?:РЎвЂљРЎРЉ|Р Т‘Р С‘Р С) Р С•РЎвЂљРЎР‚РЎРЏР Т‘|Р С—Р С•Р в„–Р Т‘[Р ВµРЎвЂ]Р С Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ|Р С‘Р Т‘[Р ВµРЎвЂ]Р С Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ|Р Т‘Р В°Р Р†Р В°Р в„–(?:РЎвЂљР Вµ)?.*(?:Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ|Р С—РЎС“РЎвЂљР ВµРЎв‚¬Р ВµРЎРѓРЎвЂљР Р†|Р С•РЎвЂљРЎР‚РЎРЏР Т‘)|Р В±РЎС“Р Т‘Р ВµР С Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ|Р С—РЎС“РЎвЂљР ВµРЎв‚¬Р ВµРЎРѓРЎвЂљР Р†(?:Р С•Р Р†Р В°РЎвЂљРЎРЉ|РЎС“Р ВµР С).*Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ|Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ.*Р С—РЎС“РЎвЂљР ВµРЎв‚¬Р ВµРЎРѓРЎвЂљР Р†|Р Т‘Р ВµРЎР‚Р В¶Р С‘Р СРЎРѓРЎРЏ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ|Р Р† Р С•РЎвЂљРЎР‚РЎРЏР Т‘|Р Р†Р С•Р В·РЎРЉР СР С‘ Р Р† Р С•РЎвЂљРЎР‚РЎРЏР Т‘|Р В±Р ВµРЎР‚РЎС“ Р В·Р В° РЎР‚РЎС“Р С”РЎС“|Р С—РЎР‚Р ВµР Т‘Р В»Р В°Р С–Р В°РЎР‹.*(?:Р С•РЎвЂљРЎР‚РЎРЏР Т‘|Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ))/i.test(lowerAct);
+    const isPartyLeave = /(?:Р С—Р С•Р С”Р С‘Р Т‘Р В°РЎР‹ Р С•РЎвЂљРЎР‚РЎРЏР Т‘|Р Р†РЎвЂ№РЎвЂ¦Р С•Р В¶РЎС“ Р С‘Р В· Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В°|Р С•РЎвЂљР Т‘Р ВµР В»РЎРЏРЎР‹РЎРѓРЎРЉ Р С•РЎвЂљ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В°|Р С‘Р Т‘РЎС“ Р С•Р Т‘Р С‘Р Р…|Р С—Р С•Р в„–Р Т‘РЎС“ Р С•Р Т‘Р С‘Р Р…|РЎР‚Р В°Р В·Р Т‘Р ВµР В»РЎРЏР ВµР СРЎРѓРЎРЏ)/i.test(lowerAct);
 
     if (isPartyLeave) {
       const priorPartyId = getPlayerPartyId(player, session);
@@ -720,13 +714,13 @@ serve(async (req) => {
           player.party_id = null;
         } catch {}
 
-        partyEventFact = `${player.name} РѕС‚РґРµР»РёР»СЃСЏ РѕС‚ РѕС‚СЂСЏРґР° Рё С‚РµРїРµСЂСЊ РґРµР№СЃС‚РІСѓРµС‚ СЃР°РјРѕСЃС‚РѕСЏС‚РµР»СЊРЅРѕ.`;
+        partyEventFact = `${player.name} Р С•РЎвЂљР Т‘Р ВµР В»Р С‘Р В»РЎРѓРЎРЏ Р С•РЎвЂљ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В° Р С‘ РЎвЂљР ВµР С—Р ВµРЎР‚РЎРЉ Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†РЎС“Р ВµРЎвЂљ РЎРѓР В°Р СР С•РЎРѓРЎвЂљР С•РЎРЏРЎвЂљР ВµР В»РЎРЉР Р…Р С•.`;
         try {
           await supabase.from("messages").insert({
             session_id,
             sender_type: "system",
-            sender_name: "РЎРёСЃС‚РµРјР°",
-            content: `рџљ¶вЂЌв™‚пёЏ ${partyEventFact}`,
+            sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
+            content: `СЂСџС™В¶РІР‚РЊРІв„ўвЂљРїС‘РЏ ${partyEventFact}`,
           });
         } catch {}
       }
@@ -750,7 +744,7 @@ serve(async (req) => {
         } else {
           groups.push({
             id: partyId,
-            name: `РћС‚СЂСЏРґ ${player.name} Рё ${partner.name}`,
+            name: `Р С›РЎвЂљРЎР‚РЎРЏР Т‘ ${player.name} Р С‘ ${partner.name}`,
             leader_id: player.id,
             members: [player.id, partner.id],
           });
@@ -764,24 +758,24 @@ serve(async (req) => {
           partner.party_id = partyId;
         } catch {}
 
-        partyEventFact = `РЎС„РѕСЂРјРёСЂРѕРІР°РЅ РѕС‚СЂСЏРґ: ${player.name} Рё ${partner.name} С‚РµРїРµСЂСЊ РїСѓС‚РµС€РµСЃС‚РІСѓСЋС‚ РІРјРµСЃС‚Рµ!`;
+        partyEventFact = `Р РЋРЎвЂћР С•РЎР‚Р СР С‘РЎР‚Р С•Р Р†Р В°Р Р… Р С•РЎвЂљРЎР‚РЎРЏР Т‘: ${player.name} Р С‘ ${partner.name} РЎвЂљР ВµР С—Р ВµРЎР‚РЎРЉ Р С—РЎС“РЎвЂљР ВµРЎв‚¬Р ВµРЎРѓРЎвЂљР Р†РЎС“РЎР‹РЎвЂљ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ!`;
         try {
           await supabase.from("messages").insert({
             session_id,
             sender_type: "system",
-            sender_name: "РЎРёСЃС‚РµРјР°",
-            content: `вљ”пёЏ ${partyEventFact}`,
+            sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
+            content: `РІС™вЂќРїС‘РЏ ${partyEventFact}`,
           });
         } catch {}
       }
     }
 
     // ============================================
-    // РЁРђР“ 2: Game Engine
+    // Р РЃР С’Р вЂњ 2: Game Engine
     // ============================================
     console.log(`[${requestId}] [STEP 2] Game Engine...`);
 
-    // Р—Р°РіСЂСѓР·РєР° РЅР°РІС‹РєРѕРІ РёРіСЂРѕРєР° РґР»СЏ РјР°С‚РµРјР°С‚РёС‡РµСЃРєРёС… Р±РѕРЅСѓСЃРѕРІ РґРІРёР¶РєР° (СѓСЂРѕРЅ, РїРѕРїР°РґР°РЅРёРµ, СЃР±РѕСЂ, РІСЂРµРјСЏ)
+    // Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р В°Р Р†РЎвЂ№Р С”Р С•Р Р† Р С‘Р С–РЎР‚Р С•Р С”Р В° Р Т‘Р В»РЎРЏ Р СР В°РЎвЂљР ВµР СР В°РЎвЂљР С‘РЎвЂЎР ВµРЎРѓР С”Р С‘РЎвЂ¦ Р В±Р С•Р Р…РЎС“РЎРѓР С•Р Р† Р Т‘Р Р†Р С‘Р В¶Р С”Р В° (РЎС“РЎР‚Р С•Р Р…, Р С—Р С•Р С—Р В°Р Т‘Р В°Р Р…Р С‘Р Вµ, РЎРѓР В±Р С•РЎР‚, Р Р†РЎР‚Р ВµР СРЎРЏ)
     const { data: pSkills } = await supabase
       .from("player_skills")
       .select("skill_key, level, effects")
@@ -793,7 +787,7 @@ serve(async (req) => {
       }
     }
 
-    // РЎРѕРєСЂР°С‰РµРЅРёРµ РІСЂРµРјРµРЅРё РЅР° РґРµР№СЃС‚РІРёСЏ РѕС‚ РЅР°РІС‹РєРѕРІ (СЃРѕР±РёСЂР°С‚РµР»СЊСЃС‚РІРѕ, РІС‹Р¶РёРІР°РЅРёРµ, РіРѕСЂРЅРѕРµ РґРµР»Рѕ Рё С‚.Рґ.)
+    // Р РЋР С•Р С”РЎР‚Р В°РЎвЂ°Р ВµР Р…Р С‘Р Вµ Р Р†РЎР‚Р ВµР СР ВµР Р…Р С‘ Р Р…Р В° Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†Р С‘РЎРЏ Р С•РЎвЂљ Р Р…Р В°Р Р†РЎвЂ№Р С”Р С•Р Р† (РЎРѓР С•Р В±Р С‘РЎР‚Р В°РЎвЂљР ВµР В»РЎРЉРЎРѓРЎвЂљР Р†Р С•, Р Р†РЎвЂ№Р В¶Р С‘Р Р†Р В°Р Р…Р С‘Р Вµ, Р С–Р С•РЎР‚Р Р…Р С•Р Вµ Р Т‘Р ВµР В»Р С• Р С‘ РЎвЂљ.Р Т‘.)
     if (time_passed_minutes > 0) {
       let maxTimeRedPct = 0;
       for (const s of Object.values(skillsMap)) {
@@ -823,7 +817,7 @@ serve(async (req) => {
         current_location_id: session.current_location_id,
       },
       acting_player: {
-        id: player.id, name: player.name || "Р“РµСЂРѕР№",
+        id: player.id, name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
         stats: player.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
         hp: player.hp, max_hp: player.max_hp,
         armor_class: player.armor_class || 10,
@@ -851,10 +845,10 @@ serve(async (req) => {
       if (!engineResult.system_facts) engineResult.system_facts = engineResult.raw_system_facts;
       else engineResult.system_facts.push(partyEventFact);
     }
-    console.log(`[${requestId}] [STEP 2] вљ™пёЏ Engine: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${JSON.stringify(engineResult.raw_system_facts)}`);
+    console.log(`[${requestId}] [STEP 2] РІС™в„ўРїС‘РЏ Engine: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${JSON.stringify(engineResult.raw_system_facts)}`);
 
     // ============================================
-    // РЁРђР“ 3: DB Persistence
+    // Р РЃР С’Р вЂњ 3: DB Persistence
     // ============================================
     console.log(`[${requestId}] [STEP 3] Persistence...`);
     const persistenceResult = await applyTurnMutations({
@@ -885,11 +879,11 @@ serve(async (req) => {
     if (location_changed && new_location_id) {
       await supabase.from("sessions").update({
         current_location_id: new_location_id,
-        current_wild_zone: null, // РІРµСЂРЅСѓР»РёСЃСЊ РІ РёРјРµРЅРѕРІР°РЅРЅСѓСЋ Р»РѕРєР°С†РёСЋ
+        current_wild_zone: null, // Р Р†Р ВµРЎР‚Р Р…РЎС“Р В»Р С‘РЎРѓРЎРЉ Р Р† Р С‘Р СР ВµР Р…Р С•Р Р†Р В°Р Р…Р Р…РЎС“РЎР‹ Р В»Р С•Р С”Р В°РЎвЂ Р С‘РЎР‹
         current_wild_zone_description: null,
       }).eq("id", session_id);
 
-      // РРіСЂРѕРєРё РґРІРёРіР°СЋС‚СЃСЏ: СЃР±СЂР°СЃС‹РІР°РµРј РїРѕРґР·РѕРЅСѓ РїРµСЂРµРјРµСЃС‚РёРІС€РµРіРѕСЃСЏ РёРіСЂРѕРєР°
+      // Р ВР С–РЎР‚Р С•Р С”Р С‘ Р Т‘Р Р†Р С‘Р С–Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ: РЎРѓР В±РЎР‚Р В°РЎРѓРЎвЂ№Р Р†Р В°Р ВµР С Р С—Р С•Р Т‘Р В·Р С•Р Р…РЎС“ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎРѓРЎвЂљР С‘Р Р†РЎв‚¬Р ВµР С–Р С•РЎРѓРЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В°
       try {
         await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
         player.current_zone = null;
@@ -897,7 +891,7 @@ serve(async (req) => {
         console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
       }
 
-      // Р§Р»РµРЅС‹ РѕРґРЅРѕРіРѕ РѕС‚СЂСЏРґР°, РЅР°С…РѕРґРёРІС€РёРµСЃСЏ РІ С‚РѕР№ Р¶Рµ Р·РѕРЅРµ/Р»РѕРєР°С†РёРё, РїРµСЂРµРјРµС‰Р°СЋС‚СЃСЏ РІРјРµСЃС‚Рµ!
+      // Р В§Р В»Р ВµР Р…РЎвЂ№ Р С•Р Т‘Р Р…Р С•Р С–Р С• Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В°, Р Р…Р В°РЎвЂ¦Р С•Р Т‘Р С‘Р Р†РЎв‚¬Р С‘Р ВµРЎРѓРЎРЏ Р Р† РЎвЂљР С•Р в„– Р В¶Р Вµ Р В·Р С•Р Р…Р Вµ/Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘, Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ!
       const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
         p.id !== player.id &&
         arePlayersInSameParty(player, p, session) &&
@@ -916,7 +910,7 @@ serve(async (req) => {
         }
       }
 
-      // РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РєР°СЂС‚Сѓ СЂР°СЃСЃС‚РѕСЏРЅРёР№ Р·РѕРЅ Рё С‚РёРї РјРµСЃС‚РЅРѕСЃС‚Рё РґР»СЏ РЅРѕРІРѕР№ Р»РѕРєР°С†РёРё С‡РµСЂРµР· РР
+      // Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С”Р В°РЎР‚РЎвЂљРЎС“ РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р В·Р С•Р Р… Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р Т‘Р В»РЎРЏ Р Р…Р С•Р Р†Р С•Р в„– Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘ РЎвЂЎР ВµРЎР‚Р ВµР В· Р ВР В
       try {
         const newLocMap = await ensureLocationMapAndTerrain({
           supabase,
@@ -934,7 +928,7 @@ serve(async (req) => {
         console.warn(`[${requestId}] [FOG] Failed to generate location_map on location change:`, locChangeMapErr);
       }
 
-      // РЎРїСѓС‚РЅРёРєРё Рё С‡Р»РµРЅС‹ РѕС‚СЂСЏРґР° РїРµСЂРµРјРµС‰Р°СЋС‚СЃСЏ РІРјРµСЃС‚Рµ СЃ РёРіСЂРѕРєРѕРј РІ РЅРѕРІСѓСЋ Р»РѕРєР°С†РёСЋ
+      // Р РЋР С—РЎС“РЎвЂљР Р…Р С‘Р С”Р С‘ Р С‘ РЎвЂЎР В»Р ВµР Р…РЎвЂ№ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В° Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ РЎРѓ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р С Р Р† Р Р…Р С•Р Р†РЎС“РЎР‹ Р В»Р С•Р С”Р В°РЎвЂ Р С‘РЎР‹
       try {
         const { data: compNpcs } = await supabase
           .from("npcs")
@@ -943,7 +937,7 @@ serve(async (req) => {
         const companionIds = (compNpcs || [])
           .filter((n: any) =>
             n.role === "companion" ||
-            (Array.isArray(n.status_tags) && (n.status_tags.includes("СЃРїСѓС‚РЅРёРє") || n.status_tags.includes("РІ_РѕС‚СЂСЏРґРµ") || n.status_tags.includes("РїРёС‚РѕРјРµС†") || n.status_tags.includes("РїСЂРёСЂСѓС‡РµРЅ")))
+            (Array.isArray(n.status_tags) && (n.status_tags.includes("РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”") || n.status_tags.includes("Р Р†_Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р Вµ") || n.status_tags.includes("Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ") || n.status_tags.includes("Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…")))
           )
           .map((n: any) => n.id);
 
@@ -964,7 +958,7 @@ serve(async (req) => {
       currentLocationName = new_wild_zone;
       session.current_wild_zone = new_wild_zone;
 
-      // РРіСЂРѕРєРё РґРІРёРіР°СЋС‚СЃСЏ: СЃР±СЂР°СЃС‹РІР°РµРј РїРѕРґР·РѕРЅСѓ РїРµСЂРµРјРµСЃС‚РёРІС€РµРіРѕСЃСЏ РёРіСЂРѕРєР°
+      // Р ВР С–РЎР‚Р С•Р С”Р С‘ Р Т‘Р Р†Р С‘Р С–Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ: РЎРѓР В±РЎР‚Р В°РЎРѓРЎвЂ№Р Р†Р В°Р ВµР С Р С—Р С•Р Т‘Р В·Р С•Р Р…РЎС“ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎРѓРЎвЂљР С‘Р Р†РЎв‚¬Р ВµР С–Р С•РЎРѓРЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В°
       try {
         await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
         player.current_zone = null;
@@ -972,7 +966,7 @@ serve(async (req) => {
         console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
       }
 
-      // Р§Р»РµРЅС‹ РѕС‚СЂСЏРґР° РїРµСЂРµС…РѕРґСЏС‚ РІ РґРёРєСѓСЋ Р·РѕРЅСѓ РІРјРµСЃС‚Рµ
+      // Р В§Р В»Р ВµР Р…РЎвЂ№ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В° Р С—Р ВµРЎР‚Р ВµРЎвЂ¦Р С•Р Т‘РЎРЏРЎвЂљ Р Р† Р Т‘Р С‘Р С”РЎС“РЎР‹ Р В·Р С•Р Р…РЎС“ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ
       const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
         p.id !== player.id &&
         arePlayersInSameParty(player, p, session) &&
@@ -991,7 +985,7 @@ serve(async (req) => {
         }
       }
 
-      // РЎРіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РєР°СЂС‚Сѓ СЂР°СЃСЃС‚РѕСЏРЅРёР№ Р·РѕРЅ Рё С‚РёРї РјРµСЃС‚РЅРѕСЃС‚Рё РґР»СЏ РґРёРєРѕР№ Р·РѕРЅС‹ С‡РµСЂРµР· РР
+      // Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С”Р В°РЎР‚РЎвЂљРЎС“ РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р В·Р С•Р Р… Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р Т‘Р В»РЎРЏ Р Т‘Р С‘Р С”Р С•Р в„– Р В·Р С•Р Р…РЎвЂ№ РЎвЂЎР ВµРЎР‚Р ВµР В· Р ВР В
       try {
         const wildLocMap = await ensureLocationMapAndTerrain({
           supabase,
@@ -1014,12 +1008,12 @@ serve(async (req) => {
       allNpcs = allNpcs.filter((n: any) =>
         isCompanionNpc(n) ||
         n.is_hostile === true ||
-        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["РґРёРєРёР№", "РјРѕРЅСЃС‚СЂ", "РґРёРєР°СЏ_Р·РѕРЅР°", "Р·РІРµСЂСЊ", "С…РёС‰РЅРёРє"].includes(String(t).toLowerCase())))
+        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р Т‘Р С‘Р С”Р С‘Р в„–", "Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚", "Р Т‘Р С‘Р С”Р В°РЎРЏ_Р В·Р С•Р Р…Р В°", "Р В·Р Р†Р ВµРЎР‚РЎРЉ", "РЎвЂ¦Р С‘РЎвЂ°Р Р…Р С‘Р С”"].includes(String(t).toLowerCase())))
       );
       console.log(`[${requestId}] [WILD_ZONE] Player entered wild zone: ${new_wild_zone}`);
     }
 
-    // РћС‚СЃР»РµР¶РёРІР°РЅРёРµ РїРµСЂРµРјРµС‰РµРЅРёСЏ РёРіСЂРѕРєР° РІРЅСѓС‚СЂРё РїРѕРґР·РѕРЅ Р»РѕРєР°С†РёРё (РґР»СЏ РўСѓРјР°РЅР° Р’РѕР№РЅС‹ / Р­С…Р° Р’РѕР№РЅС‹)
+    // Р С›РЎвЂљРЎРѓР В»Р ВµР В¶Р С‘Р Р†Р В°Р Р…Р С‘Р Вµ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В° Р Р†Р Р…РЎС“РЎвЂљРЎР‚Р С‘ Р С—Р С•Р Т‘Р В·Р С•Р Р… Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘ (Р Т‘Р В»РЎРЏ Р СћРЎС“Р СР В°Р Р…Р В° Р вЂ™Р С•Р в„–Р Р…РЎвЂ№ / Р В­РЎвЂ¦Р В° Р вЂ™Р С•Р в„–Р Р…РЎвЂ№)
     if (!location_changed && !wild_zone_changed && locationMap && Object.keys(locationMap).length > 0) {
       const availableZones = Object.keys(locationMap);
       const lowerAction = safeActionText.toLowerCase();
@@ -1032,7 +1026,7 @@ serve(async (req) => {
 
       if (matchedZone && matchedZone !== (player.current_zone || "")) {
         const prevZone = player.current_zone || null;
-        console.log(`[${requestId}] [ZONE] Player ${player.name} moved to subzone "${matchedZone}" (was: "${player.current_zone || 'РѕСЃРЅРѕРІРЅР°СЏ'}")`);
+        console.log(`[${requestId}] [ZONE] Player ${player.name} moved to subzone "${matchedZone}" (was: "${player.current_zone || 'Р С•РЎРѓР Р…Р С•Р Р†Р Р…Р В°РЎРЏ'}")`);
         player.current_zone = matchedZone;
         try {
           await supabase.from("players").update({ current_zone: matchedZone }).eq("id", player.id);
@@ -1040,7 +1034,7 @@ serve(async (req) => {
           console.warn(`[${requestId}] Failed to update player current_zone:`, zErr);
         }
 
-        // Р§Р»РµРЅС‹ РѕС‚СЂСЏРґР°, РЅР°С…РѕРґРёРІС€РёРµСЃСЏ РІ С‚РѕР№ Р¶Рµ Р·РѕРЅРµ, РїРµСЂРµРјРµС‰Р°СЋС‚СЃСЏ РІРјРµСЃС‚Рµ!
+        // Р В§Р В»Р ВµР Р…РЎвЂ№ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В°, Р Р…Р В°РЎвЂ¦Р С•Р Т‘Р С‘Р Р†РЎв‚¬Р С‘Р ВµРЎРѓРЎРЏ Р Р† РЎвЂљР С•Р в„– Р В¶Р Вµ Р В·Р С•Р Р…Р Вµ, Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ!
         const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
           p.id !== player.id &&
           arePlayersInSameParty(player, p, session) &&
@@ -1063,7 +1057,7 @@ serve(async (req) => {
 
 
     // ============================================
-    // РђР’РўРћРќРћРњРќР«Р• Р­РљРЎРџР•Р”РР¦РР NPC (0 С‚РѕРєРµРЅРѕРІ, Lazy Calendar Simulation)
+    // Р С’Р вЂ™Р СћР С›Р СњР С›Р СљР СњР В«Р вЂў Р В­Р С™Р РЋР СџР вЂўР вЂќР ВР В¦Р ВР В NPC (0 РЎвЂљР С•Р С”Р ВµР Р…Р С•Р Р†, Lazy Calendar Simulation)
     // ============================================
     let expeditionEvents: any[] = [];
     if (time_passed_minutes > 0 && session.world_id) {
@@ -1085,26 +1079,26 @@ serve(async (req) => {
     }
 
     // ============================================
-    // РРќРР¦РРђРўРР’Рђ РЎРџРЈРўРќРРљРћР’ Р’ РўР•РљРЈР©Р•Р™ РЎР¦Р•РќР• (РњРёСЂРЅС‹Рµ Рё СЂРѕР»РµРІС‹Рµ РґРµР№СЃС‚РІРёСЏ)
+    // Р ВР СњР ВР В¦Р ВР С’Р СћР ВР вЂ™Р С’ Р РЋР СџР Р€Р СћР СњР ВР С™Р С›Р вЂ™ Р вЂ™ Р СћР вЂўР С™Р Р€Р В©Р вЂўР в„ў Р РЋР В¦Р вЂўР СњР вЂў (Р СљР С‘РЎР‚Р Р…РЎвЂ№Р Вµ Р С‘ РЎР‚Р С•Р В»Р ВµР Р†РЎвЂ№Р Вµ Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†Р С‘РЎРЏ)
     // ============================================
     let companionAction: any = null;
     try {
       companionAction = await handleCompanionInSceneAction({
         supabase,
         player_action_text: safeActionText,
-        acting_player_name: player.name || "Р“РµСЂРѕР№",
+        acting_player_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
         location_npcs: allNpcs,
         session_id,
         openrouter_api_key: openrouterApiKey,
         model: satelliteModel || "meta-llama/llama-3.3-70b-instruct:free",
       });
-      console.log(`[${requestId}] [COMPANION] рџ¤ќ Checked:`, companionAction ? `${companionAction.npc_name} did: ${companionAction.action_description}` : "none (no party companions in scene)");
+      console.log(`[${requestId}] [COMPANION] СЂСџВ¤Сњ Checked:`, companionAction ? `${companionAction.npc_name} did: ${companionAction.action_description}` : "none (no party companions in scene)");
     } catch (compErr) {
       console.warn(`[${requestId}] Companion action failed:`, compErr);
     }
 
     // ============================================
-    // Р”РРќРђРњРР§Р•РЎРљРР• РќРђР’Р«РљР РР“Р РћРљРђ (1..100)
+    // Р вЂќР ВР СњР С’Р СљР ВР В§Р вЂўР РЋР С™Р ВР вЂў Р СњР С’Р вЂ™Р В«Р С™Р В Р ВР вЂњР В Р С›Р С™Р С’ (1..100)
     // ============================================
     let skillProgress: any = null;
     try {
@@ -1133,7 +1127,7 @@ serve(async (req) => {
     }
 
     // ============================================
-    // РџР РћРљРђР§РљРђ РЈР РћР’РќРЇ РџР•Р РЎРћРќРђР–Рђ (1..100, +2 РћРҐ, HP/MP)
+    // Р СџР В Р С›Р С™Р С’Р В§Р С™Р С’ Р Р€Р В Р С›Р вЂ™Р СњР Р‡ Р СџР вЂўР В Р РЋР С›Р СњР С’Р вЂ“Р С’ (1..100, +2 Р С›Р Тђ, HP/MP)
     // ============================================
     let playerLevelUp: any = null;
     try {
@@ -1207,7 +1201,7 @@ serve(async (req) => {
     }
 
     // ============================================
-    // РЁРђР“ 4: System Truth Compiler
+    // Р РЃР С’Р вЂњ 4: System Truth Compiler
     // ============================================
     console.log(`[${requestId}] [STEP 4] System Truth...`);
     const systemTruth = await compileSystemTruth({
@@ -1221,15 +1215,15 @@ serve(async (req) => {
         game_minute: session.game_minute || 0,
         current_location_id: session.current_location_id,
       },
-      location: { name: currentLocationName || currentWildZone || "РћС‚РєСЂС‹С‚С‹Р№ РјРёСЂ", weather: routerInput.weather?.description || null },
+      location: { name: currentLocationName || currentWildZone || "Р С›РЎвЂљР С”РЎР‚РЎвЂ№РЎвЂљРЎвЂ№Р в„– Р СР С‘РЎР‚", weather: routerInput.weather?.description || null },
       players: (allPlayers || []).map((p: any) => ({
-        id: p.id, name: p.name || "Р“РµСЂРѕР№", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
+        id: p.id, name: p.name || "Р вЂњР ВµРЎР‚Р С•Р в„–", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
       })),
-      npcs: (session.current_wild_zone ? allNpcs.filter((n: any) => isCompanionNpc(n) || n.is_hostile === true || (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["РґРёРєРёР№", "РјРѕРЅСЃС‚СЂ", "РґРёРєР°СЏ_Р·РѕРЅР°", "Р·РІРµСЂСЊ", "С…РёС‰РЅРёРє"].includes(String(t).toLowerCase())))) : allNpcs).map((n: any) => ({
+      npcs: (session.current_wild_zone ? allNpcs.filter((n: any) => isCompanionNpc(n) || n.is_hostile === true || (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р Т‘Р С‘Р С”Р С‘Р в„–", "Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚", "Р Т‘Р С‘Р С”Р В°РЎРЏ_Р В·Р С•Р Р…Р В°", "Р В·Р Р†Р ВµРЎР‚РЎРЉ", "РЎвЂ¦Р С‘РЎвЂ°Р Р…Р С‘Р С”"].includes(String(t).toLowerCase())))) : allNpcs).map((n: any) => ({
         id: n.id,
         name: n.name || "NPC",
-        race: n.race || "РЎСѓС‰РµСЃС‚РІРѕ",
-        role: n.role || "РћР±С‹РІР°С‚РµР»СЊ",
+        race: n.race || "Р РЋРЎС“РЎвЂ°Р ВµРЎРѓРЎвЂљР Р†Р С•",
+        role: n.role || "Р С›Р В±РЎвЂ№Р Р†Р В°РЎвЂљР ВµР В»РЎРЉ",
         category: n.category,
         status_tags: n.status_tags || [],
         is_alive: n.is_alive,
@@ -1259,7 +1253,7 @@ serve(async (req) => {
     console.log(`[${requestId}] [STEP 4] turn_status=${systemTruth.turn_status}, ${Object.keys(systemTruth.player_truths).length} player_truths`);
 
     // ============================================
-    // РЁРђР“ 5: Narrator
+    // Р РЃР С’Р вЂњ 5: Narrator
     // ============================================
     console.log(`[${requestId}] [STEP 5] Narrator...`);
     let narratorOutput: { players: Record<string, string>; global_narrative: string };
@@ -1267,9 +1261,9 @@ serve(async (req) => {
       narratorOutput = await generateNarrative({
         system_truth: systemTruth,
         action_text: safeActionText,
-        player_name: player.name || "Р“РµСЂРѕР№",
-        player_race: player.race || "Р§РµР»РѕРІРµРє",
-        player_class: player.class || "Р’РѕРёРЅ",
+        player_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+        player_race: player.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
+        player_class: player.class || "Р вЂ™Р С•Р С‘Р Р…",
         lore_context: loreContext,
         openrouter_api_key: openrouterApiKey,
         dm_model: dmModel,
@@ -1286,12 +1280,12 @@ serve(async (req) => {
     console.log(`[${requestId}] [SAVE] Persisting messages...`);
     // 1) Player action
     await supabase.from("messages").insert({
-      session_id, sender_type: "player", sender_id: player.user_id, sender_name: player.name || "Р“РµСЂРѕР№", content: safeActionText,
+      session_id, sender_type: "player", sender_id: player.user_id, sender_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–", content: safeActionText,
     });
-    // 2) Master narratives вЂ” РїРѕ РѕРґРЅРѕРјСѓ СЃРѕРѕР±С‰РµРЅРёСЋ РЅР° РёРіСЂРѕРєР°
+    // 2) Master narratives РІР‚вЂќ Р С—Р С• Р С•Р Т‘Р Р…Р С•Р СРЎС“ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘РЎР‹ Р Р…Р В° Р С‘Р С–РЎР‚Р С•Р С”Р В°
     for (const [targetPlayerId, narrative] of Object.entries(narratorOutput.players)) {
       await supabase.from("messages").insert({
-        session_id, sender_type: "master", sender_name: "РњР°СЃС‚РµСЂ", content: narrative,
+        session_id, sender_type: "master", sender_name: "Р СљР В°РЎРѓРЎвЂљР ВµРЎР‚", content: narrative,
         metadata: {
           target_player_id: targetPlayerId,
           turn_status: systemTruth.turn_status,
@@ -1301,10 +1295,10 @@ serve(async (req) => {
         },
       });
     }
-    // 3) Global log (С‚РѕР»СЊРєРѕ РїСЂРё РЅР°Р»РёС‡РёРё > 1 РёРіСЂРѕРєР°, С‡С‚РѕР±С‹ РІ СЃРѕР»Рѕ РЅРµ РґСѓР±Р»РёСЂРѕРІР°С‚СЊ РїРµСЂСЃРѕРЅР°Р»СЊРЅС‹Р№ РЅР°СЂСЂР°С‚РёРІ)
+    // 3) Global log (РЎвЂљР С•Р В»РЎРЉР С”Р С• Р С—РЎР‚Р С‘ Р Р…Р В°Р В»Р С‘РЎвЂЎР С‘Р С‘ > 1 Р С‘Р С–РЎР‚Р С•Р С”Р В°, РЎвЂЎРЎвЂљР С•Р В±РЎвЂ№ Р Р† РЎРѓР С•Р В»Р С• Р Р…Р Вµ Р Т‘РЎС“Р В±Р В»Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С—Р ВµРЎР‚РЎРѓР С•Р Р…Р В°Р В»РЎРЉР Р…РЎвЂ№Р в„– Р Р…Р В°РЎР‚РЎР‚Р В°РЎвЂљР С‘Р Р†)
     if (narratorOutput.global_narrative && allPlayers.length > 1) {
       await supabase.from("messages").insert({
-        session_id, sender_type: "master", sender_name: "Р›РѕРі",
+        session_id, sender_type: "master", sender_name: "Р вЂєР С•Р С–",
         content: narratorOutput.global_narrative,
         metadata: {
           type: "global_log",
@@ -1316,18 +1310,18 @@ serve(async (req) => {
       });
     }
 
-    // 3.5) РўРЈРњРђРќ Р’РћР™РќР« вЂ” fog-СЃРѕРѕР±С‰РµРЅРёСЏ РґР»СЏ РёРіСЂРѕРєРѕРІ РІ РґСЂСѓРіРёС… Р·РѕРЅР°С…
-    // Р Р°Р±РѕС‚Р°РµС‚ С‚РѕР»СЊРєРѕ РїСЂРё РЅР°Р»РёС‡РёРё РЅРµСЃРєРѕР»СЊРєРёС… РёРіСЂРѕРєРѕРІ РІ СЃРµСЃСЃРёРё
+    // 3.5) Р СћР Р€Р СљР С’Р Сњ Р вЂ™Р С›Р в„ўР СњР В« РІР‚вЂќ fog-РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘РЎРЏ Р Т‘Р В»РЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р† Р Р† Р Т‘РЎР‚РЎС“Р С–Р С‘РЎвЂ¦ Р В·Р С•Р Р…Р В°РЎвЂ¦
+    // Р В Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ РЎвЂљР С•Р В»РЎРЉР С”Р С• Р С—РЎР‚Р С‘ Р Р…Р В°Р В»Р С‘РЎвЂЎР С‘Р С‘ Р Р…Р ВµРЎРѓР С”Р С•Р В»РЎРЉР С”Р С‘РЎвЂ¦ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р† Р Р† РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘
     if (allPlayers.length > 1) {
       try {
-        // AI РѕРїСЂРµРґРµР»СЏРµС‚ event_type РІ Router вЂ” РЅРёРєР°РєРёС… regex-СЌРІСЂРёСЃС‚РёРє!
+        // AI Р С•Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎРЏР ВµРЎвЂљ event_type Р Р† Router РІР‚вЂќ Р Р…Р С‘Р С”Р В°Р С”Р С‘РЎвЂ¦ regex-РЎРЊР Р†РЎР‚Р С‘РЎРѓРЎвЂљР С‘Р С”!
         const eventType = routerResult.event_type || null;
         if (eventType) {
           const thresholds = fogGetEffectiveThresholds(eventType, currentTerrain);
           const actorZone: string | null = player.current_zone || null;
           const speechContent = fogExtractSpeech(safeActionText);
 
-          // РќР°Р±Р»СЋРґР°С‚РµР»Рё = РІСЃРµ РёРіСЂРѕРєРё, РєСЂРѕРјРµ Р°РІС‚РѕСЂР° РґРµР№СЃС‚РІРёСЏ
+          // Р СњР В°Р В±Р В»РЎР‹Р Т‘Р В°РЎвЂљР ВµР В»Р С‘ = Р Р†РЎРѓР Вµ Р С‘Р С–РЎР‚Р С•Р С”Р С‘, Р С”РЎР‚Р С•Р СР Вµ Р В°Р Р†РЎвЂљР С•РЎР‚Р В° Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†Р С‘РЎРЏ
           const observers = allPlayers.filter((p: any) => p.id !== player.id);
 
           let fogCount = 0;
@@ -1335,12 +1329,12 @@ serve(async (req) => {
             const obsZone: string | null = obs.current_zone || null;
             const tier = fogGetDistanceTier(actorZone, obsZone, locationMap);
 
-            // same_room (tier 0) вЂ” СЌС‚РѕС‚ РёРіСЂРѕРє СѓР¶Рµ РЅР°С…РѕРґРёС‚СЃСЏ РІ С‚РѕР№ Р¶Рµ Р·РѕРЅРµ/РєРѕРјРЅР°С‚Рµ
+            // same_room (tier 0) РІР‚вЂќ РЎРЊРЎвЂљР С•РЎвЂљ Р С‘Р С–РЎР‚Р С•Р С” РЎС“Р В¶Р Вµ Р Р…Р В°РЎвЂ¦Р С•Р Т‘Р С‘РЎвЂљРЎРѓРЎРЏ Р Р† РЎвЂљР С•Р в„– Р В¶Р Вµ Р В·Р С•Р Р…Р Вµ/Р С”Р С•Р СР Р…Р В°РЎвЂљР Вµ
             if (tier === DISTANCE_TIER.SAME_ROOM) continue;
 
             const hears  = tier <= thresholds.audioTier;
             const sees   = tier <= thresholds.visualTier;
-            if (!hears && !sees) continue; // СЃР»РёС€РєРѕРј РґР°Р»РµРєРѕ вЂ” РЅРёС‡РµРіРѕ РЅРµ РґРѕС…РѕРґРёС‚
+            if (!hears && !sees) continue; // РЎРѓР В»Р С‘РЎв‚¬Р С”Р С•Р С Р Т‘Р В°Р В»Р ВµР С”Р С• РІР‚вЂќ Р Р…Р С‘РЎвЂЎР ВµР С–Р С• Р Р…Р Вµ Р Т‘Р С•РЎвЂ¦Р С•Р Т‘Р С‘РЎвЂљ
 
             const fogText = fogPickNarrative(eventType, tier, speechContent);
             if (!fogText) continue;
@@ -1348,7 +1342,7 @@ serve(async (req) => {
             await supabase.from("messages").insert({
               session_id,
               sender_type: "master",
-              sender_name: "РњР°СЃС‚РµСЂ",
+              sender_name: "Р СљР В°РЎРѓРЎвЂљР ВµРЎР‚",
               content: fogText,
               metadata: {
                 target_player_id: obs.id,
@@ -1361,7 +1355,7 @@ serve(async (req) => {
               },
             });
             fogCount++;
-            console.log(`[${requestId}] [FOG] рџЊ«пёЏ ${player.name} (${eventType}, terrain=${currentTerrain || 'default'}) в†’ ${obs.name} tier=${tier}: "${fogText.slice(0, 60)}..."`);
+            console.log(`[${requestId}] [FOG] СЂСџРЉВ«РїС‘РЏ ${player.name} (${eventType}, terrain=${currentTerrain || 'default'}) РІвЂ вЂ™ ${obs.name} tier=${tier}: "${fogText.slice(0, 60)}..."`);
           }
           if (fogCount > 0) {
             console.log(`[${requestId}] [FOG] Dispatched ${fogCount} fog message(s) for AI event_type="${eventType}", terrain="${currentTerrain || 'default'}"`);
@@ -1388,8 +1382,8 @@ serve(async (req) => {
       await supabase.from("messages").insert({
         session_id,
         sender_type: "master",
-        sender_name: "РњРёСЂ",
-        content: `рџ“њ **РЎРѕР±С‹С‚РёРµ РјРёСЂР°**: ${ev.summary}`,
+        sender_name: "Р СљР С‘РЎР‚",
+        content: `СЂСџвЂњСљ **Р РЋР С•Р В±РЎвЂ№РЎвЂљР С‘Р Вµ Р СР С‘РЎР‚Р В°**: ${ev.summary}`,
         metadata: { type: "npc_expedition", npc_id: ev.npc_id, loot: ev.loot, leveled_up: ev.leveled_up },
       });
     }
@@ -1399,8 +1393,8 @@ serve(async (req) => {
       await supabase.from("messages").insert({
         session_id,
         sender_type: "system",
-        sender_name: "РЎРёСЃС‚РµРјР°",
-        content: `рџ”” **[РќР°РІС‹Рє РїРѕРІС‹С€РµРЅ!]** ${skillProgress.name} РґРѕСЃС‚РёРі СѓСЂ. ${skillProgress.level}! (+${skillProgress.level}% Рє СЌС„С„РµРєС‚РёРІРЅРѕСЃС‚Рё)`,
+        sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
+        content: `СЂСџвЂќвЂќ **[Р СњР В°Р Р†РЎвЂ№Р С” Р С—Р С•Р Р†РЎвЂ№РЎв‚¬Р ВµР Р…!]** ${skillProgress.name} Р Т‘Р С•РЎРѓРЎвЂљР С‘Р С– РЎС“РЎР‚. ${skillProgress.level}! (+${skillProgress.level}% Р С” РЎРЊРЎвЂћРЎвЂћР ВµР С”РЎвЂљР С‘Р Р†Р Р…Р С•РЎРѓРЎвЂљР С‘)`,
         metadata: { type: "skill_level_up", skill_key: skillProgress.skill_key, level: skillProgress.level },
       });
     }
@@ -1410,13 +1404,13 @@ serve(async (req) => {
       await supabase.from("messages").insert({
         session_id,
         sender_type: "system",
-        sender_name: "РЎРёСЃС‚РµРјР°",
-        content: `рџЋ‰ **[РќРѕРІС‹Р№ СѓСЂРѕРІРµРЅСЊ!]** РџРѕР·РґСЂР°РІР»СЏРµРј, РІС‹ РґРѕСЃС‚РёРіР»Рё ${playerLevelUp.new_level} СѓСЂРѕРІРЅСЏ!\nРџРѕР»СѓС‡РµРЅРѕ +2 СЃРІРѕР±РѕРґРЅС‹С… РѕС‡РєР° С…Р°СЂР°РєС‚РµСЂРёСЃС‚РёРє (РћРҐ). РњР°РєСЃ. HP: ${playerLevelUp.max_hp}, РњР°РєСЃ. MP: ${playerLevelUp.max_mp}.`,
+        sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
+        content: `СЂСџР‹вЂ° **[Р СњР С•Р Р†РЎвЂ№Р в„– РЎС“РЎР‚Р С•Р Р†Р ВµР Р…РЎРЉ!]** Р СџР С•Р В·Р Т‘РЎР‚Р В°Р Р†Р В»РЎРЏР ВµР С, Р Р†РЎвЂ№ Р Т‘Р С•РЎРѓРЎвЂљР С‘Р С–Р В»Р С‘ ${playerLevelUp.new_level} РЎС“РЎР‚Р С•Р Р†Р Р…РЎРЏ!\nР СџР С•Р В»РЎС“РЎвЂЎР ВµР Р…Р С• +2 РЎРѓР Р†Р С•Р В±Р С•Р Т‘Р Р…РЎвЂ№РЎвЂ¦ Р С•РЎвЂЎР С”Р В° РЎвЂ¦Р В°РЎР‚Р В°Р С”РЎвЂљР ВµРЎР‚Р С‘РЎРѓРЎвЂљР С‘Р С” (Р С›Р Тђ). Р СљР В°Р С”РЎРѓ. HP: ${playerLevelUp.max_hp}, Р СљР В°Р С”РЎРѓ. MP: ${playerLevelUp.max_mp}.`,
         metadata: { type: "player_level_up", ...playerLevelUp },
       });
     }
 
-    // 7.1) Storyline Progress Evaluation (Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРµ РѕС‚СЃР»РµР¶РёРІР°РЅРёРµ С†РµР»РµР№ Р°СЂРєРё)
+    // 7.1) Storyline Progress Evaluation (Р В°Р Р†РЎвЂљР С•Р СР В°РЎвЂљР С‘РЎвЂЎР ВµРЎРѓР С”Р С•Р Вµ Р С•РЎвЂљРЎРѓР В»Р ВµР В¶Р С‘Р Р†Р В°Р Р…Р С‘Р Вµ РЎвЂ Р ВµР В»Р ВµР в„– Р В°РЎР‚Р С”Р С‘)
     let storyProgressResult: any = null;
     if (sessionStoryline && sessionStoryline.status !== "completed" && sessionStoryline.status !== "sandbox") {
       try {
@@ -1443,7 +1437,7 @@ serve(async (req) => {
             await supabase.from("messages").insert({
               session_id,
               sender_type: "system",
-              sender_name: "РЎСЋР¶РµС‚",
+              sender_name: "Р РЋРЎР‹Р В¶Р ВµРЎвЂљ",
               content: announcement,
               metadata: {
                 type: "story_progress",
@@ -1487,7 +1481,7 @@ serve(async (req) => {
       const companionInviteResult = await handleCompanionInvitation({
         supabase,
         player_action_text: safeActionText,
-        acting_player_name: player.name || "Р“РµСЂРѕР№",
+        acting_player_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
         acting_player_id: player.id,
         location_npcs: allNpcs,
         openrouter_api_key: openrouterApiKey,
@@ -1511,18 +1505,18 @@ serve(async (req) => {
       console.warn(`[${requestId}] [COMPANION] handleCompanionInvitation failed:`, inviteErr);
     }
 
-    // 10) Pet Taming interaction (РёРЅС‚РµР»Р»РµРєС‚СѓР°Р»СЊРЅРѕРµ РїСЂРёСЂСѓС‡РµРЅРёРµ Р·РІРµСЂСЏ/РјРѕРЅСЃС‚СЂР°)
+    // 10) Pet Taming interaction (Р С‘Р Р…РЎвЂљР ВµР В»Р В»Р ВµР С”РЎвЂљРЎС“Р В°Р В»РЎРЉР Р…Р С•Р Вµ Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…Р С‘Р Вµ Р В·Р Р†Р ВµРЎР‚РЎРЏ/Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚Р В°)
     try {
       const targetCreature = allNpcs.find((n: any) =>
         n.category === "beast" || n.category === "monster" ||
-        (n.race && ["Р·РІРµСЂСЊ", "РІРѕР»Рє", "Р¶РёРІРѕС‚РЅРѕРµ", "РјРѕРЅСЃС‚СЂ"].some(r => n.race.toLowerCase().includes(r)))
+        (n.race && ["Р В·Р Р†Р ВµРЎР‚РЎРЉ", "Р Р†Р С•Р В»Р С”", "Р В¶Р С‘Р Р†Р С•РЎвЂљР Р…Р С•Р Вµ", "Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚"].some(r => n.race.toLowerCase().includes(r)))
       );
       if (targetCreature) {
         const tamingResult = await evaluatePetTamingAttempt({
           supabase,
           acting_player: {
             id: player.id,
-            name: player.name || "Р“РµСЂРѕР№",
+            name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
             stats: player.stats,
             skills: skillsMap,
           },
@@ -1535,7 +1529,7 @@ serve(async (req) => {
           await supabase.from("messages").insert({
             session_id,
             sender_type: "master",
-            sender_name: "РџСЂРёСЂСѓС‡РµРЅРёРµ",
+            sender_name: "Р СџРЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…Р С‘Р Вµ",
             content: tamingResult.narrative_feedback,
             metadata: {
               type: "pet_taming",
@@ -1549,12 +1543,12 @@ serve(async (req) => {
       console.warn(`[${requestId}] [PET] evaluatePetTamingAttempt failed:`, tameErr);
     }
 
-    // 11) Proactive Companion Offer (NPC СЃР°Рј РїСЂРµРґР»Р°РіР°РµС‚ РїРѕР№С‚Рё РІ РїСѓС‚СЊ РїСЂРё РІС‹СЃРѕРєРѕРј РґРѕРІРµСЂРёРё)
+    // 11) Proactive Companion Offer (NPC РЎРѓР В°Р С Р С—РЎР‚Р ВµР Т‘Р В»Р В°Р С–Р В°Р ВµРЎвЂљ Р С—Р С•Р в„–РЎвЂљР С‘ Р Р† Р С—РЎС“РЎвЂљРЎРЉ Р С—РЎР‚Р С‘ Р Р†РЎвЂ№РЎРѓР С•Р С”Р С•Р С Р Т‘Р С•Р Р†Р ВµРЎР‚Р С‘Р С‘)
     try {
       if (!companionInviteHandled) {
         const proactiveOffer = await checkNpcProactiveCompanionOffer({
           supabase,
-          acting_player_name: player.name || "Р“РµСЂРѕР№",
+          acting_player_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
           acting_player_id: player.id,
           location_npcs: allNpcs,
           openrouter_api_key: openrouterApiKey,
@@ -1578,7 +1572,7 @@ serve(async (req) => {
     }
 
     // ============================================
-    // D&D Р‘РћР•Р’РђРЇ РћР§Р•Р Р•Р”Р¬ РҐРћР”РћР’ (TURN QUEUE РЎ РРќРР¦РРђРўРР’РћР™ NPC, РЎРџРЈРўРќРРљРћР’ Р РџРРўРћРњР¦Р•Р’)
+    // D&D Р вЂР С›Р вЂўР вЂ™Р С’Р Р‡ Р С›Р В§Р вЂўР В Р вЂўР вЂќР В¬ Р ТђР С›Р вЂќР С›Р вЂ™ (TURN QUEUE Р РЋ Р ВР СњР ВР В¦Р ВР С’Р СћР ВР вЂ™Р С›Р в„ў NPC, Р РЋР СџР Р€Р СћР СњР ВР С™Р С›Р вЂ™ Р В Р СџР ВР СћР С›Р СљР В¦Р вЂўР вЂ™)
     // ============================================
     let npcCombatTurns: any[] = [];
     let isRoundCompleted = (!allPlayers || allPlayers.length <= 1);
@@ -1592,7 +1586,7 @@ serve(async (req) => {
         .order("created_at", { ascending: true });
 
       if (isCombat) {
-        // РџРѕРґРєР»СЋС‡Р°РµРј Рє Р±РѕСЋ РІСЂР°Р¶РґРµР±РЅС‹С… NPC СЃ Р±СЂРѕСЃРєРѕРј РёРЅРёС†РёР°С‚РёРІС‹
+        // Р СџР С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР В°Р ВµР С Р С” Р В±Р С•РЎР‹ Р Р†РЎР‚Р В°Р В¶Р Т‘Р ВµР В±Р Р…РЎвЂ№РЎвЂ¦ NPC РЎРѓ Р В±РЎР‚Р С•РЎРѓР С”Р С•Р С Р С‘Р Р…Р С‘РЎвЂ Р С‘Р В°РЎвЂљР С‘Р Р†РЎвЂ№
         const activeHostileNpcs = allNpcs.filter((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
         for (const hostNpc of activeHostileNpcs) {
           const alreadyInQueue = existingTurns?.some((t: any) => t.npc_id === hostNpc.id);
@@ -1612,12 +1606,12 @@ serve(async (req) => {
           }
         }
 
-        // РџРѕРґРєР»СЋС‡Р°РµРј Рє Р±РѕСЋ СЃРїСѓС‚РЅРёРєРѕРІ Рё РїСЂРёСЂСѓС‡РµРЅРЅС‹С… РїРёС‚РѕРјС†РµРІ РёРіСЂРѕРєР°
+        // Р СџР С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР В°Р ВµР С Р С” Р В±Р С•РЎР‹ РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”Р С•Р Р† Р С‘ Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…Р Р…РЎвЂ№РЎвЂ¦ Р С—Р С‘РЎвЂљР С•Р СРЎвЂ Р ВµР Р† Р С‘Р С–РЎР‚Р С•Р С”Р В°
         const activeCompanions = allNpcs.filter((n: any) =>
           !n.is_hostile &&
           n.is_alive !== false &&
           (n.hp ?? 10) > 0 &&
-          (n.role === "companion" || (Array.isArray(n.status_tags) && (n.status_tags.includes("СЃРїСѓС‚РЅРёРє") || n.status_tags.includes("РІ_РѕС‚СЂСЏРґРµ") || n.status_tags.includes("РїРёС‚РѕРјРµС†") || n.status_tags.includes("РїСЂРёСЂСѓС‡РµРЅ"))))
+          (n.role === "companion" || (Array.isArray(n.status_tags) && (n.status_tags.includes("РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”") || n.status_tags.includes("Р Р†_Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р Вµ") || n.status_tags.includes("Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ") || n.status_tags.includes("Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…"))))
         );
         for (const compNpc of activeCompanions) {
           const alreadyInQueue = existingTurns?.some((t: any) => t.npc_id === compNpc.id);
@@ -1639,10 +1633,10 @@ serve(async (req) => {
       }
 
       if (!existingTurns || existingTurns.length === 0) {
-        // РћС‡РµСЂРµРґРё РµС‰С‘ РЅРµС‚ вЂ” СЃРѕР·РґР°С‘Рј РґР»СЏ РёРіСЂРѕРєРѕРІ СЃРµСЃСЃРёРё
+        // Р С›РЎвЂЎР ВµРЎР‚Р ВµР Т‘Р С‘ Р ВµРЎвЂ°РЎвЂ Р Р…Р ВµРЎвЂљ РІР‚вЂќ РЎРѓР С•Р В·Р Т‘Р В°РЎвЂР С Р Т‘Р В»РЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р† РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘
         if (allPlayers && allPlayers.length > 1) {
           isRoundCompleted = false;
-          // РЎРѕСЂС‚РёСЂСѓРµРј РёРіСЂРѕРєРѕРІ: РІ Р±РѕСЋ РїРѕ РёРЅРёС†РёР°С‚РёРІРµ, РІ РјРёСЂРЅРѕРј СЂРµР¶РёРјРµ вЂ” СЃС‚СЂРѕРіРѕ РїРѕ РїРѕСЂСЏРґРєСѓ РІС…РѕРґР° РІ РјРёСЂ (created_at ASC)
+          // Р РЋР С•РЎР‚РЎвЂљР С‘РЎР‚РЎС“Р ВµР С Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р†: Р Р† Р В±Р С•РЎР‹ Р С—Р С• Р С‘Р Р…Р С‘РЎвЂ Р С‘Р В°РЎвЂљР С‘Р Р†Р Вµ, Р Р† Р СР С‘РЎР‚Р Р…Р С•Р С РЎР‚Р ВµР В¶Р С‘Р СР Вµ РІР‚вЂќ РЎРѓРЎвЂљРЎР‚Р С•Р С–Р С• Р С—Р С• Р С—Р С•РЎР‚РЎРЏР Т‘Р С”РЎС“ Р Р†РЎвЂ¦Р С•Р Т‘Р В° Р Р† Р СР С‘РЎР‚ (created_at ASC)
           const sortedPlayers = [...allPlayers].sort((a: any, b: any) => {
             if (isCombat) {
               const diff = (b.initiative || 10) - (a.initiative || 10);
@@ -1671,7 +1665,7 @@ serve(async (req) => {
           }
         }
       } else {
-        // Р”РѕР±Р°РІР»СЏРµРј РёРіСЂРѕРєРѕРІ, РєРѕС‚РѕСЂС‹С… РµС‰С‘ РЅРµС‚ РІ РѕС‡РµСЂРµРґРё (РІ РїРѕСЂСЏРґРєРµ РёС… РІС…РѕРґР° created_at ASC)
+        // Р вЂќР С•Р В±Р В°Р Р†Р В»РЎРЏР ВµР С Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р†, Р С”Р С•РЎвЂљР С•РЎР‚РЎвЂ№РЎвЂ¦ Р ВµРЎвЂ°РЎвЂ Р Р…Р ВµРЎвЂљ Р Р† Р С•РЎвЂЎР ВµРЎР‚Р ВµР Т‘Р С‘ (Р Р† Р С—Р С•РЎР‚РЎРЏР Т‘Р С”Р Вµ Р С‘РЎвЂ¦ Р Р†РЎвЂ¦Р С•Р Т‘Р В° created_at ASC)
         if (allPlayers && allPlayers.length > 1) {
           const existingPids = new Set(existingTurns.filter((t: any) => t.player_id).map((t: any) => t.player_id));
           const missingPlayers = allPlayers
@@ -1688,7 +1682,7 @@ serve(async (req) => {
           }
         }
 
-        // Р—Р°РІРµСЂС€Р°РµРј С‚РµРєСѓС‰РёР№ С…РѕРґ РёРіСЂРѕРєР°
+        // Р вЂ”Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р В°Р ВµР С РЎвЂљР ВµР С”РЎС“РЎвЂ°Р С‘Р в„– РЎвЂ¦Р С•Р Т‘ Р С‘Р С–РЎР‚Р С•Р С”Р В°
         await supabase.from("turn_queue").update({
           status: "completed",
           resolved_at: new Date().toISOString(),
@@ -1696,9 +1690,9 @@ serve(async (req) => {
           roll_result: engineResult,
         }).eq("session_id", session_id).eq("player_id", player.id);
 
-        // РС‰РµРј СЃР»РµРґСѓСЋС‰РёР№ С…РѕРґ СЃРѕ СЃС‚Р°С‚СѓСЃРѕРј 'waiting'
-        // РџСЂРё isCombat = false С…РѕРґС‹ РїРµСЂРµРґР°СЋС‚СЃСЏ СЃС‚СЂРѕРіРѕ РїРѕ РѕС‡РµСЂРµРґРё РІС…РѕРґР° РІ РјРёСЂ (created_at ASC) РѕС‚ РѕРґРЅРѕРіРѕ РёРіСЂРѕРєР° РґСЂСѓРіРѕРјСѓ.
-        // РџСЂРё isCombat = true С…РѕРґС‹ СѓРїРѕСЂСЏРґРѕС‡РµРЅС‹ РїРѕ Р±РѕРµРІРѕР№ РёРЅРёС†РёР°С‚РёРІРµ (initiative DESC, created_at ASC).
+        // Р ВРЎвЂ°Р ВµР С РЎРѓР В»Р ВµР Т‘РЎС“РЎР‹РЎвЂ°Р С‘Р в„– РЎвЂ¦Р С•Р Т‘ РЎРѓР С• РЎРѓРЎвЂљР В°РЎвЂљРЎС“РЎРѓР С•Р С 'waiting'
+        // Р СџРЎР‚Р С‘ isCombat = false РЎвЂ¦Р С•Р Т‘РЎвЂ№ Р С—Р ВµРЎР‚Р ВµР Т‘Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ РЎРѓРЎвЂљРЎР‚Р С•Р С–Р С• Р С—Р С• Р С•РЎвЂЎР ВµРЎР‚Р ВµР Т‘Р С‘ Р Р†РЎвЂ¦Р С•Р Т‘Р В° Р Р† Р СР С‘РЎР‚ (created_at ASC) Р С•РЎвЂљ Р С•Р Т‘Р Р…Р С•Р С–Р С• Р С‘Р С–РЎР‚Р С•Р С”Р В° Р Т‘РЎР‚РЎС“Р С–Р С•Р СРЎС“.
+        // Р СџРЎР‚Р С‘ isCombat = true РЎвЂ¦Р С•Р Т‘РЎвЂ№ РЎС“Р С—Р С•РЎР‚РЎРЏР Т‘Р С•РЎвЂЎР ВµР Р…РЎвЂ№ Р С—Р С• Р В±Р С•Р ВµР Р†Р С•Р в„– Р С‘Р Р…Р С‘РЎвЂ Р С‘Р В°РЎвЂљР С‘Р Р†Р Вµ (initiative DESC, created_at ASC).
         let nextQuery = supabase.from("turn_queue")
           .select("id, player_id, npc_id, entity_type, status, initiative, created_at")
           .eq("session_id", session_id)
@@ -1713,16 +1707,16 @@ serve(async (req) => {
         const { data: nextTurnData } = await nextQuery.limit(1).maybeSingle();
         let nextTurn = nextTurnData;
 
-        // Р•СЃР»Рё СЃР»РµРґСѓСЋС‰РёР№ С…РѕРґ РїСЂРёРЅР°РґР»РµР¶РёС‚ NPC вЂ” РІС‹РїРѕР»РЅСЏРµРј Р±РѕРµРІС‹Рµ С…РѕРґС‹ NPC
+        // Р вЂўРЎРѓР В»Р С‘ РЎРѓР В»Р ВµР Т‘РЎС“РЎР‹РЎвЂ°Р С‘Р в„– РЎвЂ¦Р С•Р Т‘ Р С—РЎР‚Р С‘Р Р…Р В°Р Т‘Р В»Р ВµР В¶Р С‘РЎвЂљ NPC РІР‚вЂќ Р Р†РЎвЂ№Р С—Р С•Р В»Р Р…РЎРЏР ВµР С Р В±Р С•Р ВµР Р†РЎвЂ№Р Вµ РЎвЂ¦Р С•Р Т‘РЎвЂ№ NPC
         while (nextTurn && nextTurn.entity_type === "npc" && nextTurn.npc_id) {
           const currentTurnNpcId = nextTurn.npc_id;
           const turnNpc = allNpcs.find((n: any) => n.id === currentTurnNpcId);
           if (turnNpc && turnNpc.is_alive !== false && (turnNpc.hp ?? 10) > 0) {
             const isCompanion = !turnNpc.is_hostile &&
-              (turnNpc.role === "companion" || (Array.isArray(turnNpc.status_tags) && (turnNpc.status_tags.includes("СЃРїСѓС‚РЅРёРє") || turnNpc.status_tags.includes("РІ_РѕС‚СЂСЏРґРµ") || turnNpc.status_tags.includes("РїРёС‚РѕРјРµС†") || turnNpc.status_tags.includes("РїСЂРёСЂСѓС‡РµРЅ"))));
+              (turnNpc.role === "companion" || (Array.isArray(turnNpc.status_tags) && (turnNpc.status_tags.includes("РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”") || turnNpc.status_tags.includes("Р Р†_Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р Вµ") || turnNpc.status_tags.includes("Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ") || turnNpc.status_tags.includes("Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…"))));
 
             if (isCompanion) {
-              // РҐРћР” РЎРџРЈРўРќРРљРђ / РџРРўРћРњР¦Рђ: Р°С‚Р°РєСѓРµС‚ РІСЂР°Р¶РґРµР±РЅРѕРіРѕ РјРѕР±Р° (РЅР°РїСЂРёРјРµСЂ, РІРѕР»РєР°) РІ РїРѕРјРѕС‰СЊ РёРіСЂРѕРєСѓ!
+              // Р ТђР С›Р вЂќ Р РЋР СџР Р€Р СћР СњР ВР С™Р С’ / Р СџР ВР СћР С›Р СљР В¦Р С’: Р В°РЎвЂљР В°Р С”РЎС“Р ВµРЎвЂљ Р Р†РЎР‚Р В°Р В¶Р Т‘Р ВµР В±Р Р…Р С•Р С–Р С• Р СР С•Р В±Р В° (Р Р…Р В°Р С—РЎР‚Р С‘Р СР ВµРЎР‚, Р Р†Р С•Р В»Р С”Р В°) Р Р† Р С—Р С•Р СР С•РЎвЂ°РЎРЉ Р С‘Р С–РЎР‚Р С•Р С”РЎС“!
               const hostileMobs = allNpcs.filter((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
               if (hostileMobs.length > 0) {
                 const targetMob = hostileMobs[0];
@@ -1730,7 +1724,7 @@ serve(async (req) => {
                   companion: turnNpc,
                   targetMob: {
                     id: targetMob.id,
-                    name: targetMob.name || "Р’СЂР°Рі",
+                    name: targetMob.name || "Р вЂ™РЎР‚Р В°Р С–",
                     hp: targetMob.hp ?? 10,
                     max_hp: targetMob.max_hp ?? 10,
                     armor_class: targetMob.armor_class || 11,
@@ -1747,7 +1741,7 @@ serve(async (req) => {
                     is_alive: targetMob.is_alive,
                   }).eq("id", targetMob.id);
 
-                  // Р‘РѕРЅСѓСЃ Рє РѕС‚РЅРѕС€РµРЅРёСЏРј СЃРѕ СЃРїСѓС‚РЅРёРєРѕРј Р·Р° РїРѕРјРѕС‰СЊ РІ Р±РѕСЋ (+1)
+                  // Р вЂР С•Р Р…РЎС“РЎРѓ Р С” Р С•РЎвЂљР Р…Р С•РЎв‚¬Р ВµР Р…Р С‘РЎРЏР С РЎРѓР С• РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”Р С•Р С Р В·Р В° Р С—Р С•Р СР С•РЎвЂ°РЎРЉ Р Р† Р В±Р С•РЎР‹ (+1)
                   try {
                     const { data: rel } = await supabase.from("npc_relationships").select("score").eq("npc_id", turnNpc.id).eq("player_id", player.id).maybeSingle();
                     if (rel) {
@@ -1755,8 +1749,8 @@ serve(async (req) => {
                     }
                   } catch (e) { /* ignore */ }
 
-                  // РџСЂРѕРєР°С‡РєР° СѓСЂРѕРІРЅСЏ РїРёС‚РѕРјС†Р° Р·Р° СѓС‡Р°СЃС‚РёРµ РІ Р±РѕСЋ (1..100)
-                  const isPet = Array.isArray(turnNpc.status_tags) && turnNpc.status_tags.includes("РїРёС‚РѕРјРµС†");
+                  // Р СџРЎР‚Р С•Р С”Р В°РЎвЂЎР С”Р В° РЎС“РЎР‚Р С•Р Р†Р Р…РЎРЏ Р С—Р С‘РЎвЂљР С•Р СРЎвЂ Р В° Р В·Р В° РЎС“РЎвЂЎР В°РЎРѓРЎвЂљР С‘Р Вµ Р Р† Р В±Р С•РЎР‹ (1..100)
+                  const isPet = Array.isArray(turnNpc.status_tags) && turnNpc.status_tags.includes("Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ");
                   if (isPet) {
                     try {
                       const xpAward = attackResult.is_mob_defeated ? 50 : 20;
@@ -1777,8 +1771,8 @@ serve(async (req) => {
                         await supabase.from("messages").insert({
                           session_id,
                           sender_type: "system",
-                          sender_name: "РЎРёСЃС‚РµРјР°",
-                          content: `рџЋ‰ **[РџРёС‚РѕРјРµС† РїРѕРІС‹СЃРёР» СѓСЂРѕРІРµРЅСЊ!]** ${turnNpc.name} РґРѕСЃС‚РёРі ${turnNpc.level} СѓСЂРѕРІРЅСЏ! РњР°РєСЃ. Р·РґРѕСЂРѕРІСЊРµ: ${turnNpc.max_hp} HP.`,
+                          sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
+                          content: `СЂСџР‹вЂ° **[Р СџР С‘РЎвЂљР С•Р СР ВµРЎвЂ  Р С—Р С•Р Р†РЎвЂ№РЎРѓР С‘Р В» РЎС“РЎР‚Р С•Р Р†Р ВµР Р…РЎРЉ!]** ${turnNpc.name} Р Т‘Р С•РЎРѓРЎвЂљР С‘Р С– ${turnNpc.level} РЎС“РЎР‚Р С•Р Р†Р Р…РЎРЏ! Р СљР В°Р С”РЎРѓ. Р В·Р Т‘Р С•РЎР‚Р С•Р Р†РЎРЉР Вµ: ${turnNpc.max_hp} HP.`,
                           metadata: { type: "pet_level_up", pet_id: turnNpc.id, new_level: turnNpc.level },
                         });
                       }
@@ -1804,10 +1798,10 @@ serve(async (req) => {
                 npcCombatTurns.push(attackResult);
               }
             } else {
-              // РҐРћР” Р’Р РђР–Р”Р•Р‘РќРћР“Рћ NPC (Р°С‚Р°РєР° РёРіСЂРѕРєР°)
+              // Р ТђР С›Р вЂќ Р вЂ™Р В Р С’Р вЂ“Р вЂќР вЂўР вЂР СњР С›Р вЂњР С› NPC (Р В°РЎвЂљР В°Р С”Р В° Р С‘Р С–РЎР‚Р С•Р С”Р В°)
               const battlefieldPlayers = (allPlayers || []).map((p: any) => ({
                 id: p.id,
-                name: p.name || "Р“РµСЂРѕР№",
+                name: p.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
                 hp: p.hp ?? 10,
                 max_hp: p.max_hp ?? 10,
                 armor_class: p.armor_class || 10,
@@ -1840,7 +1834,7 @@ serve(async (req) => {
               await supabase.from("messages").insert({
                 session_id,
                 sender_type: "master",
-                sender_name: "Р‘РѕР№",
+                sender_name: "Р вЂР С•Р в„–",
                 content: attackResult.log_message,
                 metadata: {
                   type: "npc_combat_turn",
@@ -1854,13 +1848,13 @@ serve(async (req) => {
             }
           }
 
-          // РџРѕРјРµС‡Р°РµРј С…РѕРґ NPC РєР°Рє РІС‹РїРѕР»РЅРµРЅРЅС‹Р№
+          // Р СџР С•Р СР ВµРЎвЂЎР В°Р ВµР С РЎвЂ¦Р С•Р Т‘ NPC Р С”Р В°Р С” Р Р†РЎвЂ№Р С—Р С•Р В»Р Р…Р ВµР Р…Р Р…РЎвЂ№Р в„–
           await supabase.from("turn_queue").update({
             status: "completed",
             resolved_at: new Date().toISOString(),
           }).eq("id", nextTurn.id);
 
-          // РџСЂРѕРІРµСЂСЏРµРј СЃР»РµРґСѓСЋС‰РёР№ С…РѕРґ
+          // Р СџРЎР‚Р С•Р Р†Р ВµРЎР‚РЎРЏР ВµР С РЎРѓР В»Р ВµР Т‘РЎС“РЎР‹РЎвЂ°Р С‘Р в„– РЎвЂ¦Р С•Р Т‘
           const nextQuery = await supabase.from("turn_queue")
             .select("id, player_id, npc_id, entity_type, status, initiative")
             .eq("session_id", session_id)
@@ -1879,7 +1873,7 @@ serve(async (req) => {
             isRoundCompleted = false;
           }
         } else {
-          // Р Р°СѓРЅРґ Р·Р°РІРµСЂС€РµРЅ! РџРµСЂРµР·Р°РїСѓСЃРєР°РµРј РѕС‡РµСЂРµРґСЊ
+          // Р В Р В°РЎС“Р Р…Р Т‘ Р В·Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р ВµР Р…! Р СџР ВµРЎР‚Р ВµР В·Р В°Р С—РЎС“РЎРѓР С”Р В°Р ВµР С Р С•РЎвЂЎР ВµРЎР‚Р ВµР Т‘РЎРЉ
           isRoundCompleted = true;
           let queueOrderQuery = supabase.from("turn_queue")
             .select("id, entity_type, initiative, created_at")
@@ -1906,8 +1900,8 @@ serve(async (req) => {
     } catch (queueErr) { console.warn(`[${requestId}] [SAVE] turn_queue update failed:`, queueErr); }
 
     // ============================================
-    // Р¤РћРќРћР’Р«Р™ РџР РћР¦Р•РЎРЎ РЎРРњРЈР›РЇР¦РР Р–РР—РќР РњРР Рђ РџРћРЎР›Р• РљР РЈР“Рђ РҐРћР”РћР’
-    // (Р РѕРІРЅРѕ 1 Р·Р°РїСЂРѕСЃ Рє РР РЅР° РІСЃРµС… СѓРґР°Р»РµРЅРЅС‹С… NPC, РєРѕРЅС‚Р°РєС‚РёСЂРѕРІР°РІС€РёС… СЃ РёРіСЂРѕРєР°РјРё)
+    // Р В¤Р С›Р СњР С›Р вЂ™Р В«Р в„ў Р СџР В Р С›Р В¦Р вЂўР РЋР РЋ Р РЋР ВР СљР Р€Р вЂєР Р‡Р В¦Р ВР В Р вЂ“Р ВР вЂ”Р СњР В Р СљР ВР В Р С’ Р СџР С›Р РЋР вЂєР вЂў Р С™Р В Р Р€Р вЂњР С’ Р ТђР С›Р вЂќР С›Р вЂ™
+    // (Р В Р С•Р Р†Р Р…Р С• 1 Р В·Р В°Р С—РЎР‚Р С•РЎРѓ Р С” Р ВР В Р Р…Р В° Р Р†РЎРѓР ВµРЎвЂ¦ РЎС“Р Т‘Р В°Р В»Р ВµР Р…Р Р…РЎвЂ№РЎвЂ¦ NPC, Р С”Р С•Р Р…РЎвЂљР В°Р С”РЎвЂљР С‘РЎР‚Р С•Р Р†Р В°Р Р†РЎв‚¬Р С‘РЎвЂ¦ РЎРѓ Р С‘Р С–РЎР‚Р С•Р С”Р В°Р СР С‘)
     // ============================================
     let worldSimResult: any = null;
     if (isRoundCompleted) {
@@ -1926,7 +1920,7 @@ serve(async (req) => {
           openrouterApiKey,
           model: dmModel,
         });
-        console.log(`[${requestId}] [WORLD_SIM] рџЊЌ Round ${nextRound} simulated: ${worldSimResult?.simulated_count || 0} distant NPC(s) acted.`);
+        console.log(`[${requestId}] [WORLD_SIM] СЂСџРЉРЊ Round ${nextRound} simulated: ${worldSimResult?.simulated_count || 0} distant NPC(s) acted.`);
       } catch (simErr) {
         console.warn(`[${requestId}] [WORLD_SIM] executeRoundCycleNpcSimulation failed:`, simErr);
       }
@@ -1966,10 +1960,11 @@ serve(async (req) => {
 
 
   } catch (err: any) {
-    console.error(`[${requestId}] вќЊ ERROR:`, err);
+    console.error(`[${requestId}] РІСњРЉ ERROR:`, err);
     return new Response(JSON.stringify({ error: err?.message || "Internal server error" }), {
       status: 500, headers: { ...CORS, "Content-Type": "application/json" },
     });
   }
 });
+
 

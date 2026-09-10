@@ -1810,210 +1810,328 @@ export async function renderGame(container, sessionId, user) {
     applyMapTransform();
   }
 
-function renderMapElements() {
+  // ============================================================
+  // MAP RENDERING HELPERS
+  // ============================================================
+
+  /** Deterministic color from state id (stable across renders) */
+  function getStateMapColor(state) {
+    if (state.map_color) return state.map_color;
+    const PALETTE = [
+      '#f472b6','#60a5fa','#a3e635','#34d399',
+      '#fb923c','#c084fc','#fde68a','#6ee7b7',
+      '#a78bfa','#fca5a5','#67e8f9','#86efac',
+    ];
+    let hash = 0;
+    const id = state.id || state.name || '';
+    for (let i = 0; i < id.length; i++) hash = (id.charCodeAt(i) + ((hash << 5) - hash)) | 0;
+    return PALETTE[Math.abs(hash) % PALETTE.length];
+  }
+
+  /** Convex Hull (Andrew's Monotone Chain) вЂ” returns ordered vertices */
+  function computeConvexHull(pts) {
+    if (pts.length < 3) return [...pts];
+    const sorted = [...pts].sort((a, b) => a.x !== b.x ? a.x - b.x : a.y - b.y);
+    const cross = (O, A, B) => (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
+    const lower = [];
+    for (const p of sorted) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+      lower.push(p);
+    }
+    const upper = [];
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const p = sorted[i];
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+      upper.push(p);
+    }
+    upper.pop(); lower.pop();
+    return lower.concat(upper);
+  }
+
+  /** Inflate polygon vertices outward from centroid by padding units */
+  function inflateHull(hull, padding) {
+    if (hull.length === 0) return hull;
+    const cx = hull.reduce((s, p) => s + p.x, 0) / hull.length;
+    const cy = hull.reduce((s, p) => s + p.y, 0) / hull.length;
+    return hull.map(p => {
+      const dx = p.x - cx, dy = p.y - cy;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      return { x: p.x + (dx / len) * padding, y: p.y + (dy / len) * padding };
+    });
+  }
+
+  /** Centroid of a polygon */
+  function polygonCentroid(pts) {
+    if (!pts.length) return { x: 0, y: 0 };
+    return { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
+  }
+
+  // ============================================================
+  // MAIN MAP RENDER
+  // ============================================================
+  function renderMapElements() {
     const gridSvg = document.getElementById('mapGridSvg');
     const locLayer = document.getElementById('mapLocationsLayer');
     const plLayer = document.getElementById('mapPlayersLayer');
     if (!gridSvg || !locLayer || !plLayer) return;
 
+    const SVG_NS = 'http://www.w3.org/2000/svg';
     const scale = getCoordScale();
     const locations = cachedWorldMapData?.locations || [];
+    const states = cachedWorldMapData?.states || [];
 
-    // 1. Calculate dynamic Grid Size (bounding box)
-    let minX = 0, maxX = 0, minY = 0, maxY = 0;
-    if (locations.length > 0) {
-      minX = Math.min(...locations.map(l => (l.pos_x ?? 0) * scale));
-      maxX = Math.max(...locations.map(l => (l.pos_x ?? 0) * scale));
-      minY = Math.min(...locations.map(l => (l.pos_y ?? 0) * scale));
-      maxY = Math.max(...locations.map(l => (l.pos_y ?? 0) * scale));
-    }
-    const currentPx = (currentPlayer?.pos_x ?? 0) * scale;
-    const currentPy = (currentPlayer?.pos_y ?? 0) * scale;
-    minX = Math.min(minX, currentPx);
-    maxX = Math.max(maxX, currentPx);
-    minY = Math.min(minY, currentPy);
-    maxY = Math.max(maxY, currentPy);
+    // в”Ђв”Ђ 1. Bounding box for dynamic grid size в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    const allPts = locations.map(l => ({ x: (l.pos_x ?? 0) * scale, y: (l.pos_y ?? 0) * scale }));
+    const playerPt = { x: (currentPlayer?.pos_x ?? 0) * scale, y: (currentPlayer?.pos_y ?? 0) * scale };
+    allPts.push(playerPt);
 
-    const padding = 2000 * scale; // Extra padding
-    const boundW = Math.max(Math.abs(minX - padding), Math.abs(maxX + padding));
-    const boundH = Math.max(Math.abs(minY - padding), Math.abs(maxY + padding));
-    const gridSize = Math.max(boundW, boundH, 4000 * scale); // At least 4000
+    const allX = allPts.map(p => p.x), allY = allPts.map(p => p.y);
+    const pad = 1800 * scale;
+    const gridSize = Math.max(
+      Math.max(Math.abs(Math.min(...allX) - pad), Math.abs(Math.max(...allX) + pad)),
+      Math.max(Math.abs(Math.min(...allY) - pad), Math.abs(Math.max(...allY) + pad)),
+      3000 * scale
+    );
 
-    // Grid lines
-    let gridLines = '';
+    // в”Ђв”Ђ 2. Rebuild SVG using DOM API (fixes encoding issues) в”Ђв”Ђв”Ђ
+    gridSvg.setAttribute('width', String(gridSize * 2));
+    gridSvg.setAttribute('height', String(gridSize * 2));
+    gridSvg.style.left = `${-gridSize}px`;
+    gridSvg.style.top = `${-gridSize}px`;
+
+    // Clear and create root group
+    while (gridSvg.firstChild) gridSvg.removeChild(gridSvg.firstChild);
+    const rootG = document.createElementNS(SVG_NS, 'g');
+    rootG.setAttribute('transform', `translate(${gridSize},${gridSize})`);
+    gridSvg.appendChild(rootG);
+
+    // в”Ђв”Ђ 3. Grid lines в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    const gridG = document.createElementNS(SVG_NS, 'g');
+    gridG.setAttribute('class', 'map-grid-lines');
     const step = 500 * scale;
     for (let x = -gridSize; x <= gridSize; x += step) {
-      gridLines += `<line x1="${x}" y1="${-gridSize}" x2="${x}" y2="${gridSize}" stroke="rgba(34, 197, 94, 0.08)" stroke-width="1" />`;
+      const l = document.createElementNS(SVG_NS, 'line');
+      l.setAttribute('x1', x); l.setAttribute('y1', -gridSize);
+      l.setAttribute('x2', x); l.setAttribute('y2', gridSize);
+      l.setAttribute('stroke', 'rgba(34,197,94,0.08)'); l.setAttribute('stroke-width', '1');
+      gridG.appendChild(l);
     }
     for (let y = -gridSize; y <= gridSize; y += step) {
-      gridLines += `<line x1="${-gridSize}" y1="${y}" x2="${gridSize}" y2="${y}" stroke="rgba(34, 197, 94, 0.08)" stroke-width="1" />`;
+      const l = document.createElementNS(SVG_NS, 'line');
+      l.setAttribute('x1', -gridSize); l.setAttribute('y1', y);
+      l.setAttribute('x2', gridSize); l.setAttribute('y2', y);
+      l.setAttribute('stroke', 'rgba(34,197,94,0.08)'); l.setAttribute('stroke-width', '1');
+      gridG.appendChild(l);
     }
+    // Axis lines
+    [['x', -gridSize, 0, gridSize, 0], ['y', 0, -gridSize, 0, gridSize]].forEach(([, x1, y1, x2, y2]) => {
+      const l = document.createElementNS(SVG_NS, 'line');
+      l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+      l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+      l.setAttribute('stroke', 'rgba(212,163,89,0.35)'); l.setAttribute('stroke-width', '1.5');
+      l.setAttribute('stroke-dasharray', '4,4');
+      gridG.appendChild(l);
+    });
+    rootG.appendChild(gridG);
 
-    // State Colors
-    const stateColors = {};
-    const getStateColor = (stateId) => {
-      if (!stateColors[stateId]) {
-        // Generate stable pseudo-random color based on stateId string
-        let hash = 0;
-        for (let i = 0; i < stateId.length; i++) hash = stateId.charCodeAt(i) + ((hash << 5) - hash);
-        const hue = Math.abs(hash) % 360;
-        stateColors[stateId] = `hsla(${hue}, 70%, 50%, 0.15)`;
+    // в”Ђв”Ђ 4. State polygon borders в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    const bordersG = document.createElementNS(SVG_NS, 'g');
+    bordersG.setAttribute('class', 'map-state-borders');
+
+    // State labels layer (drawn on top of fills)
+    const labelsG = document.createElementNS(SVG_NS, 'g');
+    labelsG.setAttribute('class', 'map-state-labels');
+
+    states.forEach(state => {
+      const color = getStateMapColor(state);
+      const fillColor = color + '30'; // 19% opacity
+      const strokeColor = color + 'bb'; // 73% opacity
+
+      let hullPts = [];
+
+      if (state.border_shape === 'polygon' && state.border_data?.points?.length >= 3) {
+        // Use explicit vertices from DB (set by migration from Р­С‚РµСЂРёСЏ 2.6.json)
+        hullPts = state.border_data.points.map(p => ({ x: p.x * scale, y: p.y * scale }));
+      } else if (state.border_shape === 'circle' && state.border_data?.radius) {
+        // Explicit circle
+        const cx = (state.border_data.center_x ?? 0) * scale;
+        const cy = (state.border_data.center_y ?? 0) * scale;
+        const r = state.border_data.radius * scale;
+        const circle = document.createElementNS(SVG_NS, 'circle');
+        circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
+        circle.setAttribute('fill', fillColor); circle.setAttribute('stroke', strokeColor);
+        circle.setAttribute('stroke-width', '2'); circle.setAttribute('stroke-dasharray', '10,5');
+        bordersG.appendChild(circle);
+        // label
+        const t = document.createElementNS(SVG_NS, 'text');
+        t.setAttribute('x', cx); t.setAttribute('y', cy);
+        t.setAttribute('class', 'map-state-label-text');
+        t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle');
+        t.textContent = state.name;
+        labelsG.appendChild(t);
+        return; // done for this state
+      } else {
+        // Fallback: compute convex hull from city coords, inflate by 350 units
+        const stateLocs = (state.locations || []).filter(
+          l => typeof l.pos_x === 'number' && typeof l.pos_y === 'number'
+        );
+        if (stateLocs.length === 0) return;
+        const rawPts = stateLocs.map(l => ({ x: l.pos_x * scale, y: l.pos_y * scale }));
+        const hull = computeConvexHull(rawPts);
+        hullPts = inflateHull(hull, 350 * scale);
       }
-      return stateColors[stateId];
-    };
 
-    // Build SVG boundaries (States and Locations)
-    let svgBorders = '';
-    
-    // Group locations by state
-    const stateGroups = {};
+      if (hullPts.length < 3) return;
+
+      // Draw polygon
+      const polygon = document.createElementNS(SVG_NS, 'polygon');
+      polygon.setAttribute('points', hullPts.map(p => `${p.x},${p.y}`).join(' '));
+      polygon.setAttribute('fill', fillColor);
+      polygon.setAttribute('stroke', strokeColor);
+      polygon.setAttribute('stroke-width', '2');
+      polygon.setAttribute('stroke-dasharray', '10,5');
+      polygon.setAttribute('class', 'map-state-polygon');
+      bordersG.appendChild(polygon);
+
+      // State label at centroid
+      const centroid = polygonCentroid(hullPts);
+      const t = document.createElementNS(SVG_NS, 'text');
+      t.setAttribute('x', centroid.x); t.setAttribute('y', centroid.y);
+      t.setAttribute('class', 'map-state-label-text');
+      t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle');
+      t.textContent = state.name;
+      labelsG.appendChild(t);
+    });
+
+    rootG.appendChild(bordersG);
+
+    // в”Ђв”Ђ 5. Location borders (small circles) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    const locBordersG = document.createElementNS(SVG_NS, 'g');
+    locBordersG.setAttribute('class', 'map-loc-borders');
     locations.forEach(loc => {
-      if (loc.state_id) {
-        if (!stateGroups[loc.state_id]) stateGroups[loc.state_id] = { name: loc.state_name, points: [] };
-        stateGroups[loc.state_id].points.push({ x: (loc.pos_x ?? 0) * scale, y: (loc.pos_y ?? 0) * scale });
-      }
-
-      // Draw Location border if requested
       const lx = (loc.pos_x ?? 0) * scale;
       const ly = (loc.pos_y ?? 0) * scale;
-      const r = (loc.bounds_data?.radius || 150) * scale;
-      if (loc.bounds_shape === 'circle') {
-        svgBorders += `<circle cx="${lx}" cy="${ly}" r="${r}" fill="rgba(59, 130, 246, 0.05)" stroke="rgba(59, 130, 246, 0.3)" stroke-width="1" stroke-dasharray="4,4" class="map-svg-loc-border" />`;
+      if (loc.bounds_shape === 'circle' && loc.bounds_data?.radius) {
+        const r = loc.bounds_data.radius * scale;
+        if (r < 2) return; // too small to draw
+        const c = document.createElementNS(SVG_NS, 'circle');
+        c.setAttribute('cx', lx); c.setAttribute('cy', ly); c.setAttribute('r', r);
+        c.setAttribute('fill', 'rgba(255,255,255,0.04)');
+        c.setAttribute('stroke', 'rgba(255,255,255,0.18)');
+        c.setAttribute('stroke-width', '1'); c.setAttribute('stroke-dasharray', '4,4');
+        c.setAttribute('class', 'map-loc-border');
+        locBordersG.appendChild(c);
+      } else if (loc.bounds_shape === 'polygon' && loc.bounds_data?.points?.length >= 3) {
+        const poly = document.createElementNS(SVG_NS, 'polygon');
+        poly.setAttribute('points', loc.bounds_data.points.map(p => `${p.x * scale},${p.y * scale}`).join(' '));
+        poly.setAttribute('fill', 'rgba(255,255,255,0.04)');
+        poly.setAttribute('stroke', 'rgba(255,255,255,0.18)');
+        poly.setAttribute('stroke-width', '1'); poly.setAttribute('stroke-dasharray', '4,4');
+        poly.setAttribute('class', 'map-loc-border');
+        locBordersG.appendChild(poly);
       }
-      
-      // Draw subzones if they exist
+      // Subzone borders (only on close zoom, managed by CSS .map-zoom-close)
       if (loc.subzones) {
         loc.subzones.forEach(sz => {
-          const szx = (sz.pos_x ?? 0) * scale;
-          const szy = (sz.pos_y ?? 0) * scale;
-          const szr = (sz.radius || 20) * scale;
-          svgBorders += `<circle cx="${szx}" cy="${szy}" r="${szr}" fill="rgba(255, 255, 255, 0.05)" stroke="rgba(255, 255, 255, 0.2)" stroke-width="0.5" stroke-dasharray="2,2" class="map-svg-subzone-border" />`;
+          const szr = (sz.radius || 0) * scale;
+          if (szr < 1) return;
+          const sc = document.createElementNS(SVG_NS, 'circle');
+          sc.setAttribute('cx', (sz.pos_x ?? 0) * scale);
+          sc.setAttribute('cy', (sz.pos_y ?? 0) * scale);
+          sc.setAttribute('r', szr);
+          sc.setAttribute('fill', 'rgba(255,255,255,0.03)');
+          sc.setAttribute('stroke', 'rgba(255,255,255,0.12)');
+          sc.setAttribute('stroke-width', '0.5');
+          sc.setAttribute('class', 'map-subzone-border');
+          locBordersG.appendChild(sc);
         });
       }
     });
+    rootG.appendChild(locBordersG);
 
-    // Draw state borders
-    Object.keys(stateGroups).forEach(stId => {
-      const g = stateGroups[stId];
-      if (g.points.length === 0) return;
-      const sMinX = Math.min(...g.points.map(p => p.x));
-      const sMaxX = Math.max(...g.points.map(p => p.x));
-      const sMinY = Math.min(...g.points.map(p => p.y));
-      const sMaxY = Math.max(...g.points.map(p => p.y));
-      const cx = (sMinX + sMaxX) / 2;
-      const cy = (sMinY + sMaxY) / 2;
-      const r = Math.max(Math.sqrt(Math.pow(sMaxX - sMinX, 2) + Math.pow(sMaxY - sMinY, 2)) / 2 + (200 * scale), 300 * scale);
-      
-      const color = getStateColor(stId);
-      svgBorders += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}" stroke="${color.replace('0.15', '0.5')}" stroke-width="2" stroke-dasharray="10,5" class="map-svg-state-border" />`;
-      svgBorders += `<text x="${cx}" y="${cy}" class="map-svg-state-label" fill="rgba(255,255,255,0.8)" font-size="${120 * scale}" font-weight="bold" text-anchor="middle" dominant-baseline="middle" style="pointer-events:none; text-shadow: 0px 4px 10px rgba(0,0,0,0.8);">${escapeHtml(g.name)}</text>`;
-    });
-
-    // Add current wild zone indication (dynamic)
+    // Wild zone ring around player
     if (session?.current_wild_zone) {
-      svgBorders += `<circle cx="${currentPx}" cy="${currentPy}" r="${400 * scale}" fill="rgba(16, 185, 129, 0.1)" stroke="rgba(16, 185, 129, 0.4)" stroke-width="2" stroke-dasharray="8,8" />`;
-      svgBorders += `<text x="${currentPx}" y="${currentPy - (420 * scale)}" fill="#10b981" font-size="${30 * scale}" font-weight="bold" text-anchor="middle" style="text-shadow: 0 2px 4px rgba(0,0,0,0.8); pointer-events:none;">${escapeHtml(session.current_wild_zone)}</text>`;
+      const wg = document.createElementNS(SVG_NS, 'g');
+      const wc = document.createElementNS(SVG_NS, 'circle');
+      wc.setAttribute('cx', playerPt.x); wc.setAttribute('cy', playerPt.y);
+      wc.setAttribute('r', 400 * scale);
+      wc.setAttribute('fill', 'rgba(16,185,129,0.08)');
+      wc.setAttribute('stroke', 'rgba(16,185,129,0.4)');
+      wc.setAttribute('stroke-width', '2'); wc.setAttribute('stroke-dasharray', '8,8');
+      const wt = document.createElementNS(SVG_NS, 'text');
+      wt.setAttribute('x', playerPt.x);
+      wt.setAttribute('y', playerPt.y - 420 * scale);
+      wt.setAttribute('fill', '#10b981');
+      wt.setAttribute('text-anchor', 'middle');
+      wt.setAttribute('class', 'map-wildzone-label');
+      wt.textContent = session.current_wild_zone;
+      wg.appendChild(wc); wg.appendChild(wt);
+      rootG.appendChild(wg);
     }
 
-    gridSvg.setAttribute('width', `${gridSize * 2}`);
-    gridSvg.setAttribute('height', `${gridSize * 2}`);
-    gridSvg.style.left = `${-gridSize}px`;
-    gridSvg.style.top = `${-gridSize}px`;
-    gridSvg.innerHTML = `
-      <g transform="translate(${gridSize}, ${gridSize})">
-        ${gridLines}
-        ${svgBorders}
-        <line x1="${-gridSize}" y1="0" x2="${gridSize}" y2="0" stroke="rgba(212, 163, 89, 0.35)" stroke-width="1.5" stroke-dasharray="4,4" />
-        <line x1="0" y1="${-gridSize}" x2="0" y2="${gridSize}" stroke="rgba(212, 163, 89, 0.35)" stroke-width="1.5" stroke-dasharray="4,4" />
-        <circle cx="0" cy="0" r="4" fill="#d4a359" />
-        <text x="8" y="-8" fill="rgba(212, 163, 89, 0.75)" font-size="11" font-family="monospace">Р¦РµРЅС‚СЂ РњРёСЂР° (0, 0)</text>
-      </g>
-    `;
+    // State labels drawn last (above fills)
+    rootG.appendChild(labelsG);
 
-    // 2. Locations
-    locLayer.innerHTML = locations.map((loc) => {
+    // Origin dot + label
+    const originDot = document.createElementNS(SVG_NS, 'circle');
+    originDot.setAttribute('cx', '0'); originDot.setAttribute('cy', '0'); originDot.setAttribute('r', '4');
+    originDot.setAttribute('fill', '#d4a359');
+    rootG.appendChild(originDot);
+
+    // в”Ђв”Ђ 6. HTML Markers for locations в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    locLayer.innerHTML = locations.map(loc => {
       const lx = (loc.pos_x ?? 0) * scale;
       const ly = (loc.pos_y ?? 0) * scale;
 
-      let icon = 'рџЏ›';
-      let pinBg = '#3b82f6';
-      
-      const isWild = loc.type === 'landmark' || loc.type === 'ruins' || loc.danger_level === 'deadly' || loc.danger_level === 'extreme';
-      
-      if (isWild) {
-        icon = 'рџЊІ';
-        pinBg = '#10b981';
-      }
-      if (loc.danger_level === 'deadly' || loc.danger_level === 'extreme') {
-        icon = 'рџ’Ђ';
-        pinBg = '#ef4444';
-      } else if (loc.danger_level === 'hard') {
-        icon = 'вљ”пёЏ';
-        pinBg = '#f59e0b';
-      } else if (loc.type === 'capital') {
-        icon = 'рџ‘‘';
-        pinBg = '#8b5cf6';
-      } else if (loc.type === 'dungeon') {
-        icon = 'в›©пёЏ';
-        pinBg = '#e11d48';
-      }
+      let icon = 'рџЏ›', pinBg = '#3b82f6';
+      if (loc.danger_level === 'lethal' || loc.danger_level === 'deadly') { icon = 'рџ’Ђ'; pinBg = '#ef4444'; }
+      else if (loc.danger_level === 'danger' || loc.danger_level === 'hard') { icon = 'вљ”пёЏ'; pinBg = '#f59e0b'; }
+      else if (loc.type === 'capital') { icon = 'рџ‘‘'; pinBg = '#8b5cf6'; }
+      else if (loc.type === 'ruins') { icon = 'рџЄЁ'; pinBg = '#78716c'; }
+      else if (loc.type === 'landmark' || loc.type === 'wilderness') { icon = 'рџЊІ'; pinBg = '#10b981'; }
+      else if (loc.type === 'dungeon') { icon = 'в›©пёЏ'; pinBg = '#e11d48'; }
+      else if (loc.type === 'village') { icon = 'рџЏпёЏ'; pinBg = '#22c55e'; }
 
-      let subzonesHtml = '';
-      if (loc.subzones && loc.subzones.length > 0) {
-        subzonesHtml = loc.subzones.map(sz => {
-          const szx = (sz.pos_x ?? 0) * scale;
-          const szy = (sz.pos_y ?? 0) * scale;
-          return `
-            <div class="map-subzone-marker" style="left: ${szx}px; top: ${szy}px;" title="${escapeHtml(sz.name)}">
-              <div class="map-subzone-dot"></div>
-              <span class="map-marker-label" style="display: ${showMapLabels ? 'block' : 'none'}; font-size: 10px; padding: 2px 4px;">${escapeHtml(sz.name)}</span>
-            </div>
-          `;
-        }).join('');
-      }
+      // subzone markers (close zoom only, hidden via CSS)
+      const subHTML = (loc.subzones || []).map(sz => {
+        const szx = (sz.pos_x ?? 0) * scale;
+        const szy = (sz.pos_y ?? 0) * scale;
+        return `<div class="map-subzone-marker" style="left:${szx}px;top:${szy}px" title="${escapeHtml(sz.name)}">
+          <div class="map-subzone-dot"></div>
+          <span class="map-marker-label" style="font-size:9px;display:${showMapLabels ? 'block' : 'none'}">${escapeHtml(sz.name)}</span>
+        </div>`;
+      }).join('');
 
-      return `
-        <div class="map-marker" data-type="${escapeHtml(loc.type)}" data-loc-id="${escapeHtml(loc.id)}" style="left: ${lx}px; top: ${ly}px;" title="${escapeHtml(loc.name)} (${loc.pos_x}, ${loc.pos_y})">
-          <div class="map-marker-pin" style="background: ${pinBg};">${icon}</div>
-          <span class="map-marker-label" style="display: ${showMapLabels ? 'block' : 'none'};">${escapeHtml(loc.name)}</span>
-        </div>
-        ${subzonesHtml}
-      `;
+      return `<div class="map-marker" data-type="${escapeHtml(loc.type)}" data-loc-id="${escapeHtml(loc.id)}"
+          style="left:${lx}px;top:${ly}px" title="${escapeHtml(loc.name)} (${loc.pos_x},${loc.pos_y})">
+          <div class="map-marker-pin" style="background:${pinBg}">${icon}</div>
+          <span class="map-marker-label" style="display:${showMapLabels ? 'block' : 'none'}">${escapeHtml(loc.name)}</span>
+        </div>${subHTML}`;
     }).join('');
 
-    locLayer.querySelectorAll('.map-marker').forEach((el) => {
-      el.addEventListener('click', (e) => {
+    locLayer.querySelectorAll('.map-marker').forEach(el => {
+      el.addEventListener('click', e => {
         e.stopPropagation();
-        const locId = el.dataset.locId;
-        const loc = locations.find(l => l.id === locId);
-        if (!loc) return;
-        showLocationPopup(loc);
+        const loc = locations.find(l => l.id === el.dataset.locId);
+        if (loc) showLocationPopup(loc);
       });
     });
 
-    // 3. Players
-    const otherPlayersHtml = (allPlayers || [])
-      .filter(p => p.id !== currentPlayer?.id)
-      .map(p => {
-        const px = (p.pos_x ?? 0) * scale;
-        const py = (p.pos_y ?? 0) * scale;
-        return `
-          <div class="map-player-beacon" style="left: ${px}px; top: ${py}px;" title="${escapeHtml(p.name || 'РРіСЂРѕРє')} (${p.pos_x ?? 0}, ${p.pos_y ?? 0})">
-            <div class="map-party-dot"></div>
-            <span class="map-marker-label" style="background: rgba(14, 38, 64, 0.9); color: #7dd3fc;">${escapeHtml(p.name || 'РРіСЂРѕРє')}</span>
-          </div>
-        `;
-      }).join('');
+    // в”Ђв”Ђ 7. Player markers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    const othersHtml = (allPlayers || []).filter(p => p.id !== currentPlayer?.id).map(p => {
+      const px = (p.pos_x ?? 0) * scale, py = (p.pos_y ?? 0) * scale;
+      return `<div class="map-player-beacon" style="left:${px}px;top:${py}px" title="${escapeHtml(p.name||'РРіСЂРѕРє')}">
+        <div class="map-party-dot"></div>
+        <span class="map-marker-label" style="background:rgba(14,38,64,0.9);color:#7dd3fc">${escapeHtml(p.name||'РРіСЂРѕРє')}</span>
+      </div>`;
+    }).join('');
 
-    plLayer.innerHTML = `
-      ${otherPlayersHtml}
-      <div class="map-player-beacon" style="left: ${currentPx}px; top: ${currentPy}px;" title="Р’С‹: (${currentPlayer?.pos_x ?? 0}, ${currentPlayer?.pos_y ?? 0})">
+    plLayer.innerHTML = `${othersHtml}
+      <div class="map-player-beacon" style="left:${playerPt.x}px;top:${playerPt.y}px" title="Р’С‹ (${currentPlayer?.pos_x??0}, ${currentPlayer?.pos_y??0})">
         <div class="map-player-dot"></div>
-        <span class="map-marker-label" style="background: rgba(10, 40, 20, 0.95); color: #4ade80; font-weight: 700;">рџ“Ќ Р’С‹ (${currentPlayer?.name || 'Р“РµСЂРѕР№'})</span>
-      </div>
-    `;
+        <span class="map-marker-label" style="background:rgba(10,40,20,0.95);color:#4ade80;font-weight:700">рџ“Ќ Р’С‹ (${currentPlayer?.name||'Р“РµСЂРѕР№'})</span>
+      </div>`;
   }
-
   function showLocationPopup(loc) {
     const popup = document.getElementById('mapLocationPopup');
     if (!popup) return;

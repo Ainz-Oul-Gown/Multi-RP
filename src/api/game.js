@@ -1634,7 +1634,7 @@ export async function getWorldMapData(worldId) {
   if (!worldId) return { states: [], locations: [] };
   const { data: states, error } = await supabase
     .from('states')
-    .select('id, name, locations(id, name, type, terrain_type, pos_x, pos_y, bounds_shape, bounds_data, danger_level, subzones(id, name, pos_x, pos_y, radius))')
+    .select('id, name, border_shape, border_data, map_color, locations(id, name, type, terrain_type, pos_x, pos_y, bounds_shape, bounds_data, danger_level, subzones(id, name, pos_x, pos_y, radius))')
     .eq('world_id', worldId)
     .order('name');
   if (error) throw error;

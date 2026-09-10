@@ -1,6 +1,6 @@
-/* src/styles/game.css — Атмосферные стили таверны («Путник и Дракон») */
+﻿/* src/styles/game.css вЂ” РђС‚РјРѕСЃС„РµСЂРЅС‹Рµ СЃС‚РёР»Рё С‚Р°РІРµСЂРЅС‹ (В«РџСѓС‚РЅРёРє Рё Р”СЂР°РєРѕРЅВ») */
 
-/* ===================== Auth Page (Вход в таверну) ===================== */
+/* ===================== Auth Page (Р’С…РѕРґ РІ С‚Р°РІРµСЂРЅСѓ) ===================== */
 .auth-page {
   justify-content: safe center;
   align-items: center;
@@ -231,7 +231,7 @@
 }
 
 
-/* ===================== Lobby (Зал Гильдии и Доска Заказов) ===================== */
+/* ===================== Lobby (Р—Р°Р» Р“РёР»СЊРґРёРё Рё Р”РѕСЃРєР° Р—Р°РєР°Р·РѕРІ) ===================== */
 .lobby-header {
   display: flex;
   align-items: center;
@@ -308,7 +308,7 @@
   overflow-y: auto;
 }
 
-/* Card Grid (Доска объявлений) */
+/* Card Grid (Р”РѕСЃРєР° РѕР±СЉСЏРІР»РµРЅРёР№) */
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -470,7 +470,7 @@
   flex-shrink: 0;
 }
 
-/* ===================== Game Screen (Походная Панель) ===================== */
+/* ===================== Game Screen (РџРѕС…РѕРґРЅР°СЏ РџР°РЅРµР»СЊ) ===================== */
 .game-page {
   height: 100vh;
   display: flex;
@@ -524,7 +524,7 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
-/* HP Vial (Склянка жизненной силы) */
+/* HP Vial (РЎРєР»СЏРЅРєР° Р¶РёР·РЅРµРЅРЅРѕР№ СЃРёР»С‹) */
 .hp-bar-container {
   width: 100%;
   max-width: 140px;
@@ -611,7 +611,7 @@
   transform: translateY(1px);
 }
 
-/* Dedicated Sub-bar for Location & Time (Компас и Часы) */
+/* Dedicated Sub-bar for Location & Time (РљРѕРјРїР°СЃ Рё Р§Р°СЃС‹) */
 .game-status-bar {
   display: flex;
   align-items: center;
@@ -664,7 +664,7 @@
   flex-shrink: 0;
 }
 
-/* ===================== Chat Area (Хроника приключений) ===================== */
+/* ===================== Chat Area (РҐСЂРѕРЅРёРєР° РїСЂРёРєР»СЋС‡РµРЅРёР№) ===================== */
 .game-chat {
   flex: 1;
   overflow-y: auto;
@@ -740,7 +740,7 @@
   color: #7fb3d5;
 }
 
-/* Master message (Пергаментная летопись) */
+/* Master message (РџРµСЂРіР°РјРµРЅС‚РЅР°СЏ Р»РµС‚РѕРїРёСЃСЊ) */
 .message-master .message-text {
   font-size: var(--fs-base);
   line-height: 1.75;
@@ -807,7 +807,7 @@
   }
 }
 
-/* System message (Слухи таверны) */
+/* System message (РЎР»СѓС…Рё С‚Р°РІРµСЂРЅС‹) */
 .message-system {
   justify-content: center;
 }
@@ -823,7 +823,7 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-/* Self message (Кожаный путевой дневник) */
+/* Self message (РљРѕР¶Р°РЅС‹Р№ РїСѓС‚РµРІРѕР№ РґРЅРµРІРЅРёРє) */
 .message-self {
   justify-content: flex-end;
 }
@@ -849,7 +849,7 @@
   line-height: 1.6;
 }
 
-/* ===================== Input Area (Очаг действий) ===================== */
+/* ===================== Input Area (РћС‡Р°Рі РґРµР№СЃС‚РІРёР№) ===================== */
 .game-input-area {
   padding: var(--space-sm) var(--space-md);
   background: linear-gradient(180deg, rgba(28, 21, 16, 0.96) 0%, rgba(18, 14, 11, 0.98) 100%);
@@ -897,7 +897,7 @@
   cursor: not-allowed;
 }
 
-/* ===================== Side Panels (Фолианты и Гримуары) ===================== */
+/* ===================== Side Panels (Р¤РѕР»РёР°РЅС‚С‹ Рё Р“СЂРёРјСѓР°СЂС‹) ===================== */
 .side-panel-overlay {
   position: fixed;
   inset: 0;
@@ -964,7 +964,7 @@
   padding: var(--space-lg);
 }
 
-/* Profile (Компактная грамота героя) */
+/* Profile (РљРѕРјРїР°РєС‚РЅР°СЏ РіСЂР°РјРѕС‚Р° РіРµСЂРѕСЏ) */
 #profilePanel .side-panel-content {
   padding: 0.75rem 0.85rem;
 }
@@ -983,7 +983,7 @@
   max-width: 100% !important;
 }
 
-/* Компактный заголовок: имя и уровень слева, аватарка справа */
+/* РљРѕРјРїР°РєС‚РЅС‹Р№ Р·Р°РіРѕР»РѕРІРѕРє: РёРјСЏ Рё СѓСЂРѕРІРµРЅСЊ СЃР»РµРІР°, Р°РІР°С‚Р°СЂРєР° СЃРїСЂР°РІР° */
 .profile-header-compact {
   display: flex;
   align-items: center;
@@ -1274,7 +1274,7 @@
   color: var(--accent-gold-bright);
 }
 
-/* Inventory (Вещмешок авантюриста) */
+/* Inventory (Р’РµС‰РјРµС€РѕРє Р°РІР°РЅС‚СЋСЂРёСЃС‚Р°) */
 .inventory-summary {
   display: flex;
   justify-content: space-between;
@@ -1324,7 +1324,7 @@
   margin-top: 2px;
 }
 
-/* ===================== NPC Bestiary (Бестиарий и Жители) ===================== */
+/* ===================== NPC Bestiary (Р‘РµСЃС‚РёР°СЂРёР№ Рё Р–РёС‚РµР»Рё) ===================== */
 .npc-card {
   padding: 0;
   overflow: hidden;
@@ -1909,7 +1909,7 @@
   gap: var(--space-sm);
 }
 
-/* File Drop Zone (Сюжетный свиток) */
+/* File Drop Zone (РЎСЋР¶РµС‚РЅС‹Р№ СЃРІРёС‚РѕРє) */
 .plot-details {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -2833,3 +2833,105 @@
     display: none !important;
 }
 
+
+
+/* ============================================================
+   MAP — Semantic Zoom & Border Styles (Migration 038)
+   ============================================================ */
+
+/* State border polygon (SVG, filled via JS fill attribute) */
+.map-state-polygon {
+  transition: opacity 0.3s ease;
+}
+
+/* State label (SVG text) */
+.map-state-label-text {
+  font-size: 80px;
+  font-weight: 800;
+  fill: rgba(255,255,255,0.85);
+  paint-order: stroke;
+  stroke: rgba(0,0,0,0.7);
+  stroke-width: 24px;
+  pointer-events: none;
+  font-family: var(--font-sans, 'Inter', sans-serif);
+  transition: opacity 0.3s ease;
+}
+
+/* Wild zone label */
+.map-wildzone-label {
+  font-size: 30px;
+  fill: #10b981;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: rgba(0,0,0,0.8);
+  stroke-width: 8px;
+  pointer-events: none;
+}
+
+/* Location border (SVG) — hidden by default, shown when zoomed in */
+.map-loc-border,
+.map-subzone-border {
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* Subzone HTML marker */
+.map-subzone-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 5;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.map-subzone-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #94a3b8;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* ── SEMANTIC ZOOM LEVELS ────────────────────────────────── */
+
+/* GLOBAL (< 30%): only state borders + capitals */
+.map-zoom-far .map-marker[data-type]:not([data-type="capital"]) {
+  opacity: 0;
+  pointer-events: none;
+}
+.map-zoom-far .map-loc-border,
+.map-zoom-far .map-subzone-border,
+.map-zoom-far .map-subzone-marker {
+  opacity: 0;
+}
+.map-zoom-far .map-state-label-text {
+  opacity: 1;
+}
+
+/* REGIONAL (30% – 90%): cities visible, state names fade */
+.map-zoom-mid .map-state-label-text {
+  opacity: 0;
+}
+.map-zoom-mid .map-subzone-marker,
+.map-zoom-mid .map-subzone-border {
+  opacity: 0;
+  pointer-events: none;
+}
+.map-zoom-mid .map-loc-border {
+  opacity: 0;
+}
+
+/* LOCAL (> 90%): all details visible, state borders fade */
+.map-zoom-close .map-state-polygon {
+  opacity: 0.25;
+}
+.map-zoom-close .map-state-label-text {
+  opacity: 0;
+}
+.map-zoom-close .map-loc-border,
+.map-zoom-close .map-subzone-border,
+.map-zoom-close .map-subzone-marker {
+  opacity: 1;
+}

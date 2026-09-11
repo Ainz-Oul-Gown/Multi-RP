@@ -1,4 +1,4 @@
-﻿// supabase/functions/process-turn/index.ts
+// supabase/functions/process-turn/index.ts
 // 5-РЎв‚¬Р В°Р С–Р С•Р Р†РЎвЂ№Р в„– Р С”Р С•Р Р…Р Р†Р ВµР в„–Р ВµРЎР‚ process-turn: Router РІвЂ вЂ™ Engine РІвЂ вЂ™ Persistence РІвЂ вЂ™ SystemTruth РІвЂ вЂ™ Narrator
 //
 // Р РЃР В°Р С–Р С‘:
@@ -354,13 +354,91 @@ serve(async (req) => {
 
     if (isFirstTurn) {
       console.log(`[${requestId}] [STARTING_LOCATION] Generating/ensuring starting location for first turn...`);
+      let availableStartingLocations: any[] = [];
+      if (session.world_id) {
+        try {
+          const { data: statesWithLocs, error: stErr } = await supabase
+            .from("states")
+            .select(`
+              id,
+              name,
+              locations(
+                id,
+                name,
+                type,
+                description,
+                pos_x,
+                pos_y,
+                subzones(id, name, description, pos_x, pos_y, radius)
+              )
+            `)
+            .eq("world_id", session.world_id);
+
+          if (!stErr && statesWithLocs) {
+            for (const s of statesWithLocs) {
+              const locs = Array.isArray(s.locations) ? s.locations : [];
+              for (const l of locs) {
+                availableStartingLocations.push({
+                  id: l.id,
+                  name: l.name,
+                  type: l.type,
+                  description: l.description || "",
+                  state_name: s.name,
+                  pos_x: l.pos_x,
+                  pos_y: l.pos_y,
+                  subzones: Array.isArray(l.subzones) ? l.subzones : [],
+                });
+              }
+            }
+          }
+        } catch (stErr) {
+          console.warn(`[${requestId}] Failed to load detailed locations from states:`, stErr);
+        }
+
+        if (availableStartingLocations.length === 0) {
+          try {
+            const { data: directLocs, error: dirErr } = await supabase
+              .from("locations")
+              .select(`
+                id,
+                name,
+                type,
+                description,
+                pos_x,
+                pos_y,
+                states(name),
+                subzones(id, name, description, pos_x, pos_y, radius)
+              `)
+              .eq("world_id", session.world_id);
+
+            if (!dirErr && directLocs) {
+              for (const l of directLocs) {
+                const st = Array.isArray(l.states) ? l.states[0] : l.states;
+                availableStartingLocations.push({
+                  id: l.id,
+                  name: l.name,
+                  type: l.type,
+                  description: l.description || "",
+                  state_name: st?.name || "",
+                  pos_x: l.pos_x,
+                  pos_y: l.pos_y,
+                  subzones: Array.isArray(l.subzones) ? l.subzones : [],
+                });
+              }
+            }
+          } catch (dirErr) {
+            console.warn(`[${requestId}] Failed to load detailed locations directly:`, dirErr);
+          }
+        }
+      }
+
       try {
         const startLoc = await ensureStartingLocation({
           supabase,
           session,
           player: {
             id: player.id,
-            name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+            name: player.name || "Герой",
             race: player.race,
             class: player.class,
             appearance: player.appearance,
@@ -370,14 +448,16 @@ serve(async (req) => {
           action_text: safeActionText,
           is_first_turn: true,
           lore_context: loreContext,
+          available_locations: availableStartingLocations,
           openrouter_api_key: openrouterApiKey,
           model: satelliteModel,
         });
 
-        if (startLoc && startLoc.is_new_location) {
+        if (startLoc && startLoc.location_id) {
           startingLocationGenerated = true;
           session.current_location_id = startLoc.location_id;
           currentLocationName = startLoc.location_name;
+          currentLocationType = startLoc.location_type;
           currentStateName = startLoc.state_name;
           session.game_year = startLoc.game_time.year;
           session.game_month = startLoc.game_time.month;
@@ -385,17 +465,63 @@ serve(async (req) => {
           session.game_hour = startLoc.game_time.hour;
           session.game_minute = startLoc.game_time.minute;
 
-          if (startLoc.pos_x !== undefined && startLoc.pos_y !== undefined) {
-            await supabase.from("players").update({
-              pos_x: startLoc.pos_x,
-              pos_y: startLoc.pos_y
-            }).eq("id", player.id);
+          const playerUpdate: Record<string, any> = {};
+          if (startLoc.pos_x !== undefined) {
+            playerUpdate.pos_x = startLoc.pos_x;
+            player.pos_x = startLoc.pos_x;
+          }
+          if (startLoc.pos_y !== undefined) {
+            playerUpdate.pos_y = startLoc.pos_y;
+            player.pos_y = startLoc.pos_y;
+          }
+          if (startLoc.subzone_id) {
+            playerUpdate.subzone_id = startLoc.subzone_id;
+            player.subzone_id = startLoc.subzone_id;
+          }
+          if (startLoc.subzone_name) {
+            playerUpdate.current_zone = startLoc.subzone_name;
+            player.current_zone = startLoc.subzone_name;
+          } else if (startLoc.location_name) {
+            playerUpdate.current_zone = startLoc.location_name;
+            player.current_zone = startLoc.location_name;
+          }
+
+          if (Object.keys(playerUpdate).length > 0) {
+            try {
+              await supabase.from("players").update(playerUpdate).eq("id", player.id);
+            } catch (pUpdErr) {
+              console.warn(`[${requestId}] [STARTING_LOCATION] Failed to update player position:`, pUpdErr);
+            }
           }
 
           if (startLoc.initial_npcs?.length) {
             allNpcs = startLoc.initial_npcs;
+          } else if (session.current_location_id) {
+            try {
+              const { data: npcData } = await supabase.from("npcs")
+                .select("id, name, race, class, role, category, hp, max_hp, armor_class, level, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time, temperament, motivation, current_mood, secrets, rumors, speech_style, daily_routine")
+                .eq("location_id", session.current_location_id);
+              if (npcData && npcData.length > 0) {
+                allNpcs = npcData.map((n: any) => ({
+                  ...n,
+                  is_alive: (n.hp ?? 10) > 0,
+                }));
+              }
+            } catch (npcReloadErr) {
+              console.warn(`[${requestId}] Failed to reload NPCs for chosen location:`, npcReloadErr);
+            }
           }
-          console.log(`[${requestId}] [STARTING_LOCATION] Created start location "${currentLocationName}" (${currentStateName}) for ${player.name}`);
+
+          if (!availableLocations.some((al) => al.id === startLoc.location_id)) {
+            availableLocations.push({
+              id: startLoc.location_id,
+              name: startLoc.location_name,
+              type: startLoc.location_type,
+              state_name: startLoc.state_name,
+            });
+          }
+
+          console.log(`[${requestId}] [STARTING_LOCATION] Spawned player ${player.name} in location "${currentLocationName}" (${currentStateName}), subzone: "${startLoc.subzone_name || 'none'}" at (${player.pos_x}, ${player.pos_y})`);
 
           try {
             const startMap = await ensureLocationMapAndTerrain({

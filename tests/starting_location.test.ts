@@ -233,5 +233,196 @@ describe("Starting Location & Calendar System", () => {
       expect(insertedRecords.sessions[0].current_location_id).toBe("loc-123");
       expect(insertedRecords.sessions[0].game_year).toBe(1248);
     });
+
+    it("includes available world locations and subzones in buildStartingLocationPrompt", () => {
+      const prompt = buildStartingLocationPrompt({
+        player: { name: "Элрион", race: "Эльф", class: "Следопыт" },
+        action_text: "Опиши мое появление в деревушке",
+        available_locations: [
+          {
+            id: "loc-vill-1",
+            name: "Зеленая Долина",
+            type: "village",
+            description: "Уютная деревня на границе Шепчущего леса",
+            state_name: "Северные земли",
+            subzones: [
+              { id: "sz-1", name: "Трактир «У Мельника»", pos_x: 12, pos_y: 34 },
+              { id: "sz-2", name: "Старая Мельница", pos_x: 15, pos_y: 38 },
+            ],
+          },
+          {
+            id: "loc-cap-1",
+            name: "Этерия-Прайм",
+            type: "capital",
+            description: "Величественная белокаменная столица империи",
+            state_name: "Центральный домен",
+            subzones: [
+              { id: "sz-3", name: "Дворцовая площадь", pos_x: 100, pos_y: 200 },
+            ],
+          },
+        ],
+      });
+
+      expect(prompt).toContain("Зеленая Долина");
+      expect(prompt).toContain("village");
+      expect(prompt).toContain("Трактир «У Мельника»");
+      expect(prompt).toContain("Этерия-Прайм");
+      expect(prompt).toContain("capital");
+      expect(prompt).toContain("ДОСТУПНЫЕ СУЩЕСТВУЮЩИЕ ЛОКАЦИИ МИРА");
+      expect(prompt).toContain("selected_subzone");
+    });
+
+    it("selects a village and random subzone from available_locations on 'в деревушке'", () => {
+      const availableLocations = [
+        {
+          id: "loc-cap-1",
+          name: "Великий Оплот",
+          type: "capital",
+          state_name: "Королевство",
+          subzones: [{ id: "sz-cap", name: "Тронный зал", pos_x: 0, pos_y: 0 }],
+        },
+        {
+          id: "loc-vill-1",
+          name: "Дубрава",
+          type: "village",
+          description: "Лесная тихая деревушка",
+          state_name: "Лесной край",
+          pos_x: 50,
+          pos_y: 60,
+          subzones: [
+            { id: "sz-v1", name: "Деревенская площадь", pos_x: 52, pos_y: 61 },
+            { id: "sz-v2", name: "Кузница кузнеца Болина", pos_x: 55, pos_y: 64 },
+          ],
+        },
+      ];
+
+      const result = buildFallbackStartingLocation(
+        { id: "p1", name: "Робин", class: "Лучник" },
+        "опиши мое появление в деревушке",
+        availableLocations
+      );
+
+      expect(result.location_name).toBe("Дубрава");
+      expect(result.location_type).toBe("village");
+      expect(result.state_name).toBe("Лесной край");
+      expect(result.subzone_id).toBeTruthy();
+      expect(["sz-v1", "sz-v2"]).toContain(result.subzone_id);
+      expect(["Деревенская площадь", "Кузница кузнеца Болина"]).toContain(result.subzone_name);
+      expect([52, 55]).toContain(result.pos_x);
+      expect([61, 64]).toContain(result.pos_y);
+    });
+
+    it("selects a capital from available_locations on 'в столице'", () => {
+      const availableLocations = [
+        {
+          id: "loc-vill-1",
+          name: "Речные Островки",
+          type: "village",
+          state_name: "Пограничье",
+        },
+        {
+          id: "loc-cap-1",
+          name: "Цитадель Солнца",
+          type: "capital",
+          description: "Златоглавая столица верховного владыки",
+          state_name: "Солнечные Владения",
+          pos_x: 10,
+          pos_y: 20,
+          subzones: [
+            { id: "sz-gate", name: "Главные врата столицы", pos_x: 11, pos_y: 21 },
+          ],
+        },
+      ];
+
+      const result = buildFallbackStartingLocation(
+        { id: "p1", name: "Артас", class: "Паладин" },
+        "Опиши мое появление в столице",
+        availableLocations
+      );
+
+      expect(result.location_name).toBe("Цитадель Солнца");
+      expect(result.location_type).toBe("capital");
+      expect(result.state_name).toBe("Солнечные Владения");
+      expect(result.subzone_id).toBe("sz-gate");
+      expect(result.subzone_name).toBe("Главные врата столицы");
+      expect(result.pos_x).toBe(11);
+      expect(result.pos_y).toBe(21);
+    });
+
+    it("uses existing DB location without inserting duplicates when available_locations is provided", async () => {
+      const insertedRecords: Record<string, any[]> = {
+        locations: [],
+        states: [],
+        sessions: [],
+      };
+
+      const mockSupabase = {
+        from: vi.fn((table: string) => ({
+          select: vi.fn(() => ({
+            eq: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+          })),
+          insert: vi.fn((records: any) => {
+            const arr = Array.isArray(records) ? records : [records];
+            insertedRecords[table].push(...arr);
+            return {
+              select: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({ data: { id: "new-id" } }),
+              })),
+            };
+          }),
+          update: vi.fn((updates: any) => {
+            insertedRecords[table].push(updates);
+            return {
+              eq: vi.fn().mockResolvedValue({ data: updates, error: null }),
+            };
+          }),
+        })),
+      } as any;
+
+      const availableLocations = [
+        {
+          id: "db-village-42",
+          name: "Сосновый Бор",
+          type: "village",
+          description: "Деревня лесорубов",
+          state_name: "Хвойный Предел",
+          pos_x: -30,
+          pos_y: 40,
+          subzones: [
+            { id: "sz-wood-1", name: "Лесопилка", pos_x: -28, pos_y: 42 },
+          ],
+        },
+      ];
+
+      const result = await ensureStartingLocation({
+        supabase: mockSupabase,
+        session: { id: "sess-test-1", current_location_id: null, world_id: "world-1" },
+        player: { id: "p1", name: "Василий", class: "Дровосек" },
+        action_text: "Опиши мое появление в тихой деревушке на лесопилке",
+        is_first_turn: true,
+        available_locations: availableLocations,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result?.is_new_location).toBe(false);
+      expect(result?.location_id).toBe("db-village-42");
+      expect(result?.location_name).toBe("Сосновый Бор");
+      expect(result?.location_type).toBe("village");
+      expect(result?.subzone_id).toBe("sz-wood-1");
+      expect(result?.subzone_name).toBe("Лесопилка");
+      expect(result?.pos_x).toBe(-28);
+      expect(result?.pos_y).toBe(42);
+
+      // CRITICAL: Ensure NO new location was inserted into the database!
+      expect(insertedRecords.locations.length).toBe(0);
+      expect(insertedRecords.states.length).toBe(0);
+
+      // Session current_location_id must be updated to the existing location
+      expect(insertedRecords.sessions.length).toBeGreaterThanOrEqual(1);
+      expect(insertedRecords.sessions[0].current_location_id).toBe("db-village-42");
+    });
   });
 });
+

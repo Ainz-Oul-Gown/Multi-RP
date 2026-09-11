@@ -8,3 +8,5 @@ supabase/.temp/
 scratch/
 *.backup.json
 .vscode/
+__pycache__/
+*.pyc

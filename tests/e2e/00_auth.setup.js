@@ -1,6 +1,6 @@
 // tests/e2e/00_auth.setup.js
-// Шаг 0: Авторизация — инжектирует токены из global-setup напрямую в localStorage
-// Это быстрее и надёжнее чем UI логин через headless Chromium
+// Шаг 0: Авторизация — инжектирует токены через addInitScript (ДО навигации)
+// Supabase читает localStorage при инициализации — токены уже там = мгновенный вход
 
 import { test as setup, expect } from '@playwright/test';
 import path from 'path';
@@ -13,7 +13,7 @@ const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3000';
 const TEST_EMAIL = 'e2e_playwright_test3@multirp.test';
 const TEST_PASSWORD = 'E2ePlaywright2026!';
 
-// Ключ localStorage для Supabase auth (формат: sb-<project-ref>-auth-token)
+// Ключ localStorage для Supabase auth
 const SUPABASE_STORAGE_KEY = `sb-xhzpxiiqrtmeduynqmsd-auth-token`;
 
 setup('authenticate via UI', async ({ page }) => {
@@ -22,48 +22,54 @@ setup('authenticate via UI', async ({ page }) => {
 
   console.log('\n🔐 [Auth Setup] Opening site at:', BASE_URL);
 
-  // Метод 1: Инжекция токенов из global-setup (быстро, надёжно)
+  // Метод 1: addInitScript — инжектируем токены ДО загрузки страницы
+  // Это самый надёжный способ: Supabase инициализируется и сразу видит токены
   if (fs.existsSync(AUTH_SESSION_FILE)) {
     try {
       const { session } = JSON.parse(fs.readFileSync(AUTH_SESSION_FILE, 'utf8'));
       if (session?.access_token) {
-        // Напрямую создаём session.json в формате Playwright storageState
-        const storageState = {
-          cookies: [],
-          origins: [{
-            origin: BASE_URL.replace(/\/$/, ''),
-            localStorage: [{
-              name: SUPABASE_STORAGE_KEY,
-              value: JSON.stringify(session),
-            }],
-          }],
-        };
-        fs.writeFileSync(AUTH_FILE, JSON.stringify(storageState, null, 2));
-        console.log('  ✅ Auth state written directly from tokens (no browser login needed)');
+        console.log('  🔑 Injecting auth tokens via addInitScript...');
 
-        // Верифицируем: открываем страницу с готовым storage и проверяем лобби
+        // Добавляем скрипт инициализации — он запускается ПЕРЕД любым JS на странице
+        await page.addInitScript(({ key, value }) => {
+          localStorage.setItem(key, value);
+        }, { key: SUPABASE_STORAGE_KEY, value: JSON.stringify(session) });
+
+        // Открываем страницу — Supabase найдёт токены в localStorage сразу
         await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-        const isLobby = await page.locator('#lobbyContent').isVisible({ timeout: 20_000 }).catch(() => false);
+
+        // Ждём лобби (токены уже в localStorage — должно открыться быстро)
+        const isLobby = await page.locator('#lobbyContent')
+          .isVisible({ timeout: 25_000 })
+          .catch(() => false);
+
         if (isLobby) {
-          console.log('  ✅ Verified: lobby accessible with injected tokens');
-          // Обновляем session.json с актуальным storage state из браузера
+          console.log('  ✅ Logged in via token injection (addInitScript)');
           await page.context().storageState({ path: AUTH_FILE });
+          console.log(`  ✅ Auth state saved to ${AUTH_FILE}`);
           return;
-        } else {
-          console.log('  ⚠️ Token injection: lobby not found, trying UI login...');
         }
+
+        console.log('  ⚠️ Token injection did not result in lobby — checking current state...');
+        const currentUrl = page.url();
+        const bodyText = await page.locator('body').innerText().catch(() => '');
+        console.log('  Current URL:', currentUrl);
+        console.log('  Body preview:', bodyText.slice(0, 200));
       }
     } catch (err) {
       console.log('  ⚠️ Token injection failed:', err.message);
     }
+  } else {
+    console.log('  ⚠️ auth-session.json not found, will try UI login');
   }
 
   // Метод 2: Fallback — обычный UI логин
+  console.log('  🔄 Trying UI login fallback...');
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
 
   // Проверяем: возможно уже в лобби
   const lobby = page.locator('#lobbyContent');
-  if (await lobby.isVisible({ timeout: 3000 }).catch(() => false)) {
+  if (await lobby.isVisible({ timeout: 5000 }).catch(() => false)) {
     console.log('  ✅ Already logged in to lobby');
     await page.context().storageState({ path: AUTH_FILE });
     return;

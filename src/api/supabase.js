@@ -12,6 +12,10 @@ let activeClient = createClient(activeUrl, activeAnonKey);
 // Хранилище слушателей авторизации для бесшовного переключения между БД
 const authStateCallbacks = new Set();
 let activeAuthSubscription = null;
+// Кешируем последнее состояние сессии — INITIAL_SESSION может сработать
+// до того как main.js добавит свой callback через onAuthStateChange()
+// undefined = ещё не получили, null = разлогинен, Session = активная сессия
+let cachedAuthSession = undefined;
 
 function bindAuthListener() {
   if (activeAuthSubscription?.subscription?.unsubscribe) {
@@ -21,6 +25,7 @@ function bindAuthListener() {
   }
 
   const { data } = activeClient.auth.onAuthStateChange((_event, session) => {
+    cachedAuthSession = session || null; // Кешируем для onAuthStateChange
     const user = session?.user || null;
     for (const cb of authStateCallbacks) {
       try { cb(user); } catch (e) { console.error('Auth listener error:', e); }
@@ -504,10 +509,26 @@ export async function getCurrentUser() {
 
 export function onAuthStateChange(callback) {
   authStateCallbacks.add(callback);
-  // Сразу вызываем с текущим состоянием пользователя
-  activeClient.auth.getSession().then(({ data: { session } }) => {
-    callback(session?.user || null);
-  }).catch(() => callback(null));
+
+  if (cachedAuthSession !== undefined) {
+    // INITIAL_SESSION уже сработал — используем кеш немедленно (без сети)
+    const user = cachedAuthSession?.user || null;
+    Promise.resolve().then(() => callback(user));
+  } else {
+    // INITIAL_SESSION ещё не пришёл — ждём getSession() с таймаутом
+    // В Supabase v2.112+ getSession() делает сетевой запрос — защищаемся от зависания
+    const sessionPromise = activeClient.auth.getSession();
+    const timeoutPromise = new Promise(resolve =>
+      setTimeout(() => resolve({ data: { session: null }, _timedOut: true }), 5000)
+    );
+    Promise.race([sessionPromise, timeoutPromise]).then((result) => {
+      const session = result?.data?.session || null;
+      if (result?._timedOut) {
+        console.warn('[Auth] getSession() timed out — INITIAL_SESSION event will update state later');
+      }
+      callback(session?.user || null);
+    }).catch(() => callback(null));
+  }
 
   return () => {
     authStateCallbacks.delete(callback);

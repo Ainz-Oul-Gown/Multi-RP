@@ -33,7 +33,7 @@ test.describe('06 — Крафт предметов', () => {
   // TEST 06-A: Крафт деревянного копья (палка + камень)
   // ─────────────────────────────────────────────
   test('06-A: Крафт — заостряю палку камнем, создаю деревянное копьё', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -75,7 +75,7 @@ test.describe('06 — Крафт предметов', () => {
   // TEST 06-B: Проверка что ресурсы вычлись из инвентаря при успешном крафте
   // ─────────────────────────────────────────────
   test('06-B: Крафт — ресурсы вычитаются из инвентаря', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
 
     // Проверяем текущий инвентарь через БД

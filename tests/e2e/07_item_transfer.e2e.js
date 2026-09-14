@@ -34,7 +34,7 @@ test.describe('07 — Передача предмета НПС', () => {
   // TEST 07-A: Возвращение в город к НПС
   // ─────────────────────────────────────────────
   test('07-A: Возвращение в город к НПС', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -56,7 +56,7 @@ test.describe('07 — Передача предмета НПС', () => {
   // TEST 07-B: Дарение предмета НПС
   // ─────────────────────────────────────────────
   test('07-B: Дарение предмета — передаю копьё НПС', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 

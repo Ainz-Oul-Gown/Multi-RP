@@ -34,7 +34,7 @@ test.describe('08 — Боевая система', () => {
   // TEST 08-A: Инициация боя — атака дикого зверя в лесу
   // ─────────────────────────────────────────────
   test('08-A: Бой — атакую дикого волка в лесу', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -80,7 +80,7 @@ test.describe('08 — Боевая система', () => {
   // TEST 08-B: Продолжение боя — второй раунд
   // ─────────────────────────────────────────────
   test('08-B: Бой — продолжаю сражение (второй раунд)', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -115,7 +115,7 @@ test.describe('08 — Боевая система', () => {
   // TEST 08-C: XP начисляется после победы в бою
   // ─────────────────────────────────────────────
   test('08-C: XP начисляется после победы', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -144,7 +144,7 @@ test.describe('08 — Боевая система', () => {
   // TEST 08-D: Полоса HP в статус-баре обновляется в UI
   // ─────────────────────────────────────────────
   test('08-D: UI — HP обновляется в статус-баре после боя', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
 
     // Проверяем наличие статус-бара

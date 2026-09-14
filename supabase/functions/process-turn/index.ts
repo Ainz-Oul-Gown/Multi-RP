@@ -118,7 +118,7 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
 // ============================================
 // Main Handler РІР‚вЂќ 5-РЎв‚¬Р В°Р С–Р С•Р Р†РЎвЂ№Р в„– Р С”Р С•Р Р…Р Р†Р ВµР в„–Р ВµРЎР‚
 // ============================================
-serve(async (req) => {
+serve(async (req: any) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS });
   }
@@ -303,7 +303,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       }
     }
     const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type, sender_name").eq("session_id", session_id).order("created_at", { ascending: false }).limit(10);
-    const recentMessages = (recentMsgs || []).reverse().map((m) => `[${m.sender_name || (m.sender_type === "master" ? "Мастер" : "Игрок")}]: ${cleanTextForAI(m.content).slice(0, 300)}`);
+    const recentMessages = (recentMsgs || []).reverse().map((m: any) => `[${m.sender_name || (m.sender_type === "master" ? "Мастер" : "Игрок")}]: ${cleanTextForAI(m.content).slice(0, 300)}`);
 
     // Load all players in session (for router, engine and system truth context)
     const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*), current_zone").eq("session_id", session_id).order("created_at", { ascending: true });
@@ -754,7 +754,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       const gpsResp = await callAI(gpsSystemPrompt, "Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»Р С‘ Р Р†РЎР‚Р ВµР СРЎРЏ.", openrouterApiKey, 2, gpsModel);
       const gpsParsed = parseAIJson(gpsResp);
       if (gpsParsed) {
-        (global as any).__gpsSubzone = gpsParsed?.moved_to_subzone || null;
+        (globalThis as any).__gpsSubzone = gpsParsed?.moved_to_subzone || null;
         time_passed_minutes = Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0));
         if (gpsParsed.location_changed === true) {
           if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
@@ -1058,7 +1058,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
           supabase,
           sessionId: session_id,
           locationId: new_location_id,
-          locationName: currentLocationName,
+          locationName: currentLocationName || "Локация",
           openrouterApiKey,
           model: satelliteModel,
         });
@@ -1161,7 +1161,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       const availableZones = Object.keys(locationMap);
 
       // 1. AI GPS результат (приоритет)
-      let matchedZone: string | null = (global as any).__gpsSubzone || null;
+      let matchedZone: string | null = (globalThis as any).__gpsSubzone || null;
       if (matchedZone && !availableZones.includes(matchedZone)) matchedZone = null;
       if (matchedZone) {
         console.log(`[${requestId}] [ZONE] AI GPS subzone: "${matchedZone}"`);
@@ -1419,6 +1419,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         player_race: player.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
         player_class: player.class || "Р вЂ™Р С•Р С‘Р Р…",
         lore_context: loreContext,
+        recent_history: recentMessages.slice(-6),
         openrouter_api_key: openrouterApiKey,
         dm_model: dmModel,
       });

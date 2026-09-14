@@ -57,6 +57,10 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
   return `Ты — Dungeon Master в текстовой многопользовательской ЛитРПГ.
 Твоя задача — превратить сухой SystemTruthDto в захватывающий литературный текст для КАЖДОГО игрока индивидуально.
 
+🔴 АБСОЛЮТНОЕ ПРАВИЛО №0 — ЯЗЫК ОТВЕТА:
+ВЕСЬ твой текст (художественный нарратив, реплики NPC, описания) ОБЯЗАН быть написан ИСКЛЮЧИТЕЛЬНО НА РУССКОМ ЯЗЫКЕ.
+Английский, немецкий или любой другой язык — СТРОГО ЗАПРЕЩЕНЫ. Даже если игрок написал на другом языке — ты отвечаешь ТОЛЬКО по-русски.
+
 ПРАВИЛА:
 1. Опирайся СТРОГО на массив knowledge для каждого игрока в player_truths.
 2. КРИТИЧЕСКИЙ ЗАПРЕТ: НИКАКОГО выдуманного лута, урона, смертей или изменений ХП, кроме явно указанных в knowledge и hp_status!
@@ -125,6 +129,7 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
 ${storylineSection}
 ${loreContext ? `Лор мира:\n${loreContext}\n` : ''}`;
 }
+
 
 // ============================================
 // Безопасный парсинг JSON
@@ -335,7 +340,7 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
 
   const systemPrompt = buildNarratorSystemPrompt(player_name, player_race, player_class, lore_context, system_truth.storyline);
   const narratorContext = buildNarratorContext(system_truth, action_text, recent_history);
-  const userMessage = `${narratorContext}\n\nСгенерируй нарратив строго по указанным фактам в JSON-формате.`;
+  const userMessage = `${narratorContext}\n\nСгенерируй нарратив строго по указанным фактам в JSON-формате. ВЕСЬ текст (описания, действия, диалоги NPC) ОБЯЗАН быть исключительно на русском языке!`;
 
   const isTest = openrouter_api_key === "test-key" || dm_model === "test-model";
   const modelsToTry = isTest

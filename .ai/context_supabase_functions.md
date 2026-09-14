@@ -1,5 +1,5 @@
 This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
-The content has been processed where content has been compressed (code blocks are separated by ⋮---- delimiter), security check has been disabled.
+The content has been processed where content has been compressed (code blocks are separated by ⋮---- delimiter).
 
 # File Summary
 
@@ -34,7 +34,6 @@ The content is organized as follows:
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Content has been compressed - code blocks are separated by ⋮---- delimiter
-- Security check has been disabled - content may contain sensitive information
 - Files are sorted by Git change count (files with more changes are at the bottom)
 
 # Directory Structure
@@ -172,6 +171,43 @@ import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
 // supabase/functions/generate-character-no-derived/index.ts
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+```
+
+## File: supabase/functions/generate-world-npcs/index.ts
+```typescript
+// supabase/functions/generate-world-npcs/index.ts
+// Только сохранение NPC в БД (генерация происходит на фронтенде)
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cleanTextForAI } from "../_shared/utils.ts";
+⋮----
+// Валидация типа урона
+⋮----
+function cleanAttack(a: any)
+⋮----
+function cleanNPC(npc: any, world_id: string)
+⋮----
+// Validate role
+⋮----
+// Validate tier and level
+⋮----
+// Calculate special attacks count by tier
+⋮----
+// Clean attacks arrays
+⋮----
+// Validate level range
+⋮----
+// Combat stats
+⋮----
+// Hit dice (D&D system)
+⋮----
+// Tier & level range
+⋮----
+// Attacks
+⋮----
+// Pack/unique
+⋮----
+// Template reference
 ```
 
 ## File: supabase/functions/npc-memory-engine/index.ts
@@ -609,43 +645,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
-```
-
-## File: supabase/functions/generate-world-npcs/index.ts
-```typescript
-// supabase/functions/generate-world-npcs/index.ts
-// Только сохранение NPC в БД (генерация происходит на фронтенде)
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { cleanTextForAI } from "../_shared/utils.ts";
-⋮----
-// Валидация типа урона
-⋮----
-function cleanAttack(a: any)
-⋮----
-function cleanNPC(npc: any, world_id: string)
-⋮----
-// Validate role
-⋮----
-// Validate tier and level
-⋮----
-// Calculate special attacks count by tier
-⋮----
-// Clean attacks arrays
-⋮----
-// Validate level range
-⋮----
-// Combat stats
-⋮----
-// Hit dice (D&D system)
-⋮----
-// Tier & level range
-⋮----
-// Attacks
-⋮----
-// Pack/unique
-⋮----
-// Template reference
 ```
 
 ## File: supabase/functions/manage-player/index.ts
@@ -1438,44 +1437,6 @@ private handleCraft(action: RouterAction, context: EngineInputContext): ActionHa
 export class CraftCustomHandler extends CraftHandler {
 ```
 
-## File: supabase/functions/process-turn/steps/_shared_prompts.ts
-```typescript
-// supabase/functions/process-turn/steps/_shared_prompts.ts
-// Промпты для Сателит (Шаг 1) и GPS (Шаг 1.6), вынесенные из index.ts
-⋮----
-export function buildSatellitePrompt(params: {
-  playerName: string;
-  playerRace: string;
-  playerClass: string;
-  currentLocation: string | null;
-  currentState: string | null;
-  currentYear: number;
-  currentMonth: number;
-  currentDay: number;
-  currentHour: number;
-  currentMinute: number;
-  recentMessages: string[];
-}): string
-⋮----
-export function buildGpsPrompt(params: {
-  playerName: string;
-  actionText: string;
-  intentType: string;
-  intentDescription: string;
-  currentYear: number;
-  currentMonth: number;
-  currentDay: number;
-  currentHour: number;
-  currentMinute: number;
-  currentLocation: string | null;
-  currentState: string | null;
-  currentWildZone?: string | null;
-  wantsLocationChange: boolean;
-  locationChangeDescription: string;
-  availableLocations: { id?: string; name: string; type?: string; state_name?: string }[];
-}): string
-```
-
 ## File: supabase/functions/_shared/starting_location_generator.ts
 ```typescript
 // supabase/functions/_shared/starting_location_generator.ts
@@ -1925,6 +1886,47 @@ export interface ActionHandlerResult {
   mutations: EngineMutation[];
   system_facts: string[];
 }
+```
+
+## File: supabase/functions/process-turn/steps/_shared_prompts.ts
+```typescript
+// supabase/functions/process-turn/steps/_shared_prompts.ts
+// Промпты для Сателит (Шаг 1) и GPS (Шаг 1.6), вынесенные из index.ts
+⋮----
+export function buildSatellitePrompt(params: {
+  playerName: string;
+  playerRace: string;
+  playerClass: string;
+  currentLocation: string | null;
+  currentState: string | null;
+  currentYear: number;
+  currentMonth: number;
+  currentDay: number;
+  currentHour: number;
+  currentMinute: number;
+  recentMessages: string[];
+}): string
+⋮----
+export function buildGpsPrompt(params: {
+  playerName: string;
+  actionText: string;
+  intentType: string;
+  intentDescription: string;
+  currentYear: number;
+  currentMonth: number;
+  currentDay: number;
+  currentHour: number;
+  currentMinute: number;
+  currentLocation: string | null;
+  currentState: string | null;
+  currentWildZone?: string | null;
+  wantsLocationChange: boolean;
+  locationChangeDescription: string;
+  availableLocations: { id?: string; name: string; type?: string; state_name?: string }[];
+  availableSubzones?: string[]; // подзоны текущей локации для AI zone matching
+}): string
+⋮----
+availableSubzones?: string[]; // подзоны текущей локации для AI zone matching
 ```
 
 ## File: supabase/functions/_shared/npc_combat_ai.ts
@@ -3007,9 +3009,12 @@ export interface NarratorInputContext {
   player_race: string;
   player_class: string;
   lore_context: string;
+  recent_history: string[]; // последние 6 сообщений для контекста ДМ
   openrouter_api_key: string;
   dm_model: string;
 }
+⋮----
+recent_history: string[]; // последние 6 сообщений для контекста ДМ
 ⋮----
 // ============================================
 // Промпт для LLM
@@ -3038,10 +3043,20 @@ function safeParseJson(text: string): any | null
 // ============================================
 export function buildFallbackNarrative(systemTruth: SystemTruthDto): NarratorOutputPayload
 ⋮----
+// Атмосфера (художественно)
+⋮----
+// Факты хода
+⋮----
+// HP изменение (только если было)
+⋮----
+// Предметы (художественно)
+⋮----
 // ============================================
 // Преобразование SystemTruthDto в чистый нарративный контекст
 // ============================================
-export function buildNarratorContext(system_truth: SystemTruthDto, action_text: string): string
+export function buildNarratorContext(system_truth: SystemTruthDto, action_text: string, recent_history?: string[]): string
+⋮----
+// Предыстория — последние ходы (если есть)
 ⋮----
 // ============================================
 // Главная функция Шага 5
@@ -3218,6 +3233,10 @@ continue; // retry
 ⋮----
 // Player is in open world / wild zone РІР‚вЂќ use currentWildZone as location name
 ⋮----
+.limit(20) // было 10;
+⋮----
+${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
+⋮----
 // Load all players in session (for router, engine and system truth context)
 ⋮----
 // Р вЂ”Р В°Р С–РЎР‚РЎС“Р В¶Р В°Р ВµР С Р С”Р В°РЎР‚РЎвЂљРЎС“ РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р В·Р С•Р Р… Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р С‘Р В· Р С”РЎРЊРЎв‚¬Р В° РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘ (Р В·Р В°Р С—Р С•Р В»Р Р…РЎРЏР ВµРЎвЂљРЎРѓРЎРЏ Р С—РЎР‚Р С‘ РЎРѓР С•Р В·Р Т‘Р В°Р Р…Р С‘Р С‘/РЎРѓР СР ВµР Р…Р Вµ Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘)
@@ -3244,6 +3263,8 @@ const isCompanionNpc = (n: any) =>
 // ============================================
 ⋮----
 // Р СџР С•Р Т‘Р С–РЎР‚РЎС“Р В¶Р В°Р ВµР С Р С‘РЎРѓРЎвЂљР С•РЎР‚Р С‘РЎР‹ Р Т‘Р В»РЎРЏ Р С”Р С•Р Р…РЎвЂљР ВµР С”РЎРѓРЎвЂљР В° Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘РЎРЏ РЎРѓ NPC/Р С‘Р С–РЎР‚Р С•Р С”Р В°Р СР С‘
+⋮----
+lore_context: loreContext.slice(0, 1500), // FIX 7: world context for router
 ⋮----
 // Apply GPS time/location (still here, as it's pre-engine)
 ⋮----
@@ -3296,8 +3317,11 @@ current_wild_zone: null, // Р Р†Р ВµРЎР‚Р Р…РЎС“Р В»
 // Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С”Р В°РЎР‚РЎвЂљРЎС“ РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р В·Р С•Р Р… Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р Т‘Р В»РЎРЏ Р Т‘Р С‘Р С”Р С•Р в„– Р В·Р С•Р Р…РЎвЂ№ РЎвЂЎР ВµРЎР‚Р ВµР В· Р ВР В
 ⋮----
 // Р С›РЎвЂљРЎРѓР В»Р ВµР В¶Р С‘Р Р†Р В°Р Р…Р С‘Р Вµ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В° Р Р†Р Р…РЎС“РЎвЂљРЎР‚Р С‘ Р С—Р С•Р Т‘Р В·Р С•Р Р… Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘ (Р Т‘Р В»РЎРЏ Р СћРЎС“Р СР В°Р Р…Р В° Р вЂ™Р С•Р в„–Р Р…РЎвЂ№ / Р В­РЎвЂ¦Р В° Р вЂ™Р С•Р в„–Р Р…РЎвЂ№)
+// Отслеживание перемещения игрока внутри подзон локации (AI GPS + regex fallback)
 ⋮----
-// Р В§Р В»Р ВµР Р…РЎвЂ№ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В°, Р Р…Р В°РЎвЂ¦Р С•Р Т‘Р С‘Р Р†РЎв‚¬Р С‘Р ВµРЎРѓРЎРЏ Р Р† РЎвЂљР С•Р в„– Р В¶Р Вµ Р В·Р С•Р Р…Р Вµ, Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ!
+// 1. AI GPS результат (приоритет)
+⋮----
+// 2. Улучшенный regex fallback
 ⋮----
 // ============================================
 // Р С’Р вЂ™Р СћР С›Р СњР С›Р СљР СњР В«Р вЂў Р В­Р С™Р РЋР СџР вЂўР вЂќР ВР В¦Р ВР В NPC (0 РЎвЂљР С•Р С”Р ВµР Р…Р С•Р Р†, Lazy Calendar Simulation)

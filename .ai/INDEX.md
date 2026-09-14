@@ -32,7 +32,8 @@
 | Изменить персонажей / статы | `modules/character_system.md` |
 | Изменить UI / страницы | `modules/frontend.md` → `context_frontend.md` |
 | Изменить БД / схему | `modules/database.md` → `context_db_migrations.md` |
-| Добавить / понять тест | `context_tests.md` |
+| Добавить / понять юнит-тест | `context_tests.md` |
+| Запустить E2E тесты (браузер) | `tests/e2e/README.md` |
 
 ## 📦 Repomix контекст-файлы
 

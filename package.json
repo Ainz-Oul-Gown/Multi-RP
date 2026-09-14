@@ -9,12 +9,17 @@
     "preview": "vite preview",
     "deploy": "npm run build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report tests/e2e/reports/html",
+    "test:e2e:setup": "playwright test --project=setup"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@vitest/coverage-v8": "^3.1.4",
     "puppeteer-core": "^25.10.0",
     "typescript": "^7.0.2",

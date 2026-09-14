@@ -10,3 +10,8 @@ scratch/
 .vscode/
 __pycache__/
 *.pyc
+
+tests/e2e/.auth/
+tests/e2e/reports/
+tests/e2e/test-results/
+.env.e2e

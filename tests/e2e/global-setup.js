@@ -70,6 +70,18 @@ export default async function globalSetup() {
       user = signInData.user;
       console.log('  ✅ Test user signed in:', user.id);
     }
+
+    // Сохраняем токены сессии для использования в 00_auth.setup.js
+    const { data: { session: savedSession } } = await supabase.auth.getSession();
+    if (savedSession) {
+      const stateDir = path.resolve('tests/e2e/.auth');
+      if (!fs.existsSync(stateDir)) fs.mkdirSync(stateDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(stateDir, 'auth-session.json'),
+        JSON.stringify({ session: savedSession, supabaseUrl: SUPABASE_URL }, null, 2)
+      );
+      console.log('  ✅ Session tokens saved to auth-session.json');
+    }
   }
 
   // 2. Настройки пользователя — бесплатные модели
@@ -83,13 +95,24 @@ export default async function globalSetup() {
   }, { onConflict: 'id' });
   console.log('  ✅ User settings configured with free models');
 
-  // 3. Очищаем старые тестовые сессии (оставляем мир)
+  // 3. Очищаем старые тестовые сессии — сохраняем текущую из session-state.json
+  const stateFilePath = path.resolve('tests/e2e/.auth/session-state.json');
+  let currentSessionId = null;
+  if (fs.existsSync(stateFilePath)) {
+    try {
+      const st = JSON.parse(fs.readFileSync(stateFilePath, 'utf8'));
+      currentSessionId = st.sessionId || null;
+    } catch {}
+  }
+
   const { data: oldSessions } = await supabase
     .from('sessions')
     .select('id, worlds(name)')
     .filter('worlds.name', 'eq', E2E_CONFIG.worldName);
 
   for (const sess of oldSessions || []) {
+    // Пропускаем текущую активную сессию тестов
+    if (currentSessionId && sess.id === currentSessionId) continue;
     // Удаляем только сессии созданные е2е тестами (не пользовательские)
     const { data: sessionPlayers } = await supabase
       .from('players')
@@ -102,18 +125,32 @@ export default async function globalSetup() {
   }
   console.log('  ✅ Old test sessions cleaned up');
 
-  // 3b. Удаляем дублирующихся тестовых персонажей (Арин) — оставляем 0
-  // чтобы тест 01-B мог создать персонажа с нуля
-  const { data: existingChars } = await supabase
-    .from('character_cards')
-    .select('id')
-    .eq('owner_id', user.id)
-    .eq('name', E2E_CONFIG.characterName);
-
-  for (const ch of existingChars || []) {
-    await supabase.from('character_cards').delete().eq('id', ch.id);
+  // 3b. Удаляем дублирующихся тестовых персонажей (Арин) — только если нет активной сессии
+  // Если session-state.json есть и сессия жива — персонаж нужен, не удаляем
+  let shouldCleanChars = true;
+  if (currentSessionId) {
+    const { data: aliveSession } = await supabase
+      .from('sessions')
+      .select('id')
+      .eq('id', currentSessionId)
+      .single();
+    if (aliveSession) {
+      shouldCleanChars = false;
+      console.log('  ✅ Active session found — skipping character cleanup');
+    }
   }
-  console.log(`  ✅ Cleaned up ${existingChars?.length || 0} old test character(s)`);
+
+  if (shouldCleanChars) {
+    const { data: existingChars } = await supabase
+      .from('character_cards')
+      .select('id')
+      .eq('owner_id', user.id)
+      .eq('name', E2E_CONFIG.characterName);
+    for (const ch of existingChars || []) {
+      await supabase.from('character_cards').delete().eq('id', ch.id);
+    }
+    console.log(`  ✅ Cleaned up ${existingChars?.length || 0} old test character(s)`);
+  }
 
   // 4. Сохраняем конфиг для переиспользования между тестами
   const stateDir = path.resolve('tests/e2e/.auth');

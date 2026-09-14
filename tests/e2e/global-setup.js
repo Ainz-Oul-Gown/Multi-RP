@@ -76,11 +76,31 @@ export default async function globalSetup() {
     if (savedSession) {
       const stateDir = path.resolve('tests/e2e/.auth');
       if (!fs.existsSync(stateDir)) fs.mkdirSync(stateDir, { recursive: true });
+
+      // Сохраняем raw session для совместимости
       fs.writeFileSync(
         path.join(stateDir, 'auth-session.json'),
         JSON.stringify({ session: savedSession, supabaseUrl: SUPABASE_URL }, null, 2)
       );
       console.log('  ✅ Session tokens saved to auth-session.json');
+
+      // Напрямую пишем session.json в формате Playwright storageState
+      // Это обходит зависание headless Chromium при UI логине
+      const storageState = {
+        cookies: [],
+        origins: [{
+          origin: 'http://localhost:3000',
+          localStorage: [{
+            name: 'sb-xhzpxiiqrtmeduynqmsd-auth-token',
+            value: JSON.stringify(savedSession),
+          }],
+        }],
+      };
+      fs.writeFileSync(
+        path.join(stateDir, 'session.json'),
+        JSON.stringify(storageState, null, 2)
+      );
+      console.log('  ✅ session.json written directly (bypasses browser auth UI)');
     }
   }
 

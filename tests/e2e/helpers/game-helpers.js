@@ -13,6 +13,126 @@ export const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://xhzpxiiqrt
 export const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 export const SERVICE_KEY = process.env.E2E_SUPABASE_SERVICE_KEY;
 
+/**
+ * Проксирует все запросы к Supabase через нативный Node.js https.
+ * Headless Chrome не может достучаться до Supabase напрямую (сетевая блокировка).
+ * Используем '**\/*' glob и node:https для надёжного проксирования.
+ * @param {import('@playwright/test').Page} page
+ */
+export async function setupSupabaseProxy(page) {
+  const { default: https } = await import('node:https');
+  const { default: http } = await import('node:http');
+  const { URL: NodeURL } = await import('node:url');
+  const { default: zlib } = await import('node:zlib');
+
+  // Отключаем Service Worker — он перехватывал fetch ДО нашего прокси и вешал запросы
+  await page.addInitScript(() => {
+    if ('serviceWorker' in navigator) {
+      Object.defineProperty(navigator, 'serviceWorker', {
+        get: () => ({ register: () => Promise.resolve({ scope: '/' }) }),
+        configurable: true,
+      });
+    }
+  });
+
+  // Заголовки которые нельзя передавать в route.fulfill (конфликт с Playwright)
+  const SKIP_RESP_HEADERS = new Set([
+    'transfer-encoding', 'connection', 'keep-alive', 'trailer',
+    'upgrade', 'proxy-connection', 'content-length', // убираем — Playwright сам считает
+  ]);
+
+  process.stdout.write('[SupabaseProxy] Proxy installed via **/* route\n');
+
+  await page.route('**/*', async (route) => {
+    const req = route.request();
+    const url = req.url();
+
+    // Только Supabase запросы проксируем через Node.js
+    if (!url.includes('supabase.co')) {
+      await route.continue();
+      return;
+    }
+
+    const method = req.method();
+    process.stdout.write(`[SupabaseProxy] → ${method} ${url.slice(0, 100)}\n`);
+
+    try {
+      // req.headers() — синхронный (без CDP round-trip), req.allHeaders() — зависает!
+      const reqHeaders = req.headers();
+      const nodeHeaders = {};
+      for (const [k, v] of Object.entries(reqHeaders)) {
+        if (!['host', 'content-length', 'connection', 'transfer-encoding'].includes(k.toLowerCase())) {
+          nodeHeaders[k] = v;
+        }
+      }
+      const postData = ['GET', 'HEAD'].includes(method) ? null : req.postDataBuffer();
+
+      const parsedUrl = new NodeURL(url);
+      const lib = parsedUrl.protocol === 'https:' ? https : http;
+
+      // Edge Functions (AI) могут работать дольше — до 120с
+      const requestTimeout = url.includes('/functions/v1/') ? 120000 : 15000;
+
+      const result = await new Promise((resolve, reject) => {
+        const options = {
+          hostname: parsedUrl.hostname,
+          port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+          path: parsedUrl.pathname + parsedUrl.search,
+          method,
+          headers: nodeHeaders,
+          timeout: requestTimeout,
+        };
+
+        const nodeReq = lib.request(options, (res) => {
+          const chunks = [];
+          res.on('data', chunk => chunks.push(chunk));
+          res.on('end', () => {
+            const raw = Buffer.concat(chunks);
+            const encoding = (res.headers['content-encoding'] || '').toLowerCase();
+
+            // Собираем заголовки, пропускаем проблемные, конвертируем массивы в строки
+            const respHeaders = {};
+            for (const [k, v] of Object.entries(res.headers)) {
+              if (!SKIP_RESP_HEADERS.has(k.toLowerCase())) {
+                respHeaders[k] = Array.isArray(v) ? v.join(', ') : String(v);
+              }
+            }
+
+            // Распаковываем gzip/deflate, убираем Content-Encoding из ответа
+            if (encoding === 'gzip' || encoding === 'deflate') {
+              delete respHeaders['content-encoding'];
+              const decompress = encoding === 'gzip' ? zlib.gunzip : zlib.inflate;
+              decompress(raw, (err, data) => {
+                process.stdout.write(`[SupabaseProxy] ← ${res.statusCode} ${encoding} decoded, body=${data?.length || 0}b\n`);
+                if (err) resolve({ status: res.statusCode, headers: respHeaders, body: raw });
+                else resolve({ status: res.statusCode, headers: respHeaders, body: data });
+              });
+            } else {
+              process.stdout.write(`[SupabaseProxy] ← ${res.statusCode} body=${raw.length}b\n`);
+              resolve({ status: res.statusCode, headers: respHeaders, body: raw });
+            }
+          });
+          res.on('error', reject);
+        });
+
+        nodeReq.on('error', reject);
+        nodeReq.on('timeout', () => { nodeReq.destroy(); reject(new Error('Node.js request timeout 15s')); });
+        if (postData) nodeReq.write(postData);
+        nodeReq.end();
+      });
+
+      await route.fulfill({
+        status: result.status,
+        headers: result.headers,
+        body: result.body,
+      });
+    } catch (err) {
+      process.stdout.write(`[SupabaseProxy] ERROR: ${err.message} for ${url.slice(0, 80)}\n`);
+      await route.abort();
+    }
+  });
+}
+
 
 /**
  * Загружает тестовую конфигурацию записанную global-setup

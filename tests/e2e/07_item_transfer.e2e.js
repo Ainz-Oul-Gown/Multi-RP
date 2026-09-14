@@ -15,7 +15,7 @@ import {
   isProseNarrative,
 } from './helpers/game-helpers.js';
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://ainz-oul-gown.github.io/Multi-RP';
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3000';
 
 test.describe('07 — Передача предмета НПС', () => {
   test.setTimeout(180_000);
@@ -31,7 +31,7 @@ test.describe('07 — Передача предмета НПС', () => {
   // TEST 07-A: Возвращение в город к НПС
   // ─────────────────────────────────────────────
   test('07-A: Возвращение в город к НПС', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -53,7 +53,7 @@ test.describe('07 — Передача предмета НПС', () => {
   // TEST 07-B: Дарение предмета НПС
   // ─────────────────────────────────────────────
   test('07-B: Дарение предмета — передаю копьё НПС', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 

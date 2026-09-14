@@ -12,25 +12,29 @@ import {
   logTestResult,
   hasEncodingArtifacts,
   isProseNarrative,
+  setupSupabaseProxy,
 } from './helpers/game-helpers.js';
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://ainz-oul-gown.github.io/Multi-RP';
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3000';
 
 test.describe('03 — Диалог с НПС и система отношений', () => {
   test.setTimeout(180_000);
 
   let sessionState;
 
-  test.beforeEach(() => {
+  test.beforeEach(async ({ page }) => {
     sessionState = loadSessionState();
     if (!sessionState) test.skip(true, 'Session state not found');
+    // Ключевой фикс: проксируем Supabase запросы через Node.js
+    // Headless Chrome не может напрямую достучаться до Supabase
+    await setupSupabaseProxy(page);
   });
 
   // ─────────────────────────────────────────────
   // TEST 03-A: Короткий диалог с ближайшим НПС
   // ─────────────────────────────────────────────
   test('03-A: Диалог — приветствие ближайшего НПС', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -56,7 +60,7 @@ test.describe('03 — Диалог с НПС и система отношени�
   // TEST 03-B: Проверка системы отношений через БД
   // ─────────────────────────────────────────────
   test('03-B: Система отношений — после взаимодействия обновляется в БД', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -64,16 +68,17 @@ test.describe('03 — Диалог с НПС и система отношени�
     const action = 'Угощаю трактирщика монетой и говорю: "Налей мне эля и всем в таверне тоже, за счёт странника!"';
     await sendGameAction(page, action, 90_000);
 
-    // Проверяем через БД что npc_relationships обновились
+    // Проверяем через БД что npc_relationships доступна (нет ошибки запроса)
+    // npc_relationships связана через player_id, не session_id
     const supabase = createServiceClient();
-    const { data: relationships } = await supabase
+    const { data: relationships, error } = await supabase
       .from('npc_relationships')
       .select('*')
-      .eq('session_id', sessionState.sessionId);
+      .eq('player_id', sessionState.playerId);
 
-    // Отношения могут быть пустыми если НПС ещё не существует в системе
-    // Главное что запрос выполнился без ошибки
-    expect(relationships).not.toBeNull();
+    // Главное что запрос выполнился без ошибки (данные могут быть пустыми)
+    expect(error).toBeNull();
+    expect(Array.isArray(relationships)).toBe(true);
 
     logTestResult('03-B: NPC relationship system', 'pass', {
       relationshipsFound: relationships?.length || 0,
@@ -84,7 +89,7 @@ test.describe('03 — Диалог с НПС и система отношени�
   // TEST 03-C: Открытие панели НПС в игре
   // ─────────────────────────────────────────────
   test('03-C: Панель НПС — открывается, отображает данные', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
 
     // Открываем панель НПС
@@ -106,7 +111,7 @@ test.describe('03 — Диалог с НПС и система отношени�
   // TEST 03-D: Повторный диалог — НПС помнит предыдущий разговор
   // ─────────────────────────────────────────────
   test('03-D: Память НПС — следующая реплика учитывает контекст', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 

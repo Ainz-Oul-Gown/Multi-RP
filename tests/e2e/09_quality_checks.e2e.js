@@ -15,7 +15,7 @@ import {
   isProseNarrative,
 } from './helpers/game-helpers.js';
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://ainz-oul-gown.github.io/Multi-RP';
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3000';
 
 test.describe('09 — Проверки качества AI-ответов', () => {
   test.setTimeout(180_000);
@@ -112,7 +112,7 @@ test.describe('09 — Проверки качества AI-ответов', () =
   // TEST 09-D: Профиль игрока отображается корректно в UI
   // ─────────────────────────────────────────────
   test('09-D: Профиль игрока — данные отображаются без артефактов', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
 
     await page.locator('#profileBtn').click();
@@ -138,7 +138,7 @@ test.describe('09 — Проверки качества AI-ответов', () =
   // TEST 09-E: Карта мира открывается и отображает данные
   // ─────────────────────────────────────────────
   test('09-E: Карта мира — открывается, показывает SVG-слои', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
 
     await page.locator('#mapBtn').click();
@@ -198,7 +198,7 @@ test.describe('09 — Проверки качества AI-ответов', () =
   // TEST 09-G: Нарратив содержит лор мира (не "обычный фэнтези-мир")
   // ─────────────────────────────────────────────
   test('09-G: Лор мира — ответы содержат специфику мира Этерия', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 

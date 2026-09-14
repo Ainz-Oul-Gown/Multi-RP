@@ -16,7 +16,7 @@ import {
   isProseNarrative,
 } from './helpers/game-helpers.js';
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://ainz-oul-gown.github.io/Multi-RP';
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3000';
 
 test.describe('05 — Лутинг: поиск ресурсов в лесу', () => {
   test.setTimeout(300_000); // 5 минут — несколько попыток
@@ -32,7 +32,7 @@ test.describe('05 — Лутинг: поиск ресурсов в лесу', ()
   // TEST 05-A: Поиск палок — до момента успеха (max 3 попытки)
   // ─────────────────────────────────────────────
   test('05-A: Поиск палок в лесу — успех в течение нескольких попыток', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -93,7 +93,7 @@ test.describe('05 — Лутинг: поиск ресурсов в лесу', ()
   // TEST 05-B: Поиск камней — до момента успеха
   // ─────────────────────────────────────────────
   test('05-B: Поиск камней — успех до 3 попыток', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 
@@ -139,7 +139,7 @@ test.describe('05 — Лутинг: поиск ресурсов в лесу', ()
   // TEST 05-C: Инвентарь отображается в UI после лутинга
   // ─────────────────────────────────────────────
   test('05-C: UI инвентаря — найденные предметы отображаются', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
 
     // Открываем инвентарь

@@ -19,7 +19,7 @@ const { data, error } = await sb
   .select('*')
   .eq('session_id', SESSION_ID)
   .order('created_at', { ascending: false })
-  .limit(20);
+  .limit(40);
 
 if (error) { console.error('Error:', error.message); process.exit(1); }
 if (!data?.length) { console.log('No messages found'); process.exit(0); }

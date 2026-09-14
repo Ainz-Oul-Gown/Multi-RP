@@ -38,13 +38,16 @@ router
   });
 
 async function bootstrap() {
+  console.log('[Bootstrap] Starting...');
   // Асинхронно считываем конфигурацию БД (URL-инвайт или сохраненную в IndexedDB)
   await initDatabaseFromStorageOrUrl();
+  console.log('[Bootstrap] DB config loaded, registering auth listener...');
 
   let isInitialAuth = true;
 
   // Auth state listener — handles both initial check AND OAuth callback
   onAuthStateChange((user) => {
+    console.log('[Bootstrap] onAuthStateChange fired! user:', user?.id || 'null');
     // Если статус авторизации не изменился
     if (!isInitialAuth && currentUser === user) return;
     if (!isInitialAuth && currentUser && user && currentUser.id === user.id) {
@@ -60,12 +63,15 @@ async function bootstrap() {
     }
 
     if (!user) {
+      console.log('[Bootstrap] No user — rendering auth page');
       renderAuth(app);
       return;
     }
 
+    console.log('[Bootstrap] User found — resolving router for:', window.location.hash);
     router.resolve();
   });
+  console.log('[Bootstrap] Auth listener registered, waiting for callback...');
 }
 
 bootstrap().catch((err) => {

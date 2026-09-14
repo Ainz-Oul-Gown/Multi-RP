@@ -76,6 +76,7 @@ export function buildGpsPrompt(params: {
   wantsLocationChange: boolean;
   locationChangeDescription: string;
   availableLocations: { id?: string; name: string; type?: string; state_name?: string }[];
+  availableSubzones?: string[]; // подзоны текущей локации для AI zone matching
 }): string {
   const timeStr = `${params.currentDay}.${params.currentMonth}.${params.currentYear} ${params.currentHour}:${params.currentMinute.toString().padStart(2, '0')}`;
   const locationStr = params.currentWildZone
@@ -87,6 +88,10 @@ export function buildGpsPrompt(params: {
   const locationsList = params.availableLocations?.length
     ? params.availableLocations.map(l => `- [ID:${l.id || 'null'}] ${l.name} (${l.type || ''}, ${l.state_name || ''})`).join('\n')
     : 'локации не найдены';
+
+  const subzonesList = params.availableSubzones?.length
+    ? `\nПодзоны внутри текущей локации (для перемещения внутри локации):\n${params.availableSubzones.map(z => `- ${z}`).join('\n')}`
+    : '';
 
   return `Ты — система GPS в текстовой RPG. Определи сколько времени занимает действие и как изменится локация.
 
@@ -100,6 +105,7 @@ export function buildGpsPrompt(params: {
 ${params.wantsLocationChange ? `Игрок хочет переместиться: ${params.locationChangeDescription}` : 'Игрок не меняет локацию'}
 
 ${params.wantsLocationChange ? `Именованные локации мира (города, деревни, поселения):\n${locationsList}` : ''}
+${subzonesList}
 
 Верни ТОЛЬКО валидный JSON без markdown:
 
@@ -109,6 +115,7 @@ ${params.wantsLocationChange ? `Именованные локации мира (
   "new_location_name": null,
   "is_wild_zone": false,
   "location_changed": false,
+  "moved_to_subzone": null,
   "travel_description": ""
 }
 
@@ -130,5 +137,11 @@ ${params.wantsLocationChange ? `Именованные локации мира (
 - Если игрок переходит в именованную локацию из списка: location_changed = true, new_location_id = ID из списка, new_location_name = название, is_wild_zone = false
 - Если игрок идёт в природное место (лес, поле, пещера, горы, берег реки, руины вне города): location_changed = true, new_location_id = null, new_location_name = краткое название места ("Лес у Ривервуда", "Горная тропа", "Прибрежные скалы"), is_wild_zone = true
 - Если игрок возвращается в таверну или ближайший город из дикой зоны: location_changed = true, выбери именованную локацию из списка (is_wild_zone = false)
-- travel_description: краткое описание перемещения`;
+- travel_description: краткое описание перемещения
+
+ПРАВИЛА ПОДЗОН (moved_to_subzone):
+- Если в списке подзон есть место, куда явно хочет попасть игрок (подходит к стойке, идёт к камину, поднимается по лестнице, садится у окна): установи moved_to_subzone = точное название подзоны из списка
+- Если игрок взаимодействует с NPC, который находится в определённой зоне, перемести игрока туда
+- Если действие не связано с перемещением к подзоне: moved_to_subzone = null
+- moved_to_subzone ТОЛЬКО из предоставленного списка подзон, не придумывать новые`;
 }

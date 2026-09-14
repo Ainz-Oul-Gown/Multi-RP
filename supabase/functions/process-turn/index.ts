@@ -281,7 +281,7 @@ serve(async (req) => {
         .from("lore_files")
         .select("title, content")
         .eq("world_id", session.world_id)
-        .limit(10);
+        .limit(20) // было 10;
 
       if (loreFiles && loreFiles.length > 0) {
         const keywords = [safeActionText, currentLocationName || "", currentWildZone || ""]
@@ -295,14 +295,15 @@ serve(async (req) => {
             .some((w: string) => w.length > 4 && content.includes(w));
         }).slice(0, 2);
 
-        const allLore = relevantLore.length > 0 ? relevantLore : loreFiles.slice(0, 1);
+        const allLore = relevantLore.length > 0 ? relevantLore : loreFiles.slice(0, 2);
         loreContext = allLore
-          .map((f: any) => `### ${f.title}\n${cleanTextForAI(f.content).slice(0, 600)}`)
+          .map((f: any) => `### ${f.title}
+${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
           .join("\n\n");
       }
     }
-    const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type").eq("session_id", session_id).order("created_at", { ascending: false }).limit(10);
-    const recentMessages = (recentMsgs || []).reverse().map((m) => `[${m.sender_type === "master" ? "Р СљР В°РЎРѓРЎвЂљР ВµРЎР‚" : "Р ВР С–РЎР‚Р С•Р С”"}]: ${cleanTextForAI(m.content).slice(0, 200)}`);
+    const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type, sender_name").eq("session_id", session_id).order("created_at", { ascending: false }).limit(10);
+    const recentMessages = (recentMsgs || []).reverse().map((m) => `[${m.sender_name || (m.sender_type === "master" ? "Мастер" : "Игрок")}]: ${cleanTextForAI(m.content).slice(0, 300)}`);
 
     // Load all players in session (for router, engine and system truth context)
     const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*), current_zone").eq("session_id", session_id).order("created_at", { ascending: true });
@@ -585,11 +586,11 @@ serve(async (req) => {
         } else if (rpcRes && rpcRes.success) {
           console.log(`[${requestId}] [STAT_ALLOC] Successfully allocated:`, rpcRes);
           const statNamesRu: Record<string, string> = {
-            STR: "РЎРѓР С‘Р В»РЎС“", DEX: "Р В»Р С•Р Р†Р С”Р С•РЎРѓРЎвЂљРЎРЉ", CON: "Р Р†РЎвЂ№Р Р…Р С•РЎРѓР В»Р С‘Р Р†Р С•РЎРѓРЎвЂљРЎРЉ",
-            INT: "Р С‘Р Р…РЎвЂљР ВµР В»Р В»Р ВµР С”РЎвЂљ", WIS: "Р СРЎС“Р Т‘РЎР‚Р С•РЎРѓРЎвЂљРЎРЉ", CHA: "РЎвЂ¦Р В°РЎР‚Р С‘Р В·Р СРЎС“"
+            STR: "сила", DEX: "ловкость", CON: "выносливость",
+            INT: "интеллект", WIS: "мудрость", CHA: "харизма"
           };
           const statRu = statNamesRu[statAllocIntent.stat] || statAllocIntent.stat;
-          statAllocatedFact = `${player.name} РЎС“РЎРѓР С—Р ВµРЎв‚¬Р Р…Р С• Р Р†Р В»Р С•Р В¶Р С‘Р В» ${statAllocIntent.points} Р С•РЎвЂЎР С”. Р Р† РЎвЂ¦Р В°РЎР‚Р В°Р С”РЎвЂљР ВµРЎР‚Р С‘РЎРѓРЎвЂљР С‘Р С”РЎС“ ${statRu} (Р Р…Р С•Р Р†Р С•Р Вµ Р В·Р Р…Р В°РЎвЂЎР ВµР Р…Р С‘Р Вµ: ${rpcRes.new_value}, РЎРѓР Р†Р С•Р В±Р С•Р Т‘Р Р…Р С• Р С•РЎвЂЎР С”Р С•Р Р†: ${rpcRes.remaining_points}).`;
+          statAllocatedFact = `${player.name} успешно вложил ${statAllocIntent.points} оч. в характеристику ${statRu} (новое значение: ${rpcRes.new_value}, свободно очков: ${rpcRes.remaining_points}).`;
 
           player.stat_points = rpcRes.remaining_points;
           if (!player.stats) player.stats = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
@@ -602,7 +603,7 @@ serve(async (req) => {
           }
         } else if (rpcRes && !rpcRes.success) {
           console.log(`[${requestId}] [STAT_ALLOC] Allocation rejected: ${rpcRes.error}`);
-          statAllocatedFact = `${player.name} Р С—Р С•Р С—РЎвЂ№РЎвЂљР В°Р В»РЎРѓРЎРЏ РЎР‚Р В°РЎРѓР С—РЎР‚Р ВµР Т‘Р ВµР В»Р С‘РЎвЂљРЎРЉ Р С•РЎвЂЎР С”Р С‘ Р Р† ${statAllocIntent.stat}, Р Р…Р С• Р Р…Р Вµ РЎРѓР СР С•Р С–: ${rpcRes.error}`;
+          statAllocatedFact = `${player.name} попытался распределить очки в ${statAllocIntent.stat}, но не смог: ${rpcRes.error}`;
         }
       } catch (allocEx) {
         console.warn(`[${requestId}] [STAT_ALLOC] Exception:`, allocEx);
@@ -624,7 +625,7 @@ serve(async (req) => {
       recent_history: recentHistoryStr,
       player: {
         id: player.id,
-        name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+        name: player.name || "Герой",
         race: player.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
         class: player.class || "Р вЂ™Р С•Р С‘Р Р…",
         level: player.level || 1,
@@ -656,7 +657,7 @@ serve(async (req) => {
         .filter((p: any) => p.id !== player.id)
         .map((p: any) => ({
           id: p.id,
-          name: p.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+          name: p.name || "Герой",
           race: p.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
           class: p.class || "Р ВР С–РЎР‚Р С•Р С”",
           level: p.level || 1,
@@ -664,13 +665,25 @@ serve(async (req) => {
           max_hp: p.max_hp ?? 100,
           current_zone: p.current_zone || null,
         })),
-      weather: {
-        description: "Р Р‡РЎРѓР Р…Р С•",
-        temperature: 20,
-        is_raining: false,
-        is_night: ((session.game_hour ?? 8) < 6 || (session.game_hour ?? 8) >= 22),
-        wind_speed: 2,
-      },
+      weather: (() => {
+        const gameMonth = session.game_month || 1;
+        const gameHour = session.game_hour ?? 8;
+        const isNight = gameHour < 6 || gameHour >= 22;
+        const isSummer = gameMonth >= 5 && gameMonth <= 8;
+        const isWinter = gameMonth === 12 || gameMonth <= 2;
+        const isAutumn = gameMonth >= 9 && gameMonth <= 11;
+        const baseTemp = isWinter ? -5 : isSummer ? 24 : isAutumn ? 10 : 15;
+        const tempVariance = (parseInt(session.id?.slice(-4) || '0', 16) % 11) - 5;
+        const temperature = Math.round(baseTemp + tempVariance + (isNight ? -4 : 0));
+        const rainSeed = parseInt(session.id?.slice(-8, -4) || '0', 16) % 10;
+        const isRaining = isAutumn ? rainSeed < 4 : isSummer ? rainSeed < 1 : rainSeed < 2;
+        let description = isRaining ? (isWinter ? 'Снегопад' : 'Дождь') : 'Ясно';
+        if (!isRaining && isWinter) description = 'Морозно';
+        if (!isRaining && isNight && !isWinter) description = 'Ясная ночь';
+        if (!isRaining && isSummer && !isNight) description = 'Солнечно';
+        const windSeed = parseInt(session.id?.slice(-6, -4) || '0', 16) % 5;
+        return { description, temperature, is_raining: isRaining, is_night: isNight, wind_speed: windSeed + 1 };
+      })(),
       game_time: {
         year: session.game_year || 1,
         month: session.game_month || 1,
@@ -683,6 +696,7 @@ serve(async (req) => {
       storyline: sessionStoryline ? {
         title: sessionStoryline.title,
         current_arc: sessionStoryline.arcs?.[sessionStoryline.current_arc_index || 0] || null,
+      lore_context: loreContext.slice(0, 1500), // FIX 7: world context for router
       } : null,
     };
 
@@ -724,7 +738,7 @@ serve(async (req) => {
 
     try {
       const gpsSystemPrompt = buildGpsPrompt({
-        playerName: cleanTextForAI(player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–"),
+        playerName: cleanTextForAI(player.name || "Герой"),
         actionText: safeActionText,
         intentType: "router",
         intentDescription: safeActionText,
@@ -735,10 +749,12 @@ serve(async (req) => {
         currentWildZone,
         wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
         availableLocations,
+        availableSubzones: locationMap && Object.keys(locationMap).length > 0 ? Object.keys(locationMap) : undefined,
       });
       const gpsResp = await callAI(gpsSystemPrompt, "Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»Р С‘ Р Р†РЎР‚Р ВµР СРЎРЏ.", openrouterApiKey, 2, gpsModel);
       const gpsParsed = parseAIJson(gpsResp);
       if (gpsParsed) {
+        (global as any).__gpsSubzone = gpsParsed?.moved_to_subzone || null;
         time_passed_minutes = Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0));
         if (gpsParsed.location_changed === true) {
           if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
@@ -768,8 +784,8 @@ serve(async (req) => {
 
     if (isBuildingLocation && isExitingBuilding && !location_changed && !wild_zone_changed) {
       wild_zone_changed = true;
-      new_wild_zone = `Р СћРЎР‚Р В°Р С”РЎвЂљ РЎС“ ${currentLocationName || "РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎвЂ№"}`;
-      travel_description = `Р вЂ™РЎвЂ№ РЎР‚Р В°РЎРѓР С—Р В°РЎвЂ¦Р С‘Р Р†Р В°Р ВµРЎвЂљР Вµ Р Т‘РЎС“Р В±Р С•Р Р†РЎС“РЎР‹ Р Т‘Р Р†Р ВµРЎР‚РЎРЉ Р С‘ Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘Р С‘РЎвЂљР Вµ Р С‘Р В· ${currentLocationName || "Р С—Р С•Р СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ"} Р Р…Р В°РЎР‚РЎС“Р В¶РЎС“ Р Р…Р В° РЎРѓР Р†Р ВµР В¶Р С‘Р в„– Р Р†Р С•Р В·Р Т‘РЎС“РЎвЂ¦ Р С—РЎР‚Р С‘Р Т‘Р С•РЎР‚Р С•Р В¶Р Р…Р С•Р С–Р С• РЎвЂљРЎР‚Р В°Р С”РЎвЂљР В°.`;
+      new_wild_zone = `Окрестности у ${currentLocationName || "таверны"}`;
+      travel_description = `Вы распахиваете дверь и выходите из ${currentLocationName || "помещения"} наружу на свежий воздух придорожного тракта.`;
       time_passed_minutes = Math.max(time_passed_minutes, 5);
       console.log(`[${requestId}] [EXIT_BUILDING] Player stepped outside: ${new_wild_zone}`);
     } else if (currentWildZone && isEnteringBuilding && !location_changed) {
@@ -840,12 +856,12 @@ serve(async (req) => {
           player.party_id = null;
         } catch {}
 
-        partyEventFact = `${player.name} Р С•РЎвЂљР Т‘Р ВµР В»Р С‘Р В»РЎРѓРЎРЏ Р С•РЎвЂљ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В° Р С‘ РЎвЂљР ВµР С—Р ВµРЎР‚РЎРЉ Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†РЎС“Р ВµРЎвЂљ РЎРѓР В°Р СР С•РЎРѓРЎвЂљР С•РЎРЏРЎвЂљР ВµР В»РЎРЉР Р…Р С•.`;
+        partyEventFact = `${player.name} отделился от отряда и теперь действует самостоятельно.`;
         try {
           await supabase.from("messages").insert({
             session_id,
             sender_type: "system",
-            sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
+            sender_name: "Система",
             content: `СЂСџС™В¶РІР‚РЊРІв„ўвЂљРїС‘РЏ ${partyEventFact}`,
           });
         } catch {}
@@ -884,12 +900,12 @@ serve(async (req) => {
           partner.party_id = partyId;
         } catch {}
 
-        partyEventFact = `Р РЋРЎвЂћР С•РЎР‚Р СР С‘РЎР‚Р С•Р Р†Р В°Р Р… Р С•РЎвЂљРЎР‚РЎРЏР Т‘: ${player.name} Р С‘ ${partner.name} РЎвЂљР ВµР С—Р ВµРЎР‚РЎРЉ Р С—РЎС“РЎвЂљР ВµРЎв‚¬Р ВµРЎРѓРЎвЂљР Р†РЎС“РЎР‹РЎвЂљ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ!`;
+        partyEventFact = `Сформирован отряд: ${player.name} и ${partner.name} теперь путешествуют вместе!`;
         try {
           await supabase.from("messages").insert({
             session_id,
             sender_type: "system",
-            sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
+            sender_name: "Система",
             content: `РІС™вЂќРїС‘РЏ ${partyEventFact}`,
           });
         } catch {}
@@ -943,7 +959,7 @@ serve(async (req) => {
         current_location_id: session.current_location_id,
       },
       acting_player: {
-        id: player.id, name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+        id: player.id, name: player.name || "Герой",
         stats: player.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
         hp: player.hp, max_hp: player.max_hp,
         armor_class: player.armor_class || 10,
@@ -1140,27 +1156,41 @@ serve(async (req) => {
     }
 
     // Р С›РЎвЂљРЎРѓР В»Р ВµР В¶Р С‘Р Р†Р В°Р Р…Р С‘Р Вµ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В° Р Р†Р Р…РЎС“РЎвЂљРЎР‚Р С‘ Р С—Р С•Р Т‘Р В·Р С•Р Р… Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘ (Р Т‘Р В»РЎРЏ Р СћРЎС“Р СР В°Р Р…Р В° Р вЂ™Р С•Р в„–Р Р…РЎвЂ№ / Р В­РЎвЂ¦Р В° Р вЂ™Р С•Р в„–Р Р…РЎвЂ№)
+// Отслеживание перемещения игрока внутри подзон локации (AI GPS + regex fallback)
     if (!location_changed && !wild_zone_changed && locationMap && Object.keys(locationMap).length > 0) {
       const availableZones = Object.keys(locationMap);
-      const lowerAction = safeActionText.toLowerCase();
 
-      const matchedZone = availableZones.find((z) => {
-        const normZone = z.toLowerCase();
-        return lowerAction.includes(normZone) ||
-          normZone.split(/\s+/).some((word) => word.length > 3 && lowerAction.includes(word.slice(0, -1)));
-      });
+      // 1. AI GPS результат (приоритет)
+      let matchedZone: string | null = (global as any).__gpsSubzone || null;
+      if (matchedZone && !availableZones.includes(matchedZone)) matchedZone = null;
+      if (matchedZone) {
+        console.log(`[${requestId}] [ZONE] AI GPS subzone: "${matchedZone}"`);
+      } else {
+        // 2. Улучшенный regex fallback
+        const lowerAction = safeActionText.toLowerCase();
+        matchedZone = availableZones.find((z) => {
+          const normZone = z.toLowerCase();
+          return lowerAction.includes(normZone) ||
+            normZone.split(/\s+/).some((word) =>
+              word.length > 3 && (
+                lowerAction.includes(word) ||
+                lowerAction.includes(word.slice(0, -1)) ||
+                lowerAction.includes(word.slice(0, -2))
+              )
+            );
+        }) || null;
+        if (matchedZone) console.log(`[${requestId}] [ZONE] Regex fallback: "${matchedZone}"`);
+      }
 
       if (matchedZone && matchedZone !== (player.current_zone || "")) {
         const prevZone = player.current_zone || null;
-        console.log(`[${requestId}] [ZONE] Player ${player.name} moved to subzone "${matchedZone}" (was: "${player.current_zone || 'Р С•РЎРѓР Р…Р С•Р Р†Р Р…Р В°РЎРЏ'}")`);
+        console.log(`[${requestId}] [ZONE] ${player.name} -> "${matchedZone}" (was: "${player.current_zone || 'основная'}")`);
         player.current_zone = matchedZone;
         try {
           await supabase.from("players").update({ current_zone: matchedZone }).eq("id", player.id);
         } catch (zErr) {
           console.warn(`[${requestId}] Failed to update player current_zone:`, zErr);
         }
-
-        // Р В§Р В»Р ВµР Р…РЎвЂ№ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В°, Р Р…Р В°РЎвЂ¦Р С•Р Т‘Р С‘Р Р†РЎв‚¬Р С‘Р ВµРЎРѓРЎРЏ Р Р† РЎвЂљР С•Р в„– Р В¶Р Вµ Р В·Р С•Р Р…Р Вµ, Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ!
         const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
           p.id !== player.id &&
           arePlayersInSameParty(player, p, session) &&
@@ -1170,10 +1200,8 @@ serve(async (req) => {
           const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
           try {
             await supabase.from("players").update({ current_zone: matchedZone }).in("id", fellowIds);
-            for (const fellow of partyFellowsInSameZone) {
-              fellow.current_zone = matchedZone;
-            }
-            console.log(`[${requestId}] [PARTY] Fellows ${partyFellowsInSameZone.map((p: any) => p.name).join(", ")} moved together to "${matchedZone}"`);
+            for (const fellow of partyFellowsInSameZone) fellow.current_zone = matchedZone;
+            console.log(`[${requestId}] [PARTY] Fellows moved together to "${matchedZone}"`);
           } catch (fErr) {
             console.warn(`[${requestId}] Failed to update party fellows current_zone:`, fErr);
           }
@@ -1212,7 +1240,7 @@ serve(async (req) => {
       companionAction = await handleCompanionInSceneAction({
         supabase,
         player_action_text: safeActionText,
-        acting_player_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+        acting_player_name: player.name || "Герой",
         location_npcs: allNpcs,
         session_id,
         openrouter_api_key: openrouterApiKey,
@@ -1343,7 +1371,7 @@ serve(async (req) => {
       },
       location: { name: currentLocationName || currentWildZone || "Р С›РЎвЂљР С”РЎР‚РЎвЂ№РЎвЂљРЎвЂ№Р в„– Р СР С‘РЎР‚", weather: routerInput.weather?.description || null },
       players: (allPlayers || []).map((p: any) => ({
-        id: p.id, name: p.name || "Р вЂњР ВµРЎР‚Р С•Р в„–", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
+        id: p.id, name: p.name || "Герой", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
       })),
       npcs: (session.current_wild_zone ? allNpcs.filter((n: any) => isCompanionNpc(n) || n.is_hostile === true || (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р Т‘Р С‘Р С”Р С‘Р в„–", "Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚", "Р Т‘Р С‘Р С”Р В°РЎРЏ_Р В·Р С•Р Р…Р В°", "Р В·Р Р†Р ВµРЎР‚РЎРЉ", "РЎвЂ¦Р С‘РЎвЂ°Р Р…Р С‘Р С”"].includes(String(t).toLowerCase())))) : allNpcs).map((n: any) => ({
         id: n.id,
@@ -1387,7 +1415,7 @@ serve(async (req) => {
       narratorOutput = await generateNarrative({
         system_truth: systemTruth,
         action_text: safeActionText,
-        player_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+        player_name: player.name || "Герой",
         player_race: player.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
         player_class: player.class || "Р вЂ™Р С•Р С‘Р Р…",
         lore_context: loreContext,
@@ -1406,12 +1434,12 @@ serve(async (req) => {
     console.log(`[${requestId}] [SAVE] Persisting messages...`);
     // 1) Player action
     await supabase.from("messages").insert({
-      session_id, sender_type: "player", sender_id: player.user_id, sender_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–", content: safeActionText,
+      session_id, sender_type: "player", sender_id: player.user_id, sender_name: player.name || "Герой", content: safeActionText,
     });
     // 2) Master narratives РІР‚вЂќ Р С—Р С• Р С•Р Т‘Р Р…Р С•Р СРЎС“ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘РЎР‹ Р Р…Р В° Р С‘Р С–РЎР‚Р С•Р С”Р В°
     for (const [targetPlayerId, narrative] of Object.entries(narratorOutput.players)) {
       await supabase.from("messages").insert({
-        session_id, sender_type: "master", sender_name: "Р СљР В°РЎРѓРЎвЂљР ВµРЎР‚", content: narrative,
+        session_id, sender_type: "master", sender_name: "Мастер", content: narrative,
         metadata: {
           target_player_id: targetPlayerId,
           turn_status: systemTruth.turn_status,
@@ -1424,7 +1452,7 @@ serve(async (req) => {
     // 3) Global log (РЎвЂљР С•Р В»РЎРЉР С”Р С• Р С—РЎР‚Р С‘ Р Р…Р В°Р В»Р С‘РЎвЂЎР С‘Р С‘ > 1 Р С‘Р С–РЎР‚Р С•Р С”Р В°, РЎвЂЎРЎвЂљР С•Р В±РЎвЂ№ Р Р† РЎРѓР С•Р В»Р С• Р Р…Р Вµ Р Т‘РЎС“Р В±Р В»Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С—Р ВµРЎР‚РЎРѓР С•Р Р…Р В°Р В»РЎРЉР Р…РЎвЂ№Р в„– Р Р…Р В°РЎР‚РЎР‚Р В°РЎвЂљР С‘Р Р†)
     if (narratorOutput.global_narrative && allPlayers.length > 1) {
       await supabase.from("messages").insert({
-        session_id, sender_type: "master", sender_name: "Р вЂєР С•Р С–",
+        session_id, sender_type: "master", sender_name: "Лог",
         content: narratorOutput.global_narrative,
         metadata: {
           type: "global_log",
@@ -1468,7 +1496,7 @@ serve(async (req) => {
             await supabase.from("messages").insert({
               session_id,
               sender_type: "master",
-              sender_name: "Р СљР В°РЎРѓРЎвЂљР ВµРЎР‚",
+              sender_name: "Мастер",
               content: fogText,
               metadata: {
                 target_player_id: obs.id,
@@ -1508,7 +1536,7 @@ serve(async (req) => {
       await supabase.from("messages").insert({
         session_id,
         sender_type: "master",
-        sender_name: "Р СљР С‘РЎР‚",
+        sender_name: "Мир",
         content: `СЂСџвЂњСљ **Р РЋР С•Р В±РЎвЂ№РЎвЂљР С‘Р Вµ Р СР С‘РЎР‚Р В°**: ${ev.summary}`,
         metadata: { type: "npc_expedition", npc_id: ev.npc_id, loot: ev.loot, leveled_up: ev.leveled_up },
       });
@@ -1519,8 +1547,8 @@ serve(async (req) => {
       await supabase.from("messages").insert({
         session_id,
         sender_type: "system",
-        sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
-        content: `СЂСџвЂќвЂќ **[Р СњР В°Р Р†РЎвЂ№Р С” Р С—Р С•Р Р†РЎвЂ№РЎв‚¬Р ВµР Р…!]** ${skillProgress.name} Р Т‘Р С•РЎРѓРЎвЂљР С‘Р С– РЎС“РЎР‚. ${skillProgress.level}! (+${skillProgress.level}% Р С” РЎРЊРЎвЂћРЎвЂћР ВµР С”РЎвЂљР С‘Р Р†Р Р…Р С•РЎРѓРЎвЂљР С‘)`,
+        sender_name: "Система",
+        content: `🔔 **[Навык повышен!]** ${skillProgress.name} достиг ур. ${skillProgress.level}! (+${skillProgress.level}% к эффективности)`,
         metadata: { type: "skill_level_up", skill_key: skillProgress.skill_key, level: skillProgress.level },
       });
     }
@@ -1530,8 +1558,8 @@ serve(async (req) => {
       await supabase.from("messages").insert({
         session_id,
         sender_type: "system",
-        sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
-        content: `СЂСџР‹вЂ° **[Р СњР С•Р Р†РЎвЂ№Р в„– РЎС“РЎР‚Р С•Р Р†Р ВµР Р…РЎРЉ!]** Р СџР С•Р В·Р Т‘РЎР‚Р В°Р Р†Р В»РЎРЏР ВµР С, Р Р†РЎвЂ№ Р Т‘Р С•РЎРѓРЎвЂљР С‘Р С–Р В»Р С‘ ${playerLevelUp.new_level} РЎС“РЎР‚Р С•Р Р†Р Р…РЎРЏ!\nР СџР С•Р В»РЎС“РЎвЂЎР ВµР Р…Р С• +2 РЎРѓР Р†Р С•Р В±Р С•Р Т‘Р Р…РЎвЂ№РЎвЂ¦ Р С•РЎвЂЎР С”Р В° РЎвЂ¦Р В°РЎР‚Р В°Р С”РЎвЂљР ВµРЎР‚Р С‘РЎРѓРЎвЂљР С‘Р С” (Р С›Р Тђ). Р СљР В°Р С”РЎРѓ. HP: ${playerLevelUp.max_hp}, Р СљР В°Р С”РЎРѓ. MP: ${playerLevelUp.max_mp}.`,
+        sender_name: "Система",
+        content: `🎉 **[Новый уровень!]** Поздравляем, вы достигли ${playerLevelUp.new_level} уровня!\nПолучено +2 свободных очка характеристик (ОХ). Макс. HP: ${playerLevelUp.max_hp}, Макс. MP: ${playerLevelUp.max_mp}.`,
         metadata: { type: "player_level_up", ...playerLevelUp },
       });
     }
@@ -1563,7 +1591,7 @@ serve(async (req) => {
             await supabase.from("messages").insert({
               session_id,
               sender_type: "system",
-              sender_name: "Р РЋРЎР‹Р В¶Р ВµРЎвЂљ",
+              sender_name: "Сюжет",
               content: announcement,
               metadata: {
                 type: "story_progress",
@@ -1607,7 +1635,7 @@ serve(async (req) => {
       const companionInviteResult = await handleCompanionInvitation({
         supabase,
         player_action_text: safeActionText,
-        acting_player_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+        acting_player_name: player.name || "Герой",
         acting_player_id: player.id,
         location_npcs: allNpcs,
         openrouter_api_key: openrouterApiKey,
@@ -1642,7 +1670,7 @@ serve(async (req) => {
           supabase,
           acting_player: {
             id: player.id,
-            name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+            name: player.name || "Герой",
             stats: player.stats,
             skills: skillsMap,
           },
@@ -1655,7 +1683,7 @@ serve(async (req) => {
           await supabase.from("messages").insert({
             session_id,
             sender_type: "master",
-            sender_name: "Р СџРЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…Р С‘Р Вµ",
+            sender_name: "Приручение",
             content: tamingResult.narrative_feedback,
             metadata: {
               type: "pet_taming",
@@ -1674,7 +1702,7 @@ serve(async (req) => {
       if (!companionInviteHandled) {
         const proactiveOffer = await checkNpcProactiveCompanionOffer({
           supabase,
-          acting_player_name: player.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+          acting_player_name: player.name || "Герой",
           acting_player_id: player.id,
           location_npcs: allNpcs,
           openrouter_api_key: openrouterApiKey,
@@ -1897,8 +1925,8 @@ serve(async (req) => {
                         await supabase.from("messages").insert({
                           session_id,
                           sender_type: "system",
-                          sender_name: "Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°",
-                          content: `СЂСџР‹вЂ° **[Р СџР С‘РЎвЂљР С•Р СР ВµРЎвЂ  Р С—Р С•Р Р†РЎвЂ№РЎРѓР С‘Р В» РЎС“РЎР‚Р С•Р Р†Р ВµР Р…РЎРЉ!]** ${turnNpc.name} Р Т‘Р С•РЎРѓРЎвЂљР С‘Р С– ${turnNpc.level} РЎС“РЎР‚Р С•Р Р†Р Р…РЎРЏ! Р СљР В°Р С”РЎРѓ. Р В·Р Т‘Р С•РЎР‚Р С•Р Р†РЎРЉР Вµ: ${turnNpc.max_hp} HP.`,
+                          sender_name: "Система",
+                          content: `🎉 **[Питомец повысил уровень!]** ${turnNpc.name} достиг ${turnNpc.level} уровня! Макс. здоровье: ${turnNpc.max_hp} HP.`,
                           metadata: { type: "pet_level_up", pet_id: turnNpc.id, new_level: turnNpc.level },
                         });
                       }
@@ -1927,7 +1955,7 @@ serve(async (req) => {
               // Р ТђР С›Р вЂќ Р вЂ™Р В Р С’Р вЂ“Р вЂќР вЂўР вЂР СњР С›Р вЂњР С› NPC (Р В°РЎвЂљР В°Р С”Р В° Р С‘Р С–РЎР‚Р С•Р С”Р В°)
               const battlefieldPlayers = (allPlayers || []).map((p: any) => ({
                 id: p.id,
-                name: p.name || "Р вЂњР ВµРЎР‚Р С•Р в„–",
+                name: p.name || "Герой",
                 hp: p.hp ?? 10,
                 max_hp: p.max_hp ?? 10,
                 armor_class: p.armor_class || 10,
@@ -1960,7 +1988,7 @@ serve(async (req) => {
               await supabase.from("messages").insert({
                 session_id,
                 sender_type: "master",
-                sender_name: "Р вЂР С•Р в„–",
+                sender_name: "Бой",
                 content: attackResult.log_message,
                 metadata: {
                   type: "npc_combat_turn",

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": ".ai/context_tests.md",
+    "style": "markdown",
+    "compress": true,
+    "showLineNumbers": false,
+    "tokenCountTree": false
+  },
+  "include": [
+    "tests/**/*"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "node_modules/**", "dist/**", ".git/**", ".playwright-mcp/**",
+      ".ai/**"
+    ]
+  }
+}

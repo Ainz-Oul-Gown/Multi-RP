@@ -1,0 +1,20 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": ".ai/context_db_migrations.md",
+    "style": "markdown",
+    "compress": true,
+    "showLineNumbers": false,
+    "tokenCountTree": false
+  },
+  "include": [
+    "supabase/migrations/**/*"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "node_modules/**", "dist/**", ".git/**", ".playwright-mcp/**",
+      ".ai/**"
+    ]
+  }
+}

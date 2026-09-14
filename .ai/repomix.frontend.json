@@ -1,0 +1,23 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": ".ai/context_frontend.md",
+    "style": "markdown",
+    "compress": true,
+    "showLineNumbers": false,
+    "tokenCountTree": false
+  },
+  "include": [
+    "src/**/*",
+    "index.html",
+    "vite.config.js",
+    "package.json"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "node_modules/**", "dist/**", ".git/**", ".playwright-mcp/**",
+      ".ai/**"
+    ]
+  }
+}

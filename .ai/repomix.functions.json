@@ -1,0 +1,20 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": ".ai/context_supabase_functions.md",
+    "style": "markdown",
+    "compress": true,
+    "showLineNumbers": false,
+    "tokenCountTree": false
+  },
+  "include": [
+    "supabase/functions/**/*"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "node_modules/**", "dist/**", ".git/**", ".playwright-mcp/**",
+      ".ai/**"
+    ]
+  }
+}

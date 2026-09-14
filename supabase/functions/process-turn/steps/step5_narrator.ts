@@ -18,6 +18,7 @@ export interface NarratorInputContext {
   player_race: string;
   player_class: string;
   lore_context: string;
+  recent_history: string[]; // последние 6 сообщений для контекста ДМ
   openrouter_api_key: string;
   dm_model: string;
 }
@@ -162,54 +163,73 @@ export function buildFallbackNarrative(systemTruth: SystemTruthDto): NarratorOut
   const players: Record<string, string> = {};
   for (const [pid, truth] of Object.entries(systemTruth.player_truths)) {
     const lines: string[] = [];
+
+    // Атмосфера (художественно)
     if (systemTruth.environment.atmosphere.sounds.length > 0) {
-      lines.push(`[Атмосфера: ${systemTruth.environment.atmosphere.sounds.join(", ")}]`);
+      lines.push(`В воздухе чувствуется: ${systemTruth.environment.atmosphere.sounds.join(", ")}.`);
     }
     if (systemTruth.environment.weather) {
-      lines.push(`[Погода: ${systemTruth.environment.weather}]`);
+      lines.push(`За окном — ${systemTruth.environment.weather}.`);
     }
+
+    // Факты хода
     if (truth.knowledge.length > 0) {
       lines.push(truth.knowledge.join("\n"));
     } else {
       lines.push("Ничего особенного не произошло.");
     }
+
+    // HP изменение (только если было)
     if (truth.hp_status.delta !== 0) {
-      const sign = truth.hp_status.delta > 0 ? "+" : "";
-      lines.push(`[HP: ${truth.hp_status.current}/${truth.hp_status.max} (${sign}${truth.hp_status.delta})]`);
+      if (truth.hp_status.delta > 0) {
+        lines.push(`Вы чувствуете прилив сил. (+${truth.hp_status.delta} здоровья, сейчас ${truth.hp_status.current}/${truth.hp_status.max})`);
+      } else {
+        lines.push(`Вы ощущаете боль от ран. (${truth.hp_status.delta} здоровья, осталось ${truth.hp_status.current}/${truth.hp_status.max})`);
+      }
     }
+
+    // Предметы (художественно)
     if (truth.inventory_delta.added.length > 0) {
-      lines.push(`[Получено: ${truth.inventory_delta.added.join(", ")}]`);
+      lines.push(`Вы подбираете: ${truth.inventory_delta.added.join(", ")}.`);
     }
     if (truth.inventory_delta.removed.length > 0) {
-      lines.push(`[Утрачено: ${truth.inventory_delta.removed.length} ед.]`);
+      lines.push(`Вы расстались с частью вещей.`);
     }
     if (truth.inventory_delta.damaged.length > 0) {
-      lines.push(`[Повреждено: ${truth.inventory_delta.damaged.length} ед.]`);
+      lines.push(`Некоторые предметы пострадали в бою.`);
     }
+
     players[pid] = lines.join("\n");
   }
 
   const globalParts: string[] = [];
   if (systemTruth.environment.location_name) {
-    globalParts.push(`[Локация: ${systemTruth.environment.location_name}]`);
+    globalParts.push(`📍 ${systemTruth.environment.location_name}`);
   }
-  globalParts.push(`[Время: ${String(systemTruth.environment.time.hour).padStart(2, "0")}:${String(systemTruth.environment.time.minute).padStart(2, "0")}]`);
+  globalParts.push(`🕐 ${String(systemTruth.environment.time.hour).padStart(2, "0")}:${String(systemTruth.environment.time.minute).padStart(2, "0")}`);
   for (const evt of systemTruth.global_events) {
     globalParts.push(evt);
   }
 
   return {
     players,
-    global_narrative: globalParts.join("\n"),
+    global_narrative: globalParts.join(" | "),
   };
 }
 
 // ============================================
 // Преобразование SystemTruthDto в чистый нарративный контекст
 // ============================================
-export function buildNarratorContext(system_truth: SystemTruthDto, action_text: string): string {
+export function buildNarratorContext(system_truth: SystemTruthDto, action_text: string, recent_history?: string[]): string {
   const t = system_truth.environment.time;
   const lines: string[] = [];
+
+  // Предыстория — последние ходы (если есть)
+  if (recent_history && recent_history.length > 0) {
+    lines.push("ИСТОРИЯ ПОСЛЕДНИХ ХОДОВ (не повторяй уже описанное, продолжай повествование):");
+    recent_history.forEach((msg) => lines.push(`  ${msg}`));
+    lines.push("");
+  }
 
   lines.push(`ДЕЙСТВИЕ ИГРОКА: "${action_text}"`);
   lines.push(`МЕСТО: ${system_truth.environment.location_name} | ВРЕМЯ: ${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`);
@@ -311,10 +331,10 @@ export function buildNarratorContext(system_truth: SystemTruthDto, action_text: 
 // Главная функция Шага 5
 // ============================================
 export async function generateNarrative(context: NarratorInputContext): Promise<NarratorOutputPayload> {
-  const { system_truth, action_text, player_name, player_race, player_class, lore_context, openrouter_api_key, dm_model } = context;
+  const { system_truth, action_text, player_name, player_race, player_class, lore_context, recent_history, openrouter_api_key, dm_model } = context;
 
   const systemPrompt = buildNarratorSystemPrompt(player_name, player_race, player_class, lore_context, system_truth.storyline);
-  const narratorContext = buildNarratorContext(system_truth, action_text);
+  const narratorContext = buildNarratorContext(system_truth, action_text, recent_history);
   const userMessage = `${narratorContext}\n\nСгенерируй нарратив строго по указанным фактам в JSON-формате.`;
 
   const isTest = openrouter_api_key === "test-key" || dm_model === "test-model";

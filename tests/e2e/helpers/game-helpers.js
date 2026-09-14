@@ -5,6 +5,9 @@ import { expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
+try {
+  process.loadEnvFile();
+} catch (e) {}
 
 export const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://xhzpxiiqrtmeduynqmsd.supabase.co';
 export const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
@@ -36,12 +39,34 @@ export function saveSessionState(state) {
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
 }
 
-/**
- * Создаёт Supabase клиент с сервисным ключом для проверок через API
- */
 export function createServiceClient() {
-  return createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false }
+  if (SERVICE_KEY) {
+    return createClient(SUPABASE_URL, SERVICE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+  }
+
+  let headers = {};
+  try {
+    const authPath = path.resolve('tests/e2e/.auth/session.json');
+    if (fs.existsSync(authPath)) {
+      const authData = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+      for (const origin of authData.origins || []) {
+        const item = origin.localStorage?.find(i => i.name.includes('auth-token'));
+        if (item) {
+          const parsed = JSON.parse(item.value);
+          if (parsed.access_token) {
+            headers['Authorization'] = `Bearer ${parsed.access_token}`;
+            break;
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return createClient(SUPABASE_URL, ANON_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers }
   });
 }
 

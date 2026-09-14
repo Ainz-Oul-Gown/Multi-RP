@@ -8,6 +8,9 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    watch: {
+      ignored: ['**/tests/**', '**/test-results/**', '**/.system_generated/**', '**/.git/**'],
+    },
     proxy: {
       '/api/supabase-mgmt': {
         target: 'https://api.supabase.com/v1',

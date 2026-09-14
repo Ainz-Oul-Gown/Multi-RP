@@ -5,15 +5,16 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://xhzpxiiqrtmeduynqmsd.supabase.co';
-// Service Role ключ — только для setup, берётся из переменной окружения
-// Установи: set E2E_SUPABASE_SERVICE_KEY=...
-const SERVICE_KEY = process.env.E2E_SUPABASE_SERVICE_KEY;
-if (!SERVICE_KEY) throw new Error('E2E_SUPABASE_SERVICE_KEY env var is required for e2e global setup');
+try {
+  process.loadEnvFile();
+} catch (e) {}
 
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://xhzpxiiqrtmeduynqmsd.supabase.co';
+const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+const SERVICE_KEY = process.env.E2E_SUPABASE_SERVICE_KEY;
 
 export const E2E_CONFIG = {
-  email: process.env.E2E_TEST_EMAIL || 'e2e_playwright_test@multirp.test',
+  email: process.env.E2E_TEST_EMAIL || 'e2e_playwright_test3@multirp.test',
   password: process.env.E2E_TEST_PASSWORD || 'E2ePlaywright2026!',
   characterName: 'Арин',
   worldName: 'Этерия',       // Импортируем из Этерия 2.6.json
@@ -27,27 +28,48 @@ export const E2E_CONFIG = {
 export default async function globalSetup() {
   console.log('\n🔧 [Global Setup] Initializing test user and Supabase data...');
 
-  const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  });
+  let user;
+  let supabase;
 
-  // 1. Создаём или находим пользователя
-  const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-  let user = listData?.users?.find(u => u.email === E2E_CONFIG.email);
-
-  if (!user) {
-    const { data: created, error } = await supabase.auth.admin.createUser({
-      email: E2E_CONFIG.email,
-      password: E2E_CONFIG.password,
-      email_confirm: true,
+  if (SERVICE_KEY) {
+    supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false }
     });
-    if (error) throw new Error(`Failed to create test user: ${error.message}`);
-    user = created.user;
-    console.log('  ✅ Test user created:', user.id);
+
+    const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    user = listData?.users?.find(u => u.email === E2E_CONFIG.email);
+
+    if (!user) {
+      const { data: created, error } = await supabase.auth.admin.createUser({
+        email: E2E_CONFIG.email,
+        password: E2E_CONFIG.password,
+        email_confirm: true,
+      });
+      if (error) throw new Error(`Failed to create test user: ${error.message}`);
+      user = created.user;
+      console.log('  ✅ Test user created:', user.id);
+    } else {
+      await supabase.auth.admin.updateUserById(user.id, { password: E2E_CONFIG.password });
+      console.log('  ✅ Test user exists:', user.id);
+    }
   } else {
-    // Обновляем пароль на случай если он изменился
-    await supabase.auth.admin.updateUserById(user.id, { password: E2E_CONFIG.password });
-    console.log('  ✅ Test user exists:', user.id);
+    supabase = createClient(SUPABASE_URL, ANON_KEY);
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: E2E_CONFIG.email,
+      password: E2E_CONFIG.password
+    });
+    if (signInError) {
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: E2E_CONFIG.email,
+        password: E2E_CONFIG.password
+      });
+      if (signUpError) throw new Error(`Failed to authenticate test user: ${signUpError.message}`);
+      user = signUpData.user;
+      console.log('  ✅ Test user signed up:', user.id);
+    } else {
+      user = signInData.user;
+      console.log('  ✅ Test user signed in:', user.id);
+    }
   }
 
   // 2. Настройки пользователя — бесплатные модели
@@ -79,6 +101,19 @@ export default async function globalSetup() {
     }
   }
   console.log('  ✅ Old test sessions cleaned up');
+
+  // 3b. Удаляем дублирующихся тестовых персонажей (Арин) — оставляем 0
+  // чтобы тест 01-B мог создать персонажа с нуля
+  const { data: existingChars } = await supabase
+    .from('character_cards')
+    .select('id')
+    .eq('owner_id', user.id)
+    .eq('name', E2E_CONFIG.characterName);
+
+  for (const ch of existingChars || []) {
+    await supabase.from('character_cards').delete().eq('id', ch.id);
+  }
+  console.log(`  ✅ Cleaned up ${existingChars?.length || 0} old test character(s)`);
 
   // 4. Сохраняем конфиг для переиспользования между тестами
   const stateDir = path.resolve('tests/e2e/.auth');

@@ -16,7 +16,7 @@ import {
   isProseNarrative,
 } from './helpers/game-helpers.js';
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://ainz-oul-gown.github.io/Multi-RP';
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3000';
 
 test.describe('02 — Начало сессии и первый ход ДМ', () => {
   test.setTimeout(180_000);
@@ -33,7 +33,7 @@ test.describe('02 — Начало сессии и первый ход ДМ', ()
   // TEST 02-A: Переход в игровой экран
   // ─────────────────────────────────────────────
   test('02-A: Игровой экран загружается, чат видим', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeVisible({ timeout: 10_000 });
@@ -46,7 +46,7 @@ test.describe('02 — Начало сессии и первый ход ДМ', ()
   // TEST 02-B: ДМ пишет стартовое сообщение "начало игры"
   // ─────────────────────────────────────────────
   test('02-B: Первый ход — ДМ описывает начало приключения в городе', async ({ page }) => {
-    await page.goto(`${BASE_URL}/#game/${sessionState.sessionId}`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/#/session/${sessionState.sessionId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#gameChat')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#actionInput')).toBeEnabled({ timeout: 10_000 });
 

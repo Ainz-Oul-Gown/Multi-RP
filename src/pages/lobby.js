@@ -3324,8 +3324,10 @@ export function renderLobby(container, user) {
     });
 
     document.getElementById('newSessionForm')?.addEventListener('submit', async (e) => {
+      console.log('[LOBBY] newSessionForm submit triggered');
       e.preventDefault();
       const worldId = document.getElementById('sessionWorld').value;
+      console.log('[LOBBY] worldId:', worldId);
       const difficulty = document.getElementById('sessionDifficulty').value;
       const aiKeyMode = document.getElementById('sessionAiKeyMode')?.value || 'host';
       let plotText = document.getElementById('sessionPlotText')?.value?.trim() || '';
@@ -3336,32 +3338,41 @@ export function renderLobby(container, user) {
       }
 
       try {
-        const session = await createSession({
+        const sessionPayload = {
           world_id: worldId,
           difficulty,
           is_pvp_enabled: pvpEnabled,
           ai_key_mode: aiKeyMode,
-        });
+        };
+        if (plotText && plotText.length > 10) {
+          sessionPayload.current_plot_stage = 'custom_plot';
+        }
+
+        console.log('[LOBBY] calling createSession with:', sessionPayload);
+        const session = await createSession(sessionPayload);
 
         // Save plot to lore_files if provided
         if (plotText && plotText.length > 10) {
-          const stageName = 'custom_plot';
-          await supabase.from('lore_files').insert({
-            world_id: worldId,
-            folder: 'plot',
-            title: stageName,
-            content: plotText,
-            tags: ['сюжет', 'custom'],
-          });
-          // Set session to use this plot
-          await updateSession(session.id, { current_plot_stage: stageName });
+          try {
+            await supabase.from('lore_files').insert({
+              world_id: worldId,
+              folder: 'plot',
+              title: 'custom_plot',
+              content: plotText,
+              tags: ['сюжет', 'custom'],
+            });
+          } catch (loreErr) {
+            console.warn('[LOBBY] lore_files insert warning:', loreErr);
+          }
         }
 
         toast.success('Сессия создана!');
         plotFile = null;
         document.getElementById('newSessionModal').classList.remove('open');
+        console.log('[LOBBY] redirecting to /session/' + session.id);
         router.navigate(`/session/${session.id}`);
       } catch (err) {
+        console.error('[LOBBY] createSession error:', err);
         toast.error('Ошибка: ' + err.message);
       }
     });

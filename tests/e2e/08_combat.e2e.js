@@ -13,7 +13,9 @@ import {
   logTestResult,
   hasEncodingArtifacts,
   isProseNarrative,
+  setupSupabaseProxy,
 } from './helpers/game-helpers.js';
+
 
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3000';
 
@@ -22,9 +24,10 @@ test.describe('08 — Боевая система', () => {
 
   let sessionState;
 
-  test.beforeEach(() => {
+  test.beforeEach(async ({ page }) => {
     sessionState = loadSessionState();
     if (!sessionState) test.skip(true, 'Session state not found');
+    await setupSupabaseProxy(page);
   });
 
   // ─────────────────────────────────────────────

@@ -352,6 +352,7 @@ export async function setDatabaseConfig({ isCustom, url, anonKey }) {
  * 3. Если нет в IndexedDB — оставляет стандартную БД
  */
 export async function initDatabaseFromStorageOrUrl() {
+  console.log('[DB Init] Starting initDatabaseFromStorageOrUrl...');
   let detectedConfig = null;
 
   // 1. Проверяем URL параметры (search и hash)
@@ -416,9 +417,17 @@ export async function initDatabaseFromStorageOrUrl() {
     return { ...detectedConfig, active: true };
   }
 
-  // 2. Если в URL ничего не было — читаем из IndexedDB
+  // 2. Если в URL ничего не было — читаем из IndexedDB (с таймаутом 3с)
+  console.log('[DB Init] Checking IndexedDB for custom config...');
   try {
-    const saved = await loadCustomDbConfig();
+    const savedPromise = loadCustomDbConfig();
+    const timeoutPromise = new Promise(resolve =>
+      setTimeout(() => {
+        console.warn('[DB Init] IndexedDB timeout (3s) — skipping, using default config');
+        resolve(null);
+      }, 3000)
+    );
+    const saved = await Promise.race([savedPromise, timeoutPromise]);
     if (saved && saved.isCustom && saved.url && saved.anonKey) {
       activeUrl = saved.url;
       activeAnonKey = saved.anonKey;
@@ -432,6 +441,7 @@ export async function initDatabaseFromStorageOrUrl() {
     console.warn('[Supabase] Failed to load config from IndexedDB:', idbErr);
   }
 
+  console.log('[DB Init] Using default Supabase config');
   return { isCustom: false, url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, fromInvite: false };
 }
 

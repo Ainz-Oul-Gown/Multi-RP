@@ -1,0 +1,2174 @@
+﻿// supabase/functions/process-turn/index.ts
+// 5-Р РЋРІвЂљВ¬Р В Р’В°Р В РЎвЂ“Р В РЎвЂўР В Р вЂ Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎвЂќР В РЎвЂўР В Р вЂ¦Р В Р вЂ Р В Р’ВµР В РІвЂћвЂ“Р В Р’ВµР РЋР вЂљ process-turn: Router Р Р†РІР‚В РІР‚в„ў Engine Р Р†РІР‚В РІР‚в„ў Persistence Р Р†РІР‚В РІР‚в„ў SystemTruth Р Р†РІР‚В РІР‚в„ў Narrator
+//
+// Р В Р РѓР В Р’В°Р В РЎвЂ“Р В РЎвЂ:
+//   1. AI Router  (step1_router.ts)        Р Р†Р вЂљРІР‚Сњ Р В РЎвЂ”Р В Р’В°Р РЋР вЂљР РЋР С“Р В РЎвЂР В Р вЂ¦Р В РЎвЂ“ Р В Р вЂ¦Р В Р’В°Р В РЎВР В Р’ВµР РЋР вЂљР В Р’ВµР В Р вЂ¦Р В РЎвЂР В РІвЂћвЂ“ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В° Р Р†РІР‚В РІР‚в„ў JSON actions
+//   2. Game Engine (engine/step2_engine.ts) Р Р†Р вЂљРІР‚Сњ Р В Р’В±Р РЋР вЂљР В РЎвЂўР РЋР С“Р В РЎвЂќР В РЎвЂ Р В РЎвЂќР РЋРЎвЂњР В Р’В±Р В РЎвЂР В РЎвЂќР В РЎвЂўР В Р вЂ , Р В РЎвЂ”Р РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р’ВµР РЋР вЂљР В РЎвЂќР В РЎвЂ, Р В РЎВР РЋРЎвЂњР РЋРІР‚С™Р В Р’В°Р РЋРІР‚В Р В РЎвЂР В РЎвЂ
+//   3. Persistence (step3_persistence.ts)   Р Р†Р вЂљРІР‚Сњ Р В Р’В°Р РЋРІР‚С™Р В РЎвЂўР В РЎВР В Р’В°Р РЋР вЂљР В Р вЂ¦Р В РЎвЂўР В Р’Вµ Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР В РЎВР В Р’ВµР В Р вЂ¦Р В Р’ВµР В Р вЂ¦Р В РЎвЂР В Р’Вµ Р В РЎВР РЋРЎвЂњР РЋРІР‚С™Р В Р’В°Р РЋРІР‚В Р В РЎвЂР В РІвЂћвЂ“ Р РЋРІР‚РЋР В Р’ВµР РЋР вЂљР В Р’ВµР В Р’В· RPC
+//   4. System Truth (step4_system_truth.ts) Р Р†Р вЂљРІР‚Сњ Р В РЎС›Р РЋРЎвЂњР В РЎВР В Р’В°Р В Р вЂ¦ Р В РІР‚в„ўР В РЎвЂўР В РІвЂћвЂ“Р В Р вЂ¦Р РЋРІР‚в„–, Р РЋР вЂљР В Р’В°Р В Р’В·Р В РўвЂР В Р’ВµР В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂР В Р’Вµ Р В Р вЂ Р В РЎвЂР В РўвЂР В РЎвЂР В РЎВР В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В РЎвЂ, RAG
+//   5. Narrator  (step5_narrator.ts)        Р Р†Р вЂљРІР‚Сњ LLM-Р В Р вЂ¦Р В Р’В°Р РЋР вЂљР РЋР вЂљР В Р’В°Р РЋРІР‚С™Р В РЎвЂўР РЋР вЂљ (Р В РЎвЂР В Р’В»Р В РЎвЂ fallback)
+
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+import { parsePlayerIntent, buildRouterHeuristicFallback, classifyIntentWithAI } from "./steps/step1_router.ts";
+import { executeEngine } from "./engine/step2_engine.ts";
+
+import { applyTurnMutations } from "./steps/step3_persistence.ts";
+import { compileSystemTruth } from "./steps/step4_system_truth.ts";
+import { generateNarrative, buildFallbackNarrative } from "./steps/step5_narrator.ts";
+import { processNpcInteractions } from "./steps/npc_memory_updater.ts";
+import { ensureStartingLocation } from "../_shared/starting_location_generator.ts";
+import { detectSkillFromAction, calculateSkillBonuses } from "../_shared/skill_engine.ts";
+import { handleCompanionInSceneAction, resolveNpcBackgroundActivities, handleCompanionInvitation, checkNpcProactiveCompanionOffer } from "../_shared/npc_autonomous_engine.ts";
+import { decideNpcCombatAction, executeNpcAttack, executeCompanionAttack } from "../_shared/npc_combat_ai.ts";
+import { evaluatePetTamingAttempt, evaluatePetLoyaltyCheck, awardPetCombatXp } from "../_shared/pet_taming_engine.ts";
+import { buildSatellitePrompt, buildGpsPrompt } from "./steps/_shared_prompts.ts";
+import { RouterInputContext } from "./types.ts";
+import { evaluateStoryProgress } from "../_shared/storyProgressEvaluator.ts";
+import { ensureLocationMapAndTerrain, TERRAIN_MODIFIERS, TerrainType } from "../_shared/fog_location_generator.ts";
+import { executeRoundCycleNpcSimulation } from "../_shared/npc_world_simulator.ts";
+import { parseStatAllocationIntent } from "./steps/stat_allocation_utils.ts";
+import { advanceTime } from "./steps/time_utils.ts";
+
+import { DISTANCE_TIER, fogPickNarrative, fogGetEffectiveThresholds, fogGetDistanceTier, fogExtractSpeech } from "./steps/fog_of_war_utils.ts";
+
+function getPlayerPartyId(p: any, session: any): string | null {
+  if (p?.party_id) return String(p.party_id);
+  const groups = Array.isArray(session?.party_groups) ? session.party_groups : [];
+  for (const g of groups) {
+    if (Array.isArray(g.members) && g.members.includes(p?.id)) {
+      return g.id;
+    }
+  }
+  return null;
+}
+
+function arePlayersInSameParty(p1: any, p2: any, session: any): boolean {
+  if (!p1 || !p2 || p1.id === p2.id) return false;
+  const party1 = getPlayerPartyId(p1, session);
+  const party2 = getPlayerPartyId(p2, session);
+  return !!party1 && party1 === party2;
+}
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
+const AI_MODEL = "xiaomi/mimo-v2.5";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+// ============================================
+// AI API call
+// ============================================
+async function callAI(systemPrompt: string, userMessage: string, apiKey: string, retries = 3, model?: string): Promise<string> {
+  const useModel = model || AI_MODEL;
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 1200 * attempt));
+      }
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: useModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.7,
+          max_tokens: 2000,
+        }),
+      });
+      if (!response.ok) {
+        lastError = new Error(`AI API error: ${response.status}`);
+        if (response.status === 401 || response.status === 402 || response.status === 403) {
+          throw lastError;
+        }
+        continue; // retry
+      }
+      const data = await response.json();
+      const content = data?.choices?.[0]?.message?.content;
+      // OpenRouter sometimes returns null/empty content Р Р†Р вЂљРІР‚Сњ treat as transient error, retry
+      if (!content || content.trim() === "") {
+        lastError = new Error("AI Router: Р В РЎвЂ”Р РЋРЎвЂњР РЋР С“Р РЋРІР‚С™Р В РЎвЂўР В РІвЂћвЂ“ Р В РЎвЂўР РЋРІР‚С™Р В Р вЂ Р В Р’ВµР РЋРІР‚С™ Р В РЎвЂўР РЋРІР‚С™ LLM");
+        console.warn(`[callAI] attempt ${attempt + 1}/${retries} Р Р†Р вЂљРІР‚Сњ empty content, retrying...`);
+        continue;
+      }
+      return content;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+  throw new Error(`AI Router: Р В Р вЂ¦Р В Р’Вµ Р РЋРЎвЂњР В РўвЂР В Р’В°Р В Р’В»Р В РЎвЂўР РЋР С“Р РЋР Р‰ Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р РЋРЎвЂњР РЋРІР‚РЋР В РЎвЂР РЋРІР‚С™Р РЋР Р‰ Р В Р вЂ Р В Р’В°Р В Р’В»Р В РЎвЂР В РўвЂР В Р вЂ¦Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎвЂўР РЋРІР‚С™Р В Р вЂ Р В Р’ВµР РЋРІР‚С™ Р В РЎвЂ”Р В РЎвЂўР РЋР С“Р В Р’В»Р В Р’Вµ ${retries} Р В РЎвЂ”Р В РЎвЂўР В РЎвЂ”Р РЋРІР‚в„–Р РЋРІР‚С™Р В РЎвЂўР В РЎвЂќ. Р В РЎСџР В РЎвЂўР РЋР С“Р В Р’В»Р В Р’ВµР В РўвЂР В Р вЂ¦Р РЋР РЏР РЋР РЏ Р В РЎвЂўР РЋРІвЂљВ¬Р В РЎвЂР В Р’В±Р В РЎвЂќР В Р’В°: ${lastError?.message || "unknown"}`);
+}
+
+
+// ============================================
+
+// ============================================
+// Main Handler Р Р†Р вЂљРІР‚Сњ 5-Р РЋРІвЂљВ¬Р В Р’В°Р В РЎвЂ“Р В РЎвЂўР В Р вЂ Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎвЂќР В РЎвЂўР В Р вЂ¦Р В Р вЂ Р В Р’ВµР В РІвЂћвЂ“Р В Р’ВµР РЋР вЂљ
+// ============================================
+serve(async (req: any) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS });
+  }
+
+  const requestId = crypto.randomUUID().slice(0, 8);
+  console.log(`\n[${requestId}] Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™ PROCESS-TURN (5-step pipeline) START Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™Р Р†РІР‚СћРЎвЂ™`);
+
+  try {
+    const { session_id, player_id, action_text } = await req.json();
+    const safeActionText = cleanTextForAI(action_text);
+
+    if (!session_id || !player_id || !safeActionText) {
+      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
+    if (imagePattern.test(safeActionText)) {
+      return new Response(JSON.stringify({ error: "Р В РЎвЂєР В Р’В±Р В Р вЂ¦Р В Р’В°Р РЋР вЂљР РЋРЎвЂњР В Р’В¶Р В Р’ВµР В Р вЂ¦Р РЋРІР‚в„– Р РЋР С“Р РЋР С“Р РЋРІР‚в„–Р В Р’В»Р В РЎвЂќР В РЎвЂ Р В Р вЂ¦Р В Р’В° Р В РЎвЂР В Р’В·Р В РЎвЂўР В Р’В±Р РЋР вЂљР В Р’В°Р В Р’В¶Р В Р’ВµР В Р вЂ¦Р В РЎвЂР РЋР РЏ. Р В Р в‚¬Р В РўвЂР В Р’В°Р В Р’В»Р В РЎвЂР РЋРІР‚С™Р В Р’Вµ Р В РЎвЂР РЋРІР‚В¦ Р В РЎвЂ Р В РЎвЂ”Р В РЎвЂўР В РЎвЂ”Р РЋР вЂљР В РЎвЂўР В Р’В±Р РЋРЎвЂњР В РІвЂћвЂ“Р РЋРІР‚С™Р В Р’Вµ Р РЋР С“Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В°." }), {
+        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // ============================================
+    // LOAD CONTEXT
+    // ============================================
+    const { data: player, error: playerErr } = await supabase
+      .from("players")
+      .select("*, inventory(*)")
+      .eq("id", player_id)
+      .single();
+    if (playerErr || !player) {
+      return new Response(JSON.stringify({ error: "Player not found" }), { status: 404, headers: { ...CORS, "Content-Type": "application/json" } });
+    }
+
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("*, worlds(owner_id, settings)")
+      .eq("id", session_id)
+      .single();
+    if (!session) {
+      return new Response(JSON.stringify({ error: "Session not found" }), { status: 404, headers: { ...CORS, "Content-Type": "application/json" } });
+    }
+
+    const sessionStoryline = session.storyline || session.worlds?.settings?.storyline || null;
+
+    // Resolve API key + models:
+    // Р В РЎСџР В РЎвЂўР В РўвЂР В РўвЂР В Р’ВµР РЋР вЂљР В Р’В¶Р В РЎвЂќР В Р’В° Р РЋР вЂљР В Р’ВµР В Р’В¶Р В РЎвЂР В РЎВР В Р’В° Р В РЎвЂўР В Р’В±Р РЋРІР‚В°Р В Р’ВµР В РЎвЂ“Р В РЎвЂў Р В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋР В Р’В° Р РЋРІР‚В¦Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В Р’В° (ai_key_mode: 'host' | 'individual')
+    // Р В РЎСџР В РЎвЂў Р РЋРЎвЂњР В РЎВР В РЎвЂўР В Р’В»Р РЋРІР‚РЋР В Р’В°Р В Р вЂ¦Р В РЎвЂР РЋР вЂ№ 'host': Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР РЋРІР‚в„– Р В Р вЂ Р РЋР С“Р В Р’ВµР РЋРІР‚В¦ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂўР В Р вЂ  Р В РЎвЂР РЋР С“Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р РЋР Р‰Р В Р’В·Р РЋРЎвЂњР РЋР вЂ№Р РЋРІР‚С™ Р В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋ Р В РЎвЂ Р В РЎВР В РЎвЂўР В РўвЂР В Р’ВµР В Р’В»Р В РЎвЂ Р РЋР С“Р В РЎвЂўР В Р’В·Р В РўвЂР В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р РЋР РЏ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋР С“Р В РЎвЂР В РЎвЂ/Р В РЎВР В РЎвЂР РЋР вЂљР В Р’В°,
+    // Р В Р’ВµР РЋР С“Р В Р’В»Р В РЎвЂ Р В Р вЂ¦Р В Р’Вµ Р В Р вЂ Р РЋРІР‚в„–Р В Р’В±Р РЋР вЂљР В Р’В°Р В Р вЂ¦ Р РЋР вЂљР В Р’ВµР В Р’В¶Р В РЎвЂР В РЎВ 'individual' (Р В РЎвЂќР В Р’В°Р В Р’В¶Р В РўвЂР РЋРІР‚в„–Р В РІвЂћвЂ“ Р РЋР С“Р В РЎвЂў Р РЋР С“Р В Р вЂ Р В РЎвЂўР В РЎвЂР В РЎВ).
+    const aiKeyMode = session.ai_key_mode || 'host';
+    const hostUserId = session.worlds?.owner_id || null;
+
+    let openrouterApiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    let satelliteModel = AI_MODEL, gpsModel = AI_MODEL, dmModel = AI_MODEL;
+
+    // 1. Р В РІР‚вЂќР В Р’В°Р В РЎвЂ“Р РЋР вЂљР РЋРЎвЂњР В Р’В·Р В РЎвЂќР В Р’В° Р В Р вЂ¦Р В Р’В°Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљР В РЎвЂўР В Р’ВµР В РЎвЂќ Р РЋРІР‚С™Р В Р’ВµР В РЎвЂќР РЋРЎвЂњР РЋРІР‚В°Р В Р’ВµР В РЎвЂ“Р В РЎвЂў Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В° (Р В Р’ВµР РЋР С“Р В Р’В»Р В РЎвЂ Р В Р’ВµР РЋР С“Р РЋРІР‚С™Р РЋР Р‰)
+    let playerSettings: any = null;
+    if (player.user_id) {
+      const { data: us } = await supabase.from("user_settings")
+        .select("openrouter_key, satellite_model, gps_model, dm_model")
+        .eq("id", player.user_id).maybeSingle();
+      playerSettings = us;
+    }
+
+    // 2. Р В РІР‚вЂќР В Р’В°Р В РЎвЂ“Р РЋР вЂљР РЋРЎвЂњР В Р’В·Р В РЎвЂќР В Р’В° Р В Р вЂ¦Р В Р’В°Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљР В РЎвЂўР В Р’ВµР В РЎвЂќ Р РЋРІР‚В¦Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В Р’В° (Р РЋР С“Р В РЎвЂўР В Р’В·Р В РўвЂР В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р РЋР РЏ Р В РЎВР В РЎвЂР РЋР вЂљР В Р’В°/Р РЋР С“Р В Р’ВµР РЋР С“Р РЋР С“Р В РЎвЂР В РЎвЂ)
+    let hostSettings: any = null;
+    if (hostUserId && hostUserId !== player.user_id) {
+      const { data: hs } = await supabase.from("user_settings")
+        .select("openrouter_key, satellite_model, gps_model, dm_model")
+        .eq("id", hostUserId).maybeSingle();
+      hostSettings = hs;
+    } else if (hostUserId && hostUserId === player.user_id) {
+      hostSettings = playerSettings;
+    }
+
+    // 3. Р В РІР‚в„ўР РЋРІР‚в„–Р В Р’В±Р В РЎвЂўР РЋР вЂљ Р В РЎвЂР РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋРІР‚РЋР В Р вЂ¦Р В РЎвЂР В РЎвЂќР В Р’В° Р В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋР В Р’В° Р В РЎвЂ Р В РЎВР В РЎвЂўР В РўвЂР В Р’ВµР В Р’В»Р В Р’ВµР В РІвЂћвЂ“ Р В Р вЂ  Р В Р’В·Р В Р’В°Р В Р вЂ Р В РЎвЂР РЋР С“Р В РЎвЂР В РЎВР В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В РЎвЂ Р В РЎвЂўР РЋРІР‚С™ ai_key_mode
+    if (aiKeyMode === 'host') {
+      // Р В РЎСџР РЋР вЂљР В РЎвЂР В РЎвЂўР РЋР вЂљР В РЎвЂР РЋРІР‚С™Р В Р’ВµР РЋРІР‚С™ Р В РўС’Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В Р’В°: Р РЋР С“Р В Р вЂ¦Р В Р’В°Р РЋРІР‚РЋР В Р’В°Р В Р’В»Р В Р’В° Р В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋ Р В РЎвЂ Р В РЎВР В РЎвЂўР В РўвЂР В Р’ВµР В Р’В»Р В РЎвЂ Р РЋР С“Р В РЎвЂўР В Р’В·Р В РўвЂР В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р РЋР РЏ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋР С“Р В РЎвЂР В РЎвЂ
+      const targetSettings = hostSettings?.openrouter_key ? hostSettings : playerSettings;
+      if (targetSettings?.openrouter_key) openrouterApiKey = sanitizeKey(targetSettings.openrouter_key);
+      if (targetSettings?.satellite_model) satelliteModel = targetSettings.satellite_model;
+      if (targetSettings?.gps_model) gpsModel = targetSettings.gps_model;
+      if (targetSettings?.dm_model) dmModel = targetSettings.dm_model;
+    } else {
+      // Р В Р’В Р В Р’ВµР В Р’В¶Р В РЎвЂР В РЎВ 'individual': Р В РЎвЂќР В Р’В°Р В Р’В¶Р В РўвЂР РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќ Р В РЎвЂР РЋР С“Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р РЋР Р‰Р В Р’В·Р РЋРЎвЂњР В Р’ВµР РЋРІР‚С™ Р РЋР С“Р В Р вЂ Р В РЎвЂўР В РІвЂћвЂ“ Р В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋ; Р В Р’ВµР РЋР С“Р В Р’В»Р В РЎвЂ Р РЋРЎвЂњ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В° Р В Р вЂ¦Р В Р’ВµР РЋРІР‚С™ Р В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋР В Р’В° Р Р†Р вЂљРІР‚Сњ Р РЋРІР‚С›Р В РЎвЂўР В Р’В»Р В Р’В»Р В Р’В±Р РЋР РЉР В РЎвЂќ Р В Р вЂ¦Р В Р’В° Р В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋ Р РЋРІР‚В¦Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В Р’В°
+      const targetSettings = playerSettings?.openrouter_key ? playerSettings : hostSettings;
+      if (targetSettings?.openrouter_key) openrouterApiKey = sanitizeKey(targetSettings.openrouter_key);
+      if (targetSettings?.satellite_model) satelliteModel = targetSettings.satellite_model;
+      if (targetSettings?.gps_model) gpsModel = targetSettings.gps_model;
+      if (targetSettings?.dm_model) dmModel = targetSettings.dm_model;
+    }
+
+    if (!openrouterApiKey) {
+      const errorMsg = aiKeyMode === 'host'
+        ? "Р В РЎСљР В Р’Вµ Р В Р’В·Р В Р’В°Р В РўвЂР В Р’В°Р В Р вЂ¦ OpenRouter API Key Р РЋР С“Р В РЎвЂўР В Р’В·Р В РўвЂР В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р РЋР РЏ Р РЋР С“Р В Р’ВµР РЋР С“Р РЋР С“Р В РЎвЂР В РЎвЂ. Р В РўС’Р В РЎвЂўР РЋР С“Р РЋРІР‚С™ Р В РўвЂР В РЎвЂўР В Р’В»Р В Р’В¶Р В Р’ВµР В Р вЂ¦ Р РЋРЎвЂњР В РЎвЂќР В Р’В°Р В Р’В·Р В Р’В°Р РЋРІР‚С™Р РЋР Р‰ Р В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋ Р В Р вЂ  Р В Р вЂ¦Р В Р’В°Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљР В РЎвЂўР В РІвЂћвЂ“Р В РЎвЂќР В Р’В°Р РЋРІР‚В¦ Р В Р’В°Р В РЎвЂќР В РЎвЂќР В Р’В°Р РЋРЎвЂњР В Р вЂ¦Р РЋРІР‚С™Р В Р’В°."
+        : "Р В Р в‚¬Р В РЎвЂќР В Р’В°Р В Р’В¶Р В РЎвЂР РЋРІР‚С™Р В Р’Вµ Р В Р вЂ Р В Р’В°Р РЋРІвЂљВ¬ OpenRouter API Key Р В Р вЂ  Р В Р вЂ¦Р В Р’В°Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљР В РЎвЂўР В РІвЂћвЂ“Р В РЎвЂќР В Р’В°Р РЋРІР‚В¦ Р В Р’В°Р В РЎвЂќР В РЎвЂќР В Р’В°Р РЋРЎвЂњР В Р вЂ¦Р РЋРІР‚С™Р В Р’В°.";
+      return new Response(JSON.stringify({ error: errorMsg, code: "MISSING_API_KEY" }), {
+        status: 402, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    // Load location, available locations, lore
+    let currentLocationName: string | null = null, currentStateName: string | null = null, currentLocationType: string | null = null;
+    // Wild zone Р Р†Р вЂљРІР‚Сњ Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР РЋР вЂљР В РЎвЂўР В РўвЂР В Р вЂ¦Р В Р’В°Р РЋР РЏ Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р В Р’В° Р В Р вЂ Р В Р вЂ¦Р В Р’Вµ Р В РЎвЂР В РЎВР В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋРІР‚в„–Р РЋРІР‚В¦ Р В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР В РІвЂћвЂ“ (Р В Р’В»Р В Р’ВµР РЋР С“, Р В РЎвЂ”Р В Р’ВµР РЋРІР‚В°Р В Р’ВµР РЋР вЂљР В Р’В°, Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р В Р’Вµ)
+    const currentWildZone: string | null = session.current_wild_zone || null;
+    let currentDangerLevel = "normal"; // РёР· locations.danger_level
+    if (currentWildZone) {
+      // Player is in open world / wild zone Р Р†Р вЂљРІР‚Сњ use currentWildZone as location name
+      currentLocationName = currentWildZone;
+      currentLocationType = "wild";
+    } else if (session.current_location_id) {
+      try {
+        const { data: locData } = await supabase
+          .from("locations")
+          .select("name, type, danger_level, states(name)")
+          .eq("id", session.current_location_id)
+          .maybeSingle();
+        if (locData) {
+          currentLocationName = locData.name;
+          currentLocationType = locData.type || null;
+          currentDangerLevel = locData.danger_level || "normal";
+          const stateObj = Array.isArray(locData.states) ? locData.states[0] : locData.states;
+          currentStateName = stateObj?.name || null;
+        }
+      } catch (locErr) {
+        console.warn(`[${requestId}] Failed to load current location:`, locErr);
+      }
+    }
+
+    let availableLocations: { id: string; name: string; type: string; state_name: string }[] = [];
+    if (session.world_id) {
+      try {
+        const { data: statesWithLocs } = await supabase
+          .from("states")
+          .select("id, name, locations(id, name, type)")
+          .eq("world_id", session.world_id);
+        if (statesWithLocs) {
+          for (const s of statesWithLocs) {
+            const locs = Array.isArray(s.locations) ? s.locations : [];
+            for (const l of locs) {
+              availableLocations.push({
+                id: l.id,
+                name: l.name,
+                type: l.type,
+                state_name: s.name,
+              });
+            }
+          }
+        }
+      } catch (locsErr) {
+        console.warn(`[${requestId}] Failed to load available locations:`, locsErr);
+      }
+    }
+
+    let loreContext = "";
+    if (session.world_id) {
+      const { data: loreFiles } = await supabase
+        .from("lore_files")
+        .select("title, content")
+        .eq("world_id", session.world_id)
+        .limit(20) // Р±С‹Р»Рѕ 10;
+
+      if (loreFiles && loreFiles.length > 0) {
+        const keywords = [safeActionText, currentLocationName || "", currentWildZone || ""]
+          .join(" ")
+          .toLowerCase();
+
+        const relevantLore = loreFiles.filter((f: any) => {
+          const content = ((f.title || "") + " " + (f.content || "")).toLowerCase();
+          return keywords
+            .split(/\s+/)
+            .some((w: string) => w.length > 4 && content.includes(w));
+        }).slice(0, 2);
+
+        const allLore = relevantLore.length > 0 ? relevantLore : loreFiles.slice(0, 2);
+        loreContext = allLore
+          .map((f: any) => `### ${f.title}
+${cleanTextForAI(f.content).slice(0, 2000)}`) // Р±С‹Р»Рѕ 600
+          .join("\n\n");
+      }
+    }
+    const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type, sender_name").eq("session_id", session_id).order("created_at", { ascending: false }).limit(10);
+    const recentMessages = (recentMsgs || []).reverse().map((m: any) => `[${m.sender_name || (m.sender_type === "master" ? "РњР°СЃС‚РµСЂ" : "РРіСЂРѕРє")}]: ${cleanTextForAI(m.content).slice(0, 300)}`);
+
+    // Load all players in session (for router, engine and system truth context)
+    const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*), current_zone").eq("session_id", session_id).order("created_at", { ascending: true });
+    const allPlayers = allPlayersData || [];
+
+    // Р В РІР‚вЂќР В Р’В°Р В РЎвЂ“Р РЋР вЂљР РЋРЎвЂњР В Р’В¶Р В Р’В°Р В Р’ВµР В РЎВ Р В РЎвЂќР В Р’В°Р РЋР вЂљР РЋРІР‚С™Р РЋРЎвЂњ Р РЋР вЂљР В Р’В°Р РЋР С“Р РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋР РЏР В Р вЂ¦Р В РЎвЂР В РІвЂћвЂ“ Р В Р’В·Р В РЎвЂўР В Р вЂ¦ Р В РЎвЂ Р РЋРІР‚С™Р В РЎвЂР В РЎвЂ” Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В РЎвЂ Р В РЎвЂР В Р’В· Р В РЎвЂќР РЋР РЉР РЋРІвЂљВ¬Р В Р’В° Р РЋР С“Р В Р’ВµР РЋР С“Р РЋР С“Р В РЎвЂР В РЎвЂ (Р В Р’В·Р В Р’В°Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р В Р вЂ¦Р РЋР РЏР В Р’ВµР РЋРІР‚С™Р РЋР С“Р РЋР РЏ Р В РЎвЂ”Р РЋР вЂљР В РЎвЂ Р РЋР С“Р В РЎвЂўР В Р’В·Р В РўвЂР В Р’В°Р В Р вЂ¦Р В РЎвЂР В РЎвЂ/Р РЋР С“Р В РЎВР В Р’ВµР В Р вЂ¦Р В Р’Вµ Р В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР В РЎвЂ)
+    let locationMap: Record<string, Record<string, number>> = session.location_map || {};
+    let currentTerrain: string | null = session.current_terrain_type || null;
+
+    // Load all NPCs in current location (for router, engine and system truth context)
+    let allNpcs: any[] = [];
+    if (session.current_location_id) {
+      const { data: npcData, error: npcErr } = await supabase.from("npcs")
+        .select("id, name, race, class, role, category, hp, max_hp, armor_class, level, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time, temperament, motivation, current_mood, secrets, rumors, speech_style, daily_routine")
+        .eq("location_id", session.current_location_id);
+      if (!npcErr) {
+        // Derive is_alive from hp (column might not exist yet in all environments)
+        allNpcs = (npcData || []).map((n: any) => ({
+          ...n,
+          is_alive: (n.hp ?? 10) > 0,
+        }));
+      }
+    }
+
+    const isCompanionNpc = (n: any) => {
+      const role = (n.role || "").toLowerCase();
+      const tags = Array.isArray(n.status_tags) ? n.status_tags.map((t: string) => String(t).toLowerCase()) : [];
+      return role === "companion" || role === "Р РЋР С“Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂР В РЎвЂќ" || tags.some((t: string) => ["companion", "Р РЋР С“Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂР В РЎвЂќ", "Р В Р вЂ _Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂР В Р’Вµ", "Р В РЎвЂ”Р В РЎвЂР РЋРІР‚С™Р В РЎвЂўР В РЎВР В Р’ВµР РЋРІР‚В ", "Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР РЋР вЂљР РЋРЎвЂњР РЋРІР‚РЋР В Р’ВµР В Р вЂ¦"].includes(t));
+    };
+
+    // Р В РІР‚СћР РЋР С“Р В Р’В»Р В РЎвЂ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќ Р В Р вЂ¦Р В Р’В°Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В РЎвЂР РЋРІР‚С™Р РЋР С“Р РЋР РЏ Р В Р вЂ  Р В РўвЂР В РЎвЂР В РЎвЂќР В РЎвЂўР В РІвЂћвЂ“ Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р В Р’Вµ (Р В Р’В»Р В Р’ВµР РЋР С“, Р В РЎвЂ”Р В Р’ВµР РЋРІР‚В°Р В Р’ВµР РЋР вЂљР В Р’В°, Р В РЎвЂ”Р РЋРЎвЂњР РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋРІвЂљВ¬Р РЋР Р‰), Р В РЎвЂ“Р В РЎвЂўР РЋР вЂљР В РЎвЂўР В РўвЂР РЋР С“Р В РЎвЂќР В РЎвЂР В Р’Вµ NPC (Р РЋРІР‚С™Р В РЎвЂўР РЋР вЂљР В РЎвЂ“Р В РЎвЂўР В Р вЂ Р РЋРІР‚В Р РЋРІР‚в„–, Р В Р’В¶Р В РЎвЂР РЋРІР‚С™Р В Р’ВµР В Р’В»Р В РЎвЂ) Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В Р’В°Р РЋР вЂ№Р РЋРІР‚С™Р РЋР С“Р РЋР РЏ Р В Р вЂ  Р В РЎвЂ“Р В РЎвЂўР РЋР вЂљР В РЎвЂўР В РўвЂР В Р’Вµ!
+    // Р В РІР‚в„ў Р РЋР С“Р РЋРІР‚В Р В Р’ВµР В Р вЂ¦Р В Р’Вµ Р РЋР С“ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂўР В РЎВ Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР РЋР С“Р РЋРЎвЂњР РЋРІР‚С™Р РЋР С“Р РЋРІР‚С™Р В Р вЂ Р РЋРЎвЂњР РЋР вЂ№Р РЋРІР‚С™ Р В РЎС›Р В РЎвЂєР В РІР‚С”Р В Р’В¬Р В РЎв„ўР В РЎвЂє Р РЋР С“Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂР В РЎвЂќР В РЎвЂ/Р В РЎвЂ”Р В РЎвЂР РЋРІР‚С™Р В РЎвЂўР В РЎВР РЋРІР‚В Р РЋРІР‚в„– Р В РЎвЂР В Р’В»Р В РЎвЂ Р В РўвЂР В РЎвЂР В РЎвЂќР В РЎвЂР В Р’Вµ Р В Р вЂ Р РЋР вЂљР В Р’В°Р В РЎвЂ“Р В РЎвЂ/Р РЋР С“Р РЋРЎвЂњР РЋРІР‚В°Р В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р вЂ Р В Р’В°.
+    if (currentWildZone) {
+      const totalLoaded = allNpcs.length;
+      allNpcs = allNpcs.filter((n: any) =>
+        isCompanionNpc(n) ||
+        n.is_hostile === true ||
+        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р В РўвЂР В РЎвЂР В РЎвЂќР В РЎвЂР В РІвЂћвЂ“", "Р В РЎВР В РЎвЂўР В Р вЂ¦Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљ", "Р В РўвЂР В РЎвЂР В РЎвЂќР В Р’В°Р РЋР РЏ_Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р В Р’В°", "Р В Р’В·Р В Р вЂ Р В Р’ВµР РЋР вЂљР РЋР Р‰", "Р РЋРІР‚В¦Р В РЎвЂР РЋРІР‚В°Р В Р вЂ¦Р В РЎвЂР В РЎвЂќ"].includes(String(t).toLowerCase())))
+      );
+      console.log(`[${requestId}] [WILD_ZONE] In wild zone "${currentWildZone}": filtered out town NPCs (${totalLoaded} -> ${allNpcs.length} present)`);
+    }
+
+    console.log(`[${requestId}] [START] РЎР‚РЎСџР вЂ№Р вЂЎ Turn for player "${player.name}" (${player.id}) in session "${session_id}". Action: "${safeActionText}"`);
+    console.log(`[${requestId}] [LOCATION] РЎР‚РЎСџРІР‚СљР РЉ LocationID=${session.current_location_id}, Name="${currentLocationName}", WildZone="${session.current_wild_zone || 'none'}", NPCs present=${allNpcs.length} (${allNpcs.map((n: any) => n.name).join(', ') || 'none'})`);
+
+    // Р В РЎСџР РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р’ВµР РЋР вЂљР РЋР РЏР В Р’ВµР В РЎВ, Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р вЂ Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В Р’В»Р В РЎвЂ Р РЋР РЉР РЋРІР‚С™Р В РЎвЂў Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂ Р В Р вЂ  Р РЋР С“Р В Р’ВµР РЋР С“Р РЋР С“Р В РЎвЂР В РЎвЂ (Р В Р вЂ¦Р В Р’ВµР РЋРІР‚С™ Р РЋР С“Р В РЎвЂўР В РЎвЂўР В Р’В±Р РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂР В РІвЂћвЂ“ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В° Р В РЎвЂР В Р’В»Р В РЎвЂ Р В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР РЋР РЏ Р В Р вЂ¦Р В Р’Вµ Р В Р’В·Р В Р’В°Р В РўвЂР В Р’В°Р В Р вЂ¦Р В Р’В°)
+    const isFirstTurn = !session.current_location_id || !(recentMsgs || []).some((m: any) => m.sender_type === "player");
+    let startingLocationGenerated = false;
+
+    if (isFirstTurn) {
+      console.log(`[${requestId}] [STARTING_LOCATION] Generating/ensuring starting location for first turn...`);
+      let availableStartingLocations: any[] = [];
+      if (session.world_id) {
+        try {
+          const { data: statesWithLocs, error: stErr } = await supabase
+            .from("states")
+            .select(`
+              id,
+              name,
+              locations(
+                id,
+                name,
+                type,
+                description,
+                pos_x,
+                pos_y,
+                subzones(id, name, description, pos_x, pos_y, radius)
+              )
+            `)
+            .eq("world_id", session.world_id);
+
+          if (!stErr && statesWithLocs) {
+            for (const s of statesWithLocs) {
+              const locs = Array.isArray(s.locations) ? s.locations : [];
+              for (const l of locs) {
+                availableStartingLocations.push({
+                  id: l.id,
+                  name: l.name,
+                  type: l.type,
+                  description: l.description || "",
+                  state_name: s.name,
+                  pos_x: l.pos_x,
+                  pos_y: l.pos_y,
+                  subzones: Array.isArray(l.subzones) ? l.subzones : [],
+                });
+              }
+            }
+          }
+        } catch (stErr) {
+          console.warn(`[${requestId}] Failed to load detailed locations from states:`, stErr);
+        }
+
+        if (availableStartingLocations.length === 0) {
+          try {
+            const { data: directLocs, error: dirErr } = await supabase
+              .from("locations")
+              .select(`
+                id,
+                name,
+                type,
+                description,
+                pos_x,
+                pos_y,
+                states(name),
+                subzones(id, name, description, pos_x, pos_y, radius)
+              `)
+              .eq("world_id", session.world_id);
+
+            if (!dirErr && directLocs) {
+              for (const l of directLocs) {
+                const st = Array.isArray(l.states) ? l.states[0] : l.states;
+                availableStartingLocations.push({
+                  id: l.id,
+                  name: l.name,
+                  type: l.type,
+                  description: l.description || "",
+                  state_name: st?.name || "",
+                  pos_x: l.pos_x,
+                  pos_y: l.pos_y,
+                  subzones: Array.isArray(l.subzones) ? l.subzones : [],
+                });
+              }
+            }
+          } catch (dirErr) {
+            console.warn(`[${requestId}] Failed to load detailed locations directly:`, dirErr);
+          }
+        }
+      }
+
+      try {
+        const startLoc = await ensureStartingLocation({
+          supabase,
+          session,
+          player: {
+            id: player.id,
+            name: player.name || "Р“РµСЂРѕР№",
+            race: player.race,
+            class: player.class,
+            appearance: player.appearance,
+            personality: player.personality,
+            bio: player.bio,
+          },
+          action_text: safeActionText,
+          is_first_turn: true,
+          lore_context: loreContext,
+          available_locations: availableStartingLocations,
+          openrouter_api_key: openrouterApiKey,
+          model: satelliteModel,
+        });
+
+        if (startLoc && startLoc.location_id) {
+          startingLocationGenerated = true;
+          session.current_location_id = startLoc.location_id;
+          currentLocationName = startLoc.location_name;
+          currentLocationType = startLoc.location_type;
+          currentStateName = startLoc.state_name;
+          session.game_year = startLoc.game_time.year;
+          session.game_month = startLoc.game_time.month;
+          session.game_day = startLoc.game_time.day;
+          session.game_hour = startLoc.game_time.hour;
+          session.game_minute = startLoc.game_time.minute;
+
+          const playerUpdate: Record<string, any> = {};
+          if (startLoc.pos_x !== undefined) {
+            playerUpdate.pos_x = startLoc.pos_x;
+            player.pos_x = startLoc.pos_x;
+          }
+          if (startLoc.pos_y !== undefined) {
+            playerUpdate.pos_y = startLoc.pos_y;
+            player.pos_y = startLoc.pos_y;
+          }
+          if (startLoc.subzone_id) {
+            playerUpdate.subzone_id = startLoc.subzone_id;
+            player.subzone_id = startLoc.subzone_id;
+          }
+          if (startLoc.subzone_name) {
+            playerUpdate.current_zone = startLoc.subzone_name;
+            player.current_zone = startLoc.subzone_name;
+          } else if (startLoc.location_name) {
+            playerUpdate.current_zone = startLoc.location_name;
+            player.current_zone = startLoc.location_name;
+          }
+
+          if (Object.keys(playerUpdate).length > 0) {
+            try {
+              await supabase.from("players").update(playerUpdate).eq("id", player.id);
+            } catch (pUpdErr) {
+              console.warn(`[${requestId}] [STARTING_LOCATION] Failed to update player position:`, pUpdErr);
+            }
+          }
+
+          if (startLoc.initial_npcs?.length) {
+            allNpcs = startLoc.initial_npcs;
+          } else if (session.current_location_id) {
+            try {
+              const { data: npcData } = await supabase.from("npcs")
+                .select("id, name, race, class, role, category, hp, max_hp, armor_class, level, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time, temperament, motivation, current_mood, secrets, rumors, speech_style, daily_routine")
+                .eq("location_id", session.current_location_id);
+              if (npcData && npcData.length > 0) {
+                allNpcs = npcData.map((n: any) => ({
+                  ...n,
+                  is_alive: (n.hp ?? 10) > 0,
+                }));
+              }
+            } catch (npcReloadErr) {
+              console.warn(`[${requestId}] Failed to reload NPCs for chosen location:`, npcReloadErr);
+            }
+          }
+
+          if (!availableLocations.some((al) => al.id === startLoc.location_id)) {
+            availableLocations.push({
+              id: startLoc.location_id,
+              name: startLoc.location_name,
+              type: startLoc.location_type,
+              state_name: startLoc.state_name,
+            });
+          }
+
+          console.log(`[${requestId}] [STARTING_LOCATION] Spawned player ${player.name} in location "${currentLocationName}" (${currentStateName}), subzone: "${startLoc.subzone_name || 'none'}" at (${player.pos_x}, ${player.pos_y})`);
+
+          try {
+            const startMap = await ensureLocationMapAndTerrain({
+              supabase,
+              sessionId: session_id,
+              locationId: startLoc.location_id,
+              locationName: startLoc.location_name,
+              locationType: startLoc.location_type,
+              openrouterApiKey,
+              model: satelliteModel,
+            });
+            locationMap = startMap.location_map;
+            currentTerrain = startMap.terrain_type;
+            session.location_map = locationMap;
+            session.current_terrain_type = currentTerrain;
+          } catch (startMapErr) {
+            console.warn(`[${requestId}] [STARTING_LOCATION] Failed to generate location_map:`, startMapErr);
+          }
+        }
+      } catch (locGenErr) {
+        console.warn(`[${requestId}] [STARTING_LOCATION] Generation error:`, locGenErr);
+      }
+    }
+
+    // Р В РІР‚СћР РЋР С“Р В Р’В»Р В РЎвЂ Р В РЎвЂќР В Р’В°Р РЋР вЂљР РЋРІР‚С™Р В Р’В° Р РЋР вЂљР В Р’В°Р РЋР С“Р РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋР РЏР В Р вЂ¦Р В РЎвЂР В РІвЂћвЂ“ Р В РЎвЂР В Р’В»Р В РЎвЂ Р РЋРІР‚С™Р В РЎвЂР В РЎвЂ” Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В РЎвЂ Р В Р’ВµР РЋРІР‚В°Р РЋРІР‚В Р В Р вЂ¦Р В Р’Вµ Р РЋР С“Р В РЎвЂўР В Р’В·Р В РўвЂР В Р’В°Р В Р вЂ¦Р РЋРІР‚в„– Р Р†Р вЂљРІР‚Сњ Р В РЎвЂ“Р В Р’ВµР В Р вЂ¦Р В Р’ВµР РЋР вЂљР В РЎвЂР РЋР вЂљР РЋРЎвЂњР В Р’ВµР В РЎВ Р РЋРІР‚РЋР В Р’ВµР РЋР вЂљР В Р’ВµР В Р’В· Р В Р’ВР В Р’В
+    if (Object.keys(locationMap).length === 0 && (session.current_location_id || currentWildZone || currentLocationName)) {
+      try {
+        const initLocMap = await ensureLocationMapAndTerrain({
+          supabase,
+          sessionId: session_id,
+          locationId: session.current_location_id,
+          locationName: currentLocationName || "Р В РІР‚С”Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР РЋР РЏ",
+          isWildZone: Boolean(currentWildZone),
+          openrouterApiKey,
+          model: satelliteModel,
+        });
+        locationMap = initLocMap.location_map;
+        currentTerrain = initLocMap.terrain_type;
+        session.location_map = locationMap;
+        session.current_terrain_type = currentTerrain;
+      } catch (locMapInitErr) {
+        console.warn(`[${requestId}] [FOG] Failed to ensure initial location_map:`, locMapInitErr);
+      }
+    }
+
+    // ============================================
+    // Р В Р’В§Р В Р’В°Р РЋРІР‚С™: Р РЋР вЂљР В Р’В°Р РЋР С“Р В РЎвЂ”Р РЋР вЂљР В Р’ВµР В РўвЂР В Р’ВµР В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂР В Р’Вµ Р В РЎвЂўР РЋРІР‚РЋР В РЎвЂќР В РЎвЂўР В Р вЂ  Р РЋРІР‚В¦Р В Р’В°Р РЋР вЂљР В Р’В°Р В РЎвЂќР РЋРІР‚С™Р В Р’ВµР РЋР вЂљР В РЎвЂР РЋР С“Р РЋРІР‚С™Р В РЎвЂР В РЎвЂќ
+    // ============================================
+    let statAllocatedFact: string | null = null;
+    const statAllocIntent = parseStatAllocationIntent(safeActionText);
+    if (statAllocIntent) {
+      console.log(`[${requestId}] [STAT_ALLOC] Detected chat intent: +${statAllocIntent.points} to ${statAllocIntent.stat}`);
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc("allocate_stat_points", {
+          p_player_id: player.id,
+          p_stat_name: statAllocIntent.stat,
+          p_points: statAllocIntent.points,
+        });
+        if (rpcErr) {
+          console.warn(`[${requestId}] [STAT_ALLOC] RPC error:`, rpcErr);
+        } else if (rpcRes && rpcRes.success) {
+          console.log(`[${requestId}] [STAT_ALLOC] Successfully allocated:`, rpcRes);
+          const statNamesRu: Record<string, string> = {
+            STR: "СЃРёР»Р°", DEX: "Р»РѕРІРєРѕСЃС‚СЊ", CON: "РІС‹РЅРѕСЃР»РёРІРѕСЃС‚СЊ",
+            INT: "РёРЅС‚РµР»Р»РµРєС‚", WIS: "РјСѓРґСЂРѕСЃС‚СЊ", CHA: "С…Р°СЂРёР·РјР°"
+          };
+          const statRu = statNamesRu[statAllocIntent.stat] || statAllocIntent.stat;
+          statAllocatedFact = `${player.name} СѓСЃРїРµС€РЅРѕ РІР»РѕР¶РёР» ${statAllocIntent.points} РѕС‡. РІ С…Р°СЂР°РєС‚РµСЂРёСЃС‚РёРєСѓ ${statRu} (РЅРѕРІРѕРµ Р·РЅР°С‡РµРЅРёРµ: ${rpcRes.new_value}, СЃРІРѕР±РѕРґРЅРѕ РѕС‡РєРѕРІ: ${rpcRes.remaining_points}).`;
+
+          player.stat_points = rpcRes.remaining_points;
+          if (!player.stats) player.stats = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
+          player.stats[statAllocIntent.stat] = rpcRes.new_value;
+          if (statAllocIntent.stat === "CON") {
+            const conMod = Math.floor((rpcRes.new_value - 10) / 2);
+            player.max_hp = Math.max(10, rpcRes.new_value * 2 + (player.level || 1) * Math.max(1, conMod + 5));
+          } else if (statAllocIntent.stat === "INT") {
+            player.max_mp = Math.max(20, rpcRes.new_value * 2 + (player.level || 1) * 5);
+          }
+        } else if (rpcRes && !rpcRes.success) {
+          console.log(`[${requestId}] [STAT_ALLOC] Allocation rejected: ${rpcRes.error}`);
+          statAllocatedFact = `${player.name} РїРѕРїС‹С‚Р°Р»СЃСЏ СЂР°СЃРїСЂРµРґРµР»РёС‚СЊ РѕС‡РєРё РІ ${statAllocIntent.stat}, РЅРѕ РЅРµ СЃРјРѕРі: ${rpcRes.error}`;
+        }
+      } catch (allocEx) {
+        console.warn(`[${requestId}] [STAT_ALLOC] Exception:`, allocEx);
+      }
+    }
+
+    // ============================================
+    // Р В Р РѓР В РЎвЂ™Р В РІР‚Сљ 1: AI Router (parsePlayerIntent)
+    // ============================================
+    console.log(`[${requestId}] [STEP 1] AI Router...`);
+    // Р В РЎСџР В РЎвЂўР В РўвЂР В РЎвЂ“Р РЋР вЂљР РЋРЎвЂњР В Р’В¶Р В Р’В°Р В Р’ВµР В РЎВ Р В РЎвЂР РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋР вЂљР В РЎвЂР РЋР вЂ№ Р В РўвЂР В Р’В»Р РЋР РЏ Р В РЎвЂќР В РЎвЂўР В Р вЂ¦Р РЋРІР‚С™Р В Р’ВµР В РЎвЂќР РЋР С“Р РЋРІР‚С™Р В Р’В° Р В РЎвЂўР В Р’В±Р РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂР РЋР РЏ Р РЋР С“ NPC/Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°Р В РЎВР В РЎвЂ
+    let recentHistoryStr = "";
+    const { data: routerRecentMsgs } = await supabase.from("messages").select("sender_name, content, sender_type").eq("session_id", session_id).order("created_at", { ascending: false }).limit(3); if (routerRecentMsgs && routerRecentMsgs.length > 0) {
+      recentHistoryStr = routerRecentMsgs.reverse().map((m: any) => `${m.sender_name || (m.sender_type === 'master' ? 'Р В РІР‚СњР В РЎС™' : 'Р В Р Р‹Р В РЎвЂР РЋР С“Р РЋРІР‚С™Р В Р’ВµР В РЎВР В Р’В°')}: "${m.content}"`).join("\n");
+    }
+
+    const routerInput: RouterInputContext = {
+      player_action_text: safeActionText,
+      recent_history: recentHistoryStr,
+      player: {
+        id: player.id,
+        name: player.name || "Р“РµСЂРѕР№",
+        race: player.race || "Р В Р’В§Р В Р’ВµР В Р’В»Р В РЎвЂўР В Р вЂ Р В Р’ВµР В РЎвЂќ",
+        class: player.class || "Р В РІР‚в„ўР В РЎвЂўР В РЎвЂР В Р вЂ¦",
+        level: player.level || 1,
+        hp: player.hp ?? 100,
+        max_hp: player.max_hp ?? 100,
+        stats: player.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        location_name: currentLocationName,
+        state_name: currentStateName,
+      },
+      inventory: (player.inventory || []).map((i: any) => ({
+        id: i.id,
+        item_name: i.item_name || i.name || "Р В РЎСџР РЋР вЂљР В Р’ВµР В РўвЂР В РЎВР В Р’ВµР РЋРІР‚С™",
+        item_type: i.type || i.item_type || "misc",
+        quantity: i.quantity || 1,
+        condition: i.condition ?? null,
+        durability: i.durability ?? null,
+        description: i.description || "",
+      })),
+      nearby_npcs: allNpcs.map((n: any) => ({
+        id: n.id,
+        name: n.name || "NPC",
+        race: n.race || "Р В РІР‚СљР РЋРЎвЂњР В РЎВР В Р’В°Р В Р вЂ¦Р В РЎвЂўР В РЎвЂР В РўвЂ",
+        is_hostile: n.is_hostile || false,
+        hp: n.hp ?? 10,
+        max_hp: n.max_hp ?? 10,
+        distance_meters: 5,
+      })),
+      nearby_players: (allPlayers || [])
+        .filter((p: any) => p.id !== player.id)
+        .map((p: any) => ({
+          id: p.id,
+          name: p.name || "Р“РµСЂРѕР№",
+          race: p.race || "Р В Р’В§Р В Р’ВµР В Р’В»Р В РЎвЂўР В Р вЂ Р В Р’ВµР В РЎвЂќ",
+          class: p.class || "Р В Р’ВР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќ",
+          level: p.level || 1,
+          hp: p.hp ?? 100,
+          max_hp: p.max_hp ?? 100,
+          current_zone: p.current_zone || null,
+        })),
+      weather: (() => {
+        const gameMonth = session.game_month || 1;
+        const gameHour = session.game_hour ?? 8;
+        const isNight = gameHour < 6 || gameHour >= 22;
+        const isSummer = gameMonth >= 5 && gameMonth <= 8;
+        const isWinter = gameMonth === 12 || gameMonth <= 2;
+        const isAutumn = gameMonth >= 9 && gameMonth <= 11;
+        const baseTemp = isWinter ? -5 : isSummer ? 24 : isAutumn ? 10 : 15;
+        const tempVariance = (parseInt(session.id?.slice(-4) || '0', 16) % 11) - 5;
+        const temperature = Math.round(baseTemp + tempVariance + (isNight ? -4 : 0));
+        const rainSeed = parseInt(session.id?.slice(-8, -4) || '0', 16) % 10;
+        const isRaining = isAutumn ? rainSeed < 4 : isSummer ? rainSeed < 1 : rainSeed < 2;
+        let description = isRaining ? (isWinter ? 'РЎРЅРµРіРѕРїР°Рґ' : 'Р”РѕР¶РґСЊ') : 'РЇСЃРЅРѕ';
+        if (!isRaining && isWinter) description = 'РњРѕСЂРѕР·РЅРѕ';
+        if (!isRaining && isNight && !isWinter) description = 'РЇСЃРЅР°СЏ РЅРѕС‡СЊ';
+        if (!isRaining && isSummer && !isNight) description = 'РЎРѕР»РЅРµС‡РЅРѕ';
+        const windSeed = parseInt(session.id?.slice(-6, -4) || '0', 16) % 5;
+        return { description, temperature, is_raining: isRaining, is_night: isNight, wind_speed: windSeed + 1 };
+      })(),
+      game_time: {
+        year: session.game_year || 1,
+        month: session.game_month || 1,
+        day: session.game_day || 1,
+        hour: session.game_hour || 8,
+        minute: session.game_minute || 0,
+      },
+      current_location_id: session.current_location_id || null,
+      current_location_name: currentLocationName,
+      storyline: sessionStoryline ? {
+        title: sessionStoryline.title,
+        current_arc: sessionStoryline.arcs?.[sessionStoryline.current_arc_index || 0] || null,
+      lore_context: loreContext.slice(0, 1500), // FIX 7: world context for router
+      } : null,
+    };
+
+    let routerResult: any;
+    try {
+      routerResult = await parsePlayerIntent(
+        routerInput,
+        openrouterApiKey,
+        satelliteModel
+      );
+    } catch (routerErr: any) {
+      console.warn(`[${requestId}] [STEP 1] Router LLM failed (${routerErr?.message}), trying AI classifier...`);
+      // РџР РћРЎР›РћР™РљРђ: AI-РєР»Р°СЃСЃРёС„РёРєР°С‚РѕСЂ (deepseek-v3, РїРѕР»РЅС‹Р№ РєРѕРЅС‚РµРєСЃС‚)
+      let classifierResult: any = null;
+      try {
+        classifierResult = await classifyIntentWithAI(routerInput, openrouterApiKey);
+      } catch (classErr: any) {
+        console.warn(`[${requestId}] [STEP 1] AI classifier error:`, classErr?.message);
+      }
+
+      if (classifierResult) {
+        console.log(`[${requestId}] [STEP 1] вњ… AI classifier: action=${classifierResult.actions?.[0]?.action_type}`);
+        routerResult = classifierResult;
+      } else {
+        console.warn(`[${requestId}] [STEP 1] Р¤Р°Р»Р»Р±СЌРє РЅР° regex-СЌРІСЂРёСЃС‚РёРєСѓ`);
+        routerResult = buildRouterHeuristicFallback(routerInput);
+      }
+    }
+
+
+    if (routerResult.status === "clarification_needed") {
+      return new Response(JSON.stringify({
+        success: false,
+        status: "clarification_needed",
+        clarification_msg: routerResult.clarification_msg,
+        actions: [],
+      }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
+    }
+
+    console.log(`[${requestId}] [STEP 1] РЎР‚РЎСџР’В§Р’В­ Router: status="${routerResult.status}", actions=${JSON.stringify(routerResult.actions.map((a: any) => ({ type: a.action_type, target: a.target_item_name || a.target_entity_id, stat: a.stat_to_check })))}`);
+
+    // Apply GPS time/location (still here, as it's pre-engine)
+    let time_passed_minutes = 0;
+    let location_changed = startingLocationGenerated,
+      new_location_id: string | null = startingLocationGenerated ? session.current_location_id : null,
+      new_wild_zone: string | null = null,
+      wild_zone_changed = false,
+      travel_description = "";
+
+    // Р В РІР‚СњР В Р’ВµР РЋРІР‚С™Р В Р’ВµР В РЎвЂќР РЋРІР‚С™Р В РЎвЂўР РЋР вЂљ Р В Р вЂ¦Р В Р’В°Р В РЎВР В Р’ВµР РЋР вЂљР В Р’ВµР В Р вЂ¦Р В РЎвЂР РЋР РЏ Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РЎВР В Р’ВµР РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂР РЋР РЏ Р В РЎвЂР В Р’В»Р В РЎвЂ Р В Р вЂ Р РЋРІР‚в„–Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В Р’В° Р В РЎвЂР В Р’В· Р В РЎвЂ”Р В РЎвЂўР В РЎВР В Р’ВµР РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂР РЋР РЏ
+    const isMovementAction = routerResult.actions?.some((a: any) => a.action_type === "move") ||
+      /Р В Р вЂ Р РЋРІР‚в„–Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂ|Р В Р вЂ Р РЋРІР‚в„–Р В РІвЂћвЂ“Р РЋРІР‚С™Р В РЎвЂ|Р В Р вЂ Р РЋРІР‚в„–Р РЋРІР‚В¦Р В РЎвЂўР В Р’В¶Р РЋРЎвЂњ|Р В РЎвЂ”Р В РЎвЂўР В РЎвЂќР В РЎвЂР В Р вЂ¦Р РЋРЎвЂњР РЋРІР‚С™Р РЋР Р‰|Р В РЎвЂ”Р В РЎвЂўР В РЎвЂќР В РЎвЂР В РўвЂР В Р’В°Р РЋР вЂ№|Р РЋРЎвЂњР В РІвЂћвЂ“Р РЋРІР‚С™Р В РЎвЂ|Р РЋРЎвЂњР РЋРІР‚В¦Р В РЎвЂўР В Р’В¶Р РЋРЎвЂњ|Р В РЎвЂўР РЋРІР‚С™Р В РЎвЂ”Р РЋР вЂљР В Р’В°Р В Р вЂ Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰Р РЋР С“Р РЋР РЏ|Р В РЎвЂР В РўвЂР РЋРЎвЂњ |Р В Р’ВµР В РўвЂР РЋРЎвЂњ |Р В Р’В±Р В Р’ВµР В РЎвЂ“Р РЋРЎвЂњ |Р В Р вЂ¦Р В Р’В° Р РЋРЎвЂњР В Р’В»Р В РЎвЂР РЋРІР‚В |Р В Р вЂ¦Р В Р’В°Р РЋР вЂљР РЋРЎвЂњР В Р’В¶Р РЋРЎвЂњ|Р В Р’В·Р В Р’В° Р В РЎвЂ”Р РЋР вЂљР В Р’ВµР В РўвЂР В Р’ВµР В Р’В»Р РЋРІР‚в„–|Р В Р вЂ¦Р В Р’В° Р РЋРІР‚С™Р РЋР вЂљР В Р’В°Р В РЎвЂќР РЋРІР‚С™|Р В Р вЂ  Р В Р’В»Р В Р’ВµР РЋР С“|Р В Р вЂ  Р В РЎвЂ“Р В РЎвЂўР РЋР вЂљР В РЎвЂўР В РўвЂ|Р В РЎвЂќ Р В РЎвЂўР В Р’В·Р В Р’ВµР РЋР вЂљР РЋРЎвЂњ|Р В Р вЂ  Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р РЋР Р‰|Р В Р’В·Р В Р’В°Р В РІвЂћвЂ“Р РЋРІР‚С™Р В РЎвЂ Р В Р вЂ  |Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРЎвЂњР РЋРІР‚С™Р РЋР Р‰Р РЋР С“Р РЋР РЏ/i.test(safeActionText);
+
+    try {
+      const gpsSystemPrompt = buildGpsPrompt({
+        playerName: cleanTextForAI(player.name || "Р“РµСЂРѕР№"),
+        actionText: safeActionText,
+        intentType: "router",
+        intentDescription: safeActionText,
+        currentYear: session.game_year || 1248, currentMonth: session.game_month || 5,
+        currentDay: session.game_day || 14, currentHour: session.game_hour || 10,
+        currentMinute: session.game_minute || 0,
+        currentLocation: currentLocationName, currentState: currentStateName,
+        currentWildZone,
+        wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
+        availableLocations,
+        availableSubzones: locationMap && Object.keys(locationMap).length > 0 ? Object.keys(locationMap) : undefined,
+      });
+      const gpsResp = await callAI(gpsSystemPrompt, "Р В РЎвЂєР В РЎвЂ”Р РЋР вЂљР В Р’ВµР В РўвЂР В Р’ВµР В Р’В»Р В РЎвЂ Р В Р вЂ Р РЋР вЂљР В Р’ВµР В РЎВР РЋР РЏ.", openrouterApiKey, 2, gpsModel);
+      const gpsParsed = parseAIJson(gpsResp);
+      if (gpsParsed) {
+        (globalThis as any).__gpsSubzone = gpsParsed?.moved_to_subzone || null;
+        time_passed_minutes = Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0));
+        if (gpsParsed.location_changed === true) {
+          if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
+            // Р В РЎСџР В Р’ВµР РЋР вЂљР В Р’ВµР РЋРІР‚В¦Р В РЎвЂўР В РўвЂ Р В Р вЂ  Р В РўвЂР В РЎвЂР В РЎвЂќР РЋРЎвЂњР РЋР вЂ№ Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р РЋРЎвЂњ (Р В Р’В»Р В Р’ВµР РЋР С“, Р В РЎвЂ”Р В Р’ВµР РЋРІР‚В°Р В Р’ВµР РЋР вЂљР В Р’В°, Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р В Р’Вµ, Р РЋРІР‚С™Р РЋР вЂљР В Р’В°Р В РЎвЂќР РЋРІР‚С™)
+            wild_zone_changed = true;
+            new_wild_zone = gpsParsed.new_location_name;
+            travel_description = gpsParsed.travel_description || "";
+            console.log(`[${requestId}] [GPS] Wild zone: ${new_wild_zone}`);
+          } else if (gpsParsed.new_location_id) {
+            // Р В РЎСџР В Р’ВµР РЋР вЂљР В Р’ВµР РЋРІР‚В¦Р В РЎвЂўР В РўвЂ Р В Р вЂ  Р В РЎвЂР В РЎВР В Р’ВµР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В Р вЂ¦Р РЋРЎвЂњР РЋР вЂ№ Р В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР РЋР вЂ№
+            location_changed = true;
+            new_location_id = gpsParsed.new_location_id;
+            wild_zone_changed = true;
+            new_wild_zone = null; // Р В РЎвЂўР РЋРІР‚РЋР В РЎвЂР РЋРІР‚В°Р В Р’В°Р В Р’ВµР В РЎВ Р В РўвЂР В РЎвЂР В РЎвЂќР РЋРЎвЂњР РЋР вЂ№ Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р РЋРЎвЂњ
+            travel_description = gpsParsed.travel_description || "";
+            console.log(`[${requestId}] [GPS] Location change Р Р†РІР‚В РІР‚в„ў ${new_location_id}`);
+          }
+        }
+      }
+    } catch (e) { /* ignore GPS errors, game continues */ }
+
+    // Р В РІР‚СњР В Р’ВµР РЋРІР‚С™Р В Р’ВµР РЋР вЂљР В РЎВР В РЎвЂР В Р вЂ¦Р В РЎвЂР РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В Р вЂ¦Р В Р’В°Р РЋР РЏ Р В РЎвЂ“Р В Р’В°Р РЋР вЂљР В Р’В°Р В Р вЂ¦Р РЋРІР‚С™Р В РЎвЂР РЋР РЏ: Р В Р вЂ Р РЋРІР‚в„–Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂ Р В РЎвЂР В Р’В· Р В Р’В·Р В РўвЂР В Р’В°Р В Р вЂ¦Р В РЎвЂР РЋР РЏ/Р РЋРІР‚С™Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРІР‚в„– Р В Р вЂ¦Р В Р’В°Р РЋР вЂљР РЋРЎвЂњР В Р’В¶Р РЋРЎвЂњ, Р В Р’ВµР РЋР С“Р В Р’В»Р В РЎвЂ GPS Р В Р вЂ¦Р В Р’Вµ Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋР В РЎвЂР В Р’В» Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р РЋРЎвЂњ
+    const isBuildingLocation = /Р РЋРІР‚С™Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦|Р РЋРІР‚С™Р РЋР вЂљР В Р’В°Р В РЎвЂќР РЋРІР‚С™Р В РЎвЂР РЋР вЂљ|Р В РЎвЂ”Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋР РЏР В Р’В»|Р В РўвЂР В РЎвЂўР В РЎВ|Р В РЎвЂ”Р В РЎвЂўР В РўвЂР В Р вЂ Р В Р’В°Р В Р’В»|Р В РЎвЂ“Р РЋР вЂљР В РЎвЂўР РЋРІР‚С™|Р В РЎвЂќР В Р’В°Р РЋРІР‚С™Р В Р’В°Р В РЎвЂќР В РЎвЂўР В РЎВР В Р’В±|Р В РЎвЂ”Р В РЎвЂўР В РЎвЂ“Р РЋР вЂљР В Р’ВµР В Р’В±|tavern|building|dungeon/i.test(currentLocationType || "") ||
+      /Р РЋРІР‚С™Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦|Р РЋРІР‚С™Р РЋР вЂљР В Р’В°Р В РЎвЂќР РЋРІР‚С™Р В РЎвЂР РЋР вЂљ|Р В РЎвЂ”Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋР РЏР В Р’В»|Р В РўвЂР В РЎвЂўР В РЎВ|Р В Р’В±Р В Р’В°Р РЋРІвЂљВ¬Р В Р вЂ¦|Р В РЎвЂќР В Р’В°Р РЋРІР‚С™Р В Р’В°Р В РЎвЂќР В РЎвЂўР В РЎВР В Р’В±|Р В РЎвЂ”Р В РЎвЂўР В РЎвЂ“Р РЋР вЂљР В Р’ВµР В Р’В±/i.test(currentLocationName || "");
+    const isExitingBuilding = /Р В Р вЂ Р РЋРІР‚в„–Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂ|Р В Р вЂ Р РЋРІР‚в„–Р В РІвЂћвЂ“Р РЋРІР‚С™Р В РЎвЂ|Р В Р вЂ Р РЋРІР‚в„–Р РЋРІР‚В¦Р В РЎвЂўР В Р’В¶Р РЋРЎвЂњ|Р В РЎвЂ”Р В РЎвЂўР В РЎвЂќР В РЎвЂР В РўвЂР В Р’В°|Р В Р вЂ¦Р В Р’В°Р РЋР вЂљР РЋРЎвЂњР В Р’В¶Р РЋРЎвЂњ|Р В Р вЂ¦Р В Р’В° Р РЋРЎвЂњР В Р’В»Р В РЎвЂР РЋРІР‚В |Р В Р вЂ¦Р В Р’В° Р В Р вЂ Р В РЎвЂўР В Р’В·Р В РўвЂР РЋРЎвЂњР РЋРІР‚В¦|Р В Р вЂ Р В РЎвЂў Р В РўвЂР В Р вЂ Р В РЎвЂўР РЋР вЂљ|Р В Р вЂ¦Р В Р’В° Р В РўвЂР В Р вЂ Р В РЎвЂўР РЋР вЂљ|Р В Р вЂ¦Р В Р’В° Р РЋРІР‚С™Р РЋР вЂљР В Р’В°Р В РЎвЂќР РЋРІР‚С™|Р В Р вЂ¦Р В Р’В° Р В РўвЂР В РЎвЂўР РЋР вЂљР В РЎвЂўР В РЎвЂ“|Р В Р вЂ  Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р РЋР Р‰/i.test(safeActionText);
+    const isEnteringBuilding = /Р В Р’В·Р В Р’В°Р В РІвЂћвЂ“Р РЋРІР‚С™Р В РЎвЂ Р В Р вЂ  Р РЋРІР‚С™Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРЎвЂњ|Р В Р’В·Р В Р’В°Р РЋРІР‚В¦Р В РЎвЂўР В Р’В¶Р РЋРЎвЂњ Р В Р вЂ  Р РЋРІР‚С™Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРЎвЂњ|Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРЎвЂњР РЋРІР‚С™Р РЋР Р‰Р РЋР С“Р РЋР РЏ Р В Р вЂ  Р РЋРІР‚С™Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРЎвЂњ|Р В Р вЂ Р РЋРІР‚В¦Р В РЎвЂўР В Р’В¶Р РЋРЎвЂњ Р В Р вЂ  Р РЋРІР‚С™Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРЎвЂњ|Р В Р’В·Р В Р’В°Р В РІвЂћвЂ“Р РЋРІР‚С™Р В РЎвЂ Р В Р вЂ Р В Р вЂ¦Р РЋРЎвЂњР РЋРІР‚С™Р РЋР вЂљР РЋР Р‰|Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРЎвЂњР РЋРІР‚С™Р РЋР Р‰Р РЋР С“Р РЋР РЏ Р В Р вЂ Р В Р вЂ¦Р РЋРЎвЂњР РЋРІР‚С™Р РЋР вЂљР РЋР Р‰/i.test(safeActionText);
+
+    if (isBuildingLocation && isExitingBuilding && !location_changed && !wild_zone_changed) {
+      wild_zone_changed = true;
+      new_wild_zone = `РћРєСЂРµСЃС‚РЅРѕСЃС‚Рё Сѓ ${currentLocationName || "С‚Р°РІРµСЂРЅС‹"}`;
+      travel_description = `Р’С‹ СЂР°СЃРїР°С…РёРІР°РµС‚Рµ РґРІРµСЂСЊ Рё РІС‹С…РѕРґРёС‚Рµ РёР· ${currentLocationName || "РїРѕРјРµС‰РµРЅРёСЏ"} РЅР°СЂСѓР¶Сѓ РЅР° СЃРІРµР¶РёР№ РІРѕР·РґСѓС… РїСЂРёРґРѕСЂРѕР¶РЅРѕРіРѕ С‚СЂР°РєС‚Р°.`;
+      time_passed_minutes = Math.max(time_passed_minutes, 5);
+      console.log(`[${requestId}] [EXIT_BUILDING] Player stepped outside: ${new_wild_zone}`);
+    } else if (currentWildZone && isEnteringBuilding && !location_changed) {
+      wild_zone_changed = true;
+      new_wild_zone = null;
+      travel_description = `Р В РІР‚в„ўР РЋРІР‚в„– Р В Р вЂ Р В РЎвЂўР В Р’В·Р В Р вЂ Р РЋР вЂљР В Р’В°Р РЋРІР‚В°Р В Р’В°Р В Р’ВµР РЋРІР‚С™Р В Р’ВµР РЋР С“Р РЋР Р‰ Р В Р вЂ Р В Р вЂ¦Р РЋРЎвЂњР РЋРІР‚С™Р РЋР вЂљР РЋР Р‰ Р РЋРІР‚С™Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРІР‚в„– Р В Р вЂ  Р РЋРІР‚С™Р РЋРІР‚ВР В РЎвЂ”Р В Р’В»Р В РЎвЂўР В Р’Вµ Р В РЎвЂ”Р В РЎвЂўР В РЎВР В Р’ВµР РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂР В Р’Вµ.`;
+      time_passed_minutes = Math.max(time_passed_minutes, 5);
+      console.log(`[${requestId}] [ENTER_BUILDING] Player stepped back inside tavern`);
+    }
+
+
+    // ============================================
+    // Р В Р в‚¬Р В РЎСџР В Р’В Р В РЎвЂ™Р В РІР‚в„ўР В РІР‚С”Р В РІР‚СћР В РЎСљР В Р’ВР В РІР‚Сћ Р В РЎвЂєР В РЎС›Р В Р’В Р В Р вЂЎР В РІР‚СњР В РЎвЂєР В РЎС™ Р В Р’В Р В Р Р‹Р В РЎвЂєР В РЎСџР В РЎвЂєР В Р Р‹Р В РЎС›Р В РЎвЂ™Р В РІР‚в„ўР В РІР‚С”Р В РІР‚СћР В РЎСљР В Р’ВР В РІР‚Сћ Р В Р’ВР В РІР‚СљР В Р’В Р В РЎвЂєР В РЎв„ўР В РЎвЂєР В РІР‚в„ў (Party & Player Resolution)
+    // ============================================
+    let partyEventFact: string | null = null;
+    const lowerAct = safeActionText.toLowerCase();
+
+    // Р В РІР‚СњР В Р’ВµР РЋРІР‚С™Р В Р’ВµР РЋР вЂљР В РЎВР В РЎвЂР В Р вЂ¦Р В РЎвЂР РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В Р вЂ¦Р В РЎвЂўР В Р’Вµ Р РЋР С“Р В РЎвЂўР В РЎвЂ”Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В Р’В°Р В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂР В Р’Вµ Р РЋРІР‚В Р В Р’ВµР В Р’В»Р В РЎвЂ Р РЋР С“ Р В Р’В¶Р В РЎвЂР В Р вЂ Р РЋРІР‚в„–Р В РЎВР В РЎвЂ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°Р В РЎВР В РЎвЂ Р В РЎвЂ”Р В РЎвЂў Р В РЎвЂР В РЎВР В Р’ВµР В Р вЂ¦Р В РЎвЂ Р В Р вЂ  Р РЋРІР‚С™Р В Р’ВµР В РЎвЂќР РЋР С“Р РЋРІР‚С™Р В Р’Вµ
+    const targetedOtherPlayer = (allPlayers || []).filter((p: any) => p.id !== player.id).find((p: any) => {
+      if (!p.name) return false;
+      const pNameLower = p.name.trim().toLowerCase();
+      const nameRegex = new RegExp(`(^|[\\s,."Р вЂ™Р’В«*!?])${pNameLower}[Р В Р’В°-Р РЋР РЏ]*([\\s,."Р вЂ™Р’В»*!?]|$)`, 'i');
+      return nameRegex.test(lowerAct) || lowerAct.includes(pNameLower);
+    });
+
+    if (targetedOtherPlayer) {
+      console.log(`[${requestId}] [PLAYER_TARGET] Detected player "${targetedOtherPlayer.name}" (${targetedOtherPlayer.id}) in action text`);
+      let hasTargetedAction = false;
+      if (routerResult.actions && routerResult.actions.length > 0) {
+        for (const act of routerResult.actions) {
+          if (act.action_type === "talk" || act.action_type === "transfer" || act.action_type === "attack") {
+            act.target_entity_id = targetedOtherPlayer.id;
+            (act as any).target_name = targetedOtherPlayer.name;
+            (act as any).target_type = "player";
+            hasTargetedAction = true;
+          }
+        }
+      }
+      if (!hasTargetedAction) {
+        if (!routerResult.actions) routerResult.actions = [];
+        routerResult.actions.push({
+          action_type: "talk",
+          target_entity_id: targetedOtherPlayer.id,
+          target_item_name: null,
+          stat_to_check: "none",
+          ai_custom_dc: null,
+          improper_tool_usage: null,
+        });
+      }
+    }
+
+    const isPartyInviteOrJoin = /(?:Р В РЎвЂўР В Р’В±Р РЋР вЂ°Р В Р’ВµР В РўвЂР В РЎвЂР В Р вЂ¦Р В РЎвЂ(?:Р РЋРІР‚С™Р РЋР Р‰Р РЋР С“Р РЋР РЏ|Р В РЎВР РЋР С“Р РЋР РЏ)|Р РЋР С“Р В РЎвЂўР В Р’В·Р В РўвЂР В Р’В°(?:Р РЋРІР‚С™Р РЋР Р‰|Р В РўвЂР В РЎвЂР В РЎВ) Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂ|Р В РЎвЂ”Р В РЎвЂўР В РІвЂћвЂ“Р В РўвЂ[Р В Р’ВµР РЋРІР‚В]Р В РЎВ Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ|Р В РЎвЂР В РўвЂ[Р В Р’ВµР РЋРІР‚В]Р В РЎВ Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ|Р В РўвЂР В Р’В°Р В Р вЂ Р В Р’В°Р В РІвЂћвЂ“(?:Р РЋРІР‚С™Р В Р’Вµ)?.*(?:Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ|Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р’ВµР РЋРІвЂљВ¬Р В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р вЂ |Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂ)|Р В Р’В±Р РЋРЎвЂњР В РўвЂР В Р’ВµР В РЎВ Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ|Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р’ВµР РЋРІвЂљВ¬Р В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р вЂ (?:Р В РЎвЂўР В Р вЂ Р В Р’В°Р РЋРІР‚С™Р РЋР Р‰|Р РЋРЎвЂњР В Р’ВµР В РЎВ).*Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ|Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ.*Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р’ВµР РЋРІвЂљВ¬Р В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р вЂ |Р В РўвЂР В Р’ВµР РЋР вЂљР В Р’В¶Р В РЎвЂР В РЎВР РЋР С“Р РЋР РЏ Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ|Р В Р вЂ  Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂ|Р В Р вЂ Р В РЎвЂўР В Р’В·Р РЋР Р‰Р В РЎВР В РЎвЂ Р В Р вЂ  Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂ|Р В Р’В±Р В Р’ВµР РЋР вЂљР РЋРЎвЂњ Р В Р’В·Р В Р’В° Р РЋР вЂљР РЋРЎвЂњР В РЎвЂќР РЋРЎвЂњ|Р В РЎвЂ”Р РЋР вЂљР В Р’ВµР В РўвЂР В Р’В»Р В Р’В°Р В РЎвЂ“Р В Р’В°Р РЋР вЂ№.*(?:Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂ|Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ))/i.test(lowerAct);
+    const isPartyLeave = /(?:Р В РЎвЂ”Р В РЎвЂўР В РЎвЂќР В РЎвЂР В РўвЂР В Р’В°Р РЋР вЂ№ Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂ|Р В Р вЂ Р РЋРІР‚в„–Р РЋРІР‚В¦Р В РЎвЂўР В Р’В¶Р РЋРЎвЂњ Р В РЎвЂР В Р’В· Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂР В Р’В°|Р В РЎвЂўР РЋРІР‚С™Р В РўвЂР В Р’ВµР В Р’В»Р РЋР РЏР РЋР вЂ№Р РЋР С“Р РЋР Р‰ Р В РЎвЂўР РЋРІР‚С™ Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂР В Р’В°|Р В РЎвЂР В РўвЂР РЋРЎвЂњ Р В РЎвЂўР В РўвЂР В РЎвЂР В Р вЂ¦|Р В РЎвЂ”Р В РЎвЂўР В РІвЂћвЂ“Р В РўвЂР РЋРЎвЂњ Р В РЎвЂўР В РўвЂР В РЎвЂР В Р вЂ¦|Р РЋР вЂљР В Р’В°Р В Р’В·Р В РўвЂР В Р’ВµР В Р’В»Р РЋР РЏР В Р’ВµР В РЎВР РЋР С“Р РЋР РЏ)/i.test(lowerAct);
+
+    if (isPartyLeave) {
+      const priorPartyId = getPlayerPartyId(player, session);
+      if (priorPartyId) {
+        let groups = Array.isArray(session.party_groups) ? [...session.party_groups] : [];
+        groups = groups.map((g: any) => ({
+          ...g,
+          members: (g.members || []).filter((m: string) => m !== player.id),
+        })).filter((g: any) => (g.members || []).length > 1);
+
+        session.party_groups = groups;
+        try {
+          await supabase.from("sessions").update({ party_groups: groups }).eq("id", session_id);
+          await supabase.from("players").update({ party_id: null }).eq("id", player.id);
+          player.party_id = null;
+        } catch {}
+
+        partyEventFact = `${player.name} РѕС‚РґРµР»РёР»СЃСЏ РѕС‚ РѕС‚СЂСЏРґР° Рё С‚РµРїРµСЂСЊ РґРµР№СЃС‚РІСѓРµС‚ СЃР°РјРѕСЃС‚РѕСЏС‚РµР»СЊРЅРѕ.`;
+        try {
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "system",
+            sender_name: "РЎРёСЃС‚РµРјР°",
+            content: `РЎР‚РЎСџРЎв„ўР’В¶Р Р†Р вЂљР РЉР Р†РІвЂћСћРІР‚С™Р С—РЎвЂР РЏ ${partyEventFact}`,
+          });
+        } catch {}
+      }
+    } else if (isPartyInviteOrJoin) {
+      let partner = targetedOtherPlayer;
+      if (!partner) {
+        const otherPlayersInZone = (allPlayers || []).filter((p: any) => p.id !== player.id && (!player.current_zone || !p.current_zone || p.current_zone === player.current_zone));
+        if (otherPlayersInZone.length === 1) {
+          partner = otherPlayersInZone[0];
+        }
+      }
+
+      if (partner && !arePlayersInSameParty(player, partner, session)) {
+        let groups = Array.isArray(session.party_groups) ? [...session.party_groups] : [];
+        let existingParty = groups.find((g: any) => g.members?.includes(partner.id) || g.members?.includes(player.id));
+        let partyId = existingParty?.id || crypto.randomUUID();
+
+        if (existingParty) {
+          if (!existingParty.members.includes(player.id)) existingParty.members.push(player.id);
+          if (!existingParty.members.includes(partner.id)) existingParty.members.push(partner.id);
+        } else {
+          groups.push({
+            id: partyId,
+            name: `Р В РЎвЂєР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂ ${player.name} Р В РЎвЂ ${partner.name}`,
+            leader_id: player.id,
+            members: [player.id, partner.id],
+          });
+        }
+
+        session.party_groups = groups;
+        try {
+          await supabase.from("sessions").update({ party_groups: groups }).eq("id", session_id);
+          await supabase.from("players").update({ party_id: partyId }).in("id", [player.id, partner.id]);
+          player.party_id = partyId;
+          partner.party_id = partyId;
+        } catch {}
+
+        partyEventFact = `РЎС„РѕСЂРјРёСЂРѕРІР°РЅ РѕС‚СЂСЏРґ: ${player.name} Рё ${partner.name} С‚РµРїРµСЂСЊ РїСѓС‚РµС€РµСЃС‚РІСѓСЋС‚ РІРјРµСЃС‚Рµ!`;
+        try {
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "system",
+            sender_name: "РЎРёСЃС‚РµРјР°",
+            content: `Р Р†РЎв„ўРІР‚СњР С—РЎвЂР РЏ ${partyEventFact}`,
+          });
+        } catch {}
+      }
+    }
+
+    // ============================================
+    // Р В Р РѓР В РЎвЂ™Р В РІР‚Сљ 2: Game Engine
+    // ============================================
+    console.log(`[${requestId}] [STEP 2] Game Engine...`);
+
+    // Р В РІР‚вЂќР В Р’В°Р В РЎвЂ“Р РЋР вЂљР РЋРЎвЂњР В Р’В·Р В РЎвЂќР В Р’В° Р В Р вЂ¦Р В Р’В°Р В Р вЂ Р РЋРІР‚в„–Р В РЎвЂќР В РЎвЂўР В Р вЂ  Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В° Р В РўвЂР В Р’В»Р РЋР РЏ Р В РЎВР В Р’В°Р РЋРІР‚С™Р В Р’ВµР В РЎВР В Р’В°Р РЋРІР‚С™Р В РЎвЂР РЋРІР‚РЋР В Р’ВµР РЋР С“Р В РЎвЂќР В РЎвЂР РЋРІР‚В¦ Р В Р’В±Р В РЎвЂўР В Р вЂ¦Р РЋРЎвЂњР РЋР С“Р В РЎвЂўР В Р вЂ  Р В РўвЂР В Р вЂ Р В РЎвЂР В Р’В¶Р В РЎвЂќР В Р’В° (Р РЋРЎвЂњР РЋР вЂљР В РЎвЂўР В Р вЂ¦, Р В РЎвЂ”Р В РЎвЂўР В РЎвЂ”Р В Р’В°Р В РўвЂР В Р’В°Р В Р вЂ¦Р В РЎвЂР В Р’Вµ, Р РЋР С“Р В Р’В±Р В РЎвЂўР РЋР вЂљ, Р В Р вЂ Р РЋР вЂљР В Р’ВµР В РЎВР РЋР РЏ)
+    const { data: pSkills } = await supabase
+      .from("player_skills")
+      .select("skill_key, level, effects")
+      .eq("player_id", player.id);
+    const skillsMap: Record<string, { level: number; effects: Record<string, number> }> = {};
+    if (pSkills) {
+      for (const ps of pSkills) {
+        skillsMap[ps.skill_key] = { level: ps.level, effects: ps.effects || {} };
+      }
+    }
+
+    // Р В Р Р‹Р В РЎвЂўР В РЎвЂќР РЋР вЂљР В Р’В°Р РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂР В Р’Вµ Р В Р вЂ Р РЋР вЂљР В Р’ВµР В РЎВР В Р’ВµР В Р вЂ¦Р В РЎвЂ Р В Р вЂ¦Р В Р’В° Р В РўвЂР В Р’ВµР В РІвЂћвЂ“Р РЋР С“Р РЋРІР‚С™Р В Р вЂ Р В РЎвЂР РЋР РЏ Р В РЎвЂўР РЋРІР‚С™ Р В Р вЂ¦Р В Р’В°Р В Р вЂ Р РЋРІР‚в„–Р В РЎвЂќР В РЎвЂўР В Р вЂ  (Р РЋР С“Р В РЎвЂўР В Р’В±Р В РЎвЂР РЋР вЂљР В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р РЋР Р‰Р РЋР С“Р РЋРІР‚С™Р В Р вЂ Р В РЎвЂў, Р В Р вЂ Р РЋРІР‚в„–Р В Р’В¶Р В РЎвЂР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В РЎвЂР В Р’Вµ, Р В РЎвЂ“Р В РЎвЂўР РЋР вЂљР В Р вЂ¦Р В РЎвЂўР В Р’Вµ Р В РўвЂР В Р’ВµР В Р’В»Р В РЎвЂў Р В РЎвЂ Р РЋРІР‚С™.Р В РўвЂ.)
+    if (time_passed_minutes > 0) {
+      let maxTimeRedPct = 0;
+      for (const s of Object.values(skillsMap)) {
+        if (s.effects?.time_reduction_pct && s.effects.time_reduction_pct > maxTimeRedPct) {
+          maxTimeRedPct = s.effects.time_reduction_pct;
+        }
+      }
+      if (maxTimeRedPct > 0) {
+        const reduced = Math.round(time_passed_minutes * (1 - maxTimeRedPct / 100));
+        console.log(`[${requestId}] [SKILLS] Time reduced by ${maxTimeRedPct}% from ${time_passed_minutes}m to ${reduced}m`);
+        time_passed_minutes = Math.max(1, reduced);
+      }
+    }
+
+    const engineResult = executeEngine({
+      router_output: {
+        ...routerResult,
+        raw_action_text: safeActionText,
+      },
+      session: {
+        id: session_id,
+        difficulty: session.difficulty || "normal",
+        is_pvp_enabled: session.is_pvp_enabled || false,
+        game_year: session.game_year || 1248, game_month: session.game_month || 5,
+        game_day: session.game_day || 14, game_hour: session.game_hour || 10,
+        game_minute: session.game_minute || 0,
+        current_location_id: session.current_location_id,
+        location_danger_level: (currentDangerLevel as any) || "normal",
+      },
+      acting_player: {
+        id: player.id, name: player.name || "Р“РµСЂРѕР№",
+        stats: player.stats || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        hp: player.hp, max_hp: player.max_hp,
+        armor_class: player.armor_class || 10,
+        initiative: player.initiative || 0,
+        level: player.level || 1,
+        inventory: player.inventory || [],
+        injuries: player.injuries || [],
+        skills: skillsMap,
+      },
+      targets: {
+        players: new Map((allPlayers || []).map((p: any) => [p.id, p])),
+        npcs: new Map(allNpcs.map((n: any) => [n.id, n])),
+        location_items: new Map(),
+      },
+    });
+    if (statAllocatedFact) {
+      if (!engineResult.raw_system_facts) engineResult.raw_system_facts = [];
+      engineResult.raw_system_facts.push(statAllocatedFact);
+      if (!engineResult.system_facts) engineResult.system_facts = engineResult.raw_system_facts;
+      else engineResult.system_facts.push(statAllocatedFact);
+    }
+    if (partyEventFact) {
+      if (!engineResult.raw_system_facts) engineResult.raw_system_facts = [];
+      engineResult.raw_system_facts.push(partyEventFact);
+      if (!engineResult.system_facts) engineResult.system_facts = engineResult.raw_system_facts;
+      else engineResult.system_facts.push(partyEventFact);
+    }
+    // РћР±СЂР°Р±РѕС‚РєР° СЌРЅРєР°СѓРЅС‚РµСЂР°: РЅР°Р№С‚Рё/СЃРїР°СѓРЅРёС‚СЊ NPC РµСЃР»Рё С‚СЂРёРіРіРµСЂРЅСѓР»РѕСЃСЊ
+    if (engineResult.encounter_triggered?.triggered) {
+      const enc = engineResult.encounter_triggered;
+      // 1) РС‰РµРј РІСЂР°Р¶РґРµР±РЅРѕРіРѕ NPC СѓР¶Рµ РІ С‚РµРєСѓС‰РµР№ Р»РѕРєР°С†РёРё
+      const matchingNpc = allNpcs.find((n: any) => n.is_hostile && n.is_alive !== false);
+      if (matchingNpc) {
+        engineResult.raw_system_facts.push(`Р’СЂР°Рі ${matchingNpc.name} Р·Р°РјРµС‡Р°РµС‚ ${player.name} Рё РіРѕС‚РѕРІРёС‚СЃСЏ Рє Р°С‚Р°РєРµ!`);
+        engineResult.system_facts.push(`Р’СЂР°Рі ${matchingNpc.name} Р·Р°РјРµС‡Р°РµС‚ ${player.name} Рё РіРѕС‚РѕРІРёС‚СЃСЏ Рє Р°С‚Р°РєРµ!`);
+      } else {
+        // 2) NPC РЅРµС‚ РІ Р»РѕРєР°С†РёРё вЂ” РїРµСЂРµРјРµС‰Р°РµРј РїРѕРґС…РѕРґСЏС‰РµРіРѕ РёР· РјРёСЂР°
+        const tierTarget = enc.tier || 1;
+        const { data: spawnCandidates } = await supabase
+          .from("npcs")
+          .select("id, name, hp, max_hp, is_hostile, category, tier, level, base_attacks, special_attacks, armor_class, initiative, stats")
+          .eq("world_id", session.world_id)
+          .eq("is_hostile", true)
+          .lte("tier", tierTarget + 1)
+          .order("tier", { ascending: false })
+          .limit(10);
+        if (spawnCandidates?.length) {
+          const spawned = spawnCandidates[Math.floor(Math.random() * spawnCandidates.length)];
+          await supabase.from("npcs").update({ location_id: session.current_location_id }).eq("id", spawned.id);
+          allNpcs.push({ ...spawned, is_alive: true, location_id: session.current_location_id });
+          engineResult.raw_system_facts.push(`${spawned.name} РІС‹РїСЂС‹РіРёРІР°РµС‚ РёР· С‚РµРЅРё Рё РЅР°РїР°РґР°РµС‚ РЅР° ${player.name}!`);
+          engineResult.system_facts.push(`${spawned.name} РІС‹РїСЂС‹РіРёРІР°РµС‚ РёР· С‚РµРЅРё Рё РЅР°РїР°РґР°РµС‚ РЅР° ${player.name}!`);
+          console.log(`[${requestId}] [ENCOUNTER] Spawned ${spawned.name} (tier=${spawned.tier}) into location ${session.current_location_id}`);
+        } else {
+          console.log(`[${requestId}] [ENCOUNTER] No matching hostile NPC found for tier=${tierTarget}`);
+        }
+      }
+    }
+
+    console.log(`[${requestId}] [STEP 2]`, "engine done"); Р Р†РЎв„ўРІвЂћСћР С—РЎвЂР РЏ Engine: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${JSON.stringify(engineResult.raw_system_facts)}`);
+
+    // ============================================
+    // Р В Р РѓР В РЎвЂ™Р В РІР‚Сљ 3: DB Persistence
+    // ============================================
+    console.log(`[${requestId}] [STEP 3] Persistence...`);
+    const persistenceResult = await applyTurnMutations({
+      session_id,
+      engine_output: engineResult,
+    });
+    console.log(`[${requestId}] [STEP 3] ${persistenceResult.status}, ${persistenceResult.applied_mutations_count} applied`);
+
+    // Apply time advance to session
+    if (time_passed_minutes > 0) {
+      const nt = advanceTime({
+        year: session.game_year || 1248, month: session.game_month || 5, day: session.game_day || 14,
+        hour: session.game_hour || 10, minute: session.game_minute || 0,
+      }, time_passed_minutes);
+      await supabase.from("sessions").update({
+        game_year: nt.year, game_month: nt.month, game_day: nt.day,
+        game_hour: nt.hour, game_minute: nt.minute,
+      }).eq("id", session_id);
+      session.game_year = nt.year;
+      session.game_month = nt.month;
+      session.game_day = nt.day;
+      session.game_hour = nt.hour;
+      session.game_minute = nt.minute;
+    }
+
+    const playerStartingZone = player.current_zone || null;
+
+    if (location_changed && new_location_id) {
+      await supabase.from("sessions").update({
+        current_location_id: new_location_id,
+        current_wild_zone: null, // Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРЎвЂњР В Р’В»Р В РЎвЂР РЋР С“Р РЋР Р‰ Р В Р вЂ  Р В РЎвЂР В РЎВР В Р’ВµР В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В Р вЂ¦Р РЋРЎвЂњР РЋР вЂ№ Р В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР РЋР вЂ№
+        current_wild_zone_description: null,
+      }).eq("id", session_id);
+
+      // Р В Р’ВР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂ Р В РўвЂР В Р вЂ Р В РЎвЂР В РЎвЂ“Р В Р’В°Р РЋР вЂ№Р РЋРІР‚С™Р РЋР С“Р РЋР РЏ: Р РЋР С“Р В Р’В±Р РЋР вЂљР В Р’В°Р РЋР С“Р РЋРІР‚в„–Р В Р вЂ Р В Р’В°Р В Р’ВµР В РЎВ Р В РЎвЂ”Р В РЎвЂўР В РўвЂР В Р’В·Р В РЎвЂўР В Р вЂ¦Р РЋРЎвЂњ Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В РЎвЂР В Р вЂ Р РЋРІвЂљВ¬Р В Р’ВµР В РЎвЂ“Р В РЎвЂўР РЋР С“Р РЋР РЏ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°
+      try {
+        await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
+        player.current_zone = null;
+      } catch (pzErr) {
+        console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
+      }
+
+      // Р В Р’В§Р В Р’В»Р В Р’ВµР В Р вЂ¦Р РЋРІР‚в„– Р В РЎвЂўР В РўвЂР В Р вЂ¦Р В РЎвЂўР В РЎвЂ“Р В РЎвЂў Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂР В Р’В°, Р В Р вЂ¦Р В Р’В°Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В РЎвЂР В Р вЂ Р РЋРІвЂљВ¬Р В РЎвЂР В Р’ВµР РЋР С“Р РЋР РЏ Р В Р вЂ  Р РЋРІР‚С™Р В РЎвЂўР В РІвЂћвЂ“ Р В Р’В¶Р В Р’Вµ Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р В Р’Вµ/Р В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР В РЎвЂ, Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РЎВР В Р’ВµР РЋРІР‚В°Р В Р’В°Р РЋР вЂ№Р РЋРІР‚С™Р РЋР С“Р РЋР РЏ Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ!
+      const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
+        p.id !== player.id &&
+        arePlayersInSameParty(player, p, session) &&
+        (p.current_zone || null) === playerStartingZone
+      );
+      if (partyFellowsInSameZone.length > 0) {
+        const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
+        try {
+          await supabase.from("players").update({ current_zone: null }).in("id", fellowIds);
+          for (const fellow of partyFellowsInSameZone) {
+            fellow.current_zone = null;
+          }
+          console.log(`[${requestId}] [PARTY] Fellows ${partyFellowsInSameZone.map((p: any) => p.name).join(", ")} followed ${player.name} to new location ${new_location_id}`);
+        } catch (fErr) {
+          console.warn(`[${requestId}] Failed to reset party fellows current_zone:`, fErr);
+        }
+      }
+
+      // Р В Р Р‹Р В РЎвЂ“Р В Р’ВµР В Р вЂ¦Р В Р’ВµР РЋР вЂљР В РЎвЂР РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р’В°Р РЋРІР‚С™Р РЋР Р‰ Р В РЎвЂќР В Р’В°Р РЋР вЂљР РЋРІР‚С™Р РЋРЎвЂњ Р РЋР вЂљР В Р’В°Р РЋР С“Р РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋР РЏР В Р вЂ¦Р В РЎвЂР В РІвЂћвЂ“ Р В Р’В·Р В РЎвЂўР В Р вЂ¦ Р В РЎвЂ Р РЋРІР‚С™Р В РЎвЂР В РЎвЂ” Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В РЎвЂ Р В РўвЂР В Р’В»Р РЋР РЏ Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В РЎвЂўР В РІвЂћвЂ“ Р В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР В РЎвЂ Р РЋРІР‚РЋР В Р’ВµР РЋР вЂљР В Р’ВµР В Р’В· Р В Р’ВР В Р’В
+      try {
+        const newLocMap = await ensureLocationMapAndTerrain({
+          supabase,
+          sessionId: session_id,
+          locationId: new_location_id,
+          locationName: currentLocationName || "Р›РѕРєР°С†РёСЏ",
+          openrouterApiKey,
+          model: satelliteModel,
+        });
+        locationMap = newLocMap.location_map;
+        currentTerrain = newLocMap.terrain_type;
+        session.location_map = locationMap;
+        session.current_terrain_type = currentTerrain;
+      } catch (locChangeMapErr) {
+        console.warn(`[${requestId}] [FOG] Failed to generate location_map on location change:`, locChangeMapErr);
+      }
+
+      // Р В Р Р‹Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂР В РЎвЂќР В РЎвЂ Р В РЎвЂ Р РЋРІР‚РЋР В Р’В»Р В Р’ВµР В Р вЂ¦Р РЋРІР‚в„– Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂР В Р’В° Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РЎВР В Р’ВµР РЋРІР‚В°Р В Р’В°Р РЋР вЂ№Р РЋРІР‚С™Р РЋР С“Р РЋР РЏ Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ Р РЋР С“ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂўР В РЎВ Р В Р вЂ  Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р РЋРЎвЂњР РЋР вЂ№ Р В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР РЋР вЂ№
+      try {
+        const { data: compNpcs } = await supabase
+          .from("npcs")
+          .select("id, status_tags, role")
+          .eq("world_id", session.world_id);
+        const companionIds = (compNpcs || [])
+          .filter((n: any) =>
+            n.role === "companion" ||
+            (Array.isArray(n.status_tags) && (n.status_tags.includes("Р РЋР С“Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂР В РЎвЂќ") || n.status_tags.includes("Р В Р вЂ _Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂР В Р’Вµ") || n.status_tags.includes("Р В РЎвЂ”Р В РЎвЂР РЋРІР‚С™Р В РЎвЂўР В РЎВР В Р’ВµР РЋРІР‚В ") || n.status_tags.includes("Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР РЋР вЂљР РЋРЎвЂњР РЋРІР‚РЋР В Р’ВµР В Р вЂ¦")))
+          )
+          .map((n: any) => n.id);
+
+        if (companionIds.length > 0) {
+          await supabase.from("npcs").update({ location_id: new_location_id }).in("id", companionIds);
+          console.log(`[${requestId}] [COMPANION] Moved ${companionIds.length} companion(s) to new location ${new_location_id}`);
+        }
+      } catch (moveErr) {
+        console.warn(`[${requestId}] [COMPANION] Failed to move companions:`, moveErr);
+      }
+    }
+
+    if (wild_zone_changed && new_wild_zone) {
+      await supabase.from("sessions").update({
+        current_wild_zone: new_wild_zone,
+        current_wild_zone_description: travel_description || null,
+      }).eq("id", session_id);
+      currentLocationName = new_wild_zone;
+      session.current_wild_zone = new_wild_zone;
+
+      // Р В Р’ВР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂ Р В РўвЂР В Р вЂ Р В РЎвЂР В РЎвЂ“Р В Р’В°Р РЋР вЂ№Р РЋРІР‚С™Р РЋР С“Р РЋР РЏ: Р РЋР С“Р В Р’В±Р РЋР вЂљР В Р’В°Р РЋР С“Р РЋРІР‚в„–Р В Р вЂ Р В Р’В°Р В Р’ВµР В РЎВ Р В РЎвЂ”Р В РЎвЂўР В РўвЂР В Р’В·Р В РЎвЂўР В Р вЂ¦Р РЋРЎвЂњ Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В РЎвЂР В Р вЂ Р РЋРІвЂљВ¬Р В Р’ВµР В РЎвЂ“Р В РЎвЂўР РЋР С“Р РЋР РЏ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°
+      try {
+        await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
+        player.current_zone = null;
+      } catch (pzErr) {
+        console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
+      }
+
+      // Р В Р’В§Р В Р’В»Р В Р’ВµР В Р вЂ¦Р РЋРІР‚в„– Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂР В Р’В° Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР РЋРІР‚В¦Р В РЎвЂўР В РўвЂР РЋР РЏР РЋРІР‚С™ Р В Р вЂ  Р В РўвЂР В РЎвЂР В РЎвЂќР РЋРЎвЂњР РЋР вЂ№ Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р РЋРЎвЂњ Р В Р вЂ Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р’Вµ
+      const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
+        p.id !== player.id &&
+        arePlayersInSameParty(player, p, session) &&
+        (p.current_zone || null) === playerStartingZone
+      );
+      if (partyFellowsInSameZone.length > 0) {
+        const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
+        try {
+          await supabase.from("players").update({ current_zone: null }).in("id", fellowIds);
+          for (const fellow of partyFellowsInSameZone) {
+            fellow.current_zone = null;
+          }
+          console.log(`[${requestId}] [PARTY] Fellows ${partyFellowsInSameZone.map((p: any) => p.name).join(", ")} followed ${player.name} to wild zone ${new_wild_zone}`);
+        } catch (fErr) {
+          console.warn(`[${requestId}] Failed to reset party fellows current_zone:`, fErr);
+        }
+      }
+
+      // Р В Р Р‹Р В РЎвЂ“Р В Р’ВµР В Р вЂ¦Р В Р’ВµР РЋР вЂљР В РЎвЂР РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р’В°Р РЋРІР‚С™Р РЋР Р‰ Р В РЎвЂќР В Р’В°Р РЋР вЂљР РЋРІР‚С™Р РЋРЎвЂњ Р РЋР вЂљР В Р’В°Р РЋР С“Р РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋР РЏР В Р вЂ¦Р В РЎвЂР В РІвЂћвЂ“ Р В Р’В·Р В РЎвЂўР В Р вЂ¦ Р В РЎвЂ Р РЋРІР‚С™Р В РЎвЂР В РЎвЂ” Р В РЎВР В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂўР РЋР С“Р РЋРІР‚С™Р В РЎвЂ Р В РўвЂР В Р’В»Р РЋР РЏ Р В РўвЂР В РЎвЂР В РЎвЂќР В РЎвЂўР В РІвЂћвЂ“ Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р РЋРІР‚в„– Р РЋРІР‚РЋР В Р’ВµР РЋР вЂљР В Р’ВµР В Р’В· Р В Р’ВР В Р’В
+      try {
+        const wildLocMap = await ensureLocationMapAndTerrain({
+          supabase,
+          sessionId: session_id,
+          locationId: null,
+          locationName: new_wild_zone,
+          locationDescription: travel_description,
+          isWildZone: true,
+          openrouterApiKey,
+          model: satelliteModel,
+        });
+        locationMap = wildLocMap.location_map;
+        currentTerrain = wildLocMap.terrain_type;
+        session.location_map = locationMap;
+        session.current_terrain_type = currentTerrain;
+      } catch (wildChangeMapErr) {
+        console.warn(`[${requestId}] [FOG] Failed to generate location_map on wild zone change:`, wildChangeMapErr);
+      }
+
+      allNpcs = allNpcs.filter((n: any) =>
+        isCompanionNpc(n) ||
+        n.is_hostile === true ||
+        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р В РўвЂР В РЎвЂР В РЎвЂќР В РЎвЂР В РІвЂћвЂ“", "Р В РЎВР В РЎвЂўР В Р вЂ¦Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљ", "Р В РўвЂР В РЎвЂР В РЎвЂќР В Р’В°Р РЋР РЏ_Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р В Р’В°", "Р В Р’В·Р В Р вЂ Р В Р’ВµР РЋР вЂљР РЋР Р‰", "Р РЋРІР‚В¦Р В РЎвЂР РЋРІР‚В°Р В Р вЂ¦Р В РЎвЂР В РЎвЂќ"].includes(String(t).toLowerCase())))
+      );
+      console.log(`[${requestId}] [WILD_ZONE] Player entered wild zone: ${new_wild_zone}`);
+    }
+
+    // Р В РЎвЂєР РЋРІР‚С™Р РЋР С“Р В Р’В»Р В Р’ВµР В Р’В¶Р В РЎвЂР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В РЎвЂР В Р’Вµ Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РЎВР В Р’ВµР РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂР РЋР РЏ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В° Р В Р вЂ Р В Р вЂ¦Р РЋРЎвЂњР РЋРІР‚С™Р РЋР вЂљР В РЎвЂ Р В РЎвЂ”Р В РЎвЂўР В РўвЂР В Р’В·Р В РЎвЂўР В Р вЂ¦ Р В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР В РЎвЂ (Р В РўвЂР В Р’В»Р РЋР РЏ Р В РЎС›Р РЋРЎвЂњР В РЎВР В Р’В°Р В Р вЂ¦Р В Р’В° Р В РІР‚в„ўР В РЎвЂўР В РІвЂћвЂ“Р В Р вЂ¦Р РЋРІР‚в„– / Р В Р’В­Р РЋРІР‚В¦Р В Р’В° Р В РІР‚в„ўР В РЎвЂўР В РІвЂћвЂ“Р В Р вЂ¦Р РЋРІР‚в„–)
+// РћС‚СЃР»РµР¶РёРІР°РЅРёРµ РїРµСЂРµРјРµС‰РµРЅРёСЏ РёРіСЂРѕРєР° РІРЅСѓС‚СЂРё РїРѕРґР·РѕРЅ Р»РѕРєР°С†РёРё (AI GPS + regex fallback)
+    if (!location_changed && !wild_zone_changed && locationMap && Object.keys(locationMap).length > 0) {
+      const availableZones = Object.keys(locationMap);
+
+      // 1. AI GPS СЂРµР·СѓР»СЊС‚Р°С‚ (РїСЂРёРѕСЂРёС‚РµС‚)
+      let matchedZone: string | null = (globalThis as any).__gpsSubzone || null;
+      if (matchedZone && !availableZones.includes(matchedZone)) matchedZone = null;
+      if (matchedZone) {
+        console.log(`[${requestId}] [ZONE] AI GPS subzone: "${matchedZone}"`);
+      } else {
+        // 2. РЈР»СѓС‡С€РµРЅРЅС‹Р№ regex fallback
+        const lowerAction = safeActionText.toLowerCase();
+        matchedZone = availableZones.find((z) => {
+          const normZone = z.toLowerCase();
+          return lowerAction.includes(normZone) ||
+            normZone.split(/\s+/).some((word) =>
+              word.length > 3 && (
+                lowerAction.includes(word) ||
+                lowerAction.includes(word.slice(0, -1)) ||
+                lowerAction.includes(word.slice(0, -2))
+              )
+            );
+        }) || null;
+        if (matchedZone) console.log(`[${requestId}] [ZONE] Regex fallback: "${matchedZone}"`);
+      }
+
+      if (matchedZone && matchedZone !== (player.current_zone || "")) {
+        const prevZone = player.current_zone || null;
+        console.log(`[${requestId}] [ZONE] ${player.name} -> "${matchedZone}" (was: "${player.current_zone || 'РѕСЃРЅРѕРІРЅР°СЏ'}")`);
+        player.current_zone = matchedZone;
+        try {
+          await supabase.from("players").update({ current_zone: matchedZone }).eq("id", player.id);
+        } catch (zErr) {
+          console.warn(`[${requestId}] Failed to update player current_zone:`, zErr);
+        }
+        const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
+          p.id !== player.id &&
+          arePlayersInSameParty(player, p, session) &&
+          (p.current_zone || null) === prevZone
+        );
+        if (partyFellowsInSameZone.length > 0) {
+          const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
+          try {
+            await supabase.from("players").update({ current_zone: matchedZone }).in("id", fellowIds);
+            for (const fellow of partyFellowsInSameZone) fellow.current_zone = matchedZone;
+            console.log(`[${requestId}] [PARTY] Fellows moved together to "${matchedZone}"`);
+          } catch (fErr) {
+            console.warn(`[${requestId}] Failed to update party fellows current_zone:`, fErr);
+          }
+        }
+      }
+    }
+
+
+    // ============================================
+    // Р В РЎвЂ™Р В РІР‚в„ўР В РЎС›Р В РЎвЂєР В РЎСљР В РЎвЂєР В РЎС™Р В РЎСљР В Р’В«Р В РІР‚Сћ Р В Р’В­Р В РЎв„ўР В Р Р‹Р В РЎСџР В РІР‚СћР В РІР‚СњР В Р’ВР В Р’В¦Р В Р’ВР В Р’В NPC (0 Р РЋРІР‚С™Р В РЎвЂўР В РЎвЂќР В Р’ВµР В Р вЂ¦Р В РЎвЂўР В Р вЂ , Lazy Calendar Simulation)
+    // ============================================
+    let expeditionEvents: any[] = [];
+    if (time_passed_minutes > 0 && session.world_id) {
+      try {
+        expeditionEvents = await resolveNpcBackgroundActivities({
+          supabase,
+          world_id: session.world_id,
+          current_game_time: {
+            year: session.game_year || 1248,
+            month: session.game_month || 5,
+            day: session.game_day || 14,
+            hour: session.game_hour || 10,
+            minute: session.game_minute || 0,
+          },
+        });
+      } catch (expErr) {
+        console.warn(`[${requestId}] resolveNpcBackgroundActivities failed:`, expErr);
+      }
+    }
+
+    // ============================================
+    // Р В Р’ВР В РЎСљР В Р’ВР В Р’В¦Р В Р’ВР В РЎвЂ™Р В РЎС›Р В Р’ВР В РІР‚в„ўР В РЎвЂ™ Р В Р Р‹Р В РЎСџР В Р в‚¬Р В РЎС›Р В РЎСљР В Р’ВР В РЎв„ўР В РЎвЂєР В РІР‚в„ў Р В РІР‚в„ў Р В РЎС›Р В РІР‚СћР В РЎв„ўР В Р в‚¬Р В Р’В©Р В РІР‚СћР В РІвЂћСћ Р В Р Р‹Р В Р’В¦Р В РІР‚СћР В РЎСљР В РІР‚Сћ (Р В РЎС™Р В РЎвЂР РЋР вЂљР В Р вЂ¦Р РЋРІР‚в„–Р В Р’Вµ Р В РЎвЂ Р РЋР вЂљР В РЎвЂўР В Р’В»Р В Р’ВµР В Р вЂ Р РЋРІР‚в„–Р В Р’Вµ Р В РўвЂР В Р’ВµР В РІвЂћвЂ“Р РЋР С“Р РЋРІР‚С™Р В Р вЂ Р В РЎвЂР РЋР РЏ)
+    // ============================================
+    let companionAction: any = null;
+    try {
+      companionAction = await handleCompanionInSceneAction({
+        supabase,
+        player_action_text: safeActionText,
+        acting_player_name: player.name || "Р“РµСЂРѕР№",
+        location_npcs: allNpcs,
+        session_id,
+        openrouter_api_key: openrouterApiKey,
+        model: satelliteModel || "meta-llama/llama-3.3-70b-instruct:free",
+      });
+      console.log(`[${requestId}] [COMPANION] РЎР‚РЎСџР’В¤РЎСљ Checked:`, companionAction ? `${companionAction.npc_name} did: ${companionAction.action_description}` : "none (no party companions in scene)");
+    } catch (compErr) {
+      console.warn(`[${requestId}] Companion action failed:`, compErr);
+    }
+
+    // ============================================
+    // Р В РІР‚СњР В Р’ВР В РЎСљР В РЎвЂ™Р В РЎС™Р В Р’ВР В Р’В§Р В РІР‚СћР В Р Р‹Р В РЎв„ўР В Р’ВР В РІР‚Сћ Р В РЎСљР В РЎвЂ™Р В РІР‚в„ўР В Р’В«Р В РЎв„ўР В Р’В Р В Р’ВР В РІР‚СљР В Р’В Р В РЎвЂєР В РЎв„ўР В РЎвЂ™ (1..100)
+    // ============================================
+    let skillProgress: any = null;
+    try {
+      const detectedSkill = detectSkillFromAction({
+        action_text: safeActionText,
+        action_type: routerResult.actions[0]?.type,
+        skill_hint: routerResult.skill_hint,
+      });
+
+      if (detectedSkill) {
+        const xpAmount = routerResult.actions.length > 0 ? 35 : 20;
+        const { data: skillRes, error: skillErr } = await supabase.rpc("add_player_skill_xp", {
+          p_player_id: player.id,
+          p_skill_key: detectedSkill.key,
+          p_skill_name: detectedSkill.name,
+          p_xp_amount: xpAmount,
+        });
+
+        if (!skillErr && skillRes?.success) {
+          skillProgress = skillRes;
+          console.log(`[${requestId}] [SKILL] ${detectedSkill.name} +${xpAmount} XP (Lvl ${skillRes.level}${skillRes.leveled_up ? ' - LEVEL UP!' : ''})`);
+        }
+      }
+    } catch (skillExc) {
+      console.warn(`[${requestId}] Skill progression failed:`, skillExc);
+    }
+
+    // ============================================
+    // Р В РЎСџР В Р’В Р В РЎвЂєР В РЎв„ўР В РЎвЂ™Р В Р’В§Р В РЎв„ўР В РЎвЂ™ Р В Р в‚¬Р В Р’В Р В РЎвЂєР В РІР‚в„ўР В РЎСљР В Р вЂЎ Р В РЎСџР В РІР‚СћР В Р’В Р В Р Р‹Р В РЎвЂєР В РЎСљР В РЎвЂ™Р В РІР‚вЂњР В РЎвЂ™ (1..100, +2 Р В РЎвЂєР В РўС’, HP/MP)
+    // ============================================
+    let playerLevelUp: any = null;
+    try {
+      const isCombatAction = routerResult.actions.some((a: any) => a.type === "attack");
+      const baseTurnXp = isCombatAction ? 50 : 25;
+      const currentLevel = player.level || 1;
+      const currentXp = (player.xp || 0) + baseTurnXp;
+      const xpNeeded = currentLevel * 100;
+
+      if (currentXp >= xpNeeded && currentLevel < 100) {
+        const newLevel = currentLevel + 1;
+        const leftoverXp = currentXp - xpNeeded;
+        const newStatPoints = (player.stat_points || 0) + 2;
+
+        const conVal = player.stats?.CON || 10;
+        const conMod = Math.floor((conVal - 10) / 2);
+        const hpGain = Math.max(1, 5 + conMod);
+        const newMaxHp = (player.max_hp || 10) + hpGain;
+        const newHp = Math.min(newMaxHp, (player.hp || 10) + hpGain);
+
+        const intVal = player.stats?.INT || 10;
+        const newMaxMp = Math.max(20, intVal * 2 + newLevel * 5);
+        const newMp = Math.min(newMaxMp, (player.mp || 50) + 15);
+
+        const { error: lvlUpdateErr } = await supabase.from("players").update({
+          level: newLevel,
+          xp: leftoverXp,
+          stat_points: newStatPoints,
+          max_hp: newMaxHp,
+          hp: newHp,
+          max_mp: newMaxMp,
+          mp: newMp,
+          updated_at: new Date().toISOString(),
+        }).eq("id", player.id);
+
+        if (lvlUpdateErr) {
+          console.error(`[${requestId}] [LEVEL_UP] DB update error:`, lvlUpdateErr);
+        } else {
+          player.level = newLevel;
+          player.xp = leftoverXp;
+          player.stat_points = newStatPoints;
+          player.max_hp = newMaxHp;
+          player.hp = newHp;
+          player.max_mp = newMaxMp;
+          player.mp = newMp;
+        }
+
+        playerLevelUp = {
+          old_level: currentLevel,
+          new_level: newLevel,
+          stat_points_gained: 2,
+          total_stat_points: newStatPoints,
+          hp_gained: hpGain,
+          max_hp: newMaxHp,
+          max_mp: newMaxMp,
+        };
+        console.log(`[${requestId}] [LEVEL_UP] Player ${player.name} leveled up to ${newLevel}! (+2 stat points)`);
+      } else {
+        const { error: xpUpdateErr } = await supabase.from("players").update({
+          xp: currentXp,
+          updated_at: new Date().toISOString(),
+        }).eq("id", player.id);
+        if (xpUpdateErr) {
+          console.error(`[${requestId}] [XP_UPDATE] DB update error:`, xpUpdateErr);
+        } else {
+          player.xp = currentXp;
+        }
+      }
+    } catch (lvlErr) {
+      console.warn(`[${requestId}] Leveling check failed:`, lvlErr);
+    }
+
+    // ============================================
+    // Р В Р РѓР В РЎвЂ™Р В РІР‚Сљ 4: System Truth Compiler
+    // ============================================
+    console.log(`[${requestId}] [STEP 4] System Truth...`);
+    const systemTruth = await compileSystemTruth({
+      session_id,
+      acting_player_id: player.id,
+      engine_output: engineResult,
+      persistence_output: persistenceResult,
+      session: {
+        game_year: session.game_year || 1248, game_month: session.game_month || 5,
+        game_day: session.game_day || 14, game_hour: session.game_hour || 10,
+        game_minute: session.game_minute || 0,
+        current_location_id: session.current_location_id,
+      },
+      location: { name: currentLocationName || currentWildZone || "Р В РЎвЂєР РЋРІР‚С™Р В РЎвЂќР РЋР вЂљР РЋРІР‚в„–Р РЋРІР‚С™Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎВР В РЎвЂР РЋР вЂљ", weather: routerInput.weather?.description || null },
+      players: (allPlayers || []).map((p: any) => ({
+        id: p.id, name: p.name || "Р“РµСЂРѕР№", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
+      })),
+      npcs: (session.current_wild_zone ? allNpcs.filter((n: any) => isCompanionNpc(n) || n.is_hostile === true || (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р В РўвЂР В РЎвЂР В РЎвЂќР В РЎвЂР В РІвЂћвЂ“", "Р В РЎВР В РЎвЂўР В Р вЂ¦Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљ", "Р В РўвЂР В РЎвЂР В РЎвЂќР В Р’В°Р РЋР РЏ_Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р В Р’В°", "Р В Р’В·Р В Р вЂ Р В Р’ВµР РЋР вЂљР РЋР Р‰", "Р РЋРІР‚В¦Р В РЎвЂР РЋРІР‚В°Р В Р вЂ¦Р В РЎвЂР В РЎвЂќ"].includes(String(t).toLowerCase())))) : allNpcs).map((n: any) => ({
+        id: n.id,
+        name: n.name || "NPC",
+        race: n.race || "Р В Р Р‹Р РЋРЎвЂњР РЋРІР‚В°Р В Р’ВµР РЋР С“Р РЋРІР‚С™Р В Р вЂ Р В РЎвЂў",
+        role: n.role || "Р В РЎвЂєР В Р’В±Р РЋРІР‚в„–Р В Р вЂ Р В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р РЋР Р‰",
+        category: n.category,
+        status_tags: n.status_tags || [],
+        is_alive: n.is_alive,
+        is_hostile: n.is_hostile || false,
+        appearance: n.appearance || null,
+        background: n.background || null,
+        habits: n.habits || null,
+        catchphrases: Array.isArray(n.catchphrases) ? n.catchphrases : [],
+        current_activity: n.current_activity || null,
+        temperament: n.temperament || null,
+        motivation: n.motivation || null,
+        current_mood: n.current_mood || null,
+        secrets: n.secrets || null,
+        rumors: n.rumors || null,
+        speech_style: n.speech_style || null,
+        daily_routine: n.daily_routine || null,
+      })),
+      atmosphere: routerResult.atmosphere || { sounds: [], visuals: [] },
+      time_passed_minutes,
+      encounter_alert: null,
+      storyline: sessionStoryline ? {
+        title: sessionStoryline.title,
+        prologue: sessionStoryline.prologue,
+        current_arc: sessionStoryline.arcs?.[sessionStoryline.current_arc_index || 0] || null,
+      } : null,
+    });
+    console.log(`[${requestId}] [STEP 4] turn_status=${systemTruth.turn_status}, ${Object.keys(systemTruth.player_truths).length} player_truths`);
+
+    // ============================================
+    // Р В Р РѓР В РЎвЂ™Р В РІР‚Сљ 5: Narrator
+    // ============================================
+    console.log(`[${requestId}] [STEP 5] Narrator...`);
+    let narratorOutput: { players: Record<string, string>; global_narrative: string };
+    try {
+      narratorOutput = await generateNarrative({
+        system_truth: systemTruth,
+        action_text: safeActionText,
+        player_name: player.name || "Р“РµСЂРѕР№",
+        player_race: player.race || "Р В Р’В§Р В Р’ВµР В Р’В»Р В РЎвЂўР В Р вЂ Р В Р’ВµР В РЎвЂќ",
+        player_class: player.class || "Р В РІР‚в„ўР В РЎвЂўР В РЎвЂР В Р вЂ¦",
+        lore_context: loreContext,
+        recent_history: recentMessages.slice(-6),
+        openrouter_api_key: openrouterApiKey,
+        dm_model: dmModel,
+      });
+    } catch (narratorErr) {
+      console.warn(`[${requestId}] [STEP 5] LLM failed, using fallback:`, narratorErr);
+      narratorOutput = buildFallbackNarrative(systemTruth);
+    }
+    console.log(`[${requestId}] [STEP 5] ${Object.keys(narratorOutput.players).length} player narratives`);
+
+    // ============================================
+    // SAVE: messages + turn_queue
+    // ============================================
+    console.log(`[${requestId}] [SAVE] Persisting messages...`);
+    // 1) Player action
+    await supabase.from("messages").insert({
+      session_id, sender_type: "player", sender_id: player.user_id, sender_name: player.name || "Р“РµСЂРѕР№", content: safeActionText,
+    });
+    // 2) Master narratives Р Р†Р вЂљРІР‚Сњ Р В РЎвЂ”Р В РЎвЂў Р В РЎвЂўР В РўвЂР В Р вЂ¦Р В РЎвЂўР В РЎВР РЋРЎвЂњ Р РЋР С“Р В РЎвЂўР В РЎвЂўР В Р’В±Р РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂР РЋР вЂ№ Р В Р вЂ¦Р В Р’В° Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°
+    for (const [targetPlayerId, narrative] of Object.entries(narratorOutput.players)) {
+      await supabase.from("messages").insert({
+        session_id, sender_type: "master", sender_name: "РњР°СЃС‚РµСЂ", content: narrative,
+        metadata: {
+          target_player_id: targetPlayerId,
+          turn_status: systemTruth.turn_status,
+          hp_status: systemTruth.player_truths[targetPlayerId]?.hp_status,
+          inventory_delta: systemTruth.player_truths[targetPlayerId]?.inventory_delta,
+          game_time: systemTruth.environment.time,
+        },
+      });
+    }
+    // 3) Global log (Р РЋРІР‚С™Р В РЎвЂўР В Р’В»Р РЋР Р‰Р В РЎвЂќР В РЎвЂў Р В РЎвЂ”Р РЋР вЂљР В РЎвЂ Р В Р вЂ¦Р В Р’В°Р В Р’В»Р В РЎвЂР РЋРІР‚РЋР В РЎвЂР В РЎвЂ > 1 Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°, Р РЋРІР‚РЋР РЋРІР‚С™Р В РЎвЂўР В Р’В±Р РЋРІР‚в„– Р В Р вЂ  Р РЋР С“Р В РЎвЂўР В Р’В»Р В РЎвЂў Р В Р вЂ¦Р В Р’Вµ Р В РўвЂР РЋРЎвЂњР В Р’В±Р В Р’В»Р В РЎвЂР РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р’В°Р РЋРІР‚С™Р РЋР Р‰ Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР РЋР С“Р В РЎвЂўР В Р вЂ¦Р В Р’В°Р В Р’В»Р РЋР Р‰Р В Р вЂ¦Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В Р вЂ¦Р В Р’В°Р РЋР вЂљР РЋР вЂљР В Р’В°Р РЋРІР‚С™Р В РЎвЂР В Р вЂ )
+    if (narratorOutput.global_narrative && allPlayers.length > 1) {
+      await supabase.from("messages").insert({
+        session_id, sender_type: "master", sender_name: "Р›РѕРі",
+        content: narratorOutput.global_narrative,
+        metadata: {
+          type: "global_log",
+          is_global: true,
+          initiator_player_id: player.id,
+          initiator_zone: player.current_zone || null,
+          game_time: systemTruth.environment.time,
+        },
+      });
+    }
+
+    // 3.5) Р В РЎС›Р В Р в‚¬Р В РЎС™Р В РЎвЂ™Р В РЎСљ Р В РІР‚в„ўР В РЎвЂєР В РІвЂћСћР В РЎСљР В Р’В« Р Р†Р вЂљРІР‚Сњ fog-Р РЋР С“Р В РЎвЂўР В РЎвЂўР В Р’В±Р РЋРІР‚В°Р В Р’ВµР В Р вЂ¦Р В РЎвЂР РЋР РЏ Р В РўвЂР В Р’В»Р РЋР РЏ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂўР В Р вЂ  Р В Р вЂ  Р В РўвЂР РЋР вЂљР РЋРЎвЂњР В РЎвЂ“Р В РЎвЂР РЋРІР‚В¦ Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р В Р’В°Р РЋРІР‚В¦
+    // Р В Р’В Р В Р’В°Р В Р’В±Р В РЎвЂўР РЋРІР‚С™Р В Р’В°Р В Р’ВµР РЋРІР‚С™ Р РЋРІР‚С™Р В РЎвЂўР В Р’В»Р РЋР Р‰Р В РЎвЂќР В РЎвЂў Р В РЎвЂ”Р РЋР вЂљР В РЎвЂ Р В Р вЂ¦Р В Р’В°Р В Р’В»Р В РЎвЂР РЋРІР‚РЋР В РЎвЂР В РЎвЂ Р В Р вЂ¦Р В Р’ВµР РЋР С“Р В РЎвЂќР В РЎвЂўР В Р’В»Р РЋР Р‰Р В РЎвЂќР В РЎвЂР РЋРІР‚В¦ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂўР В Р вЂ  Р В Р вЂ  Р РЋР С“Р В Р’ВµР РЋР С“Р РЋР С“Р В РЎвЂР В РЎвЂ
+    if (allPlayers.length > 1) {
+      try {
+        // AI Р В РЎвЂўР В РЎвЂ”Р РЋР вЂљР В Р’ВµР В РўвЂР В Р’ВµР В Р’В»Р РЋР РЏР В Р’ВµР РЋРІР‚С™ event_type Р В Р вЂ  Router Р Р†Р вЂљРІР‚Сњ Р В Р вЂ¦Р В РЎвЂР В РЎвЂќР В Р’В°Р В РЎвЂќР В РЎвЂР РЋРІР‚В¦ regex-Р РЋР РЉР В Р вЂ Р РЋР вЂљР В РЎвЂР РЋР С“Р РЋРІР‚С™Р В РЎвЂР В РЎвЂќ!
+        const eventType = routerResult.event_type || null;
+        if (eventType) {
+          const thresholds = fogGetEffectiveThresholds(eventType, currentTerrain);
+          const actorZone: string | null = player.current_zone || null;
+          const speechContent = fogExtractSpeech(safeActionText);
+
+          // Р В РЎСљР В Р’В°Р В Р’В±Р В Р’В»Р РЋР вЂ№Р В РўвЂР В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р В РЎвЂ = Р В Р вЂ Р РЋР С“Р В Р’Вµ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂ, Р В РЎвЂќР РЋР вЂљР В РЎвЂўР В РЎВР В Р’Вµ Р В Р’В°Р В Р вЂ Р РЋРІР‚С™Р В РЎвЂўР РЋР вЂљР В Р’В° Р В РўвЂР В Р’ВµР В РІвЂћвЂ“Р РЋР С“Р РЋРІР‚С™Р В Р вЂ Р В РЎвЂР РЋР РЏ
+          const observers = allPlayers.filter((p: any) => p.id !== player.id);
+
+          let fogCount = 0;
+          for (const obs of observers) {
+            const obsZone: string | null = obs.current_zone || null;
+            const tier = fogGetDistanceTier(actorZone, obsZone, locationMap);
+
+            // same_room (tier 0) Р Р†Р вЂљРІР‚Сњ Р РЋР РЉР РЋРІР‚С™Р В РЎвЂўР РЋРІР‚С™ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќ Р РЋРЎвЂњР В Р’В¶Р В Р’Вµ Р В Р вЂ¦Р В Р’В°Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В РЎвЂР РЋРІР‚С™Р РЋР С“Р РЋР РЏ Р В Р вЂ  Р РЋРІР‚С™Р В РЎвЂўР В РІвЂћвЂ“ Р В Р’В¶Р В Р’Вµ Р В Р’В·Р В РЎвЂўР В Р вЂ¦Р В Р’Вµ/Р В РЎвЂќР В РЎвЂўР В РЎВР В Р вЂ¦Р В Р’В°Р РЋРІР‚С™Р В Р’Вµ
+            if (tier === DISTANCE_TIER.SAME_ROOM) continue;
+
+            const hears  = tier <= thresholds.audioTier;
+            const sees   = tier <= thresholds.visualTier;
+            if (!hears && !sees) continue; // Р РЋР С“Р В Р’В»Р В РЎвЂР РЋРІвЂљВ¬Р В РЎвЂќР В РЎвЂўР В РЎВ Р В РўвЂР В Р’В°Р В Р’В»Р В Р’ВµР В РЎвЂќР В РЎвЂў Р Р†Р вЂљРІР‚Сњ Р В Р вЂ¦Р В РЎвЂР РЋРІР‚РЋР В Р’ВµР В РЎвЂ“Р В РЎвЂў Р В Р вЂ¦Р В Р’Вµ Р В РўвЂР В РЎвЂўР РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В РЎвЂР РЋРІР‚С™
+
+            const fogText = fogPickNarrative(eventType, tier, speechContent);
+            if (!fogText) continue;
+
+            await supabase.from("messages").insert({
+              session_id,
+              sender_type: "master",
+              sender_name: "РњР°СЃС‚РµСЂ",
+              content: fogText,
+              metadata: {
+                target_player_id: obs.id,
+                type: "fog_perception",
+                fog_event_type: eventType,
+                fog_distance_tier: tier,
+                fog_terrain_type: currentTerrain,
+                fog_filtered: true,
+                initiator_player_id: player.id,
+              },
+            });
+            fogCount++;
+            console.log(`[${requestId}] [FOG] РЎР‚РЎСџР Р‰Р’В«Р С—РЎвЂР РЏ ${player.name} (${eventType}, terrain=${currentTerrain || 'default'}) Р Р†РІР‚В РІР‚в„ў ${obs.name} tier=${tier}: "${fogText.slice(0, 60)}..."`);
+          }
+          if (fogCount > 0) {
+            console.log(`[${requestId}] [FOG] Dispatched ${fogCount} fog message(s) for AI event_type="${eventType}", terrain="${currentTerrain || 'default'}"`);
+          }
+        }
+      } catch (fogErr) {
+        console.warn(`[${requestId}] [FOG] Fog dispatch failed (non-critical):`, fogErr);
+      }
+    }
+
+    // 4) Companion action message
+    if (companionAction) {
+      await supabase.from("messages").insert({
+        session_id,
+        sender_type: "npc",
+        sender_name: companionAction.npc_name,
+        content: `${companionAction.dialogue}\n\n*${companionAction.action_description}*`,
+        metadata: { is_companion: true, item_obtained: companionAction.item_obtained },
+      });
+    }
+
+    // 5) Expedition events messages
+    for (const ev of expeditionEvents) {
+      await supabase.from("messages").insert({
+        session_id,
+        sender_type: "master",
+        sender_name: "РњРёСЂ",
+        content: `РЎР‚РЎСџРІР‚СљРЎС™ **Р В Р Р‹Р В РЎвЂўР В Р’В±Р РЋРІР‚в„–Р РЋРІР‚С™Р В РЎвЂР В Р’Вµ Р В РЎВР В РЎвЂР РЋР вЂљР В Р’В°**: ${ev.summary}`,
+        metadata: { type: "npc_expedition", npc_id: ev.npc_id, loot: ev.loot, leveled_up: ev.leveled_up },
+      });
+    }
+
+    // 6) Skill level up notification
+    if (skillProgress?.leveled_up) {
+      await supabase.from("messages").insert({
+        session_id,
+        sender_type: "system",
+        sender_name: "РЎРёСЃС‚РµРјР°",
+        content: `рџ”” **[РќР°РІС‹Рє РїРѕРІС‹С€РµРЅ!]** ${skillProgress.name} РґРѕСЃС‚РёРі СѓСЂ. ${skillProgress.level}! (+${skillProgress.level}% Рє СЌС„С„РµРєС‚РёРІРЅРѕСЃС‚Рё)`,
+        metadata: { type: "skill_level_up", skill_key: skillProgress.skill_key, level: skillProgress.level },
+      });
+    }
+
+    // 7) Player level up notification
+    if (playerLevelUp) {
+      await supabase.from("messages").insert({
+        session_id,
+        sender_type: "system",
+        sender_name: "РЎРёСЃС‚РµРјР°",
+        content: `рџЋ‰ **[РќРѕРІС‹Р№ СѓСЂРѕРІРµРЅСЊ!]** РџРѕР·РґСЂР°РІР»СЏРµРј, РІС‹ РґРѕСЃС‚РёРіР»Рё ${playerLevelUp.new_level} СѓСЂРѕРІРЅСЏ!\nРџРѕР»СѓС‡РµРЅРѕ +2 СЃРІРѕР±РѕРґРЅС‹С… РѕС‡РєР° С…Р°СЂР°РєС‚РµСЂРёСЃС‚РёРє (РћРҐ). РњР°РєСЃ. HP: ${playerLevelUp.max_hp}, РњР°РєСЃ. MP: ${playerLevelUp.max_mp}.`,
+        metadata: { type: "player_level_up", ...playerLevelUp },
+      });
+    }
+
+    // 7.1) Storyline Progress Evaluation (Р В Р’В°Р В Р вЂ Р РЋРІР‚С™Р В РЎвЂўР В РЎВР В Р’В°Р РЋРІР‚С™Р В РЎвЂР РЋРІР‚РЋР В Р’ВµР РЋР С“Р В РЎвЂќР В РЎвЂўР В Р’Вµ Р В РЎвЂўР РЋРІР‚С™Р РЋР С“Р В Р’В»Р В Р’ВµР В Р’В¶Р В РЎвЂР В Р вЂ Р В Р’В°Р В Р вЂ¦Р В РЎвЂР В Р’Вµ Р РЋРІР‚В Р В Р’ВµР В Р’В»Р В Р’ВµР В РІвЂћвЂ“ Р В Р’В°Р РЋР вЂљР В РЎвЂќР В РЎвЂ)
+    let storyProgressResult: any = null;
+    if (sessionStoryline && sessionStoryline.status !== "completed" && sessionStoryline.status !== "sandbox") {
+      try {
+        const actingPlayerTruth = systemTruth.player_truths[player.id];
+        const narrativeForPlayer = narratorOutput.players[player.id] || "";
+        storyProgressResult = evaluateStoryProgress({
+          storyline: sessionStoryline,
+          playerAction: safeActionText,
+          systemFacts: actingPlayerTruth?.knowledge || [],
+          narrativeText: narrativeForPlayer,
+          currentLocation: currentLocationName || "",
+          nearbyNpcs: allNpcs,
+        });
+
+        if (storyProgressResult.completedGoalTitles.length > 0 || storyProgressResult.advancedArc) {
+          console.log(`[${requestId}] [STORY] Progress evaluated: ${storyProgressResult.completedGoalTitles.length} goals completed, arcAdvanced=${storyProgressResult.advancedArc}`);
+          const currentPlotStage = storyProgressResult.updatedStoryline.arcs?.[storyProgressResult.updatedStoryline.current_arc_index]?.title || null;
+          await supabase.from("sessions").update({
+            storyline: storyProgressResult.updatedStoryline,
+            current_plot_stage: currentPlotStage,
+          }).eq("id", session_id);
+
+          for (const announcement of storyProgressResult.announcements) {
+            await supabase.from("messages").insert({
+              session_id,
+              sender_type: "system",
+              sender_name: "РЎСЋР¶РµС‚",
+              content: announcement,
+              metadata: {
+                type: "story_progress",
+                completed_goals: storyProgressResult.completedGoalTitles,
+                advanced_arc: storyProgressResult.advancedArc,
+                arc_index: storyProgressResult.updatedStoryline.current_arc_index,
+              },
+            });
+          }
+        }
+      } catch (storyEvalErr) {
+        console.warn(`[${requestId}] Failed to evaluate story progress:`, storyEvalErr);
+      }
+    }
+
+    // 8) NPC Relationships & Memories update
+    let npcUpdates: any[] = [];
+    try {
+      npcUpdates = await processNpcInteractions({
+        supabase,
+        session_id,
+        acting_player: player,
+        action_text: safeActionText,
+        router_result: routerResult,
+        engine_result: engineResult,
+        narrator_output: narratorOutput,
+        all_npcs: allNpcs,
+        openrouter_api_key: openrouterApiKey,
+        chat_model: dmModel,
+      });
+      if (npcUpdates.length > 0) {
+        console.log(`[${requestId}] [NPC] Updated ${npcUpdates.length} NPC relationship(s):`, npcUpdates.map(u => `${u.npc_name}: ${u.delta > 0 ? '+' : ''}${u.delta} -> ${u.score} (${u.tier})`));
+      }
+    } catch (npcErr) {
+      console.warn(`[${requestId}] [NPC] processNpcInteractions failed:`, npcErr);
+    }
+
+    // 9) Companion Invitation & Pet Taming interactions
+    let companionInviteHandled = false;
+    try {
+      const companionInviteResult = await handleCompanionInvitation({
+        supabase,
+        player_action_text: safeActionText,
+        acting_player_name: player.name || "Р“РµСЂРѕР№",
+        acting_player_id: player.id,
+        location_npcs: allNpcs,
+        openrouter_api_key: openrouterApiKey,
+        model: dmModel,
+      });
+      if (companionInviteResult) {
+        companionInviteHandled = true;
+        await supabase.from("messages").insert({
+          session_id,
+          sender_type: "master",
+          sender_name: companionInviteResult.npc_name,
+          content: companionInviteResult.dialogue,
+          metadata: {
+            type: "companion_invitation",
+            npc_id: companionInviteResult.npc_id,
+            joined_party: companionInviteResult.joined_party,
+          },
+        });
+      }
+    } catch (inviteErr) {
+      console.warn(`[${requestId}] [COMPANION] handleCompanionInvitation failed:`, inviteErr);
+    }
+
+    // 10) Pet Taming interaction (Р В РЎвЂР В Р вЂ¦Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р В Р’В»Р В Р’ВµР В РЎвЂќР РЋРІР‚С™Р РЋРЎвЂњР В Р’В°Р В Р’В»Р РЋР Р‰Р В Р вЂ¦Р В РЎвЂўР В Р’Вµ Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР РЋР вЂљР РЋРЎвЂњР РЋРІР‚РЋР В Р’ВµР В Р вЂ¦Р В РЎвЂР В Р’Вµ Р В Р’В·Р В Р вЂ Р В Р’ВµР РЋР вЂљР РЋР РЏ/Р В РЎВР В РЎвЂўР В Р вЂ¦Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљР В Р’В°)
+    try {
+      const targetCreature = allNpcs.find((n: any) =>
+        n.category === "beast" || n.category === "monster" ||
+        (n.race && ["Р В Р’В·Р В Р вЂ Р В Р’ВµР РЋР вЂљР РЋР Р‰", "Р В Р вЂ Р В РЎвЂўР В Р’В»Р В РЎвЂќ", "Р В Р’В¶Р В РЎвЂР В Р вЂ Р В РЎвЂўР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂўР В Р’Вµ", "Р В РЎВР В РЎвЂўР В Р вЂ¦Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљ"].some(r => n.race.toLowerCase().includes(r)))
+      );
+      if (targetCreature) {
+        const tamingResult = await evaluatePetTamingAttempt({
+          supabase,
+          acting_player: {
+            id: player.id,
+            name: player.name || "Р“РµСЂРѕР№",
+            stats: player.stats,
+            skills: skillsMap,
+          },
+          target_creature: targetCreature,
+          action_text: safeActionText,
+        });
+
+        if (tamingResult && tamingResult.is_taming_action) {
+          companionInviteHandled = true;
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "master",
+            sender_name: "РџСЂРёСЂСѓС‡РµРЅРёРµ",
+            content: tamingResult.narrative_feedback,
+            metadata: {
+              type: "pet_taming",
+              creature_id: targetCreature.id,
+              result: tamingResult,
+            },
+          });
+        }
+      }
+    } catch (tameErr) {
+      console.warn(`[${requestId}] [PET] evaluatePetTamingAttempt failed:`, tameErr);
+    }
+
+    // 11) Proactive Companion Offer (NPC Р РЋР С“Р В Р’В°Р В РЎВ Р В РЎвЂ”Р РЋР вЂљР В Р’ВµР В РўвЂР В Р’В»Р В Р’В°Р В РЎвЂ“Р В Р’В°Р В Р’ВµР РЋРІР‚С™ Р В РЎвЂ”Р В РЎвЂўР В РІвЂћвЂ“Р РЋРІР‚С™Р В РЎвЂ Р В Р вЂ  Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р РЋР Р‰ Р В РЎвЂ”Р РЋР вЂљР В РЎвЂ Р В Р вЂ Р РЋРІР‚в„–Р РЋР С“Р В РЎвЂўР В РЎвЂќР В РЎвЂўР В РЎВ Р В РўвЂР В РЎвЂўР В Р вЂ Р В Р’ВµР РЋР вЂљР В РЎвЂР В РЎвЂ)
+    try {
+      if (!companionInviteHandled) {
+        const proactiveOffer = await checkNpcProactiveCompanionOffer({
+          supabase,
+          acting_player_name: player.name || "Р“РµСЂРѕР№",
+          acting_player_id: player.id,
+          location_npcs: allNpcs,
+          openrouter_api_key: openrouterApiKey,
+          model: dmModel,
+        });
+        if (proactiveOffer) {
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "master",
+            sender_name: proactiveOffer.npc_name,
+            content: proactiveOffer.dialogue,
+            metadata: {
+              type: "proactive_companion_offer",
+              npc_id: proactiveOffer.npc_id,
+            },
+          });
+        }
+      }
+    } catch (proErr) {
+      console.warn(`[${requestId}] [COMPANION] checkNpcProactiveCompanionOffer failed:`, proErr);
+    }
+
+    // ============================================
+    // D&D Р В РІР‚ВР В РЎвЂєР В РІР‚СћР В РІР‚в„ўР В РЎвЂ™Р В Р вЂЎ Р В РЎвЂєР В Р’В§Р В РІР‚СћР В Р’В Р В РІР‚СћР В РІР‚СњР В Р’В¬ Р В РўС’Р В РЎвЂєР В РІР‚СњР В РЎвЂєР В РІР‚в„ў (TURN QUEUE Р В Р Р‹ Р В Р’ВР В РЎСљР В Р’ВР В Р’В¦Р В Р’ВР В РЎвЂ™Р В РЎС›Р В Р’ВР В РІР‚в„ўР В РЎвЂєР В РІвЂћСћ NPC, Р В Р Р‹Р В РЎСџР В Р в‚¬Р В РЎС›Р В РЎСљР В Р’ВР В РЎв„ўР В РЎвЂєР В РІР‚в„ў Р В Р’В Р В РЎСџР В Р’ВР В РЎС›Р В РЎвЂєР В РЎС™Р В Р’В¦Р В РІР‚СћР В РІР‚в„ў)
+    // ============================================
+    let npcCombatTurns: any[] = [];
+    let isRoundCompleted = (!allPlayers || allPlayers.length <= 1);
+    try {
+      const isCombat = routerResult.actions.some((a: any) => a.type === "attack") ||
+        allNpcs.some((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
+
+      const { data: existingTurns } = await supabase.from("turn_queue")
+        .select("id, player_id, npc_id, entity_type, status, initiative")
+        .eq("session_id", session_id)
+        .order("created_at", { ascending: true });
+
+      if (isCombat) {
+        // Р В РЎСџР В РЎвЂўР В РўвЂР В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋР В Р’В°Р В Р’ВµР В РЎВ Р В РЎвЂќ Р В Р’В±Р В РЎвЂўР РЋР вЂ№ Р В Р вЂ Р РЋР вЂљР В Р’В°Р В Р’В¶Р В РўвЂР В Р’ВµР В Р’В±Р В Р вЂ¦Р РЋРІР‚в„–Р РЋРІР‚В¦ NPC Р РЋР С“ Р В Р’В±Р РЋР вЂљР В РЎвЂўР РЋР С“Р В РЎвЂќР В РЎвЂўР В РЎВ Р В РЎвЂР В Р вЂ¦Р В РЎвЂР РЋРІР‚В Р В РЎвЂР В Р’В°Р РЋРІР‚С™Р В РЎвЂР В Р вЂ Р РЋРІР‚в„–
+        const activeHostileNpcs = allNpcs.filter((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
+        for (const hostNpc of activeHostileNpcs) {
+          const alreadyInQueue = existingTurns?.some((t: any) => t.npc_id === hostNpc.id);
+          if (!alreadyInQueue) {
+            const dexMod = Math.floor(((hostNpc.stats?.DEX || 10) - 10) / 2);
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const initRoll = d20 + dexMod;
+            await supabase.from("turn_queue").insert({
+              session_id,
+              npc_id: hostNpc.id,
+              player_id: null,
+              entity_type: "npc",
+              initiative: initRoll,
+              status: "waiting",
+              round_number: 1,
+            });
+          }
+        }
+
+        // Р В РЎСџР В РЎвЂўР В РўвЂР В РЎвЂќР В Р’В»Р РЋР вЂ№Р РЋРІР‚РЋР В Р’В°Р В Р’ВµР В РЎВ Р В РЎвЂќ Р В Р’В±Р В РЎвЂўР РЋР вЂ№ Р РЋР С“Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂР В РЎвЂќР В РЎвЂўР В Р вЂ  Р В РЎвЂ Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР РЋР вЂљР РЋРЎвЂњР РЋРІР‚РЋР В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋРІР‚в„–Р РЋРІР‚В¦ Р В РЎвЂ”Р В РЎвЂР РЋРІР‚С™Р В РЎвЂўР В РЎВР РЋРІР‚В Р В Р’ВµР В Р вЂ  Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°
+        const activeCompanions = allNpcs.filter((n: any) =>
+          !n.is_hostile &&
+          n.is_alive !== false &&
+          (n.hp ?? 10) > 0 &&
+          (n.role === "companion" || (Array.isArray(n.status_tags) && (n.status_tags.includes("Р РЋР С“Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂР В РЎвЂќ") || n.status_tags.includes("Р В Р вЂ _Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂР В Р’Вµ") || n.status_tags.includes("Р В РЎвЂ”Р В РЎвЂР РЋРІР‚С™Р В РЎвЂўР В РЎВР В Р’ВµР РЋРІР‚В ") || n.status_tags.includes("Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР РЋР вЂљР РЋРЎвЂњР РЋРІР‚РЋР В Р’ВµР В Р вЂ¦"))))
+        );
+        for (const compNpc of activeCompanions) {
+          const alreadyInQueue = existingTurns?.some((t: any) => t.npc_id === compNpc.id);
+          if (!alreadyInQueue) {
+            const dexMod = Math.floor(((compNpc.stats?.DEX || 12) - 10) / 2);
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const initRoll = d20 + dexMod;
+            await supabase.from("turn_queue").insert({
+              session_id,
+              npc_id: compNpc.id,
+              player_id: null,
+              entity_type: "npc",
+              initiative: initRoll,
+              status: "waiting",
+              round_number: 1,
+            });
+          }
+        }
+      }
+
+      if (!existingTurns || existingTurns.length === 0) {
+        // Р В РЎвЂєР РЋРІР‚РЋР В Р’ВµР РЋР вЂљР В Р’ВµР В РўвЂР В РЎвЂ Р В Р’ВµР РЋРІР‚В°Р РЋРІР‚В Р В Р вЂ¦Р В Р’ВµР РЋРІР‚С™ Р Р†Р вЂљРІР‚Сњ Р РЋР С“Р В РЎвЂўР В Р’В·Р В РўвЂР В Р’В°Р РЋРІР‚ВР В РЎВ Р В РўвЂР В Р’В»Р РЋР РЏ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂўР В Р вЂ  Р РЋР С“Р В Р’ВµР РЋР С“Р РЋР С“Р В РЎвЂР В РЎвЂ
+        if (allPlayers && allPlayers.length > 1) {
+          isRoundCompleted = false;
+          // Р В Р Р‹Р В РЎвЂўР РЋР вЂљР РЋРІР‚С™Р В РЎвЂР РЋР вЂљР РЋРЎвЂњР В Р’ВµР В РЎВ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂўР В Р вЂ : Р В Р вЂ  Р В Р’В±Р В РЎвЂўР РЋР вЂ№ Р В РЎвЂ”Р В РЎвЂў Р В РЎвЂР В Р вЂ¦Р В РЎвЂР РЋРІР‚В Р В РЎвЂР В Р’В°Р РЋРІР‚С™Р В РЎвЂР В Р вЂ Р В Р’Вµ, Р В Р вЂ  Р В РЎВР В РЎвЂР РЋР вЂљР В Р вЂ¦Р В РЎвЂўР В РЎВ Р РЋР вЂљР В Р’ВµР В Р’В¶Р В РЎвЂР В РЎВР В Р’Вµ Р Р†Р вЂљРІР‚Сњ Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљР В РЎвЂўР В РЎвЂ“Р В РЎвЂў Р В РЎвЂ”Р В РЎвЂў Р В РЎвЂ”Р В РЎвЂўР РЋР вЂљР РЋР РЏР В РўвЂР В РЎвЂќР РЋРЎвЂњ Р В Р вЂ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В Р’В° Р В Р вЂ  Р В РЎВР В РЎвЂР РЋР вЂљ (created_at ASC)
+          const sortedPlayers = [...allPlayers].sort((a: any, b: any) => {
+            if (isCombat) {
+              const diff = (b.initiative || 10) - (a.initiative || 10);
+              if (diff !== 0) return diff;
+            }
+            return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+          });
+
+          const actorIndex = sortedPlayers.findIndex((p: any) => p.id === player.id);
+          const nextIndex = actorIndex >= 0 ? (actorIndex + 1) % sortedPlayers.length : 0;
+          const nextPlayer = sortedPlayers[nextIndex];
+
+          for (const p of sortedPlayers) {
+            const isActor = p.id === player.id;
+            const isNext = p.id === nextPlayer.id && !isActor;
+            await supabase.from("turn_queue").insert({
+              session_id,
+              player_id: p.id,
+              entity_type: "player",
+              initiative: p.initiative || 10,
+              status: isActor ? "completed" : (isNext ? "active" : "waiting"),
+              resolved_at: isActor ? new Date().toISOString() : null,
+              parsed_action: isActor ? routerResult : null,
+              roll_result: isActor ? engineResult : null,
+            });
+          }
+        }
+      } else {
+        // Р В РІР‚СњР В РЎвЂўР В Р’В±Р В Р’В°Р В Р вЂ Р В Р’В»Р РЋР РЏР В Р’ВµР В РЎВ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В РЎвЂўР В Р вЂ , Р В РЎвЂќР В РЎвЂўР РЋРІР‚С™Р В РЎвЂўР РЋР вЂљР РЋРІР‚в„–Р РЋРІР‚В¦ Р В Р’ВµР РЋРІР‚В°Р РЋРІР‚В Р В Р вЂ¦Р В Р’ВµР РЋРІР‚С™ Р В Р вЂ  Р В РЎвЂўР РЋРІР‚РЋР В Р’ВµР РЋР вЂљР В Р’ВµР В РўвЂР В РЎвЂ (Р В Р вЂ  Р В РЎвЂ”Р В РЎвЂўР РЋР вЂљР РЋР РЏР В РўвЂР В РЎвЂќР В Р’Вµ Р В РЎвЂР РЋРІР‚В¦ Р В Р вЂ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В Р’В° created_at ASC)
+        if (allPlayers && allPlayers.length > 1) {
+          const existingPids = new Set(existingTurns.filter((t: any) => t.player_id).map((t: any) => t.player_id));
+          const missingPlayers = allPlayers
+            .filter((p: any) => !existingPids.has(p.id))
+            .sort((a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+          for (const p of missingPlayers) {
+            await supabase.from("turn_queue").insert({
+              session_id,
+              player_id: p.id,
+              entity_type: "player",
+              initiative: p.initiative || 10,
+              status: "waiting",
+            });
+          }
+        }
+
+        // Р В РІР‚вЂќР В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР РЋРІвЂљВ¬Р В Р’В°Р В Р’ВµР В РЎВ Р РЋРІР‚С™Р В Р’ВµР В РЎвЂќР РЋРЎвЂњР РЋРІР‚В°Р В РЎвЂР В РІвЂћвЂ“ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°
+        await supabase.from("turn_queue").update({
+          status: "completed",
+          resolved_at: new Date().toISOString(),
+          parsed_action: routerResult,
+          roll_result: engineResult,
+        }).eq("session_id", session_id).eq("player_id", player.id);
+
+        // Р В Р’ВР РЋРІР‚В°Р В Р’ВµР В РЎВ Р РЋР С“Р В Р’В»Р В Р’ВµР В РўвЂР РЋРЎвЂњР РЋР вЂ№Р РЋРІР‚В°Р В РЎвЂР В РІвЂћвЂ“ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂ Р РЋР С“Р В РЎвЂў Р РЋР С“Р РЋРІР‚С™Р В Р’В°Р РЋРІР‚С™Р РЋРЎвЂњР РЋР С“Р В РЎвЂўР В РЎВ 'waiting'
+        // Р В РЎСџР РЋР вЂљР В РЎвЂ isCombat = false Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР РЋРІР‚в„– Р В РЎвЂ”Р В Р’ВµР РЋР вЂљР В Р’ВµР В РўвЂР В Р’В°Р РЋР вЂ№Р РЋРІР‚С™Р РЋР С“Р РЋР РЏ Р РЋР С“Р РЋРІР‚С™Р РЋР вЂљР В РЎвЂўР В РЎвЂ“Р В РЎвЂў Р В РЎвЂ”Р В РЎвЂў Р В РЎвЂўР РЋРІР‚РЋР В Р’ВµР РЋР вЂљР В Р’ВµР В РўвЂР В РЎвЂ Р В Р вЂ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В Р’В° Р В Р вЂ  Р В РЎВР В РЎвЂР РЋР вЂљ (created_at ASC) Р В РЎвЂўР РЋРІР‚С™ Р В РЎвЂўР В РўвЂР В Р вЂ¦Р В РЎвЂўР В РЎвЂ“Р В РЎвЂў Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В° Р В РўвЂР РЋР вЂљР РЋРЎвЂњР В РЎвЂ“Р В РЎвЂўР В РЎВР РЋРЎвЂњ.
+        // Р В РЎСџР РЋР вЂљР В РЎвЂ isCombat = true Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР РЋРІР‚в„– Р РЋРЎвЂњР В РЎвЂ”Р В РЎвЂўР РЋР вЂљР РЋР РЏР В РўвЂР В РЎвЂўР РЋРІР‚РЋР В Р’ВµР В Р вЂ¦Р РЋРІР‚в„– Р В РЎвЂ”Р В РЎвЂў Р В Р’В±Р В РЎвЂўР В Р’ВµР В Р вЂ Р В РЎвЂўР В РІвЂћвЂ“ Р В РЎвЂР В Р вЂ¦Р В РЎвЂР РЋРІР‚В Р В РЎвЂР В Р’В°Р РЋРІР‚С™Р В РЎвЂР В Р вЂ Р В Р’Вµ (initiative DESC, created_at ASC).
+        let nextQuery = supabase.from("turn_queue")
+          .select("id, player_id, npc_id, entity_type, status, initiative, created_at")
+          .eq("session_id", session_id)
+          .eq("status", "waiting");
+
+        if (isCombat) {
+          nextQuery = nextQuery.order("initiative", { ascending: false }).order("created_at", { ascending: true });
+        } else {
+          nextQuery = nextQuery.order("created_at", { ascending: true });
+        }
+
+        const { data: nextTurnData } = await nextQuery.limit(1).maybeSingle();
+        let nextTurn = nextTurnData;
+
+        // Р В РІР‚СћР РЋР С“Р В Р’В»Р В РЎвЂ Р РЋР С“Р В Р’В»Р В Р’ВµР В РўвЂР РЋРЎвЂњР РЋР вЂ№Р РЋРІР‚В°Р В РЎвЂР В РІвЂћвЂ“ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂ Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР В Р вЂ¦Р В Р’В°Р В РўвЂР В Р’В»Р В Р’ВµР В Р’В¶Р В РЎвЂР РЋРІР‚С™ NPC Р Р†Р вЂљРІР‚Сњ Р В Р вЂ Р РЋРІР‚в„–Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р В Р вЂ¦Р РЋР РЏР В Р’ВµР В РЎВ Р В Р’В±Р В РЎвЂўР В Р’ВµР В Р вЂ Р РЋРІР‚в„–Р В Р’Вµ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР РЋРІР‚в„– NPC
+        while (nextTurn && nextTurn.entity_type === "npc" && nextTurn.npc_id) {
+          const currentTurnNpcId = nextTurn.npc_id;
+          const turnNpc = allNpcs.find((n: any) => n.id === currentTurnNpcId);
+          if (turnNpc && turnNpc.is_alive !== false && (turnNpc.hp ?? 10) > 0) {
+            const isCompanion = !turnNpc.is_hostile &&
+              (turnNpc.role === "companion" || (Array.isArray(turnNpc.status_tags) && (turnNpc.status_tags.includes("Р РЋР С“Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂР В РЎвЂќ") || turnNpc.status_tags.includes("Р В Р вЂ _Р В РЎвЂўР РЋРІР‚С™Р РЋР вЂљР РЋР РЏР В РўвЂР В Р’Вµ") || turnNpc.status_tags.includes("Р В РЎвЂ”Р В РЎвЂР РЋРІР‚С™Р В РЎвЂўР В РЎВР В Р’ВµР РЋРІР‚В ") || turnNpc.status_tags.includes("Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР РЋР вЂљР РЋРЎвЂњР РЋРІР‚РЋР В Р’ВµР В Р вЂ¦"))));
+
+            if (isCompanion) {
+              // Р В РўС’Р В РЎвЂєР В РІР‚Сњ Р В Р Р‹Р В РЎСџР В Р в‚¬Р В РЎС›Р В РЎСљР В Р’ВР В РЎв„ўР В РЎвЂ™ / Р В РЎСџР В Р’ВР В РЎС›Р В РЎвЂєР В РЎС™Р В Р’В¦Р В РЎвЂ™: Р В Р’В°Р РЋРІР‚С™Р В Р’В°Р В РЎвЂќР РЋРЎвЂњР В Р’ВµР РЋРІР‚С™ Р В Р вЂ Р РЋР вЂљР В Р’В°Р В Р’В¶Р В РўвЂР В Р’ВµР В Р’В±Р В Р вЂ¦Р В РЎвЂўР В РЎвЂ“Р В РЎвЂў Р В РЎВР В РЎвЂўР В Р’В±Р В Р’В° (Р В Р вЂ¦Р В Р’В°Р В РЎвЂ”Р РЋР вЂљР В РЎвЂР В РЎВР В Р’ВµР РЋР вЂљ, Р В Р вЂ Р В РЎвЂўР В Р’В»Р В РЎвЂќР В Р’В°) Р В Р вЂ  Р В РЎвЂ”Р В РЎвЂўР В РЎВР В РЎвЂўР РЋРІР‚В°Р РЋР Р‰ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР РЋРЎвЂњ!
+              const hostileMobs = allNpcs.filter((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
+              if (hostileMobs.length > 0) {
+                const targetMob = hostileMobs[0];
+                const attackResult = executeCompanionAttack({
+                  companion: turnNpc,
+                  targetMob: {
+                    id: targetMob.id,
+                    name: targetMob.name || "Р В РІР‚в„ўР РЋР вЂљР В Р’В°Р В РЎвЂ“",
+                    hp: targetMob.hp ?? 10,
+                    max_hp: targetMob.max_hp ?? 10,
+                    armor_class: targetMob.armor_class || 11,
+                  },
+                });
+
+                if (attackResult.is_hit && attackResult.damage > 0) {
+                  targetMob.hp = attackResult.remaining_mob_hp;
+                  if (attackResult.is_mob_defeated) {
+                    targetMob.is_alive = false;
+                  }
+                  await supabase.from("npcs").update({
+                    hp: targetMob.hp,
+                    is_alive: targetMob.is_alive,
+                  }).eq("id", targetMob.id);
+
+                  // Р В РІР‚ВР В РЎвЂўР В Р вЂ¦Р РЋРЎвЂњР РЋР С“ Р В РЎвЂќ Р В РЎвЂўР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂўР РЋРІвЂљВ¬Р В Р’ВµР В Р вЂ¦Р В РЎвЂР РЋР РЏР В РЎВ Р РЋР С“Р В РЎвЂў Р РЋР С“Р В РЎвЂ”Р РЋРЎвЂњР РЋРІР‚С™Р В Р вЂ¦Р В РЎвЂР В РЎвЂќР В РЎвЂўР В РЎВ Р В Р’В·Р В Р’В° Р В РЎвЂ”Р В РЎвЂўР В РЎВР В РЎвЂўР РЋРІР‚В°Р РЋР Р‰ Р В Р вЂ  Р В Р’В±Р В РЎвЂўР РЋР вЂ№ (+1)
+                  try {
+                    const { data: rel } = await supabase.from("npc_relationships").select("score").eq("npc_id", turnNpc.id).eq("player_id", player.id).maybeSingle();
+                    if (rel) {
+                      await supabase.from("npc_relationships").update({ score: rel.score + 1 }).eq("npc_id", turnNpc.id).eq("player_id", player.id);
+                    }
+                  } catch (e) { /* ignore */ }
+
+                  // Р В РЎСџР РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚РЋР В РЎвЂќР В Р’В° Р РЋРЎвЂњР РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р вЂ¦Р РЋР РЏ Р В РЎвЂ”Р В РЎвЂР РЋРІР‚С™Р В РЎвЂўР В РЎВР РЋРІР‚В Р В Р’В° Р В Р’В·Р В Р’В° Р РЋРЎвЂњР РЋРІР‚РЋР В Р’В°Р РЋР С“Р РЋРІР‚С™Р В РЎвЂР В Р’Вµ Р В Р вЂ  Р В Р’В±Р В РЎвЂўР РЋР вЂ№ (1..100)
+                  const isPet = Array.isArray(turnNpc.status_tags) && turnNpc.status_tags.includes("Р В РЎвЂ”Р В РЎвЂР РЋРІР‚С™Р В РЎвЂўР В РЎВР В Р’ВµР РЋРІР‚В ");
+                  if (isPet) {
+                    try {
+                      const xpAward = attackResult.is_mob_defeated ? 50 : 20;
+                      const petXpRes = awardPetCombatXp(turnNpc, xpAward);
+                      turnNpc.level = petXpRes.new_level;
+                      turnNpc.max_hp = petXpRes.new_max_hp;
+                      turnNpc.hp = petXpRes.new_hp;
+                      turnNpc.xp = petXpRes.xp;
+
+                      await supabase.from("npcs").update({
+                        level: turnNpc.level,
+                        max_hp: turnNpc.max_hp,
+                        hp: turnNpc.hp,
+                        xp: turnNpc.xp,
+                      }).eq("id", turnNpc.id);
+
+                      if (petXpRes.leveled_up) {
+                        await supabase.from("messages").insert({
+                          session_id,
+                          sender_type: "system",
+                          sender_name: "РЎРёСЃС‚РµРјР°",
+                          content: `рџЋ‰ **[РџРёС‚РѕРјРµС† РїРѕРІС‹СЃРёР» СѓСЂРѕРІРµРЅСЊ!]** ${turnNpc.name} РґРѕСЃС‚РёРі ${turnNpc.level} СѓСЂРѕРІРЅСЏ! РњР°РєСЃ. Р·РґРѕСЂРѕРІСЊРµ: ${turnNpc.max_hp} HP.`,
+                          metadata: { type: "pet_level_up", pet_id: turnNpc.id, new_level: turnNpc.level },
+                        });
+                      }
+                    } catch (petXpErr) {
+                      console.warn(`[${requestId}] [PET_XP] Failed to award pet XP:`, petXpErr);
+                    }
+                  }
+                }
+
+                await supabase.from("messages").insert({
+                  session_id,
+                  sender_type: "master",
+                  sender_name: turnNpc.name,
+                  content: attackResult.log_message,
+                  metadata: {
+                    type: "companion_combat_turn",
+                    npc_id: turnNpc.id,
+                    target_mob_id: targetMob.id,
+                    attack_result: attackResult,
+                  },
+                });
+
+                npcCombatTurns.push(attackResult);
+              }
+            } else {
+              // Р В РўС’Р В РЎвЂєР В РІР‚Сњ Р В РІР‚в„ўР В Р’В Р В РЎвЂ™Р В РІР‚вЂњР В РІР‚СњР В РІР‚СћР В РІР‚ВР В РЎСљР В РЎвЂєР В РІР‚СљР В РЎвЂє NPC (Р В Р’В°Р РЋРІР‚С™Р В Р’В°Р В РЎвЂќР В Р’В° Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°)
+              const battlefieldPlayers = (allPlayers || []).map((p: any) => ({
+                id: p.id,
+                name: p.name || "Р“РµСЂРѕР№",
+                hp: p.hp ?? 10,
+                max_hp: p.max_hp ?? 10,
+                armor_class: p.armor_class || 10,
+                class: p.class,
+              }));
+
+              const decision = await decideNpcCombatAction({
+                npc: turnNpc,
+                players: battlefieldPlayers,
+                openrouter_api_key: openrouterApiKey,
+                model: dmModel,
+              });
+
+              const targetPlayer = battlefieldPlayers.find((p: any) => p.id === decision.target_player_id) || battlefieldPlayers[0];
+
+              const attackResult = executeNpcAttack({
+                npc: turnNpc,
+                targetPlayer,
+                decision,
+              });
+
+              if (attackResult.is_hit && attackResult.damage > 0) {
+                const { data: curTarget } = await supabase.from("players").select("hp").eq("id", targetPlayer.id).single();
+                if (curTarget) {
+                  const updatedHp = Math.max(0, (curTarget.hp ?? 10) - attackResult.damage);
+                  await supabase.from("players").update({ hp: updatedHp }).eq("id", targetPlayer.id);
+                }
+              }
+
+              await supabase.from("messages").insert({
+                session_id,
+                sender_type: "master",
+                sender_name: "Р‘РѕР№",
+                content: attackResult.log_message,
+                metadata: {
+                  type: "npc_combat_turn",
+                  npc_id: turnNpc.id,
+                  target_player_id: targetPlayer.id,
+                  attack_result: attackResult,
+                },
+              });
+
+              npcCombatTurns.push(attackResult);
+            }
+          }
+
+          // Р В РЎСџР В РЎвЂўР В РЎВР В Р’ВµР РЋРІР‚РЋР В Р’В°Р В Р’ВµР В РЎВ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂ NPC Р В РЎвЂќР В Р’В°Р В РЎвЂќ Р В Р вЂ Р РЋРІР‚в„–Р В РЎвЂ”Р В РЎвЂўР В Р’В»Р В Р вЂ¦Р В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋРІР‚в„–Р В РІвЂћвЂ“
+          await supabase.from("turn_queue").update({
+            status: "completed",
+            resolved_at: new Date().toISOString(),
+          }).eq("id", nextTurn.id);
+
+          // Р В РЎСџР РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р’ВµР РЋР вЂљР РЋР РЏР В Р’ВµР В РЎВ Р РЋР С“Р В Р’В»Р В Р’ВµР В РўвЂР РЋРЎвЂњР РЋР вЂ№Р РЋРІР‚В°Р В РЎвЂР В РІвЂћвЂ“ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂ
+          const nextQuery = await supabase.from("turn_queue")
+            .select("id, player_id, npc_id, entity_type, status, initiative")
+            .eq("session_id", session_id)
+            .eq("status", "waiting")
+            .order("initiative", { ascending: false })
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          nextTurn = nextQuery.data;
+        }
+
+        if (nextTurn) {
+          await supabase.from("turn_queue").update({ status: "active" }).eq("id", nextTurn.id);
+          if (allPlayers && allPlayers.length > 1) {
+            isRoundCompleted = false;
+          }
+        } else {
+          // Р В Р’В Р В Р’В°Р РЋРЎвЂњР В Р вЂ¦Р В РўвЂ Р В Р’В·Р В Р’В°Р В Р вЂ Р В Р’ВµР РЋР вЂљР РЋРІвЂљВ¬Р В Р’ВµР В Р вЂ¦! Р В РЎСџР В Р’ВµР РЋР вЂљР В Р’ВµР В Р’В·Р В Р’В°Р В РЎвЂ”Р РЋРЎвЂњР РЋР С“Р В РЎвЂќР В Р’В°Р В Р’ВµР В РЎВ Р В РЎвЂўР РЋРІР‚РЋР В Р’ВµР РЋР вЂљР В Р’ВµР В РўвЂР РЋР Р‰
+          isRoundCompleted = true;
+          let queueOrderQuery = supabase.from("turn_queue")
+            .select("id, entity_type, initiative, created_at")
+            .eq("session_id", session_id);
+
+          if (isCombat) {
+            queueOrderQuery = queueOrderQuery.order("initiative", { ascending: false }).order("created_at", { ascending: true });
+          } else {
+            queueOrderQuery = queueOrderQuery.order("created_at", { ascending: true });
+          }
+
+          const { data: allSessionTurns } = await queueOrderQuery;
+
+          if (allSessionTurns && allSessionTurns.length > 0) {
+            const firstTurn = allSessionTurns[0];
+            const otherTurnIds = allSessionTurns.slice(1).map((t: any) => t.id);
+            if (otherTurnIds.length > 0) {
+              await supabase.from("turn_queue").update({ status: "waiting", resolved_at: null }).in("id", otherTurnIds);
+            }
+            await supabase.from("turn_queue").update({ status: "active", resolved_at: null }).eq("id", firstTurn.id);
+          }
+        }
+      }
+    } catch (queueErr) { console.warn(`[${requestId}] [SAVE] turn_queue update failed:`, queueErr); }
+
+    // ============================================
+    // Р В Р’В¤Р В РЎвЂєР В РЎСљР В РЎвЂєР В РІР‚в„ўР В Р’В«Р В РІвЂћСћ Р В РЎСџР В Р’В Р В РЎвЂєР В Р’В¦Р В РІР‚СћР В Р Р‹Р В Р Р‹ Р В Р Р‹Р В Р’ВР В РЎС™Р В Р в‚¬Р В РІР‚С”Р В Р вЂЎР В Р’В¦Р В Р’ВР В Р’В Р В РІР‚вЂњР В Р’ВР В РІР‚вЂќР В РЎСљР В Р’В Р В РЎС™Р В Р’ВР В Р’В Р В РЎвЂ™ Р В РЎСџР В РЎвЂєР В Р Р‹Р В РІР‚С”Р В РІР‚Сћ Р В РЎв„ўР В Р’В Р В Р в‚¬Р В РІР‚СљР В РЎвЂ™ Р В РўС’Р В РЎвЂєР В РІР‚СњР В РЎвЂєР В РІР‚в„ў
+    // (Р В Р’В Р В РЎвЂўР В Р вЂ Р В Р вЂ¦Р В РЎвЂў 1 Р В Р’В·Р В Р’В°Р В РЎвЂ”Р РЋР вЂљР В РЎвЂўР РЋР С“ Р В РЎвЂќ Р В Р’ВР В Р’В Р В Р вЂ¦Р В Р’В° Р В Р вЂ Р РЋР С“Р В Р’ВµР РЋРІР‚В¦ Р РЋРЎвЂњР В РўвЂР В Р’В°Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В Р вЂ¦Р РЋРІР‚в„–Р РЋРІР‚В¦ NPC, Р В РЎвЂќР В РЎвЂўР В Р вЂ¦Р РЋРІР‚С™Р В Р’В°Р В РЎвЂќР РЋРІР‚С™Р В РЎвЂР РЋР вЂљР В РЎвЂўР В Р вЂ Р В Р’В°Р В Р вЂ Р РЋРІвЂљВ¬Р В РЎвЂР РЋРІР‚В¦ Р РЋР С“ Р В РЎвЂР В РЎвЂ“Р РЋР вЂљР В РЎвЂўР В РЎвЂќР В Р’В°Р В РЎВР В РЎвЂ)
+    // ============================================
+    let worldSimResult: any = null;
+    if (isRoundCompleted) {
+      try {
+        const nextRound = (session.current_round || 1) + 1;
+        await supabase.from("sessions").update({ current_round: nextRound }).eq("id", session_id);
+
+        worldSimResult = await executeRoundCycleNpcSimulation({
+          supabase,
+          sessionId: session_id,
+          roundNumber: nextRound,
+          currentLocationId: session.current_location_id,
+          worldId: session.world_id,
+          loreContext,
+          storyline: sessionStoryline,
+          openrouterApiKey,
+          model: dmModel,
+        });
+        console.log(`[${requestId}] [WORLD_SIM] РЎР‚РЎСџР Р‰Р РЉ Round ${nextRound} simulated: ${worldSimResult?.simulated_count || 0} distant NPC(s) acted.`);
+      } catch (simErr) {
+        console.warn(`[${requestId}] [WORLD_SIM] executeRoundCycleNpcSimulation failed:`, simErr);
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      pipeline: {
+        step1: { status: "ok", actions_count: routerResult.actions.length },
+        step2: { status: "ok", mutations_count: engineResult.mutations.length },
+        step3: { status: persistenceResult.status, applied: persistenceResult.applied_mutations_count },
+        step4: { status: "ok", turn_status: systemTruth.turn_status },
+        step5: { status: "ok", players_narrated: Object.keys(narratorOutput.players).length },
+      },
+      turn_status: systemTruth.turn_status,
+      narratives: narratorOutput,
+      npc_updates: npcUpdates,
+      companion_action: companionAction,
+      expedition_events: expeditionEvents,
+      skill_progress: skillProgress,
+      level_up: playerLevelUp,
+      npc_combat_turns: npcCombatTurns,
+      world_simulation: worldSimResult,
+      game_time: systemTruth.environment.time,
+      time_minutes: time_passed_minutes,
+      location_changed: location_changed || wild_zone_changed,
+      new_location_id,
+      current_location_name: currentLocationName,
+      current_state_name: currentStateName,
+      current_wild_zone: session.current_wild_zone || null,
+      story_progress: storyProgressResult ? {
+        completed_goals: storyProgressResult.completedGoalTitles,
+        advanced_arc: storyProgressResult.advancedArc,
+        current_arc_index: storyProgressResult.updatedStoryline.current_arc_index,
+      } : null,
+    }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
+
+
+  } catch (err: any) {
+    console.error(`[${requestId}] Р Р†РЎСљР Р‰ ERROR:`, err);
+    return new Response(JSON.stringify({ error: err?.message || "Internal server error" }), {
+      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+});
+
+

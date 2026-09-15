@@ -167,18 +167,44 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
   }
 
   // ============================================
-  // Случайный энкаунтер (с учетом сложности сессии, времени и скрытности)
+  // Случайный и целевой энкаунтер
   // ============================================
   let encounter_triggered: EncounterTriggered = { triggered: false };
-  if (router_output.encounter_intent.type === "random" || router_output.actions.some(a => a.action_type === "move")) {
+  const isEncounterAction =
+    router_output.encounter_intent.type === "random" ||
+    router_output.encounter_intent.type === "targeted" ||
+    router_output.actions.some(a => a.action_type === "move" || a.action_type === "search");
+
+  if (isEncounterAction) {
+    // ----- Базовый порог по danger_level локации -----
+    // safe=2%, normal=12%, danger=35%, lethal=65%
+    const DANGER_BASE: Record<string, number> = {
+      safe: 2,
+      normal: 12,
+      danger: 35,
+      lethal: 65,
+    };
+    const dangerLevel = session.location_danger_level || "normal";
+    let baseThreshold = DANGER_BASE[dangerLevel] ?? 12;
+
+    // ----- Модификатор сложности сессии -----
+    const DIFFICULTY_MULT: Record<string, number> = { easy: 0.5, normal: 1.0, hard: 1.5 };
+    baseThreshold *= (DIFFICULTY_MULT[session.difficulty] ?? 1.0);
+
+    // ----- Время: чем дольше ходишь — тем выше шанс (max 3x) -----
+    const timeHours = Math.max(0.25, (router_output.time_estimate_minutes || 30) / 60);
+    const timeMult = Math.min(3.0, timeHours);
+
+    // ----- Целевой поиск (игрок ИЩЕТ врага) — шанс ×3 -----
+    const intentMult = router_output.encounter_intent.type === "targeted" ? 3.0 : 1.0;
+
+    // ----- Скрытность — снижает шанс встретить НПС (поднимает для НПС найти игрока) -----
     const moveAction = router_output.actions.find(a => a.action_type === "move");
     const stealthFactor = moveAction?.stealth_factor ?? 1.0;
-    const timeHours = Math.max(0.1, (router_output.time_estimate_minutes || 30) / 60);
 
-    // Базовый порог по сложности сессии ('easy' = 5, 'normal' = 10, 'hard' = 15)
-    let dynamicThreshold = ENCOUNTER_THRESHOLDS[session.difficulty] * stealthFactor * Math.min(3, timeHours);
-
+    const dynamicThreshold = baseThreshold * timeMult * intentMult * stealthFactor;
     const roll = rollD100();
+
     if (roll < dynamicThreshold) {
       const tierRoll = rollD100();
       const tier = getEncounterTier(tierRoll);
@@ -187,12 +213,17 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
         tier: tier.tier,
         creature_name: tier.name,
       };
+      const intentLabel = router_output.encounter_intent.type === "targeted" ? "🎯 Целевой" : "🎲 Случайный";
       raw_system_facts.push(
-        `🎲 Случайный энкаунтер! Появилось: ${encounter_triggered.creature_name} (тир ${encounter_triggered.tier}).`
+        `${intentLabel} энкаунтер! Опасность локации: ${dangerLevel}. ` +
+        `Бросок: ${roll.toFixed(0)} vs порог ${dynamicThreshold.toFixed(0)}. ` +
+        `Появилось: ${encounter_triggered.creature_name} (тир ${encounter_triggered.tier}).`
+      );
+    } else if (router_output.encounter_intent.type === "targeted") {
+      raw_system_facts.push(
+        `Поиск врагов не дал результата (бросок ${roll.toFixed(0)} vs порог ${dynamicThreshold.toFixed(0)} [${dangerLevel}]).`
       );
     }
-  } else if (router_output.encounter_intent.type === "targeted" && router_output.encounter_intent.target_name) {
-    raw_system_facts.push(`Целевой энкаунтер: ${router_output.encounter_intent.target_name}.`);
   }
 
   return {

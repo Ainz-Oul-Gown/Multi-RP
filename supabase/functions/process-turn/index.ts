@@ -1,4 +1,4 @@
-// supabase/functions/process-turn/index.ts
+﻿// supabase/functions/process-turn/index.ts
 // 5-РЎв‚¬Р В°Р С–Р С•Р Р†РЎвЂ№Р в„– Р С”Р С•Р Р…Р Р†Р ВµР в„–Р ВµРЎР‚ process-turn: Router РІвЂ вЂ™ Engine РІвЂ вЂ™ Persistence РІвЂ вЂ™ SystemTruth РІвЂ вЂ™ Narrator
 //
 // Р РЃР В°Р С–Р С‘:
@@ -228,6 +228,7 @@ serve(async (req: any) => {
     let currentLocationName: string | null = null, currentStateName: string | null = null, currentLocationType: string | null = null;
     // Wild zone РІР‚вЂќ Р С—РЎР‚Р С‘РЎР‚Р С•Р Т‘Р Р…Р В°РЎРЏ Р В·Р С•Р Р…Р В° Р Р†Р Р…Р Вµ Р С‘Р СР ВµР Р…Р Р…РЎвЂ№РЎвЂ¦ Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р в„– (Р В»Р ВµРЎРѓ, Р С—Р ВµРЎвЂ°Р ВµРЎР‚Р В°, Р С—Р С•Р В»Р Вµ)
     const currentWildZone: string | null = session.current_wild_zone || null;
+    let currentDangerLevel = "normal"; // из locations.danger_level
     if (currentWildZone) {
       // Player is in open world / wild zone РІР‚вЂќ use currentWildZone as location name
       currentLocationName = currentWildZone;
@@ -236,12 +237,13 @@ serve(async (req: any) => {
       try {
         const { data: locData } = await supabase
           .from("locations")
-          .select("name, type, states(name)")
+          .select("name, type, danger_level, states(name)")
           .eq("id", session.current_location_id)
           .maybeSingle();
         if (locData) {
           currentLocationName = locData.name;
           currentLocationType = locData.type || null;
+          currentDangerLevel = locData.danger_level || "normal";
           const stateObj = Array.isArray(locData.states) ? locData.states[0] : locData.states;
           currentStateName = stateObj?.name || null;
         }
@@ -971,6 +973,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         game_day: session.game_day || 14, game_hour: session.game_hour || 10,
         game_minute: session.game_minute || 0,
         current_location_id: session.current_location_id,
+        location_danger_level: (currentDangerLevel as any) || "normal",
       },
       acting_player: {
         id: player.id, name: player.name || "Герой",
@@ -1001,7 +1004,39 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       if (!engineResult.system_facts) engineResult.system_facts = engineResult.raw_system_facts;
       else engineResult.system_facts.push(partyEventFact);
     }
-    console.log(`[${requestId}] [STEP 2] РІС™в„ўРїС‘РЏ Engine: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${JSON.stringify(engineResult.raw_system_facts)}`);
+    // Обработка энкаунтера: найти/спаунить NPC если триггернулось
+    if (engineResult.encounter_triggered?.triggered) {
+      const enc = engineResult.encounter_triggered;
+      // 1) Ищем враждебного NPC уже в текущей локации
+      const matchingNpc = allNpcs.find((n: any) => n.is_hostile && n.is_alive !== false);
+      if (matchingNpc) {
+        engineResult.raw_system_facts.push(`Враг ${matchingNpc.name} замечает ${player.name} и готовится к атаке!`);
+        engineResult.system_facts.push(`Враг ${matchingNpc.name} замечает ${player.name} и готовится к атаке!`);
+      } else {
+        // 2) NPC нет в локации — перемещаем подходящего из мира
+        const tierTarget = enc.tier || 1;
+        const { data: spawnCandidates } = await supabase
+          .from("npcs")
+          .select("id, name, hp, max_hp, is_hostile, category, tier, level, base_attacks, special_attacks, armor_class, initiative, stats")
+          .eq("world_id", session.world_id)
+          .eq("is_hostile", true)
+          .lte("tier", tierTarget + 1)
+          .order("tier", { ascending: false })
+          .limit(10);
+        if (spawnCandidates?.length) {
+          const spawned = spawnCandidates[Math.floor(Math.random() * spawnCandidates.length)];
+          await supabase.from("npcs").update({ location_id: session.current_location_id }).eq("id", spawned.id);
+          allNpcs.push({ ...spawned, is_alive: true, location_id: session.current_location_id });
+          engineResult.raw_system_facts.push(`${spawned.name} выпрыгивает из тени и нападает на ${player.name}!`);
+          engineResult.system_facts.push(`${spawned.name} выпрыгивает из тени и нападает на ${player.name}!`);
+          console.log(`[${requestId}] [ENCOUNTER] Spawned ${spawned.name} (tier=${spawned.tier}) into location ${session.current_location_id}`);
+        } else {
+          console.log(`[${requestId}] [ENCOUNTER] No matching hostile NPC found for tier=${tierTarget}`);
+        }
+      }
+    }
+
+    console.log(`[${requestId}] [STEP 2] Engine done: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${engineResult.raw_system_facts?.length ?? 0}`);
 
     // ============================================
     // Р РЃР С’Р вЂњ 3: DB Persistence

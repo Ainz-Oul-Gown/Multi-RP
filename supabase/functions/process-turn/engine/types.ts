@@ -80,6 +80,8 @@ export interface EngineSession {
   game_hour: number;
   game_minute: number;
   current_location_id: string | null;
+  /** Уровень опасности текущей локации из locations.danger_level */
+  location_danger_level: "safe" | "normal" | "danger" | "lethal" | null;
 }
 
 // ============================================

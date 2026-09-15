@@ -1,38 +1,52 @@
-// Получить последние AI ответы из БД для оценки
+// Пары 1-31 (ранние)
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 
 const SUPABASE_URL = 'https://xhzpxiiqrtmeduynqmsd.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoenB4aWlxcnRtZWR1eW5xbXNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzNDU5NzEsImV4cCI6MjEwMTkyMTk3MX0.F9rh-vkpRiRQNXntWUuFQDzZdNIY_0HES6NJCi6zcM0';
 
-// Читаем сохранённую сессию из тестов
 const sessionFile = JSON.parse(readFileSync('tests/e2e/.auth/auth-session.json', 'utf8'));
 const ACCESS_TOKEN = sessionFile.session?.access_token || sessionFile.access_token;
-
 const sb = createClient(SUPABASE_URL, ANON_KEY, {
   global: { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } }
 });
 
-const SESSION_ID = '6a72db7e-a082-4889-9dc0-a195658ac71c';
-const { data, error } = await sb
-  .from('messages')
-  .select('*')
-  .eq('session_id', SESSION_ID)
-  .order('created_at', { ascending: false })
-  .limit(40);
+const { data: sessions } = await sb.from('sessions')
+  .select('id, created_at').order('created_at', { ascending: false }).limit(5);
 
-if (error) { console.error('Error:', error.message); process.exit(1); }
-if (!data?.length) { console.log('No messages found'); process.exit(0); }
+let allMessages = [];
+for (const s of (sessions || [])) {
+  const { data } = await sb.from('messages')
+    .select('id, session_id, sender_type, sender_name, content, created_at')
+    .eq('session_id', s.id)
+    .order('created_at', { ascending: true })
+    .limit(200);
+  if (data?.length) allMessages.push(...data);
+}
+allMessages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+// Берём ВСЕ сообщения, не только последние 100
+const pairs = [];
+for (let i = 0; i < allMessages.length; i++) {
+  const m = allMessages[i];
+  if ((m.sender_type || '').toLowerCase() === 'player') {
+    const next = allMessages[i + 1];
+    if (next && ['master','system','narrator'].includes(next.sender_type)) {
+      pairs.push({ request: m, response: next });
+      i++;
+    }
+  }
+}
 
-// Определяем колонки автоматически
-const keys = Object.keys(data[0]);
-console.log('Columns:', keys.join(', '));
-console.log('\n=== Последние сообщения (тест 03) ===');
-data?.reverse().forEach(m => {
-  const role = m.sender_role || m.role || m.type || m.sender || 'unknown';
-  const text = m.content || m.text || m.message || m.body || '';
-  const emoji = role.includes('assistant') || role.includes('ai') || role.includes('dm') ? '🤖 AI' 
-               : role.includes('user') || role.includes('player') ? '👤 Player' : `[${role}]`;
-  console.log(`\n${emoji} [${new Date(m.created_at).toLocaleTimeString()}]`);
-  console.log(text.slice(0, 600));
+// Выводим первые 31 пары
+console.log(`Всего пар: ${pairs.length}. Показываю 1-31:\n`);
+pairs.slice(0, 31).forEach((p, idx) => {
+  const ts = new Date(p.request.created_at).toLocaleTimeString('ru-RU');
+  const req = (p.request.content || '').trim();
+  const resp = (p.response.content || '').trim();
+  const isFail = resp.includes('провалилось') || resp.includes('не найден') || resp.includes('Действие "');
+  const hasNarr = resp.split('\n').some(l => l.length > 80);
+  const flag = isFail ? '🔴' : !hasNarr ? '⚠️' : '✅';
+  console.log(`${flag} [${idx+1}] ${ts} | REQ: ${req.slice(0,120)}`);
+  console.log(`      ANS: ${resp.slice(0,250)}`);
+  console.log();
 });

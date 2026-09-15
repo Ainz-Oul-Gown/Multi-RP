@@ -1598,27 +1598,38 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     console.log(`[${requestId}] [STEP 4] turn_status=${systemTruth.turn_status}, ${Object.keys(systemTruth.player_truths).length} player_truths`);
 
     // ============================================
-    // Р РЃР С’Р вЂњ 5: Narrator
+    // ШАГ 5: Narrator
     // ============================================
     console.log(`[${requestId}] [STEP 5] Narrator...`);
     let narratorOutput: { players: Record<string, string>; global_narrative: string };
+    let narratorStatus: "ok" | "fallback" = "ok";
+    let narratorError: string | null = null;
+    const backupKeys = [
+      playerSettings?.openrouter_key ? sanitizeKey(playerSettings.openrouter_key) : null,
+      hostSettings?.openrouter_key ? sanitizeKey(hostSettings.openrouter_key) : null,
+      FALLBACK_OPENROUTER_KEY ? sanitizeKey(FALLBACK_OPENROUTER_KEY) : null,
+    ].filter(Boolean) as string[];
+
     try {
       narratorOutput = await generateNarrative({
         system_truth: systemTruth,
         action_text: safeActionText,
         player_name: player.name || "Герой",
-        player_race: player.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
-        player_class: player.class || "Р вЂ™Р С•Р С‘Р Р…",
+        player_race: player.race || "Человек",
+        player_class: player.class || "Воин",
         lore_context: loreContext,
         recent_history: recentMessages.slice(-6),
         openrouter_api_key: openrouterApiKey,
+        backup_api_keys: backupKeys,
         dm_model: dmModel,
       });
-    } catch (narratorErr) {
+    } catch (narratorErr: any) {
       console.warn(`[${requestId}] [STEP 5] LLM failed, using fallback:`, narratorErr);
+      narratorStatus = "fallback";
+      narratorError = narratorErr?.message || String(narratorErr);
       narratorOutput = buildFallbackNarrative(systemTruth);
     }
-    console.log(`[${requestId}] [STEP 5] ${Object.keys(narratorOutput.players).length} player narratives`);
+    console.log(`[${requestId}] [STEP 5] ${Object.keys(narratorOutput.players).length} player narratives (status: ${narratorStatus})`);
 
     // ============================================
     // SAVE: messages + turn_queue
@@ -2285,7 +2296,11 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         step2: { status: "ok", mutations_count: engineResult.mutations.length },
         step3: { status: persistenceResult.status, applied: persistenceResult.applied_mutations_count },
         step4: { status: "ok", turn_status: systemTruth.turn_status },
-        step5: { status: "ok", players_narrated: Object.keys(narratorOutput.players).length },
+        step5: {
+          status: narratorStatus,
+          players_narrated: Object.keys(narratorOutput.players).length,
+          error: narratorError,
+        },
       },
       turn_status: systemTruth.turn_status,
       narratives: narratorOutput,

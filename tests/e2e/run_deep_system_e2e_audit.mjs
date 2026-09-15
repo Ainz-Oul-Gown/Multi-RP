@@ -104,6 +104,7 @@ async function runAudit() {
     id: sessionId,
     world_id: WORLD_ID,
     difficulty: 'easy',
+    ai_key_mode: 'individual',
     game_year: 1248,
     game_month: 5,
     game_day: 14,
@@ -206,6 +207,15 @@ ${JSON.stringify(turn1.data?.pipeline || {}, null, 2)}
     stage1Report += `- ✅ **Чистота языка:** Ответ выдержан на русском языке без иностранных утечек токенов.\n`;
   }
 
+  const isFallback1 = turn1.data?.pipeline?.step5?.status === 'fallback'
+    || dmMsg1.includes('В воздухе чувствуется: шаги, шум ветра')
+    || dmMsg1.startsWith('📍');
+  if (isFallback1) {
+    stage1Report += `- ❌ **СБОЙ НЕЙРОСЕТИ (FALLBACK):** Ответ сгенерирован процедурным фоллбэком, а не нейросетью! Ошибка: ${turn1.data?.pipeline?.step5?.error || 'неизвестно'}\n`;
+  } else {
+    stage1Report += `- ✅ **Художественный ответ нейросети:** ДМ успешно сгенерировал литературный нарратив.\n`;
+  }
+
   appendToAudit(stage1Report + '\n---\n');
   console.log('✅ Этап 1 записан в аудит.');
 
@@ -259,6 +269,15 @@ ${JSON.stringify(turn2.data?.pipeline || {}, null, 2)}
     stage2Report += `- ✅ **Синхронизация перемещения:** Нарратив не врет о мгновенном прибытии без смены ID в базе.\n`;
   }
 
+  const isFallback2 = turn2.data?.pipeline?.step5?.status === 'fallback'
+    || dmMsg2.includes('В воздухе чувствуется: шаги, шум ветра')
+    || dmMsg2.startsWith('📍');
+  if (isFallback2) {
+    stage2Report += `- ❌ **СБОЙ НЕЙРОСЕТИ (FALLBACK):** Ответ сгенерирован процедурным фоллбэком, а не нейросетью! Ошибка: ${turn2.data?.pipeline?.step5?.error || 'неизвестно'}\n`;
+  } else {
+    stage2Report += `- ✅ **Художественный ответ нейросети:** ДМ успешно сгенерировал литературный нарратив.\n`;
+  }
+
   appendToAudit(stage2Report + '\n---\n');
   console.log('✅ Этап 2 записан в аудит.');
 
@@ -302,6 +321,15 @@ ${JSON.stringify(turn3.data?.pipeline || {}, null, 2)}
     stage3Report += `- ✅ **Обработка диалога:** Реплика воспринята миром без падения парсера целей.\n`;
   }
 
+  const isFallback3 = turn3.data?.pipeline?.step5?.status === 'fallback'
+    || dmMsg3.includes('В воздухе чувствуется: шаги, шум ветра')
+    || dmMsg3.startsWith('📍');
+  if (isFallback3) {
+    stage3Report += `- ❌ **СБОЙ НЕЙРОСЕТИ (FALLBACK):** Ответ сгенерирован процедурным фоллбэком, а не нейросетью! Ошибка: ${turn3.data?.pipeline?.step5?.error || 'неизвестно'}\n`;
+  } else {
+    stage3Report += `- ✅ **Художественный ответ нейросети:** ДМ успешно сгенерировал литературный нарратив.\n`;
+  }
+
   appendToAudit(stage3Report + '\n---\n');
   console.log('✅ Этап 3 записан в аудит.');
 
@@ -343,6 +371,15 @@ ${JSON.stringify(turn4.data?.pipeline || {}, null, 2)}
     stage4Report += `- ❌ **БАГ УРОНА (0 УРОНА):** Зафиксировано сообщение с «0 урона» при успешном попадании/проверке!\n`;
   } else {
     stage4Report += `- ✅ **Урон/навык:** Нет сообщений с абсурдным нулевым уроном при успешном попадании.\n`;
+  }
+
+  const isFallback4 = turn4.data?.pipeline?.step5?.status === 'fallback'
+    || dmMsg4.includes('В воздухе чувствуется: шаги, шум ветра')
+    || dmMsg4.startsWith('📍');
+  if (isFallback4) {
+    stage4Report += `- ❌ **СБОЙ НЕЙРОСЕТИ (FALLBACK):** Ответ сгенерирован процедурным фоллбэком, а не нейросетью! Ошибка: ${turn4.data?.pipeline?.step5?.error || 'неизвестно'}\n`;
+  } else {
+    stage4Report += `- ✅ **Художественный ответ нейросети:** ДМ успешно сгенерировал литературный нарратив.\n`;
   }
 
   appendToAudit(stage4Report + '\n---\n');
@@ -410,6 +447,15 @@ ${JSON.stringify(turn5.data?.pipeline || {}, null, 2)}
     stage5Report += `- ❌ **КУКЛОВОДСТВО (GODMODING):** ДМ придумал реплику или действие за второго живого игрока Каэля!\n`;
   } else {
     stage5Report += `- ✅ **Защита свободы воли:** ДМ описал жест Лиры, оставив решение за Каэлем.\n`;
+  }
+
+  const isFallback5 = turn5.data?.pipeline?.step5?.status === 'fallback'
+    || dmMsg5.includes('В воздухе чувствуется: шаги, шум ветра')
+    || dmMsg5.startsWith('📍');
+  if (isFallback5) {
+    stage5Report += `- ❌ **СБОЙ НЕЙРОСЕТИ (FALLBACK):** Ответ сгенерирован процедурным фоллбэком, а не нейросетью! Ошибка: ${turn5.data?.pipeline?.step5?.error || 'неизвестно'}\n`;
+  } else {
+    stage5Report += `- ✅ **Художественный ответ нейросети:** ДМ успешно сгенерировал литературный нарратив.\n`;
   }
 
   appendToAudit(stage5Report + '\n---\n');

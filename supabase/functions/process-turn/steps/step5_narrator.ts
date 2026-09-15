@@ -20,6 +20,7 @@ export interface NarratorInputContext {
   lore_context: string;
   recent_history: string[]; // последние 6 сообщений для контекста ДМ
   openrouter_api_key: string;
+  backup_api_keys?: string[];
   dm_model: string;
 }
 
@@ -391,6 +392,16 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
   const userMessage = `${narratorContext}\n\nСгенерируй нарратив строго по указанным фактам в JSON-формате. ВЕСЬ текст (описания, действия, диалоги NPC) ОБЯЗАН быть исключительно на русском языке!`;
 
   const isTest = openrouter_api_key === "test-key" || dm_model === "test-model";
+  const allKeys = isTest
+    ? [openrouter_api_key]
+    : Array.from(
+        new Set(
+          [openrouter_api_key, ...(context.backup_api_keys || [])]
+            .map((k) => (k || "").trim())
+            .filter((k) => k.length > 5)
+        )
+      );
+
   const modelsToTry = isTest
     ? [dm_model || "test-model"]
     : Array.from(
@@ -406,36 +417,46 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
       );
   let lastErr: any = null;
 
-  for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
-    const curModel = modelsToTry[attempt];
-    try {
-      if (attempt > 0 && !isTest) {
-        await new Promise((r) => setTimeout(r, 400 * attempt));
-      }
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openrouter_api_key}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://ainz-oul-gown.github.io/Multi-RP/",
-          "X-Title": "Multi-RP",
-        },
-        body: JSON.stringify({
-          model: curModel,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-          temperature: 0.7,
-          max_tokens: 2000,
-        }),
-        signal: AbortSignal.timeout(28000),
-      });
+  for (const curKey of allKeys) {
+    let keyAuthFailed = false;
+    for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
+      if (keyAuthFailed) break;
+      const curModel = modelsToTry[attempt];
+      try {
+        if (attempt > 0 && !isTest) {
+          await new Promise((r) => setTimeout(r, 400 * attempt));
+        }
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${curKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://ainz-oul-gown.github.io/Multi-RP/",
+            "X-Title": "Multi-RP",
+          },
+          body: JSON.stringify({
+            model: curModel,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userMessage },
+            ],
+            temperature: 0.7,
+            max_tokens: 2000,
+          }),
+          signal: AbortSignal.timeout(28000),
+        });
 
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        throw new Error(`Narrator LLM error: ${response.status} - ${errText.slice(0, 150)}`);
-      }
+        if (!response.ok) {
+          const errText = await response.text().catch(() => "");
+          const errMsg = `Narrator LLM error: ${response.status} - ${errText.slice(0, 150)}`;
+          if (response.status === 401 || response.status === 402 || response.status === 403) {
+            console.warn(`[step5_narrator] Key auth failure (${response.status}) on ${curModel}. Trying next key.`);
+            keyAuthFailed = true;
+            lastErr = new Error(errMsg);
+            break;
+          }
+          throw new Error(errMsg);
+        }
 
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
@@ -528,9 +549,10 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         players: validatedPlayers,
         global_narrative: typeof parsed.global_narrative === "string" ? cleanNarrativeText(parsed.global_narrative) : "",
       };
-    } catch (err) {
-      lastErr = err;
-      console.warn(`[step5_narrator] Attempt ${attempt + 1} (${curModel}) failed:`, err);
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[step5_narrator] Attempt ${attempt + 1} (${curModel}) failed:`, err);
+      }
     }
   }
 

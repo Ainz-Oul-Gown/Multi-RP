@@ -59,18 +59,76 @@ export class TalkHandler extends BaseActionHandler {
     }
 
     // 4. Только если цель точно не живой игрок — ищем NPC
+
+    // УРОВЕНЬ 1: По UUID из роутера
     let targetNpc = this.findNpcById(context, action.target_entity_id || "");
 
-    // Резолв по подсказке имени среди NPC
+    // УРОВЕНЬ 2: По имени (hint из AI-роутера / классификатора)
     if (!targetNpc) {
-      const hint = (((action as any).target_entity_name || (action as any).target_name || action.target_item_name || "") as string).toLowerCase().trim();
+      const hint = (
+        (action as any).target_entity_name ||
+        (action as any).target_name ||
+        action.target_item_name || ""
+      ).toLowerCase().trim();
+
       if (hint) {
-        for (const [id, n] of context.targets.npcs.entries()) {
-          if (n.name.toLowerCase().includes(hint) || hint.includes(n.name.toLowerCase())) {
+        for (const [_id, n] of context.targets.npcs.entries()) {
+          const nLower = n.name.toLowerCase();
+          if (nLower.includes(hint) || hint.includes(nLower)) {
             targetNpc = n;
             break;
           }
         }
+      }
+    }
+
+    // УРОВЕНЬ 3: По профессии/роли — ищем ключевые слова из реплики игрока
+    // в полях background и name каждого NPC (данные приходят из БД)
+    if (!targetNpc) {
+      // Берём существительные из реплики (слова длиннее 3 букв, не частицы)
+      const stopWords = new Set(["что", "как", "где", "кто", "его", "ему", "свой", "мне", "меня", "нас", "вас", "это", "она", "они", "оно", "тот", "эта", "эти"]);
+      const keywords = rawLower
+        .split(/[\s,.!?«»"']+/)
+        .filter(w => w.length > 3 && !stopWords.has(w));
+
+      if (keywords.length > 0) {
+        let bestMatch: any = null;
+        let bestScore = 0;
+
+        for (const [_id, n] of context.targets.npcs.entries()) {
+          if (n.is_hostile) continue; // не ищем среди врагов
+
+          // Поля для поиска: background содержит профессиональное описание
+          const searchText = [
+            n.name || "",
+            n.background || "",
+            n.appearance || "",
+            n.category || "",
+          ].join(" ").toLowerCase();
+
+          // Считаем сколько ключевых слов из реплики попало в описание NPC
+          const score = keywords.filter(w => searchText.includes(w)).length;
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = n;
+          }
+        }
+
+        // Берём только если хоть одно ключевое слово совпало
+        if (bestScore > 0) {
+          targetNpc = bestMatch;
+        }
+      }
+    }
+
+    // УРОВЕНЬ 4 (последний шанс): Единственный дружественный NPC рядом
+    // Используем только если рядом ровно один — иначе слишком рискованно
+    if (!targetNpc) {
+      const friendlyNpcs = Array.from(context.targets.npcs.values()).filter(
+        (n: any) => !n.is_hostile && n.is_alive !== false
+      );
+      if (friendlyNpcs.length === 1) {
+        targetNpc = friendlyNpcs[0];
       }
     }
 

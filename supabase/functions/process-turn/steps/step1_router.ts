@@ -1113,9 +1113,9 @@ export async function classifyIntentWithAI(
   const SMART_FREE_MODELS = [
     preferredModel,
     "meta-llama/llama-3.3-70b-instruct:free",
+    "meta-llama/llama-3.1-8b-instruct:free",
     "google/gemini-2.0-flash-exp:free",
     "qwen/qwen-2.5-72b-instruct:free",
-    "google/gemma-2-27b-it:free",
   ].filter(Boolean) as string[];
 
   for (const model of SMART_FREE_MODELS) {

@@ -409,12 +409,15 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
           [
             dm_model,
             "meta-llama/llama-3.3-70b-instruct:free",
+            "meta-llama/llama-3.1-8b-instruct:free",
+            "mistralai/mistral-7b-instruct:free",
+            "deepseek/deepseek-chat:free",
             "qwen/qwen-2.5-72b-instruct:free",
-            "google/gemma-2-27b-it:free",
             "google/gemini-2.0-flash-exp:free",
           ].filter(Boolean)
         )
       );
+  const attemptErrors: string[] = [];
   let lastErr: any = null;
 
   for (const curKey of allKeys) {
@@ -549,13 +552,14 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         players: validatedPlayers,
         global_narrative: typeof parsed.global_narrative === "string" ? cleanNarrativeText(parsed.global_narrative) : "",
       };
-      } catch (err) {
+      } catch (err: any) {
         lastErr = err;
+        attemptErrors.push(`[${curModel}]: ${err?.message || err}`);
         console.warn(`[step5_narrator] Attempt ${attempt + 1} (${curModel}) failed:`, err);
       }
     }
   }
 
-  throw lastErr || new Error("Failed all narrator attempts");
+  throw new Error(`Failed all narrator attempts: ${attemptErrors.join(" | ")}`);
 }
 

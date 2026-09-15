@@ -1822,33 +1822,39 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     }
 
     // 9) Companion Invitation & Pet Taming interactions
+    // Только если игрок не обращается к другому живому игроку!
+    const isDirectedToOtherPlayer = allPlayers.some((p: any) =>
+      p.id !== player.id && p.name && safeActionText.toLowerCase().includes(p.name.toLowerCase())
+    );
     let companionInviteHandled = false;
-    try {
-      const companionInviteResult = await handleCompanionInvitation({
-        supabase,
-        player_action_text: safeActionText,
-        acting_player_name: player.name || "Герой",
-        acting_player_id: player.id,
-        location_npcs: allNpcs,
-        openrouter_api_key: openrouterApiKey,
-        model: dmModel,
-      });
-      if (companionInviteResult) {
-        companionInviteHandled = true;
-        await supabase.from("messages").insert({
-          session_id,
-          sender_type: "master",
-          sender_name: companionInviteResult.npc_name,
-          content: companionInviteResult.dialogue,
-          metadata: {
-            type: "companion_invitation",
-            npc_id: companionInviteResult.npc_id,
-            joined_party: companionInviteResult.joined_party,
-          },
+    if (!isDirectedToOtherPlayer) {
+      try {
+        const companionInviteResult = await handleCompanionInvitation({
+          supabase,
+          player_action_text: safeActionText,
+          acting_player_name: player.name || "Герой",
+          acting_player_id: player.id,
+          location_npcs: allNpcs,
+          openrouter_api_key: openrouterApiKey,
+          model: dmModel,
         });
+        if (companionInviteResult) {
+          companionInviteHandled = true;
+          await supabase.from("messages").insert({
+            session_id,
+            sender_type: "master",
+            sender_name: companionInviteResult.npc_name,
+            content: companionInviteResult.dialogue,
+            metadata: {
+              type: "companion_invitation",
+              npc_id: companionInviteResult.npc_id,
+              joined_party: companionInviteResult.joined_party,
+            },
+          });
+        }
+      } catch (inviteErr) {
+        console.warn(`[${requestId}] [COMPANION] handleCompanionInvitation failed:`, inviteErr);
       }
-    } catch (inviteErr) {
-      console.warn(`[${requestId}] [COMPANION] handleCompanionInvitation failed:`, inviteErr);
     }
 
     // 10) Pet Taming interaction (Р С‘Р Р…РЎвЂљР ВµР В»Р В»Р ВµР С”РЎвЂљРЎС“Р В°Р В»РЎРЉР Р…Р С•Р Вµ Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…Р С‘Р Вµ Р В·Р Р†Р ВµРЎР‚РЎРЏ/Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚Р В°)

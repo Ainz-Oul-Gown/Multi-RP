@@ -240,7 +240,7 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
       };
       // Чистый факт для мира без отладочных порогов кубиков
       raw_system_facts.push(
-        `${encounter_triggered.creature_name} выпрыгивает из тени и нападает на ${acting_player.name}!`
+        `🎯 Встреча в пути! Появилось: ${encounter_triggered.creature_name} — существо нападает на ${acting_player.name}!`
       );
     } else if (router_output.encounter_intent.type === "targeted") {
       const targetLabel = router_output.encounter_intent.target_name ? ` ("${router_output.encounter_intent.target_name}")` : "";

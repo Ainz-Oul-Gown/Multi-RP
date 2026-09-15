@@ -395,6 +395,8 @@ export async function generateCompanionDialogue(params: {
     try {
       const systemPrompt = `Ты — ролевой ИИ в ЛитРПГ/D&D игре. Твоя задача — сгенерировать ОДНУ прямую реплику персонажа (NPC), обращенную к конкретному игроку (${player_name}).
 Реплика должна СТРОГО отражать уникальный характер персонажа, его расу, класс, привычки, коронные фразы и текущие отношения.
+КАТЕГОРИЧЕСКИ ЗАПРЕЩЕН АНГЛИЙСКИЙ ЯЗЫК. РЕПЛИКА ДОЛЖНА БЫТЬ ИСКЛЮЧИТЕЛЬНО НА РУССКОМ ЯЗЫКЕ.
+ЗАПРЕЩЕНО ВЫВОДИТЬ СВОИ РАССУЖДЕНИЯ ИЛИ ПЛАНЫ.
 Отвечай ТОЛЬКО репликой персонажа от первого лица в русских кавычках «...». Без вводных слов, пояснений и метаданных.`;
 
       const userPrompt = `NPC: ${npc.name || "Спутник"}
@@ -416,10 +418,10 @@ export async function generateCompanionDialogue(params: {
 
       const modelsToTry = [
         model,
-        "google/gemma-4-31b-it:free",
-        "minimax/minimax-m3:free",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "minimax/minimax-m2.7:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen-2.5-72b-instruct:free",
+        "google/gemma-2-27b-it:free",
+        "google/gemini-2.0-flash-exp:free",
       ].filter(Boolean);
 
       for (const curModel of modelsToTry) {
@@ -446,7 +448,10 @@ export async function generateCompanionDialogue(params: {
             const data = await resp.json();
             const content = data.choices?.[0]?.message?.content?.trim();
             if (content && content.length > 5) {
-              return content.startsWith("«") ? content : `«${content.replace(/^["'«]|["'»]$/g, "")}»`;
+              const hasEnglishWords = /[a-zA-Z]{4,}/.test(content);
+              if (!hasEnglishWords) {
+                return content.startsWith("«") ? content : `«${content.replace(/^["'«]|["'»]$/g, "")}»`;
+              }
             }
           }
         } catch (subErr) {
@@ -498,12 +503,19 @@ export async function handleCompanionInvitation(params: {
 
   if (!isInvite) return null;
 
-  // Ищем дружелюбного живого NPC
-  const candidate = location_npcs.find((n) => {
+  // Ищем дружелюбного живого NPC, чье имя названо в реплике
+  let candidate = location_npcs.find((n) => {
     if (n.is_hostile || n.is_alive === false) return false;
-    if (n.name && lowerText.includes(n.name.toLowerCase())) return true;
-    return true;
+    return n.name && lowerText.includes(n.name.toLowerCase());
   });
+
+  // Если имя NPC явно не названо, берем единственного NPC только если рядом ровно 1 NPC
+  if (!candidate && location_npcs.length === 1) {
+    const singleNpc = location_npcs[0];
+    if (!singleNpc.is_hostile && singleNpc.is_alive !== false) {
+      candidate = singleNpc;
+    }
+  }
 
   if (!candidate) return null;
 

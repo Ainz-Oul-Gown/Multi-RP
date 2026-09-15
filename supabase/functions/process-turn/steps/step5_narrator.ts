@@ -408,13 +408,16 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         new Set(
           [
             dm_model,
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "meta-llama/llama-3.1-8b-instruct:free",
-            "mistralai/mistral-7b-instruct:free",
-            "deepseek/deepseek-chat:free",
-            "qwen/qwen-2.5-72b-instruct:free",
-            "google/gemini-2.0-flash-exp:free",
-          ].filter(Boolean)
+            dm_model ? dm_model.replace(/:free$/, "") : null,
+            "meta-llama/llama-3.1-8b-instruct",
+            "deepseek/deepseek-chat",
+            "meta-llama/llama-3.3-70b-instruct",
+            "google/gemini-2.0-flash-001",
+            "qwen/qwen-2.5-72b-instruct",
+            "meta-llama/llama-3.2-3b-instruct:free",
+            "meta-llama/llama-3.2-1b-instruct:free",
+            "mistralai/mistral-small-24b-instruct-2501:free",
+          ].filter(Boolean) as string[]
         )
       );
   const attemptErrors: string[] = [];

@@ -1112,10 +1112,13 @@ export async function classifyIntentWithAI(
   // ========= ПУЛ УМНЫХ БЕСПЛАТНЫХ МОДЕЛЕЙ ДЛЯ TIER 2 =========
   const SMART_FREE_MODELS = [
     preferredModel,
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "google/gemini-2.0-flash-exp:free",
-    "qwen/qwen-2.5-72b-instruct:free",
+    preferredModel ? preferredModel.replace(/:free$/, "") : null,
+    "meta-llama/llama-3.1-8b-instruct",
+    "deepseek/deepseek-chat",
+    "meta-llama/llama-3.3-70b-instruct",
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "meta-llama/llama-3.2-1b-instruct:free",
+    "qwen/qwen-2.5-72b-instruct",
   ].filter(Boolean) as string[];
 
   for (const model of SMART_FREE_MODELS) {

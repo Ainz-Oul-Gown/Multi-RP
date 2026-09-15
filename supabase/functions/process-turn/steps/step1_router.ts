@@ -914,7 +914,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
 
   // Определение намерений энкаунтера (охота / поиск существа)
   let encounterIntent: { type: "targeted" | "random" | "none"; target_name: string | null } = { type: "none", target_name: null };
-  const huntMatch = lower.match(/(?:ищу|выслеживаю|выследить|охочусь|охота|найти|следы)\s+(?:на\s+)?(волк[а-я]*|кабан[а-я]*|медвед[а-я]*|олен[а-я]*|гоблин[а-я]*|разбойник[а-я]*|бандит[а-я]*|звер[а-я]*|чудовищ[а-я]*|враг[а-я]*|[а-яё]{3,20})/i);
+  const huntMatch = lower.match(/(?:ищу|выслеживаю|выследить|охочусь|охота|найти|следы)\s+(?:на\s+)?(?:[а-яё]+(?:ого|его|ую|ей|ый|ий|ая|яя|ом|ем)\s+)?(волк[а-я]*|кабан[а-я]*|медвед[а-я]*|олен[а-я]*|гоблин[а-я]*|разбойник[а-я]*|бандит[а-я]*|василиск[а-я]*|паук[а-я]*|звер[а-я]*|чудовищ[а-я]*|враг[а-я]*|[а-яё]{3,20})/i);
   if (huntMatch) {
     const rawTarget = huntMatch[1].trim();
     let normalized = rawTarget;
@@ -923,6 +923,8 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     else if (/медвед/i.test(rawTarget)) normalized = "Медведь";
     else if (/олен/i.test(rawTarget)) normalized = "Олень";
     else if (/гоблин/i.test(rawTarget)) normalized = "Гоблин";
+    else if (/василиск/i.test(rawTarget)) normalized = "Василиск";
+    else if (/паук/i.test(rawTarget)) normalized = "Паук";
     else if (/разбойник|бандит/i.test(rawTarget)) normalized = "Разбойник";
     else normalized = rawTarget.charAt(0).toUpperCase() + rawTarget.slice(1);
 

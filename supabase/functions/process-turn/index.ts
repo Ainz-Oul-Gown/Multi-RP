@@ -263,12 +263,12 @@ serve(async (req: any) => {
       currentDangerLevel = parentLocationDanger;
     }
 
-    let availableLocations: { id: string; name: string; type: string; state_name: string }[] = [];
+    let availableLocations: { id: string; name: string; type: string; state_name: string; danger_level?: "safe" | "normal" | "danger" | "lethal" }[] = [];
     if (session.world_id) {
       try {
         const { data: statesWithLocs } = await supabase
           .from("states")
-          .select("id, name, locations(id, name, type)")
+          .select("id, name, locations(id, name, type, danger_level)")
           .eq("world_id", session.world_id);
         if (statesWithLocs) {
           for (const s of statesWithLocs) {
@@ -278,6 +278,7 @@ serve(async (req: any) => {
                 id: l.id,
                 name: l.name,
                 type: l.type,
+                danger_level: l.danger_level || "normal",
                 state_name: s.name,
               });
             }
@@ -898,7 +899,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     const targetedOtherPlayer = (allPlayers || []).filter((p: any) => p.id !== player.id).find((p: any) => {
       if (!p.name) return false;
       const pNameLower = p.name.trim().toLowerCase();
-      const nameRegex = new RegExp(`(^|[\\s,."Р’В«*!?])${pNameLower}[Р В°-РЎРЏ]*([\\s,."Р’В»*!?]|$)`, 'i');
+      const nameRegex = new RegExp(`(^|[\\s,."«*!?])${pNameLower}[а-яё]*([\\s,."»*!?]|$)`, 'i');
       return nameRegex.test(lowerAct) || lowerAct.includes(pNameLower);
     });
 

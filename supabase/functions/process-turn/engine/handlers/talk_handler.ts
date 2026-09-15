@@ -121,32 +121,56 @@ export class TalkHandler extends BaseActionHandler {
       }
     }
 
-    // УРОВЕНЬ 4 (последний шанс): Единственный дружественный NPC рядом
-    // Используем только если рядом ровно один — иначе слишком рискованно
+    // УРОВЕНЬ 4: Ближайший дружественный NPC рядом
     if (!targetNpc) {
       const friendlyNpcs = Array.from(context.targets.npcs.values()).filter(
         (n: any) => !n.is_hostile && n.is_alive !== false
       );
-      if (friendlyNpcs.length === 1) {
+      if (friendlyNpcs.length > 0) {
         targetNpc = friendlyNpcs[0];
       }
     }
 
+    // Если рядом вообще нет NPC (одиночество в дикой зоне) — речь звучит вслух в окружающий мир
     if (!targetNpc) {
+      const speechMatch = rawText.match(/[«"]([^»"]{1,120})[»"]/);
+      const speechContent = speechMatch ? speechMatch[1] : rawText.trim();
       return {
         result: {
           action_type: this.action_type,
-          success: false,
-          details: "Цель разговора не найдена",
+          success: true,
+          details: "Слова сказаны вслух в окружающее пространство",
         },
         mutations: [],
-        system_facts: [`${player.name} попытался заговорить с неизвестным персонажем.`],
+        system_facts: [
+          speechContent
+            ? `${player.name} произносит вслух: «${speechContent}», но поблизости нет ни души, кто мог бы откликнуться.`
+            : `${player.name} подает голос в пустоту, но вокруг лишь тишина.`
+        ],
       };
     }
 
     // ============================================
     // Диалог с NPC: insight (WIS) или persuasion (CHA)
     // ============================================
+    // Если проверка характеристик не требуется (stat_to_check === "none" или DC <= 0) — обычный диалог успешен без кубиков
+    if (action.stat_to_check === "none" || (action.ai_custom_dc !== null && action.ai_custom_dc !== undefined && action.ai_custom_dc <= 0)) {
+      return {
+        result: {
+          action_type: this.action_type,
+          success: true,
+          target_entity_id: targetNpc.id,
+          target_type: "npc",
+          target_id: targetNpc.id,
+          details: `Разговор с ${targetNpc.name}`,
+        } as any,
+        mutations: [],
+        system_facts: [
+          `${player.name} обращается, чтобы поговорить с ${targetNpc.name}.`,
+        ],
+      };
+    }
+
     const stat = action.stat_to_check || "insight";
     const statMod = this.getStatToCheckMod(player, stat);
     const proficiency = this.getProficiency(player);

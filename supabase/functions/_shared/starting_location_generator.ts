@@ -18,6 +18,7 @@ export interface AvailableLocationInfo {
   type: string;
   description?: string;
   state_name?: string;
+  danger_level?: "safe" | "normal" | "danger" | "lethal";
   pos_x?: number;
   pos_y?: number;
   subzones?: SubzoneInfo[];
@@ -71,8 +72,10 @@ export function buildStartingLocationPrompt(params: {
   world_name?: string;
   lore_context?: string;
   available_locations?: AvailableLocationInfo[];
+  difficulty?: string;
+  player_level?: number;
 }): string {
-  const { player, action_text, world_name, lore_context, available_locations } = params;
+  const { player, action_text, world_name, lore_context, available_locations, difficulty, player_level } = params;
 
   let existingLocationsBlock = "";
   if (available_locations && available_locations.length > 0) {
@@ -80,8 +83,11 @@ export function buildStartingLocationPrompt(params: {
       const subNames = (loc.subzones || []).map((sz) => sz.name).filter(Boolean);
       const subStr = subNames.length > 0 ? `\n    Подзоны / места: ${subNames.join(", ")}` : "";
       const descStr = loc.description ? `\n    Описание: ${cleanTextForAI(loc.description)}` : "";
-      return `- "${loc.name}" (тип: ${loc.type}${loc.state_name ? `, регион: ${loc.state_name}` : ""})${descStr}${subStr}`;
+      const dangerStr = loc.danger_level ? `, опасность: ${loc.danger_level}` : ", опасность: normal";
+      return `- "${loc.name}" (тип: ${loc.type}${dangerStr}${loc.state_name ? `, регион: ${loc.state_name}` : ""})${descStr}${subStr}`;
     });
+
+    const isEasy = (difficulty || "normal") === "easy" || (player_level || 1) <= 1;
 
     existingLocationsBlock = `
 ДОСТУПНЫЕ СУЩЕСТВУЮЩИЕ ЛОКАЦИИ МИРА (ВЫБЕРИ ИЗ НИХ):
@@ -94,11 +100,18 @@ ${locLines.join("\n")}
    - Если игрок просит город («в городе», «в портовом городе») — выбери наиболее подходящую локацию с типом "city" или "capital".
    - Если игрок просит руины/подземелье/замок/дикую местность — выбери подходящую по типу ("ruins", "dungeon", "landmark", "fortress", "wilderness").
    - Если игрок не уточнил тип локации (например «оглядываюсь», «начинаю путь»), выбери наиболее естественную локацию из списка под расу, класс и биографию героя.
-2. **Выбор подзоны (selected_subzone)**:
+2. **СТРОГАЯ БЕЗОПАСНОСТЬ СТАРТА (ОСОБЕННО ДЛЯ НОВИЧКА ИЛИ СЛОЖНОСТИ EASY)**:
+   ${isEasy ? `
+   - ВНИМАНИЕ: СЛОЖНОСТЬ СЕССИИ — "${difficulty || 'easy'}" (ИЛИ 1 УРОВЕНЬ ГЕРОЯ)!
+   - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО выбирать локации со статусом опасности "danger" или "lethal"!
+   - Выбирай ИСКЛЮЧИТЕЛЬНО локации со статусом "safe" или "normal"!
+   - Если игрок просил "деревню", но единственная деревня в списке имеет опасность "danger" (например, "Скрытая деревня изгоев"), ВЫБЕРИ БЕЗОПАСНЫЙ ГОРОД ИЛИ СТОЛИЦУ СО СТАТУСОМ "safe" ИЛИ "normal" (например "Великое Древо Жизни" или "Изумрудная Застава")! Новичок не должен погибать на первом ходу!` : `
+   - Старайся не помещать игрока в смертельно опасные зоны ("lethal") на старте, если он явно не просил об этом.`}
+3. **Выбор подзоны (selected_subzone)**:
    - В выбранной локации выбери конкретную подзону из списка её подзон (например, таверна, центральная площадь, главные ворота, причал, рыночная площадь).
    - Если игрок уточнил конкретное место (например «сижу в таверне»), выбери подзону-таверну, если она есть, или наиболее близкую.
    - Если подходящей подзоны в списке нет или список пуст, укажи логичное название подзоны (например, "Главная площадь" или "Трактир").
-3. **ВАЖНО**:
+4. **ВАЖНО**:
    - В поле "location_name" верни ТОЧНОЕ название локации из списка доступных! Не выдумывай новое название, если в списке есть подходящая локация.
    - В поле "location_type" верни её тип.
 `;
@@ -464,6 +477,8 @@ export async function ensureStartingLocation(params: {
         world_name: session.worlds?.name,
         lore_context,
         available_locations,
+        difficulty: session.difficulty,
+        player_level: player.level || 1,
       });
 
       const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -523,6 +538,7 @@ export async function ensureStartingLocation(params: {
   // 2. Проверяем, есть ли совпадение со списком существующих локаций в БД
   const availLocs = available_locations || [];
   let matchedLoc: AvailableLocationInfo | null = null;
+  const isEasyMode = (session.difficulty === "easy") || (player.level || 1) <= 1;
 
   if (availLocs.length > 0) {
     const targetName = (generatedData.location_name || "").trim().toLowerCase();
@@ -537,28 +553,43 @@ export async function ensureStartingLocation(params: {
 
     const lowerAct = (action_text || "").toLowerCase();
     if (lowerAct.includes("дерев") || lowerAct.includes("сел") || lowerAct.includes("хутор")) {
-      const vill = availLocs.find((l) => l.type === "village");
+      const vill = availLocs.find((l) => l.type === "village" && (!isEasyMode || (l.danger_level !== "danger" && l.danger_level !== "lethal")));
       if (vill && matchedLoc?.type !== "village") {
         matchedLoc = vill;
       }
     } else if (lowerAct.includes("столиц")) {
-      const cap = availLocs.find((l) => l.type === "capital");
+      const cap = availLocs.find((l) => l.type === "capital" && (!isEasyMode || (l.danger_level !== "danger" && l.danger_level !== "lethal")));
       if (cap && matchedLoc?.type !== "capital") {
         matchedLoc = cap;
       }
     } else if (lowerAct.includes("город") || lowerAct.includes("полис")) {
-      const city = availLocs.find((l) => l.type === "city" || l.type === "capital");
+      const city = availLocs.find((l) => (l.type === "city" || l.type === "capital") && (!isEasyMode || (l.danger_level !== "danger" && l.danger_level !== "lethal")));
       if (city && matchedLoc?.type !== "city" && matchedLoc?.type !== "capital") {
         matchedLoc = city;
       }
     }
 
     if (!matchedLoc && generatedData.location_type) {
-      matchedLoc = availLocs.find((l) => l.type === generatedData.location_type) || null;
+      matchedLoc = availLocs.find((l) => l.type === generatedData.location_type && (!isEasyMode || (l.danger_level !== "danger" && l.danger_level !== "lethal"))) || null;
     }
 
     if (!matchedLoc) {
-      matchedLoc = availLocs[0];
+      matchedLoc = availLocs.find((l) => !isEasyMode || (l.danger_level !== "danger" && l.danger_level !== "lethal")) || availLocs[0];
+    }
+
+    // 🛡️ Защита новичка: если выбранная локация опасна на легкой сложности или для 1 уровня — перенаправляем в безопасную
+    if (isEasyMode && matchedLoc && (matchedLoc.danger_level === "danger" || matchedLoc.danger_level === "lethal")) {
+      const safeAlt = availLocs.find((l) => l.state_name === matchedLoc?.state_name && l.danger_level !== "danger" && l.danger_level !== "lethal")
+        || availLocs.find((l) => l.danger_level === "safe")
+        || availLocs.find((l) => l.danger_level === "normal")
+        || availLocs.find((l) => (l.type === "city" || l.type === "capital") && l.danger_level !== "danger" && l.danger_level !== "lethal")
+        || availLocs[0];
+      if (safeAlt && safeAlt.id !== matchedLoc.id) {
+        console.log(`[starting_location_generator] 🛡️ Novice protection: redirected from dangerous "${matchedLoc.name}" (${matchedLoc.danger_level}) to safe "${safeAlt.name}" (${safeAlt.danger_level || 'normal'})`);
+        matchedLoc = safeAlt;
+        generatedData.location_name = safeAlt.name;
+        generatedData.location_type = safeAlt.type;
+      }
     }
   }
 

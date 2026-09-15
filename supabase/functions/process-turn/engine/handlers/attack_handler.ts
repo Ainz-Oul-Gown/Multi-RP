@@ -135,7 +135,8 @@ export class AttackHandler extends BaseActionHandler {
       totalDamage = Math.max(1, Math.floor(totalDamage * (1 + skillDmgBonusPct / 100)));
     }
 
-    if (totalDamage < 0) totalDamage = 0;
+    // Любое успешное попадание наносит минимум 1 единицу урона (базовое правило TTRPG/D&D)
+    if (totalDamage < 1) totalDamage = 1;
 
     // Мутация HP цели
     const targetType = isNpc ? "npc" : "player";

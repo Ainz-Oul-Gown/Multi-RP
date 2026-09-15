@@ -191,6 +191,16 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
     const DIFFICULTY_MULT: Record<string, number> = { easy: 0.5, normal: 1.0, hard: 1.5 };
     baseThreshold *= (DIFFICULTY_MULT[session.difficulty] ?? 1.0);
 
+    // 🛡️ Защита новичка (Novice Grace Period):
+    // На сложности "easy" в первые 3 раунда для персонажа 1-го уровня случайные нападения врагов
+    // отключены (порог = 0), ЕСЛИ игрок сам целенаправленно не ищет бой (encounter_intent.type !== "targeted").
+    const isEasy = (session.difficulty || "normal") === "easy";
+    const isNovice = (context.acting_player.level || 1) <= 1 && (session.current_round ?? 1) <= 3;
+    const isExplicitHunting = router_output.encounter_intent.type === "targeted";
+    if (isEasy && isNovice && !isExplicitHunting) {
+      baseThreshold = 0;
+    }
+
     // ----- Время: чем дольше ходишь — тем выше шанс (max 3x) -----
     const timeHours = Math.max(0.25, (router_output.time_estimate_minutes || 30) / 60);
     const timeMult = Math.min(3.0, timeHours);
@@ -228,16 +238,14 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
         tier: tier.tier,
         creature_name: creatureName,
       };
-      const intentLabel = isTargeted ? "🎯 Целевой" : "🎲 Случайный";
+      // Чистый факт для мира без отладочных порогов кубиков
       raw_system_facts.push(
-        `${intentLabel} энкаунтер! Опасность локации: ${dangerLevel}. ` +
-        `Бросок: ${roll.toFixed(0)} vs порог ${dynamicThreshold.toFixed(0)}. ` +
-        `Появилось: ${encounter_triggered.creature_name} (тир ${encounter_triggered.tier}).`
+        `${encounter_triggered.creature_name} выпрыгивает из тени и нападает на ${acting_player.name}!`
       );
     } else if (router_output.encounter_intent.type === "targeted") {
       const targetLabel = router_output.encounter_intent.target_name ? ` ("${router_output.encounter_intent.target_name}")` : "";
       raw_system_facts.push(
-        `Поиск врагов${targetLabel} не дал результата (бросок ${roll.toFixed(0)} vs порог ${dynamicThreshold.toFixed(0)} [${dangerLevel}]).`
+        `Поиск врагов${targetLabel} не дал результата — местность вокруг кажется безлюдной и спокойной.`
       );
     }
   }

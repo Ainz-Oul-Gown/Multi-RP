@@ -697,7 +697,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
   }
   // 2. Передача предмета другому персонажу / игроку / NPC (transfer)
   // ВАЖНО: «дар» требует \b — иначе матчит «государство»!
-  else if (/(?:переда|отда|\bдарю\b|\bдаришь\b|\bдарит\b|вруч)/i.test(lower)) {
+  else if (/(?:переда|отда|\bдарю\b|\bдаришь\b|\bдарит\b|вруч|\bдержи\b|\bвозьми\b)/i.test(lower)) {
     const qtyMatch = lower.match(/\b(\d+)\b/);
     const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
 
@@ -711,14 +711,20 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
 
     // Сначала ищем среди живых игроков!
     let matchedPlayer = players.find((p: any) => {
-      const pStems = (p.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+      if (!p.name) return false;
+      const pNameLower = p.name.trim().toLowerCase();
+      if (lower.includes(pNameLower)) return true;
+      const pStems = pNameLower.split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
       return pStems.some((ps: string) => actionStems.some((as: string) => as.includes(ps) || ps.includes(as)));
     });
 
     let matchedNpc = null;
     if (!matchedPlayer) {
       matchedNpc = npcs.find((n: any) => {
-        const npcStems = (n.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+        if (!n.name) return false;
+        const nNameLower = n.name.trim().toLowerCase();
+        if (lower.includes(nNameLower)) return true;
+        const npcStems = nNameLower.split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
         return npcStems.some((ns: string) => actionStems.some((as: string) => as.includes(ns) || ns.includes(as)));
       });
       if (!matchedNpc && npcs.length === 1 && !npcs[0].is_hostile) {
@@ -732,8 +738,8 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     // Извлечь название предмета из текста если не нашли в инвентаре
     let transferItemName = matchedItem?.item_name || null;
     if (!transferItemName) {
-      // Попробуем взять первое существительное после «отдаю/передаю/дарю»
-      const itemMatch = lower.match(/(?:отда|переда|дар|вруч)[а-яё]*\s+(?:ему|ей|им|тебе|вам|ей)?\s*([а-яё]{3,})/i);
+      // Попробуем взять первое существительное после «отдаю/передаю/дарю/держи»
+      const itemMatch = lower.match(/(?:отда|переда|дар|вруч|держи|возьми)[а-яё]*\s+(?:ему|ей|им|тебе|вам|этот|эту|эти)?\s*([а-яё]{3,})/i);
       if (itemMatch) {
         transferItemName = itemMatch[1];
       }
@@ -754,8 +760,12 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
   }
   // 3. Перемещение (move) — проверяется ПЕРЕД разговором и сбором ресурсов, чтобы "Возвращаюсь в таверну «Пьяный гоблин»" и "Иду в лес" были move
   else if (/(?:^|[\s,.:;!?])(иду|идём|пойду|пошёл|пошла|шагаю|направляюсь|перемещаюсь|двигаюсь|отправляюсь|выхожу|вхожу|захожу|зайду|выйду|бегу|еду|лечу|плыву|перехожу|спускаюсь|поднимаюсь|взбираюсь|ухожу|покидаю|прихожу|возвращаюсь|доберусь|добираюсь)(?:[\s,.:;!?]|$)/i.test(lower)) {
-    const destMatch = rawText.match(/(?:иду|пойду|направляюсь|отправляюсь|вхожу|выхожу|перехожу|спускаюсь|поднимаюсь|бегу|еду|возвращаюсь)\s+(?:в|к|на|из|до|за)\s+([^,.!?]{2,60})/i);
-    const destName = destMatch ? destMatch[1].trim() : rawText.slice(0, 60).trim();
+    const destMatch = rawText.match(/(?:иду|идём|пойду|пошёл|пошла|шагаю|направляюсь|перемещаюсь|двигаюсь|отправляюсь|вхожу|выхожу|перехожу|спускаюсь|поднимаюсь|бегу|еду|возвращаюсь|добираюсь)\s+(?:в сторону|по направлению к|по направлению в|по тропе в сторону|по тропе к|по тропе|по дороге к|в|к|на|из|до|за|по)\s+([^,.!?]{2,80})/i);
+    let destName = destMatch ? destMatch[1].trim() : "";
+    if (!destName) {
+      const afterVerbMatch = rawText.match(/(?:иду|идём|пойду|пошёл|пошла|шагаю|направляюсь|перемещаюсь|двигаюсь|отправляюсь|бегу|еду)\s+([^,.!?]{2,60})/i);
+      destName = afterVerbMatch ? afterVerbMatch[1].trim() : "намеченное место";
+    }
 
     let matchedSubzoneId: string | null = null;
     const subzones = Array.isArray((input as any)?.available_subzones) ? (input as any).available_subzones : [];
@@ -790,14 +800,20 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
 
     // ВЫСШИЙ ПРИОРИТЕТ: живые игроки!
     let matchedPlayer = players.find((p: any) => {
-      const pStems = (p.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+      if (!p.name) return false;
+      const pNameLower = p.name.trim().toLowerCase();
+      if (lower.includes(pNameLower)) return true;
+      const pStems = pNameLower.split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
       return pStems.some((ps: string) => actionStems.some((as: string) => as.includes(ps) || ps.includes(as)));
     });
 
     let matchedNpc = null;
     if (!matchedPlayer) {
       matchedNpc = npcs.find((n: any) => {
-        const npcStems = (n.name || "").toLowerCase().split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
+        if (!n.name) return false;
+        const nNameLower = n.name.trim().toLowerCase();
+        if (lower.includes(nNameLower)) return true;
+        const npcStems = nNameLower.split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
         return npcStems.some((ns: string) => actionStems.some((as: string) => as.includes(ns) || ns.includes(as)));
       });
     }

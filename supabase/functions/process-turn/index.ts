@@ -11,7 +11,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
-import { parsePlayerIntent, buildRouterHeuristicFallback } from "./steps/step1_router.ts";
+import { parsePlayerIntent, buildRouterHeuristicFallback, classifyIntentWithAI } from "./steps/step1_router.ts";
 import { executeEngine } from "./engine/step2_engine.ts";
 
 import { applyTurnMutations } from "./steps/step3_persistence.ts";
@@ -708,8 +708,22 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         satelliteModel
       );
     } catch (routerErr: any) {
-      console.warn(`[${requestId}] [STEP 1] Router LLM failed (${routerErr?.message}), using heuristic fallback...`);
-      routerResult = buildRouterHeuristicFallback(routerInput);
+      console.warn(`[${requestId}] [STEP 1] Router LLM failed (${routerErr?.message}), trying AI classifier...`);
+      // ПРОСЛОЙКА: AI-классификатор (deepseek-v3, полный контекст)
+      let classifierResult: any = null;
+      try {
+        classifierResult = await classifyIntentWithAI(routerInput, openrouterApiKey);
+      } catch (classErr: any) {
+        console.warn(`[${requestId}] [STEP 1] AI classifier error:`, classErr?.message);
+      }
+
+      if (classifierResult) {
+        console.log(`[${requestId}] [STEP 1] ✅ AI classifier: action=${classifierResult.actions?.[0]?.action_type}`);
+        routerResult = classifierResult;
+      } else {
+        console.warn(`[${requestId}] [STEP 1] Фаллбэк на regex-эвристику`);
+        routerResult = buildRouterHeuristicFallback(routerInput);
+      }
     }
 
 

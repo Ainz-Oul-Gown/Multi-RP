@@ -670,7 +670,8 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     timeEstimate = 1;
   }
   // 2. Передача предмета другому персонажу / игроку / NPC (transfer)
-  else if (/(?:переда|отда|дар|вруч)/i.test(lower)) {
+  // ВАЖНО: «дар» требует \b — иначе матчит «государство»!
+  else if (/(?:переда|отда|\bдарю\b|\bдаришь\b|\bдарит\b|вруч)/i.test(lower)) {
     const qtyMatch = lower.match(/\b(\d+)\b/);
     const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
 
@@ -726,7 +727,8 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     timeEstimate = 2;
   }
   // 3. Разговор / обращение / вопрос / предложение (talk)
-  else if (/["«»]/.test(rawText) || /(?:сказ|говор|спрос|крич|шепт|давай|пойдём|пойдем|обращ|предлаг)/i.test(lower)) {
+  // Добавлены: «спрашиваю», «вопрош», «интересуюсь» и другие формы диалога
+  else if (/["«»]/.test(rawText) || /(?:сказ|говор|спрос|спраш|крич|шепт|давай|пойдём|пойдем|обращ|предлаг|вопрош|интерес|приветств)/i.test(lower)) {
     const cleanStem = (w: string) => w.replace(/(?:а|ов|ев|и|ы|у|е|ом|ам|ами|ях|ых|их|ого|его|ому|ему|ым|им|ую|ею|ей|я)$/i, "");
     const actionStems = lower.split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
 

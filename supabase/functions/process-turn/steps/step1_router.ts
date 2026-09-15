@@ -612,14 +612,15 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
   const players = Array.isArray(input?.nearby_players) ? input.nearby_players : [];
 
   // 0. ATTACK — MUST come before drop to prevent "бросаюсь" matching drop regex
-  if (/(?:атак|бью\b|нанос.*удар|бросаюсь.*(?:волк|враг|зверь|монстр|гобл|бандит|разбойник)|нападаю|рублю|колю\b|стреля.*(?:в\s+\w+)|кидаюсь.*(?:на\s+\w+))/i.test(lower)) {
-    // Ищем враждебную цель: сначала явно враждебного NPC, потом первого NPC вообще
-    const hostile = npcs.find((n: any) => n.is_hostile) || npcs[0] || null;
-    // Пробуем найти NPC по имени в тексте действия
+  if (/(?:атак|бью\b|наносу?|нанош|уклон.*удар|бросаюсь.*(?:волк|враг|зверь|монстр|гобл|бандит|разбойник)|нападаю|рублю|колю\b|стреля.*(?:в\s+\w+)|кидаюсь.*(?:на\s+\w+)|пробиваю|разруб)/i.test(lower)) {
+    // Ищем цель: ТОЛЬКО явно-враждебный NPC (is_hostile=true) или упомянутый по имени
+    // НИКОГДА не используем npcs[0] — он может быть дружественным компаньоном!
+    const hostileNpc = npcs.find((n: any) => n.is_hostile) || null;
+    // Пробуем найти NPC/монстра по имени в тексте действия
     const mentionedNpc = npcs.find((n: any) => {
       const name = (n.name || '').toLowerCase();
       return name.length >= 3 && lower.includes(name);
-    }) || hostile;
+    }) || hostileNpc; // fallback ТОЛЬКО на враждебного, не на первого в списке
     actions.push({
       action_type: "attack",
       target_entity_id: mentionedNpc?.id || null,

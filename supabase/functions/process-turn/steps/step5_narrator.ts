@@ -373,9 +373,10 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         new Set(
           [
             dm_model,
-            "google/gemma-4-31b-it:free",
-            "minimax/minimax-m3:free",
-            "nvidia/nemotron-3-super-120b-a12b:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "google/gemma-2-27b-it:free",
+            "google/gemini-2.0-flash-exp:free",
           ].filter(Boolean)
         )
       );

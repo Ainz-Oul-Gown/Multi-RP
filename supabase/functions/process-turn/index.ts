@@ -1,4 +1,4 @@
-﻿// supabase/functions/process-turn/index.ts
+// supabase/functions/process-turn/index.ts
 // 5-РЎв‚¬Р В°Р С–Р С•Р Р†РЎвЂ№Р в„– Р С”Р С•Р Р…Р Р†Р ВµР в„–Р ВµРЎР‚ process-turn: Router РІвЂ вЂ™ Engine РІвЂ вЂ™ Persistence РІвЂ вЂ™ SystemTruth РІвЂ вЂ™ Narrator
 //
 // Р РЃР В°Р С–Р С‘:
@@ -766,7 +766,9 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
         availableLocations,
         availableSubzones: locationMap && Object.keys(locationMap).length > 0 ? Object.keys(locationMap) : undefined,
-      });
+        terrainType: currentTerrain || currentLocationType || "unknown",
+      } as any);
+
       const gpsResp = await callAI(gpsSystemPrompt, "Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»Р С‘ Р Р†РЎР‚Р ВµР СРЎРЏ.", openrouterApiKey, 2, gpsModel);
       const gpsParsed = parseAIJson(gpsResp);
       if (gpsParsed) {

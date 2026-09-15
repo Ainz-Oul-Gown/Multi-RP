@@ -127,7 +127,16 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
 
 Игрок-инициатор: ${playerName} (${playerRace}, ${playerClass})
 ${storylineSection}
-${loreContext ? `Лор мира:\n${loreContext}\n` : ''}`;
+${loreContext ? `Лор мира:\n${loreContext}\n` : ''}
+
+13. ВАРИАТИВНОСТЬ НАЧАЛА:
+   НИКОГДА не начинай однаково! ЗАПРЕЩЕНО начинать более двух ответов подряд с «Солнечный свет». Чередуй:
+   - Действие: Персонаж сразу что-то делает («Арин выхватывает...»)
+   - Звук: Начни с звука («Грохот досок...», «Хруст хвои...»)
+   - Чувство: («В ноздрях висит...», «Сердце бьёт...»)
+   - Свет: («Солнечный свет...» — не подряд дважды!)
+   - Диалог: С реплики NPC («— Ну наконец, — брюзжает...»)
+   - Деталь: Начни с мелкой детали мира`;
 }
 
 
@@ -338,7 +347,16 @@ export function buildNarratorContext(system_truth: SystemTruthDto, action_text: 
 export async function generateNarrative(context: NarratorInputContext): Promise<NarratorOutputPayload> {
   const { system_truth, action_text, player_name, player_race, player_class, lore_context, recent_history, openrouter_api_key, dm_model } = context;
 
-  const systemPrompt = buildNarratorSystemPrompt(player_name, player_race, player_class, lore_context, system_truth.storyline);
+  // Очистка lore_context: удаляем не-кириллические символы (иероглифы, латиница длинными сериями)
+  const cleanLoreContext = lore_context
+    ? lore_context
+        .replace(/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\u0100-\u024f]{1}/g, '') // CJK + латинские расширенные
+        .replace(/[a-zA-Z]{8,}/g, '') // длинные английские слова (>8 символов)
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+    : '';
+
+  const systemPrompt = buildNarratorSystemPrompt(player_name, player_race, player_class, cleanLoreContext, system_truth.storyline);
   const narratorContext = buildNarratorContext(system_truth, action_text, recent_history);
   const userMessage = `${narratorContext}\n\nСгенерируй нарратив строго по указанным фактам в JSON-формате. ВЕСЬ текст (описания, действия, диалоги NPC) ОБЯЗАН быть исключительно на русском языке!`;
 
@@ -405,11 +423,23 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
       };
 
       // Валидация: проверяем, что все players из SystemTruthDto присутствуют и очищены от псевдо-тегов
+      const PLACEHOLDERS = [
+        '<narrative text>', '\u0442екст...', '...', '[narrative]', '{narrative}',
+        '<text>', 'нарратив', 'narrative text',
+      ];
       const validatedPlayers: Record<string, string> = {};
+      let hasPlaceholder = false;
       for (const pid of Object.keys(system_truth.player_truths)) {
-        const text = typeof parsed.players[pid] === "string" ? parsed.players[pid] : "…";
-        validatedPlayers[pid] = cleanNarrativeText(text);
+        const text = typeof parsed.players[pid] === 'string' ? parsed.players[pid] : '…';
+        const cleaned = cleanNarrativeText(text);
+        // Проверка на placeholder: если ответ пустой или шаблонный — переключаемся на следующую модель
+        if (cleaned.trim().length < 15 || PLACEHOLDERS.some(p => cleaned.trim().toLowerCase().includes(p.toLowerCase()))) {
+          hasPlaceholder = true;
+          console.warn(`[step5_narrator] Placeholder detected for player ${pid}: "${cleaned.slice(0, 50)}"`);
+        }
+        validatedPlayers[pid] = cleaned;
       }
+      if (hasPlaceholder) throw new Error('Narrator returned placeholder text — retry next model');
 
       return {
         players: validatedPlayers,

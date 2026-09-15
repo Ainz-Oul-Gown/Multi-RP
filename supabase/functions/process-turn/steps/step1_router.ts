@@ -611,8 +611,33 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
   const npcs = Array.isArray(input?.nearby_npcs) ? input.nearby_npcs : [];
   const players = Array.isArray(input?.nearby_players) ? input.nearby_players : [];
 
+  // 0. ATTACK — MUST come before drop to prevent "бросаюсь" matching drop regex
+  if (/(?:атак|бью\b|нанос.*удар|бросаюсь.*(?:волк|враг|зверь|монстр|гобл|бандит|разбойник)|нападаю|рублю|колю\b|стреля.*(?:в\s+\w+)|кидаюсь.*(?:на\s+\w+))/i.test(lower)) {
+    // Ищем враждебную цель: сначала явно враждебного NPC, потом первого NPC вообще
+    const hostile = npcs.find((n: any) => n.is_hostile) || npcs[0] || null;
+    // Пробуем найти NPC по имени в тексте действия
+    const mentionedNpc = npcs.find((n: any) => {
+      const name = (n.name || '').toLowerCase();
+      return name.length >= 3 && lower.includes(name);
+    }) || hostile;
+    actions.push({
+      action_type: "attack",
+      target_entity_id: mentionedNpc?.id || null,
+      target_name: mentionedNpc?.name || null,
+      target_item_name: null,
+      item_type: null,
+      used_item_id: null,
+      consumed_materials: null,
+      stat_to_check: "strength",
+      ai_custom_dc: null,
+      improper_tool_usage: null,
+    });
+    skillHint = "swordsmanship";
+    timeEstimate = 5;
+  }
   // 1. Выбрасывание предметов (drop) — выполняется гарантированно и без бросков кубиков
-  if (/(?:выкид|выброс|броса|выкину|избавл|избавь)/i.test(lower)) {
+  // ВАЖНО: regex использует \b (граница слова) чтобы не захватить «бросаюсь» (rush)
+  else if (/(?:\bвыкид|\bвыброс|(?:^|\s)броса(?:ю|ешь|ет|ем|ете|ют)\s+(?!впер|навстреч|к\s+|на\s+[а-яё]+а)|\bвыкину|\bизбавл|\bизбавь)/i.test(lower)) {
     const qtyMatch = lower.match(/\b(\d+)\b/);
     const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
 
@@ -676,11 +701,21 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     const targetEntityId = matchedPlayer ? matchedPlayer.id : (matchedNpc ? matchedNpc.id : null);
     const targetEntityName = matchedPlayer ? matchedPlayer.name : (matchedNpc ? matchedNpc.name : null);
 
+    // Извлечь название предмета из текста если не нашли в инвентаре
+    let transferItemName = matchedItem?.item_name || null;
+    if (!transferItemName) {
+      // Попробуем взять первое существительное после «отдаю/передаю/дарю»
+      const itemMatch = lower.match(/(?:отда|переда|дар|вруч)[а-яё]*\s+(?:ему|ей|им|тебе|вам|ей)?\s*([а-яё]{3,})/i);
+      if (itemMatch) {
+        transferItemName = itemMatch[1];
+      }
+    }
+
     actions.push({
       action_type: "transfer",
       target_entity_id: targetEntityId,
       target_name: targetEntityName,
-      target_item_name: matchedItem?.item_name || null,
+      target_item_name: transferItemName,
       used_item_id: matchedItem?.id || null,
       consumed_materials: [{ id: matchedItem?.id || "transfer", quantity: qty }],
       stat_to_check: "none",

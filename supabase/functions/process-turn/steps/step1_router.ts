@@ -67,8 +67,10 @@ export function buildRouterSystemPrompt(): string {
    - ai_custom_dc: 30-40 (высокая сложность)
 
 5. **clarification_needed vs Свободный отыгрыш / Описание сцены**:
-   - КРИТИЧЕСКИ ВАЖНО: Описательные, созерцательные, ознакомительные и ролевые действия (например: "Опиши мое появление в каком-либо городе", "Осматриваюсь вокруг", "Вхожу в город", "Прислушиваюсь к шуму улицы", "Отдыхаю у костра", "Размышляю", "Любуюсь закатом") — это ПОЛНОСТЬЮ ВАЛИДНЫЕ действия! Для них ОБЯЗАТЕЛЬНО возвращай status: "success", пустой массив actions: [] (или действие "search"/"talk" если уместно), и время 10-30 минут. Ни в коем случае НЕ возвращай clarification_needed для таких действий! Нарратор (AI Dungeon Master) сам красочно опишет сцену.
-   - clarification_needed разрешено возвращать ИСКЛЮЧИТЕЛЬНО если ввод игрока является случайным мусором/набором букв (например: "asdfghjk", "???", "123"). Сообщение clarification_msg ДОЛЖНО БЫТЬ СТРОГО НА РУССКОМ ЯЗЫКЕ (например: "Уточните, какое действие вы хотите совершить").
+   - КРИТИЧЕСКИ ВАЖНО: Описательные, созерцательные и ролевые действия БЕЗ физического перемещения (например: "Осматриваюсь вокруг", "Прислушиваюсь к шуму улицы", "Отдыхаю у костра", "Размышляю", "Любуюсь закатом", "Опиши сцену") — это ПОЛНОСТЬЮ ВАЛИДНЫЕ действия! Для них ОБЯЗАТЕЛЬНО возвращай status: "success", пустой массив actions: [] (или "search"/"talk" если уместно), и время 10-30 минут. Нарратор сам красочно опишет сцену.
+   - РАЗГРАНИЧЕНИЕ: "Осматриваюсь" (стоя на месте) = actions:[] НО "Иду осматривать лес" = action_type:"move". "Слушаю шум улицы" = actions:[] НО "Вхожу в город"/"Иду в таверну"/"Иду в лес" = action_type:"move". Если игрок ФИЗИЧЕСКИ ДВИЖЕТСЯ — это ВСЕГДА "move", даже если описывает куда.
+   - clarification_needed разрешено ИСКЛЮЧИТЕЛЬНО для случайного мусора (например: "asdfghjk", "???", "123"). Сообщение СТРОГО на русском.
+
 
 6. **Навыки игрока (skill_hint)**:
    Определи, какой навык развивает это действие (если применимо): "swordsmanship", "archery", "gathering", "crafting", "leatherworking", "stealth", "survival", "persuasion", "medicine", "magic" или null.
@@ -333,11 +335,22 @@ export function buildUserMessage(input: any): string {
     lines.push("");
   }
 
+  lines.push(`## Примеры правильной классификации действий`);
+  lines.push(`"Иду в лес" → actions:[{action_type:"move", target_item_name:"лес", stat_to_check:"none", ai_custom_dc:null}]`);
+  lines.push(`"Иду вглубь рощи" → actions:[{action_type:"move", target_item_name:"глубь рощи", stat_to_check:"none", ai_custom_dc:null}]`);
+  lines.push(`"Отправляюсь в город Эскорию" → actions:[{action_type:"move", target_item_name:"город Эскория", stat_to_check:"none", ai_custom_dc:null}]`);
+  lines.push(`"Вхожу в пещеру" → actions:[{action_type:"move", target_item_name:"пещера", stat_to_check:"none", ai_custom_dc:null}]`);
+  lines.push(`"Выхожу из таверны на улицу" → actions:[{action_type:"move", target_item_name:"улица", stat_to_check:"none", ai_custom_dc:null}]`);
+  lines.push(`"Осматриваюсь вокруг" → actions:[]  (НЕ move! стоит на месте)`);
+  lines.push(`"Прислушиваюсь к шуму" → actions:[]  (НЕ move! стоит на месте)`);
+  lines.push(``);
+
   lines.push(`## Инструкция`);
   lines.push(`Верни ТОЛЬКО валидный JSON по указанной схеме. Используй ТОЛЬКО ID из инвентаря. Если действие невозможно — status: "impossible".`);
 
   return lines.join("\n");
 }
+
 
 // ============================================
 // Валидация ответа LLM

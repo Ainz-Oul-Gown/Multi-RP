@@ -147,8 +147,32 @@ ${loreContext ? `Лор мира:\n${loreContext}\n` : ''}
 
 
 // ============================================
-// Безопасный парсинг JSON
+// Безопасный парсинг JSON с починкой переносов строк
 // ============================================
+function fixUnescapedNewlinesInJson(jsonStr: string): string {
+  let inString = false;
+  let escaped = false;
+  let out = "";
+  for (let i = 0; i < jsonStr.length; i++) {
+    const c = jsonStr[i];
+    if (c === "\\" && inString) {
+      escaped = !escaped;
+      out += c;
+    } else if (c === '"' && !escaped) {
+      inString = !inString;
+      out += c;
+    } else if (inString && (c === "\n" || c === "\r")) {
+      out += c === "\n" ? "\\n" : "\\r";
+    } else if (inString && c === "\t") {
+      out += "\\t";
+    } else {
+      escaped = false;
+      out += c;
+    }
+  }
+  return out;
+}
+
 function safeParseJson(text: string): any | null {
   // Убираем markdown-блоки
   let cleaned = text.trim();
@@ -163,9 +187,9 @@ function safeParseJson(text: string): any | null {
   try {
     return JSON.parse(candidate);
   } catch {
-    // Попробуем починить частые ошибки
+    // Попробуем починить неэкранированные переносы строк и висячие запятые
     try {
-      const fixed = candidate
+      const fixed = fixUnescapedNewlinesInJson(candidate)
         .replace(/,\s*}/g, "}")
         .replace(/,\s*]/g, "]")
         .replace(/\\"/g, '"');
@@ -393,6 +417,8 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         headers: {
           "Authorization": `Bearer ${openrouter_api_key}`,
           "Content-Type": "application/json",
+          "HTTP-Referer": "https://ainz-oul-gown.github.io/Multi-RP/",
+          "X-Title": "Multi-RP",
         },
         body: JSON.stringify({
           model: curModel,
@@ -407,16 +433,26 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
       });
 
       if (!response.ok) {
-        throw new Error(`Narrator LLM error: ${response.status}`);
+        const errText = await response.text().catch(() => "");
+        throw new Error(`Narrator LLM error: ${response.status} - ${errText.slice(0, 150)}`);
       }
 
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
       if (!content || content.trim() === "") throw new Error("Empty narrator response");
 
-      const parsed = safeParseJson(content);
-      if (!parsed || typeof parsed.players !== "object") {
-        throw new Error("Failed to parse narrator JSON");
+      let parsed = safeParseJson(content);
+      if (!parsed || typeof parsed !== "object") {
+        // Если модель ответила художественным текстом напрямую вместо JSON
+        const isRussianText = /[а-яёА-ЯЁ]{15,}/.test(content);
+        if (isRussianText && content.trim().length > 30) {
+          parsed = { players: {} };
+          for (const pid of Object.keys(system_truth.player_truths)) {
+            parsed.players[pid] = content.trim();
+          }
+        } else {
+          throw new Error(`Failed to parse narrator JSON from response: "${content.slice(0, 100)}..."`);
+        }
       }
 
       const cleanNarrativeText = (raw: string): string => {
@@ -451,7 +487,26 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
       const validatedPlayers: Record<string, string> = {};
       let hasPlaceholder = false;
       for (const pid of Object.keys(system_truth.player_truths)) {
-        let rawText = typeof parsed.players[pid] === 'string' ? parsed.players[pid] : null;
+        const playerName = system_truth.player_truths[pid]?.player_name;
+        let rawText: string | null = null;
+        if (parsed.players && typeof parsed.players === "object") {
+          if (typeof parsed.players[pid] === "string") {
+            rawText = parsed.players[pid];
+          } else if (playerName && typeof parsed.players[playerName] === "string") {
+            rawText = parsed.players[playerName];
+          } else {
+            for (const [k, v] of Object.entries(parsed.players)) {
+              if (typeof v === "string" && playerName && (k.toLowerCase().includes(playerName.toLowerCase()) || playerName.toLowerCase().includes(k.toLowerCase()))) {
+                rawText = v;
+                break;
+              }
+            }
+          }
+          if (!rawText && Object.keys(parsed.players).length === 1 && Object.keys(system_truth.player_truths).length === 1) {
+            const singleVal = Object.values(parsed.players)[0];
+            if (typeof singleVal === "string") rawText = singleVal;
+          }
+        }
         if (!rawText || rawText.trim().length === 0) {
           rawText = 'Персонаж внимательно следит за происходящим вокруг.';
         }

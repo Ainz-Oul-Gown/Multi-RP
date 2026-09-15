@@ -721,24 +721,37 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         satelliteModel
       );
     } catch (routerErr: any) {
-      console.warn(`[${requestId}] [STEP 1] Router LLM failed (${routerErr?.message}), trying AI classifier...`);
-      // ПРОСЛОЙКА: AI-классификатор (deepseek-v3, полный контекст)
+      console.warn(`[${requestId}] [STEP 1] Router LLM (Tier 1) failed (${routerErr?.message}), invoking Tier 2 Targeted AI classifier...`);
+      routerResult = null;
+    }
+
+    // Проверяем необходимость задействовать Tier 2 AI Classifier:
+    // 1) Tier 1 упал с ошибкой (routerResult == null)
+    // 2) Tier 1 вернул clarification_needed, но действие содержит явные глаголы активности
+    // 3) Tier 1 вернул actions: [] при явном глаголе активности
+    const rawActionText = (routerInput.player_action_text || "").trim().toLowerCase();
+    const hasObviousActionVerbs = /(?:иду|пойду|бегу|шагаю|направл|вхожу|выхожу|вернусь|бью|атак|удар|выслеж|ищу|собира|крафт|смастер|выкин|выброс|отда|переда)/i.test(rawActionText);
+    const tier1NeedsRescue = !routerResult ||
+      (routerResult.status === "clarification_needed" && hasObviousActionVerbs) ||
+      (routerResult.status === "success" && routerResult.actions?.length === 0 && hasObviousActionVerbs);
+
+    if (tier1NeedsRescue) {
+      console.log(`[${requestId}] [STEP 1] Tier 2 rescue triggered for action: "${rawActionText}"`);
       let classifierResult: any = null;
       try {
         classifierResult = await classifyIntentWithAI(routerInput, openrouterApiKey);
       } catch (classErr: any) {
-        console.warn(`[${requestId}] [STEP 1] AI classifier error:`, classErr?.message);
+        console.warn(`[${requestId}] [STEP 1] Tier 2 AI classifier error:`, classErr?.message);
       }
 
-      if (classifierResult) {
-        console.log(`[${requestId}] [STEP 1] ✅ AI classifier: action=${classifierResult.actions?.[0]?.action_type}`);
+      if (classifierResult && (classifierResult.actions?.length > 0 || classifierResult.encounter_intent?.type === "targeted")) {
+        console.log(`[${requestId}] [STEP 1] ✅ Tier 2 AI classifier rescued turn: action=${classifierResult.actions?.[0]?.action_type}`);
         routerResult = classifierResult;
-      } else {
-        console.warn(`[${requestId}] [STEP 1] Фаллбэк на regex-эвристику`);
+      } else if (!routerResult) {
+        console.warn(`[${requestId}] [STEP 1] Tier 1 & Tier 2 failed, falling back to Tier 3 emergency regex-heuristic`);
         routerResult = buildRouterHeuristicFallback(routerInput);
       }
     }
-
 
     if (routerResult.status === "clarification_needed") {
       return new Response(JSON.stringify({

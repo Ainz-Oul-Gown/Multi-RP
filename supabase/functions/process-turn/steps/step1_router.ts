@@ -638,7 +638,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
   const players = Array.isArray(input?.nearby_players) ? input.nearby_players : [];
 
   // 0. ATTACK — MUST come before drop to prevent "бросаюсь" matching drop regex
-  if (/(?:атак|бью\b|наносу?|нанош|уклон.*удар|бросаюсь.*(?:волк|враг|зверь|монстр|гобл|бандит|разбойник)|нападаю|рублю|колю\b|стреля.*(?:в\s+\w+)|кидаюсь.*(?:на\s+\w+)|пробиваю|разруб)/i.test(lower)) {
+  if (/(?:атак|бью|наносу?|нанош|уклон.*удар|бросаюсь.*(?:волк|враг|зверь|монстр|гобл|бандит|разбойник)|нападаю|рублю|колю|стреля.*(?:в\s+\w+)|кидаюсь.*(?:на\s+\w+)|пробиваю|разруб|контратак)/i.test(lower)) {
     // Ищем цель: ТОЛЬКО явно-враждебный NPC (is_hostile=true) или упомянутый по имени
     // НИКОГДА не используем npcs[0] — он может быть дружественным компаньоном!
     const hostileNpc = npcs.find((n: any) => n.is_hostile) || null;
@@ -752,8 +752,38 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     });
     timeEstimate = 2;
   }
-  // 3. Разговор / обращение / вопрос / предложение (talk)
-  // Добавлены: «спрашиваю», «вопрош», «интересуюсь» и другие формы диалога
+  // 3. Перемещение (move) — проверяется ПЕРЕД разговором и сбором ресурсов, чтобы "Возвращаюсь в таверну «Пьяный гоблин»" и "Иду в лес" были move
+  else if (/(?:^|[\s,.:;!?])(иду|идём|пойду|пошёл|пошла|шагаю|направляюсь|перемещаюсь|двигаюсь|отправляюсь|выхожу|вхожу|захожу|зайду|выйду|бегу|еду|лечу|плыву|перехожу|спускаюсь|поднимаюсь|взбираюсь|ухожу|покидаю|прихожу|возвращаюсь|доберусь|добираюсь)(?:[\s,.:;!?]|$)/i.test(lower)) {
+    const destMatch = rawText.match(/(?:иду|пойду|направляюсь|отправляюсь|вхожу|выхожу|перехожу|спускаюсь|поднимаюсь|бегу|еду|возвращаюсь)\s+(?:в|к|на|из|до|за)\s+([^,.!?]{2,60})/i);
+    const destName = destMatch ? destMatch[1].trim() : rawText.slice(0, 60).trim();
+
+    let matchedSubzoneId: string | null = null;
+    const subzones = Array.isArray((input as any)?.available_subzones) ? (input as any).available_subzones : [];
+    for (const sz of subzones) {
+      if (typeof sz === "string" && lower.includes(sz.toLowerCase())) {
+        matchedSubzoneId = sz;
+        break;
+      }
+    }
+
+    actions.push({
+      action_type: "move",
+      target_entity_id: null,
+      target_subzone_id: matchedSubzoneId,
+      target_name: null,
+      target_item_name: destName,
+      item_type: null,
+      used_item_id: null,
+      consumed_materials: null,
+      stat_to_check: "none",
+      ai_custom_dc: null,
+      speed_modifier: 1.0,
+      stealth_factor: 1.0,
+      improper_tool_usage: null,
+    } as any);
+    timeEstimate = 20;
+  }
+  // 4. Разговор / обращение / вопрос / предложение (talk)
   else if (/["«»]/.test(rawText) || /(?:сказ|говор|спрос|спраш|крич|шепт|давай|пойдём|пойдем|обращ|предлаг|вопрош|интерес|приветств)/i.test(lower)) {
     const cleanStem = (w: string) => w.replace(/(?:а|ов|ев|и|ы|у|е|ом|ам|ами|ях|ых|их|ого|его|ому|ему|ым|им|ую|ею|ей|я)$/i, "");
     const actionStems = lower.split(/[\s,.-]+/).map(cleanStem).filter((w: string) => w.length >= 3);
@@ -789,36 +819,21 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     });
     timeEstimate = 2;
   }
-  // 4. Перемещение (move) — проверяется ПЕРЕД сбором ресурсов, чтобы "Иду в лес за ягодами" было move
-  else if (/(?:^|[\s,.:;!?])(иду|идём|пойду|пошёл|пошла|шагаю|направляюсь|перемещаюсь|двигаюсь|отправляюсь|выхожу|вхожу|захожу|зайду|выйду|бегу|еду|лечу|плыву|перехожу|спускаюсь|поднимаюсь|взбираюсь|ухожу|покидаю|прихожу|возвращаюсь|доберусь|добираюсь)(?:[\s,.:;!?]|$)/i.test(lower)) {
-    const destMatch = rawText.match(/(?:иду|пойду|направляюсь|отправляюсь|вхожу|выхожу|перехожу|спускаюсь|поднимаюсь|бегу|еду|возвращаюсь)\s+(?:в|к|на|из|до|за)\s+([^,.!?]{2,60})/i);
-    const destName = destMatch ? destMatch[1].trim() : rawText.slice(0, 60).trim();
-
-    let matchedSubzoneId: string | null = null;
-    const subzones = Array.isArray((input as any)?.available_subzones) ? (input as any).available_subzones : [];
-    for (const sz of subzones) {
-      if (typeof sz === "string" && lower.includes(sz.toLowerCase())) {
-        matchedSubzoneId = sz;
-        break;
-      }
-    }
-
+  // 5. Крафт и создание предметов (craft_recipe) — проверяется ПЕРЕД сбором сырья
+  else if (/(?:затачива|смастер|скрафт|сделать.*из|создать.*из|выструг|крафч|изготов)/i.test(lower)) {
     actions.push({
-      action_type: "move",
+      action_type: "craft_recipe",
       target_entity_id: null,
-      target_subzone_id: matchedSubzoneId,
       target_name: null,
-      target_item_name: destName,
+      target_item_name: rawText.slice(0, 50).trim(),
       item_type: null,
       used_item_id: null,
       consumed_materials: null,
-      stat_to_check: "none",
-      ai_custom_dc: null,
-      speed_modifier: 1.0,
-      stealth_factor: 1.0,
+      stat_to_check: "dexterity",
+      ai_custom_dc: 12,
       improper_tool_usage: null,
-    } as any);
-    timeEstimate = 20;
+    });
+    timeEstimate = 30;
   }
   else if (lower.includes("палк") || lower.includes("ветк")) {
     actions.push({
@@ -949,9 +964,20 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
  *
  * При ошибке → null → вызывающий код переходит к regex-эвристике.
  */
+// ============================================
+// AI-классификатор намерений (Tier 2 Fallback)
+// ============================================
+/**
+ * Второй эшелон распознавания: специализированный узкий AI-классификатор.
+ * Запускается, если Primary AI Router упал с ошибкой API, вернул невалидный JSON
+ * или ложный clarification_needed на явном действии.
+ * Использует интеллектуальные бесплатные модели (Llama-3.3-70B, Gemini-2.0-Flash-Exp, Qwen-2.5-72B).
+ * При полном отказе всех моделей → возвращает null → запускается Tier 3 (regex-эвристика).
+ */
 export async function classifyIntentWithAI(
   input: RouterInputContext,
   apiKey: string,
+  preferredModel?: string,
 ): Promise<RouterOutputPayload | null> {
   const actionText = (input?.player_action_text || (input as any)?.action_text || "").trim();
   if (!actionText) return null;
@@ -966,134 +992,115 @@ export async function classifyIntentWithAI(
   const inv = Array.isArray(input?.inventory)
     ? input.inventory
     : Array.isArray((input as any)?.player_inventory) ? (input as any).player_inventory : [];
+  const subzones = Array.isArray((input as any)?.available_subzones) ? (input as any).available_subzones : [];
   const player = input?.player;
   const weather = input?.weather;
   const gameTime = input?.game_time;
+  const dangerLevel = (input as any)?.current_danger_level || (input as any)?.danger_level || "normal";
 
   // ========= СИСТЕМНЫЙ ПРОМПТ =========
-  const systemPrompt = `Ты — интерпретатор намерений игрока в текстовой RPG-игре на русском языке.
-Твоя задача: определить тип действия и его цель по реплике игрока.
+  const systemPrompt = `Ты — специализированный классификатор намерений игрока для D&D ЛитРПГ игры.
+Твоя задача — точно классифицировать действие игрока в структурированный JSON.
 
-## ПРАВИЛА ТИПОВ ДЕЙСТВИЙ:
-- **attack**: атаковать, ударить, наносить удар, рубить, колоть, стрелять В кого-то, броситься НА врага, уклоняться+бить, финальный удар, схватка, бой
-- **talk**: говорить С КЕМ-ТО, спросить У КОГО-ТО, обратиться К кому-то, вести диалог, приветствовать кого-то
-- **move**: идти, бежать, перемещаться, пойти, направиться, вернуться, двинуться, зайти, выйти — ДАЖЕ если упоминается место назначения (таверна, город, лес)
-- **drop**: выбросить, выкинуть, избавиться от предмета, бросить предмет на землю
-- **transfer**: отдать, передать, вручить, подарить предмет ДРУГОМУ персонажу
-- **harvest_ambient**: СОБРАТЬ готовое из природы (камни, ягоды, ветки, трава), срубить дерево — НЕ создавать новое!
-- **search**: искать, осмотреть, обыскать место, найти что-то, разведать, изучить местность
-- **craft_recipe**: смастерить, сделать, скрафтить, СОЗДАТЬ новый предмет, заточить/обработать материал чтобы получить другой предмет
-- **loot**: обыскать труп, взять с убитого врага
-- **none**: пустое или чисто ролевое действие без игрового эффекта
+## ТИПЫ ДЕЙСТВИЙ (action_type):
+- attack: атаковать, ударить, нанести удар, выстрелить, напасть, броситься НА врага, рубить, колоть.
+- talk: говорить, спросить, обратиться, крикнуть, предложить, приветствовать (живого игрока или NPC).
+- move: идти, бежать, направиться, войти, выйти, переместиться, вернуться (в лес, пещеру, таверну, город).
+- search: поиск, выслеживание, разведка, охота на зверя ("выслеживаю волка", "ищу кабана").
+- harvest_ambient: сбор готового природного сырья (ветки, камни, ягоды, травы, грибы, вода).
+- craft_recipe: изготовление нового предмета (заточка палки в копьё, создание факела, крафт оружия).
+- drop: выбросить, выкинуть, сбросить предмет из инвентаря на землю.
+- transfer: отдать, передать, подарить предмет другому персонажу (игроку или NPC).
+- loot: обыскать труп, забрать трофеи с убитого врага.
+- none: ролевой осмотр, прислушивание, размышления, стояние на месте без физического действия.
 
-## ⚠️ КРИТИЧЕСКИЕ ПРАВИЛА — ПРИОРИТЕТ НАД ВСЕМ ОСТАЛЬНЫМ:
+## ОХОТА И ЦЕЛЕВОЙ ПОИСК (encounter_intent):
+- Если игрок целенаправленно ищет/выслеживает конкретное существо или зверя ("выслеживаю волка", "ищу кабана", "охочусь на оленя"):
+  encounter_intent: { "type": "targeted", "target_name": "Волк" (имя существа в им. падеже) }
+  action_type: "search", stat_to_check: "survival"
+- Если игрок путешествует или идёт по дикой местности без поиска конкретной цели:
+  encounter_intent: { "type": "random", "target_name": null }
+- Если действие мирное, бытовое или происходит в безопасном месте:
+  encounter_intent: { "type": "none", "target_name": null }
 
-### MOVE vs TALK (самая частая ошибка!):
-- Если игрок ПЕРЕМЕЩАЕТСЯ — это ВСЕГДА move, даже если цель — социальное место:
-  - "возвращаюсь в таверну" → **move** (не talk!)
-  - "иду в таверну «Пьяный гоблин»" → **move**
-  - "выхожу из таверны на улицу" → **move**
-  - "направляюсь к городу" → **move**
-  - "иду обратно к лесной опушке" → **move**
-- talk ТОЛЬКО когда есть явный диалог: "говорю с трактирщиком", "спрашиваю стражника о..."
+## ВАЖНЫЕ ПРАВИЛА:
+1. "Иду в лес" / "Возвращаюсь в таверну" / "Вхожу в пещеру" → ВСЕГДА move (не talk и не search!).
+2. "Осматриваюсь вокруг" / "Прислушиваюсь к тишине" → ВСЕГДА none (actions: []).
+3. "Выкидываю грибы" → ВСЕГДА drop (не harvest_ambient!).
+4. "Бросаюсь на волка" → ВСЕГДА attack (не drop!).
+5. Диалог с сопартийцем (живым игроком) имеет наивысший приоритет над фоновыми NPC.
 
-### CRAFT vs HARVEST (вторая частая ошибка!):
-- harvest_ambient: берёшь ГОТОВОЕ из природы ("ищу камни", "собираю ветки")
-- craft_recipe: СОЗДАЁШЬ новый предмет ("затачиваю палку → копьё", "делаю дубину из ветки", "плету верёвку")
-
-### ATTACK — чёткие признаки:
-- "бросаюсь вперёд на волка" → **attack** (не drop!)
-- "уклоняюсь от укуса и бью" → **attack**
-- "наношу финальный удар" → **attack**
-
-### Другие тонкости:
-- "государство" содержит "дар" — но это НЕ transfer
-- "спрашиваю прохожего о новостях города" → talk (явный диалог)
-
-## ФОРМАТ ОТВЕТА (строгий JSON, без пояснений):
+## ФОРМАТ ОТВЕТА (строгий JSON, без markdown и пояснений):
 {
-  "action_type": "один из типов выше",
-  "target_name": "имя цели (NPC или игрока) или null",
-  "item_name": "название предмета если нужен или null",
+  "action_type": "move|attack|talk|search|harvest_ambient|craft_recipe|drop|transfer|loot|none",
+  "target_name": "имя существа, NPC или игрока или null",
+  "target_subzone_name": "название подзоны при перемещении или null",
+  "item_name": "название предмета или ресурса или null",
   "stat_to_check": "strength|dexterity|perception|survival|charisma|none",
-  "reasoning": "1 предложение почему"
+  "encounter_intent": {
+    "type": "targeted|random|none",
+    "target_name": "string или null"
+  },
+  "reasoning": "краткое объяснение выбора"
 }`;
 
-
-  // ========= КОНТЕКСТНЫЙ БЛОК =========
+  // ========= СФОКУСИРОВАННЫЙ КОНТЕКСТ =========
   const contextLines: string[] = [];
 
-  // Локация
   const locName = input?.current_location_name || (input as any)?.current_location || null;
-  if (locName) contextLines.push(`Локация: ${locName}`);
+  if (locName) contextLines.push(`Локация: ${locName} (Опасность: ${dangerLevel})`);
 
-  // Время и погода
+  if (subzones.length > 0) {
+    const szList = subzones.map((sz: any) => typeof sz === "string" ? sz : sz.name).filter(Boolean).join(", ");
+    if (szList) contextLines.push(`Подзоны рядом: ${szList}`);
+  }
+
   if (gameTime) {
-    contextLines.push(`Время: день ${gameTime.day}, ${gameTime.hour}:${String(gameTime.minute).padStart(2, "0")}`);
+    contextLines.push(`Время: ${gameTime.hour}:${String(gameTime.minute).padStart(2, "0")}`);
   }
   if (weather) {
-    contextLines.push(`Погода: ${weather.description}${weather.is_night ? " (ночь)" : ""}`);
+    contextLines.push(`Погода: ${weather.description}`);
   }
 
-  // Персонаж игрока
   if (player) {
-    contextLines.push(
-      `Игрок: ${player.name} (${player.race} ${player.class}, ур.${player.level}, ` +
-      `HP ${player.hp}/${player.max_hp}, ` +
-      `STR=${player.stats?.STR} DEX=${player.stats?.DEX} CHA=${player.stats?.CHA})`
-    );
+    contextLines.push(`Игрок: ${player.name} (${player.race} ${player.class})`);
   }
 
-  // NPC рядом — подробно
   if (npcs.length > 0) {
-    const npcDesc = npcs.map((n: any) => {
-      const role = n.is_hostile ? "⚔️враг" : "🤝союзник";
-      const hp = (n.hp !== undefined && n.max_hp) ? ` HP:${n.hp}/${n.max_hp}` : "";
-      const dist = n.distance_meters ? ` ~${n.distance_meters}м` : "";
-      return `${n.name} [${role}${hp}${dist}]`;
-    }).join(", ");
+    const npcDesc = npcs.map((n: any) => `${n.name} [${n.is_hostile ? "враг" : "мирный"}]`).join(", ");
     contextLines.push(`NPC рядом: ${npcDesc}`);
   } else {
     contextLines.push("NPC рядом: нет");
   }
 
-  // Игроки рядом
   if (players.length > 0) {
-    contextLines.push(`Другие игроки: ${players.map((p: any) => p.name).join(", ")}`);
+    contextLines.push(`Живые игроки рядом: ${players.map((p: any) => p.name).join(", ")}`);
   }
 
-  // Инвентарь
   if (inv.length > 0) {
-    const invDesc = inv.map((i: any) => {
-      const name = i.item_name || i.name || "?";
-      const type = i.item_type ? ` (${i.item_type})` : "";
-      const qty = (i.quantity && i.quantity > 1) ? ` x${i.quantity}` : "";
-      return `${name}${type}${qty}`;
-    }).join(", ");
+    const invDesc = inv.map((i: any) => i.item_name || i.name || "?").slice(0, 15).join(", ");
     contextLines.push(`Инвентарь: ${invDesc}`);
-  } else {
-    contextLines.push("Инвентарь: пусто");
   }
 
-  // История (последние 5 сообщений)
   if (input?.recent_history) {
-    // recent_history — строка с форматом "[Имя]: текст"
-    const histLines = input.recent_history.split("\n").slice(-5).join("\n");
+    const histLines = input.recent_history.split("\n").slice(-4).join("\n");
     if (histLines.trim()) {
-      contextLines.push(`\nПоследние сообщения:\n${histLines}`);
+      contextLines.push(`\nКонтекст чата:\n${histLines}`);
     }
   }
 
-  const userMsg = `${contextLines.join("\n")}\n\nДействие игрока: "${actionText}"`;
+  const userMsg = `${contextLines.join("\n")}\n\nРеплика/действие игрока: "${actionText}"`;
 
-  // ========= ЗАПРОС К МОДЕЛИ =========
-  // Используем умную бесплатную модель с попытками
-  const MODELS = [
-    "deepseek/deepseek-chat-v3-0324:free",   // лучший выбор — умный, бесплатный
-    "google/gemma-2-27b-it:free",             // резерв — хорошо понимает русский
-  ];
+  // ========= ПУЛ УМНЫХ БЕСПЛАТНЫХ МОДЕЛЕЙ ДЛЯ TIER 2 =========
+  const SMART_FREE_MODELS = [
+    preferredModel,
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemini-2.0-flash-exp:free",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "google/gemma-2-27b-it:free",
+  ].filter(Boolean) as string[];
 
-  for (const model of MODELS) {
+  for (const model of SMART_FREE_MODELS) {
     try {
       const resp = await fetch(OPENROUTER_URL, {
         method: "POST",
@@ -1107,11 +1114,11 @@ export async function classifyIntentWithAI(
             { role: "system", content: systemPrompt },
             { role: "user", content: userMsg },
           ],
-          max_tokens: 200,
-          temperature: 0,
-          response_format: { type: "json_object" }, // принудительный JSON
+          max_tokens: 250,
+          temperature: 0.1,
+          response_format: { type: "json_object" },
         }),
-        signal: AbortSignal.timeout(12000), // 12 сек — умная модель думает дольше
+        signal: AbortSignal.timeout(9000), // 9 сек таймаут
       });
 
       if (!resp.ok) {
@@ -1125,46 +1132,45 @@ export async function classifyIntentWithAI(
 
       const parsed = parseAIJson(content) as any;
       const actionType = parsed?.action_type as string;
-      if (!actionType || !(VALID_TYPES as readonly string[]).includes(actionType)) {
+      if (!actionType || !(VALID_TYPES as readonly string[]).includes(actionType as any)) {
         console.warn(`[classifyIntentWithAI] Model ${model} returned unknown action_type: "${actionType}"`);
         continue;
       }
 
       const targetName: string | null = (parsed?.target_name && parsed.target_name !== "null") ? parsed.target_name : null;
+      const targetSubzoneName: string | null = (parsed?.target_subzone_name && parsed.target_subzone_name !== "null") ? parsed.target_subzone_name : null;
       const itemName: string | null = (parsed?.item_name && parsed.item_name !== "null") ? parsed.item_name : null;
       const statToCheck: string = parsed?.stat_to_check || "none";
       const reasoning: string = parsed?.reasoning || "";
 
-      console.log(`[classifyIntentWithAI] ✅ model=${model}, action=${actionType}, target=${targetName}, item=${itemName}${reasoning ? ` | reason: ${reasoning}` : ""}`);
+      console.log(`[classifyIntentWithAI] ✅ model=${model}, action=${actionType}, target=${targetName}, subzone=${targetSubzoneName}${reasoning ? ` | reason: ${reasoning}` : ""}`);
 
-      // === Резолвинг UUID по имени ===
+      // === Резолвинг сущностей ===
       const findEntityByName = (name: string | null) => {
         if (!name) return null;
         const lname = name.toLowerCase();
-        // Точное совпадение сначала
-        const exactNpc = npcs.find((n: any) => (n.name || "").toLowerCase() === lname);
-        if (exactNpc) return { id: exactNpc.id, name: exactNpc.name, is_hostile: exactNpc.is_hostile };
-        // Частичное совпадение
-        const partialNpc = npcs.find((n: any) => (n.name || "").toLowerCase().includes(lname) || lname.includes((n.name || "").toLowerCase()));
-        if (partialNpc) return { id: partialNpc.id, name: partialNpc.name, is_hostile: partialNpc.is_hostile };
-        // Среди игроков
+        // Сначала живые игроки!
         const exactPlayer = players.find((p: any) => (p.name || "").toLowerCase() === lname);
-        if (exactPlayer) return { id: exactPlayer.id, name: exactPlayer.name, is_hostile: false };
-        const partialPlayer = players.find((p: any) => (p.name || "").toLowerCase().includes(lname));
-        if (partialPlayer) return { id: partialPlayer.id, name: partialPlayer.name, is_hostile: false };
+        if (exactPlayer) return { id: exactPlayer.id, name: exactPlayer.name, is_hostile: false, is_player: true };
+        const partialPlayer = players.find((p: any) => (p.name || "").toLowerCase().includes(lname) || lname.includes((p.name || "").toLowerCase()));
+        if (partialPlayer) return { id: partialPlayer.id, name: partialPlayer.name, is_hostile: false, is_player: true };
+
+        // Затем NPC
+        const exactNpc = npcs.find((n: any) => (n.name || "").toLowerCase() === lname);
+        if (exactNpc) return { id: exactNpc.id, name: exactNpc.name, is_hostile: exactNpc.is_hostile, is_player: false };
+        const partialNpc = npcs.find((n: any) => (n.name || "").toLowerCase().includes(lname) || lname.includes((n.name || "").toLowerCase()));
+        if (partialNpc) return { id: partialNpc.id, name: partialNpc.name, is_hostile: partialNpc.is_hostile, is_player: false };
+
         return null;
       };
 
-      // Для атаки - ищем только враждебных или прямо названных
       const findAttackTarget = (name: string | null) => {
         const namedEntity = findEntityByName(name);
         if (namedEntity) return namedEntity;
-        // Если цель не названа - берём первого враждебного (НЕ npcs[0]!)
         const hostile = npcs.find((n: any) => n.is_hostile);
-        return hostile ? { id: hostile.id, name: hostile.name, is_hostile: true } : null;
+        return hostile ? { id: hostile.id, name: hostile.name, is_hostile: true, is_player: false } : null;
       };
 
-      // Найти предмет в инвентаре по имени
       const findItemByName = (name: string | null) => {
         if (!name) return null;
         const lname = name.toLowerCase();
@@ -1172,6 +1178,20 @@ export async function classifyIntentWithAI(
           (i.item_name || i.name || "").toLowerCase().includes(lname)
         ) || null;
       };
+
+      // Сопоставление подзоны
+      let matchedSubzoneId: string | null = null;
+      if (actionType === "move") {
+        const searchZoneName = (targetSubzoneName || itemName || targetName || "").toLowerCase();
+        for (const sz of subzones) {
+          const szName = (typeof sz === "string" ? sz : sz.name || "").toLowerCase();
+          const szId = typeof sz === "string" ? sz : sz.id;
+          if (szName && (searchZoneName.includes(szName) || szName.includes(searchZoneName) || actionText.toLowerCase().includes(szName))) {
+            matchedSubzoneId = szId;
+            break;
+          }
+        }
+      }
 
       const targetEntity = actionType === "attack"
         ? findAttackTarget(targetName)
@@ -1182,54 +1202,86 @@ export async function classifyIntentWithAI(
       const validStats = ["strength", "dexterity", "stealth", "perception", "survival", "investigation", "insight", "charisma", "none"];
       const resolvedStat = validStats.includes(statToCheck) ? statToCheck :
         actionType === "attack" ? "strength" :
-        actionType === "move" ? "dexterity" :
-        actionType === "search" ? "perception" :
+        actionType === "move" ? "none" :
+        actionType === "search" ? "survival" :
         actionType === "harvest_ambient" ? "survival" :
         actionType === "craft_recipe" ? "dexterity" :
-        actionType === "talk" ? "charisma" :
+        actionType === "talk" ? "none" :
         "none";
 
-      const action: RouterAction = {
-        action_type: actionType as any,
-        target_entity_id: targetEntity?.id || null,
-        target_name: targetEntity?.name || targetName,
-        target_item_name: itemName,
-        item_type: null,
-        used_item_id: matchedItem?.id || null,
-        consumed_materials: (actionType === "transfer" && matchedItem)
-          ? [{ id: matchedItem.id, quantity: 1 }]
-          : null,
-        stat_to_check: resolvedStat as any,
-        ai_custom_dc: null,
-        improper_tool_usage: null,
+      // === encounter_intent ===
+      let encounterIntent: { type: "targeted" | "random" | "none"; target_name: string | null } = {
+        type: "none",
+        target_name: null,
       };
 
+      const rawEnc = parsed?.encounter_intent;
+      if (rawEnc && typeof rawEnc === "object" && ["targeted", "random", "none"].includes(rawEnc.type)) {
+        encounterIntent = {
+          type: rawEnc.type,
+          target_name: rawEnc.target_name ? String(rawEnc.target_name).trim() : null,
+        };
+      } else if (actionType === "search" && targetName && /(волк|кабан|медвед|олен|звер|лисиц|дич|тролл|гобл|разбойник|бандит|монстр)/i.test(targetName)) {
+        encounterIntent = {
+          type: "targeted",
+          target_name: targetName,
+        };
+      } else if (actionType === "move") {
+        encounterIntent = {
+          type: "random",
+          target_name: null,
+        };
+      }
+
+      // Формирование actions
+      const actions: RouterAction[] = [];
+      if (actionType !== "none") {
+        actions.push({
+          action_type: actionType as any,
+          target_entity_id: targetEntity?.id || null,
+          target_subzone_id: matchedSubzoneId,
+          target_name: targetEntity?.name || targetName,
+          target_item_name: itemName || targetSubzoneName || targetName,
+          item_type: null,
+          used_item_id: matchedItem?.id || null,
+          consumed_materials: (actionType === "transfer" && matchedItem)
+            ? [{ id: matchedItem.id, quantity: 1 }]
+            : null,
+          stat_to_check: resolvedStat as any,
+          ai_custom_dc: actionType === "search" || actionType === "harvest_ambient" ? 12 : null,
+          improper_tool_usage: null,
+        } as any);
+      }
+
       const atmosphere: Atmosphere = {
-        sounds: ["шаги", "шум ветра"],
-        visuals: ["окружающий пейзаж"],
+        sounds: actionType === "attack" ? ["лязг оружия", "крик"] : ["шум ветра", "шорох листвы"],
+        visuals: actionType === "move" ? ["изгибы тропы", "смена пейзажа"] : ["окружающая обстановка"],
       };
+
+      const timeMinutes =
+        actionType === "attack" ? 5 :
+        actionType === "move" ? 20 :
+        actionType === "talk" ? 2 :
+        actionType === "craft_recipe" ? 30 :
+        actionType === "harvest_ambient" ? 10 :
+        actionType === "search" ? 30 : 5;
 
       return {
         status: "success",
         clarification_msg: null,
-        skill_hint: actionType === "attack" ? "swordsmanship" : null as any,
+        skill_hint: actionType === "attack" ? "swordsmanship" : actionType === "search" ? "survival" : null as any,
         event_type: actionType === "attack" ? "combat_medium" : "neutral",
-        actions: [action],
-        time_estimate_minutes:
-          actionType === "attack" ? 5 :
-          actionType === "move" ? 15 :
-          actionType === "talk" ? 2 :
-          actionType === "craft_recipe" ? 30 :
-          actionType === "harvest_ambient" ? 10 : 5,
+        actions,
+        time_estimate_minutes: timeMinutes,
         atmosphere,
-        encounter_intent: { type: "none", target_name: null },
+        encounter_intent: encounterIntent,
       };
     } catch (err) {
       console.warn(`[classifyIntentWithAI] Model ${model} error:`, err instanceof Error ? err.message : err);
     }
   }
 
-  console.warn(`[classifyIntentWithAI] All models failed, falling back to regex heuristic`);
+  console.warn(`[classifyIntentWithAI] All smart free models failed, falling back to regex heuristic`);
   return null;
 }
 

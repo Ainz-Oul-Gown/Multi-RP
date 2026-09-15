@@ -16,13 +16,18 @@
          ▼
 ┌─────────────────────────────────────────────┐
 │ Step 1: step1_router.ts — РОУТЕР             │
-│  Многоуровневый парсер намерений:            │
-│  1) MiMo-v2.5 (главный LLM) → JSON          │
-│  2) DeepSeek-v3 AI-классификатор (fallback)  │
-│     • получает локацию, NPC, историю, инвент │
-│     • определяет move/talk/attack/craft/etc  │
-│  3) Regex эвристика (последний resort)       │
-│  Выход: { intent, items, moved_to_subzone }  │
+│  3-уровневый отказоустойчивый парсер:       │
+│  1) Tier 1: Primary AI (MiMo-v2.5) → JSON    │
+│     • полный контекст мира, инвентаря, NPC  │
+│  2) Tier 2: Targeted Smart Free AI Classifier│
+│     • модели: Llama-3.3-70B, Gemini-Flash,   │
+│       Qwen-2.5-72B, Gemma-2-27B             │
+│     • сфокусированный контекст, охота        │
+│       (encounter_intent: targeted/random),   │
+│       подзоны, спасение ложных уточнений     │
+│  3) Tier 3: Emergency Regex Heuristic        │
+│     • аварийный режим (только при офлайне)   │
+│  Выход: RouterOutputPayload                  │
 └──────────────┬──────────────────────────────┘
                │
                ▼

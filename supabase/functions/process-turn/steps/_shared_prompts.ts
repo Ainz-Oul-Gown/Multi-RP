@@ -73,6 +73,7 @@ export function buildGpsPrompt(params: {
   currentLocation: string | null;
   currentState: string | null;
   currentWildZone?: string | null;
+  currentDangerLevel?: string | null;
   wantsLocationChange: boolean;
   locationChangeDescription: string;
   availableLocations: { id?: string; name: string; type?: string; state_name?: string }[];
@@ -80,9 +81,9 @@ export function buildGpsPrompt(params: {
 }): string {
   const timeStr = `${params.currentDay}.${params.currentMonth}.${params.currentYear} ${params.currentHour}:${params.currentMinute.toString().padStart(2, '0')}`;
   const locationStr = params.currentWildZone
-    ? `Дикая зона: ${params.currentWildZone}`
+    ? `Дикая зона: ${params.currentWildZone} (опасность: ${params.currentDangerLevel || 'normal'})`
     : params.currentLocation
-      ? `${params.currentLocation}` + (params.currentState ? `, ${params.currentState}` : '')
+      ? `${params.currentLocation}` + (params.currentState ? `, ${params.currentState}` : '') + ` (опасность: ${params.currentDangerLevel || 'normal'})`
       : 'неизвестно';
 
   const locationsList = params.availableLocations?.length
@@ -97,6 +98,7 @@ export function buildGpsPrompt(params: {
 
 Текущее время: ${timeStr}
 Текущая локация: ${locationStr}
+Базовая опасность местности / danger_level: ${params.currentDangerLevel || 'normal'}
 Тип местности / terrain_type: ${(params as any).terrainType || 'неизвестно'}
 
 Действие игрока: "${params.actionText}"
@@ -114,6 +116,8 @@ ${subzonesList}
   "new_location_name": null,
   "is_wild_zone": false,
   "location_changed": false,
+  "is_plausible": true,
+  "wild_zone_danger_level": "normal",
   "moved_to_subzone": null,
   "travel_description": ""
 }
@@ -150,25 +154,27 @@ ${subzonesList}
 | Городские окрестности | лес за городом, поле, дорога, ферма     | пещера в центре города         |
 
 ЕСЛИ запрошенная локация НЕВОЗМОЖНА рядом с текущей:
-→ location_changed = false, time_minutes = 5
+→ location_changed = false, is_plausible = false, time_minutes = 5-15
 → travel_description = "Такого места здесь нет. [Краткое объяснение почему]"
 
 ШАГ 2 — ОПРЕДЕЛИ ТИП ПЕРЕМЕЩЕНИЯ:
 
 A) Движение внутри текущей зоны (к подзоне/точке):
-   → location_changed = false, moved_to_subzone = название из списка (если есть), time_minutes = 5-15
+   → location_changed = false, is_plausible = true, moved_to_subzone = название из списка (если есть), time_minutes = 5-15
 
 B) Переход в природную зону рядом (плаузибильная по матрице выше):
-   → location_changed = true, is_wild_zone = true
+   → location_changed = true, is_wild_zone = true, is_plausible = true
    → new_location_name = КОНКРЕТНОЕ название, отражающее terrain: "Тёмный бурелом", "Пещера у замшелых скал", "Туманная поляна", "Брод через Шёпот-ручей"
    → НЕ называй абстрактно: не "Лес у X", а нечто атмосферное
+   → wild_zone_danger_level: если дикая зона рядом с безопасным городом/поселением — ставь "safe" или "normal" (охраняется, риск низкий); рядом с опасными/дикими землями — "danger" или "lethal"; по умолчанию как у родительской локации ("${params.currentDangerLevel || 'normal'}")
 
 C) Переход в именованную локацию из списка:
-   → location_changed = true, new_location_id = ID из списка, is_wild_zone = false
+   → location_changed = true, new_location_id = ID из списка, is_wild_zone = false, is_plausible = true
 
-D) Выход из здания наружу:
-   → location_changed = true, is_wild_zone = true
+D) Выход из здания наружу (Если игрок находится внутри здания, таверны или подземелья и выходит наружу):
+   → location_changed = true, is_wild_zone = true, is_plausible = true
    → new_location_name = "Придорожный тракт у [название]" или "Улица у [название]"
+   → wild_zone_danger_level = "${params.currentDangerLevel || 'normal'}"
 
 E) Возврат из дикой зоны в известную локацию:
    → Найди ближайшую именованную локацию из списка

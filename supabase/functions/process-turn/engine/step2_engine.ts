@@ -195,33 +195,49 @@ export function executeEngine(context: EngineInputContext): EngineOutputPayload 
     const timeHours = Math.max(0.25, (router_output.time_estimate_minutes || 30) / 60);
     const timeMult = Math.min(3.0, timeHours);
 
-    // ----- Целевой поиск (игрок ИЩЕТ врага) — шанс ×3 -----
+    // ----- Целевой поиск (игрок ИЩЕТ врага) — базовый шанс ×3 -----
     const intentMult = router_output.encounter_intent.type === "targeted" ? 3.0 : 1.0;
 
     // ----- Скрытность — снижает шанс встретить НПС (поднимает для НПС найти игрока) -----
     const moveAction = router_output.actions.find(a => a.action_type === "move");
     const stealthFactor = moveAction?.stealth_factor ?? 1.0;
 
-    const dynamicThreshold = baseThreshold * timeMult * intentMult * stealthFactor;
+    // ----- Навык выживания/внимательности (WIS) даёт бонус к целевому поиску -----
+    let skillBonus = 1.0;
+    if (router_output.encounter_intent.type === "targeted") {
+      const wis = context.acting_player.stats?.WIS || 10;
+      const wisMod = Math.floor((wis - 10) / 2);
+      if (wisMod > 0) {
+        skillBonus += wisMod * 0.1; // +10% к шансу за каждый +1 модификатора
+      }
+    }
+
+    const dynamicThreshold = baseThreshold * timeMult * intentMult * stealthFactor * skillBonus;
     const roll = rollD100();
 
     if (roll < dynamicThreshold) {
       const tierRoll = rollD100();
       const tier = getEncounterTier(tierRoll);
+      const isTargeted = router_output.encounter_intent.type === "targeted";
+      const creatureName = (isTargeted && router_output.encounter_intent.target_name)
+        ? router_output.encounter_intent.target_name
+        : tier.name;
+
       encounter_triggered = {
         triggered: true,
         tier: tier.tier,
-        creature_name: tier.name,
+        creature_name: creatureName,
       };
-      const intentLabel = router_output.encounter_intent.type === "targeted" ? "🎯 Целевой" : "🎲 Случайный";
+      const intentLabel = isTargeted ? "🎯 Целевой" : "🎲 Случайный";
       raw_system_facts.push(
         `${intentLabel} энкаунтер! Опасность локации: ${dangerLevel}. ` +
         `Бросок: ${roll.toFixed(0)} vs порог ${dynamicThreshold.toFixed(0)}. ` +
         `Появилось: ${encounter_triggered.creature_name} (тир ${encounter_triggered.tier}).`
       );
     } else if (router_output.encounter_intent.type === "targeted") {
+      const targetLabel = router_output.encounter_intent.target_name ? ` ("${router_output.encounter_intent.target_name}")` : "";
       raw_system_facts.push(
-        `Поиск врагов не дал результата (бросок ${roll.toFixed(0)} vs порог ${dynamicThreshold.toFixed(0)} [${dangerLevel}]).`
+        `Поиск врагов${targetLabel} не дал результата (бросок ${roll.toFixed(0)} vs порог ${dynamicThreshold.toFixed(0)} [${dangerLevel}]).`
       );
     }
   }

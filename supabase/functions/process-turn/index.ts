@@ -226,14 +226,12 @@ serve(async (req: any) => {
 
     // Load location, available locations, lore
     let currentLocationName: string | null = null, currentStateName: string | null = null, currentLocationType: string | null = null;
-    // Wild zone РІР‚вЂќ Р С—РЎР‚Р С‘РЎР‚Р С•Р Т‘Р Р…Р В°РЎРЏ Р В·Р С•Р Р…Р В° Р Р†Р Р…Р Вµ Р С‘Р СР ВµР Р…Р Р…РЎвЂ№РЎвЂ¦ Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р в„– (Р В»Р ВµРЎРѓ, Р С—Р ВµРЎвЂ°Р ВµРЎР‚Р В°, Р С—Р С•Р В»Р Вµ)
     const currentWildZone: string | null = session.current_wild_zone || null;
-    let currentDangerLevel = "normal"; // из locations.danger_level
-    if (currentWildZone) {
-      // Player is in open world / wild zone РІР‚вЂќ use currentWildZone as location name
-      currentLocationName = currentWildZone;
-      currentLocationType = "wild";
-    } else if (session.current_location_id) {
+    let parentLocationDanger = "normal";
+    let parentLocationName: string | null = null;
+
+    // Всегда загружаем данные базовой/родительской локации, даже если игрок в дикой зоне
+    if (session.current_location_id) {
       try {
         const { data: locData } = await supabase
           .from("locations")
@@ -241,15 +239,28 @@ serve(async (req: any) => {
           .eq("id", session.current_location_id)
           .maybeSingle();
         if (locData) {
-          currentLocationName = locData.name;
-          currentLocationType = locData.type || null;
-          currentDangerLevel = locData.danger_level || "normal";
+          parentLocationDanger = locData.danger_level || "normal";
+          parentLocationName = locData.name || null;
+          if (!currentWildZone) {
+            currentLocationName = locData.name;
+            currentLocationType = locData.type || null;
+          }
           const stateObj = Array.isArray(locData.states) ? locData.states[0] : locData.states;
           currentStateName = stateObj?.name || null;
         }
       } catch (locErr) {
         console.warn(`[${requestId}] Failed to load current location:`, locErr);
       }
+    }
+
+    // Если игрок в дикой зоне — берём сохранённый уровень опасности дикой зоны или наследуем от родительского города
+    let currentDangerLevel = "normal";
+    if (currentWildZone) {
+      currentLocationName = currentWildZone;
+      currentLocationType = "wild";
+      currentDangerLevel = session.current_wild_zone_danger_level || parentLocationDanger || "normal";
+    } else {
+      currentDangerLevel = parentLocationDanger;
     }
 
     let availableLocations: { id: string; name: string; type: string; state_name: string }[] = [];
@@ -738,9 +749,39 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
     }
 
-    console.log(`[${requestId}] [STEP 1] СЂСџВ§В­ Router: status="${routerResult.status}", actions=${JSON.stringify(routerResult.actions.map((a: any) => ({ type: a.action_type, target: a.target_item_name || a.target_entity_id, stat: a.stat_to_check })))}`);
+    console.log(`[${requestId}] [STEP 1] 📡 Router: status="${routerResult.status}", actions=${JSON.stringify(routerResult.actions.map((a: any) => ({ type: a.action_type, target: a.target_item_name || a.target_entity_id, stat: a.stat_to_check })))}`);
+
+    // ============================================
+    // MOVEMENT SAFETY NET
+    // Если роутер вернул actions:[] но текст содержит глаголы движения —
+    // инжектируем move action, т.к. модель часто игнорирует правило #16
+    // ============================================
+    const _movementVerbRegex = /\b(иду\b|идём|пойду|пошёл|пошла|шагаю|направляюсь|перемещаюсь|двигаюсь|отправляюсь|выхожу|вхожу|захожу|зайду|выйду|бегу|еду|лечу|плыву|перехожу|спускаюсь|поднимаюсь|взбираюсь|ухожу|покидаю|прихожу|возвращаюсь|доберусь|добираюсь)\b/i;
+    const _hasRouterMove = routerResult.actions?.some((a: any) => a.action_type === "move");
+    if (!_hasRouterMove && _movementVerbRegex.test(safeActionText) && routerResult.status === "success") {
+      // Извлекаем место назначения из текста
+      const _destMatch = safeActionText.match(/(?:иду|пойду|направляюсь|отправляюсь|вхожу|выхожу|перехожу|спускаюсь|поднимаюсь)\s+(?:в|к|на|из|до|за)\s+([^,.!?]{2,60})/i);
+      const _moveDest = _destMatch?.[1]?.trim() || safeActionText.slice(0, 80).trim();
+      routerResult.actions = routerResult.actions || [];
+      routerResult.actions.push({
+        action_type: "move",
+        target_entity_id: null,
+        target_name: null,
+        target_item_name: _moveDest,
+        item_type: null,
+        used_item_id: null,
+        consumed_materials: null,
+        stat_to_check: "none",
+        ai_custom_dc: null,
+        improper_tool_usage: null,
+        dynamic_blueprint: null,
+        raw_action_text: safeActionText,
+      });
+      console.log(`[${requestId}] [MOVE_INJECT] ⚡ Injected move action (router missed it): dest="${_moveDest}"`);
+    }
 
     // Apply GPS time/location (still here, as it's pre-engine)
+
     let time_passed_minutes = 0;
     let location_changed = startingLocationGenerated,
       new_location_id: string | null = startingLocationGenerated ? session.current_location_id : null,
@@ -763,6 +804,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         currentMinute: session.game_minute || 0,
         currentLocation: currentLocationName, currentState: currentStateName,
         currentWildZone,
+        currentDangerLevel,
         wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
         availableLocations,
         availableSubzones: locationMap && Object.keys(locationMap).length > 0 ? Object.keys(locationMap) : undefined,
@@ -774,21 +816,39 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       if (gpsParsed) {
         (globalThis as any).__gpsSubzone = gpsParsed?.moved_to_subzone || null;
         time_passed_minutes = Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0));
+
+        // ПЛАУЗИБИЛЬНОСТЬ: если игрок пытался сменить локацию, но GPS отверг её как невозможную рядом
+        const moveAction = routerResult.actions?.find((a: any) => a.action_type === "move");
+        if (isMovementAction && (gpsParsed.is_plausible === false || (!gpsParsed.location_changed && !gpsParsed.moved_to_subzone && gpsParsed.travel_description))) {
+          if (moveAction) {
+            moveAction.movement_rejected = true;
+            moveAction.rejection_reason = gpsParsed.travel_description || "Такого места поблизости нет.";
+            console.log(`[${requestId}] [GPS_REJECT] 🚫 Movement rejected (implausible): ${moveAction.rejection_reason}`);
+          }
+        }
+
         if (gpsParsed.location_changed === true) {
           if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
-            // Р СџР ВµРЎР‚Р ВµРЎвЂ¦Р С•Р Т‘ Р Р† Р Т‘Р С‘Р С”РЎС“РЎР‹ Р В·Р С•Р Р…РЎС“ (Р В»Р ВµРЎРѓ, Р С—Р ВµРЎвЂ°Р ВµРЎР‚Р В°, Р С—Р С•Р В»Р Вµ, РЎвЂљРЎР‚Р В°Р С”РЎвЂљ)
+            // Переход в дикую зону (лес, пещера, поле, тракт)
             wild_zone_changed = true;
             new_wild_zone = gpsParsed.new_location_name;
             travel_description = gpsParsed.travel_description || "";
-            console.log(`[${requestId}] [GPS] Wild zone: ${new_wild_zone}`);
+            const gpsWildDanger = gpsParsed.wild_zone_danger_level;
+            const validDangers = ["safe", "normal", "danger", "lethal"];
+            currentDangerLevel = (validDangers.includes(gpsWildDanger) ? gpsWildDanger : parentLocationDanger) || "normal";
+            console.log(`[${requestId}] [GPS] Wild zone: ${new_wild_zone} (danger: ${currentDangerLevel})`);
           } else if (gpsParsed.new_location_id) {
-            // Р СџР ВµРЎР‚Р ВµРЎвЂ¦Р С•Р Т‘ Р Р† Р С‘Р СР ВµР Р…Р С•Р Р†Р В°Р Р…Р Р…РЎС“РЎР‹ Р В»Р С•Р С”Р В°РЎвЂ Р С‘РЎР‹
+            // Переход в именованную локацию
             location_changed = true;
             new_location_id = gpsParsed.new_location_id;
             wild_zone_changed = true;
-            new_wild_zone = null; // Р С•РЎвЂЎР С‘РЎвЂ°Р В°Р ВµР С Р Т‘Р С‘Р С”РЎС“РЎР‹ Р В·Р С•Р Р…РЎС“
+            new_wild_zone = null; // очищаем дикую зону
             travel_description = gpsParsed.travel_description || "";
-            console.log(`[${requestId}] [GPS] Location change РІвЂ вЂ™ ${new_location_id}`);
+            try {
+              const { data: newLocRow } = await supabase.from("locations").select("danger_level").eq("id", new_location_id).maybeSingle();
+              if (newLocRow?.danger_level) currentDangerLevel = newLocRow.danger_level;
+            } catch (_) {}
+            console.log(`[${requestId}] [GPS] Location change → ${new_location_id} (danger: ${currentDangerLevel})`);
           }
         }
       }
@@ -1009,24 +1069,83 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     // Обработка энкаунтера: найти/спаунить NPC если триггернулось
     if (engineResult.encounter_triggered?.triggered) {
       const enc = engineResult.encounter_triggered;
-      // 1) Ищем враждебного NPC уже в текущей локации
-      const matchingNpc = allNpcs.find((n: any) => n.is_hostile && n.is_alive !== false);
+      const targetCreature = enc.creature_name ? enc.creature_name.toLowerCase() : null;
+
+      // 1) Ищем враждебного NPC уже в текущей локации (приоритет совпадению по имени)
+      let matchingNpc = allNpcs.find((n: any) => n.is_hostile && n.is_alive !== false && targetCreature && n.name?.toLowerCase().includes(targetCreature));
+      if (!matchingNpc && !targetCreature) {
+        matchingNpc = allNpcs.find((n: any) => n.is_hostile && n.is_alive !== false);
+      }
+
       if (matchingNpc) {
         engineResult.raw_system_facts.push(`Враг ${matchingNpc.name} замечает ${player.name} и готовится к атаке!`);
         engineResult.system_facts.push(`Враг ${matchingNpc.name} замечает ${player.name} и готовится к атаке!`);
       } else {
-        // 2) NPC нет в локации — перемещаем подходящего из мира
+        // 2) Ищем подходящего из мира или шаблонов
         const tierTarget = enc.tier || 1;
-        const { data: spawnCandidates } = await supabase
-          .from("npcs")
-          .select("id, name, hp, max_hp, is_hostile, category, tier, level, base_attacks, special_attacks, armor_class, initiative, stats")
-          .eq("world_id", session.world_id)
-          .eq("is_hostile", true)
-          .lte("tier", tierTarget + 1)
-          .order("tier", { ascending: false })
-          .limit(10);
-        if (spawnCandidates?.length) {
-          const spawned = spawnCandidates[Math.floor(Math.random() * spawnCandidates.length)];
+        let spawned: any = null;
+
+        if (targetCreature) {
+          // Сначала ищем в существующих NPC мира
+          const { data: targetCandidates } = await supabase
+            .from("npcs")
+            .select("id, name, hp, max_hp, is_hostile, category, tier, level, base_attacks, special_attacks, armor_class, initiative, stats")
+            .eq("world_id", session.world_id)
+            .eq("is_hostile", true)
+            .ilike("name", `%${targetCreature}%`)
+            .limit(5);
+
+          if (targetCandidates && targetCandidates.length > 0) {
+            spawned = targetCandidates[Math.floor(Math.random() * targetCandidates.length)];
+          }
+
+          // Если нет в NPC — ищем в creature_templates
+          if (!spawned) {
+            const { data: tmpls } = await supabase
+              .from("creature_templates")
+              .select("*")
+              .eq("world_id", session.world_id)
+              .ilike("species_name", `%${targetCreature}%`)
+              .limit(1);
+
+            if (tmpls && tmpls.length > 0) {
+              const tmpl = tmpls[0];
+              const { data: createdNpc } = await supabase.from("npcs").insert({
+                world_id: session.world_id,
+                location_id: session.current_location_id,
+                name: tmpl.species_name,
+                race: tmpl.race || "Чудовище",
+                category: tmpl.category || "beast",
+                tier: tmpl.tier || tierTarget,
+                level: tmpl.level_min || 1,
+                hp: 25,
+                max_hp: 25,
+                is_hostile: true,
+                is_alive: true,
+                base_attacks: tmpl.base_attacks || [],
+                special_attacks: tmpl.special_attacks || [],
+              }).select().maybeSingle();
+              spawned = createdNpc;
+            }
+          }
+        }
+
+        // Если не найден целевой или энкаунтер случайный — общий пул врагов мира
+        if (!spawned) {
+          const { data: spawnCandidates } = await supabase
+            .from("npcs")
+            .select("id, name, hp, max_hp, is_hostile, category, tier, level, base_attacks, special_attacks, armor_class, initiative, stats")
+            .eq("world_id", session.world_id)
+            .eq("is_hostile", true)
+            .lte("tier", tierTarget + 1)
+            .order("tier", { ascending: false })
+            .limit(10);
+          if (spawnCandidates && spawnCandidates.length > 0) {
+            spawned = spawnCandidates[Math.floor(Math.random() * spawnCandidates.length)];
+          }
+        }
+
+        if (spawned) {
           await supabase.from("npcs").update({ location_id: session.current_location_id }).eq("id", spawned.id);
           allNpcs.push({ ...spawned, is_alive: true, location_id: session.current_location_id });
           engineResult.raw_system_facts.push(`${spawned.name} выпрыгивает из тени и нападает на ${player.name}!`);
@@ -1074,6 +1193,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         current_location_id: new_location_id,
         current_wild_zone: null, // Р Р†Р ВµРЎР‚Р Р…РЎС“Р В»Р С‘РЎРѓРЎРЉ Р Р† Р С‘Р СР ВµР Р…Р С•Р Р†Р В°Р Р…Р Р…РЎС“РЎР‹ Р В»Р С•Р С”Р В°РЎвЂ Р С‘РЎР‹
         current_wild_zone_description: null,
+        current_wild_zone_danger_level: null,
       }).eq("id", session_id);
 
       // Р ВР С–РЎР‚Р С•Р С”Р С‘ Р Т‘Р Р†Р С‘Р С–Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ: РЎРѓР В±РЎР‚Р В°РЎРѓРЎвЂ№Р Р†Р В°Р ВµР С Р С—Р С•Р Т‘Р В·Р С•Р Р…РЎС“ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎРѓРЎвЂљР С‘Р Р†РЎв‚¬Р ВµР С–Р С•РЎРѓРЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В°
@@ -1147,9 +1267,11 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       await supabase.from("sessions").update({
         current_wild_zone: new_wild_zone,
         current_wild_zone_description: travel_description || null,
+        current_wild_zone_danger_level: currentDangerLevel || "normal",
       }).eq("id", session_id);
       currentLocationName = new_wild_zone;
       session.current_wild_zone = new_wild_zone;
+      session.current_wild_zone_danger_level = currentDangerLevel;
 
       // Р ВР С–РЎР‚Р С•Р С”Р С‘ Р Т‘Р Р†Р С‘Р С–Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ: РЎРѓР В±РЎР‚Р В°РЎРѓРЎвЂ№Р Р†Р В°Р ВµР С Р С—Р С•Р Т‘Р В·Р С•Р Р…РЎС“ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎРѓРЎвЂљР С‘Р Р†РЎв‚¬Р ВµР С–Р С•РЎРѓРЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В°
       try {

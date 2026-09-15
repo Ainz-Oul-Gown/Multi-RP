@@ -163,6 +163,15 @@ export function buildRouterSystemPrompt(): string {
 
    ВАЖНО: "иду в лес", "спускаюсь в пещеру", "иду вглубь рощи", "направляюсь к холму" — всё это action_type:move, НЕ описательное действие!
 
+17. **Охота и Целевой поиск врагов (encounter_intent)**:
+   - Если игрок целенаправленно ищет, выслеживает или охотится на конкретное существо, зверя или врагов ("ищу волка", "выслеживаю кабана", "охочусь на оленя", "ищу разбойников", "выслеживаю следы гоблинов"):
+     * encounter_intent: {"type": "targeted", "target_name": "волк"} (указывай базовое название существа в именительном падеже)
+     * В actions: добавь action_type: "search", stat_to_check: "survival" (для дичи/следов зверей) или "investigation" (для следов врага).
+   - Если игрок исследует опасную территорию или идёт наугад через чащу/пещеру/руины без конкретной цели:
+     * encounter_intent: {"type": "random", "target_name": null}
+   - Для мирных действий, разговоров, отдыха, крафта, перемещения по безопасной дороге или осмотра на месте:
+     * encounter_intent: {"type": "none", "target_name": null}
+
 
 ## ФОРМАТ ОТВЕТА
 
@@ -654,8 +663,8 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     timeEstimate = 5;
   }
   // 1. Выбрасывание предметов (drop) — выполняется гарантированно и без бросков кубиков
-  // ВАЖНО: regex использует \b (граница слова) чтобы не захватить «бросаюсь» (rush)
-  else if (/(?:\bвыкид|\bвыброс|(?:^|\s)броса(?:ю|ешь|ет|ем|ете|ют)\s+(?!впер|навстреч|к\s+|на\s+[а-яё]+а)|\bвыкину|\bизбавл|\bизбавь)/i.test(lower)) {
+  // ВАЖНО: regex использует безопасные границы вместо \b чтобы корректно матчить кириллицу и не захватить «бросаюсь» (rush)
+  else if (/(?:(?:^|[\s,.:;!?])(выкид|выброс|выкину|избавл|избавь)|(?:^|\s)броса(?:ю|ешь|ет|ем|ете|ют)\s+(?!впер|навстреч|к\s+|на\s+[а-яё]+а))/i.test(lower)) {
     const qtyMatch = lower.match(/\b(\d+)\b/);
     const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
 
@@ -780,6 +789,37 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     });
     timeEstimate = 2;
   }
+  // 4. Перемещение (move) — проверяется ПЕРЕД сбором ресурсов, чтобы "Иду в лес за ягодами" было move
+  else if (/(?:^|[\s,.:;!?])(иду|идём|пойду|пошёл|пошла|шагаю|направляюсь|перемещаюсь|двигаюсь|отправляюсь|выхожу|вхожу|захожу|зайду|выйду|бегу|еду|лечу|плыву|перехожу|спускаюсь|поднимаюсь|взбираюсь|ухожу|покидаю|прихожу|возвращаюсь|доберусь|добираюсь)(?:[\s,.:;!?]|$)/i.test(lower)) {
+    const destMatch = rawText.match(/(?:иду|пойду|направляюсь|отправляюсь|вхожу|выхожу|перехожу|спускаюсь|поднимаюсь|бегу|еду|возвращаюсь)\s+(?:в|к|на|из|до|за)\s+([^,.!?]{2,60})/i);
+    const destName = destMatch ? destMatch[1].trim() : rawText.slice(0, 60).trim();
+
+    let matchedSubzoneId: string | null = null;
+    const subzones = Array.isArray((input as any)?.available_subzones) ? (input as any).available_subzones : [];
+    for (const sz of subzones) {
+      if (typeof sz === "string" && lower.includes(sz.toLowerCase())) {
+        matchedSubzoneId = sz;
+        break;
+      }
+    }
+
+    actions.push({
+      action_type: "move",
+      target_entity_id: null,
+      target_subzone_id: matchedSubzoneId,
+      target_name: null,
+      target_item_name: destName,
+      item_type: null,
+      used_item_id: null,
+      consumed_materials: null,
+      stat_to_check: "none",
+      ai_custom_dc: null,
+      speed_modifier: 1.0,
+      stealth_factor: 1.0,
+      improper_tool_usage: null,
+    } as any);
+    timeEstimate = 20;
+  }
   else if (lower.includes("палк") || lower.includes("ветк")) {
     actions.push({
       action_type: "harvest_ambient",
@@ -842,10 +882,11 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
       ai_custom_dc: 10,
       improper_tool_usage: null,
     });
-  } else if (lower.includes("ищу") || lower.includes("обыск") || lower.includes("найти") || lower.includes("поискать")) {
+  } else if (lower.includes("ищу") || lower.includes("обыск") || lower.includes("найти") || lower.includes("поискать") || lower.includes("выслежива") || lower.includes("охочусь")) {
     actions.push({
       action_type: "search",
       target_entity_id: null,
+      target_name: null,
       target_item_name: null,
       item_type: null,
       used_item_id: null,
@@ -854,6 +895,29 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
       ai_custom_dc: 12,
       improper_tool_usage: null,
     });
+  }
+
+  // Определение намерений энкаунтера (охота / поиск существа)
+  let encounterIntent: { type: "targeted" | "random" | "none"; target_name: string | null } = { type: "none", target_name: null };
+  const huntMatch = lower.match(/(?:ищу|выслеживаю|выследить|охочусь|охота|найти|следы)\s+(?:на\s+)?(волк[а-я]*|кабан[а-я]*|медвед[а-я]*|олен[а-я]*|гоблин[а-я]*|разбойник[а-я]*|бандит[а-я]*|звер[а-я]*|чудовищ[а-я]*|враг[а-я]*|[а-яё]{3,20})/i);
+  if (huntMatch) {
+    const rawTarget = huntMatch[1].trim();
+    let normalized = rawTarget;
+    if (/волк/i.test(rawTarget)) normalized = "Волк";
+    else if (/кабан/i.test(rawTarget)) normalized = "Кабан";
+    else if (/медвед/i.test(rawTarget)) normalized = "Медведь";
+    else if (/олен/i.test(rawTarget)) normalized = "Олень";
+    else if (/гоблин/i.test(rawTarget)) normalized = "Гоблин";
+    else if (/разбойник|бандит/i.test(rawTarget)) normalized = "Разбойник";
+    else normalized = rawTarget.charAt(0).toUpperCase() + rawTarget.slice(1);
+
+    encounterIntent = {
+      type: "targeted",
+      target_name: normalized,
+    };
+    skillHint = "survival";
+  } else if (/иду|двигаюсь|пробираюсь|исследую/i.test(lower) && (lower.includes("лес") || lower.includes("пещер") || lower.includes("руин"))) {
+    encounterIntent = { type: "random", target_name: null };
   }
 
   const isForest = lower.includes("лес") || lower.includes("рощ") || lower.includes("дерев");
@@ -868,7 +932,7 @@ export function buildRouterHeuristicFallback(input: RouterInputContext): RouterO
     actions,
     time_estimate_minutes: timeEstimate,
     atmosphere: { sounds, visuals },
-    encounter_intent: { type: "none", target_name: null },
+    encounter_intent: encounterIntent,
   };
 }
 

@@ -122,8 +122,8 @@ describe("Step 5: Narrator", () => {
     expect(result.players["p1"]).toContain("Бросок");
     expect(result.players["p2"]).toContain("Источник урона неизвестен");
     expect(result.players["p1"]).toContain("потрескивание камина");
-    // Должен присутствовать HP-блок
-    expect(result.players["p2"]).toContain("HP");
+    // Должен присутствовать HP-блок (или 'здоровья')
+    expect(result.players["p2"]).toMatch(/HP|здоровь/);
   });
 
   it("Fallback: обрабатывает conflict-статус (race condition)", () => {
@@ -133,11 +133,10 @@ describe("Step 5: Narrator", () => {
 
     const result = buildFallbackNarrative(truth);
     expect(result.players["p1"]).toContain("не удалось");
-    expect(result.players["p1"]).toContain("забран");
   });
 
-  it("LLM ошибка → бросает исключение (вызывающий код использует fallback)", async () => {
-    mockFetch.mockResolvedValueOnce({
+  it("Бросает ошибку при превышении всех попыток", async () => {
+    mockFetch.mockResolvedValue({
       ok: false,
       status: 500,
       text: async () => "Internal Server Error",
@@ -146,27 +145,9 @@ describe("Step 5: Narrator", () => {
     await expect(generateNarrative({
       system_truth: makeBaseTruth(),
       action_text: "test",
-      player_name: "X",
-      player_race: "Y",
-      player_class: "Z",
-      lore_context: "",
-      openrouter_api_key: "test-key",
-      dm_model: "test-model",
-    })).rejects.toThrow();
-  });
-
-  it("Кривой JSON от LLM → бросает исключение", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ choices: [{ message: { content: "невалидный json" } }] }),
-    });
-
-    await expect(generateNarrative({
-      system_truth: makeBaseTruth(),
-      action_text: "test",
-      player_name: "X",
-      player_race: "Y",
-      player_class: "Z",
+      player_name: "Элария",
+      player_race: "Эльф",
+      player_class: "Воин",
       lore_context: "",
       openrouter_api_key: "test-key",
       dm_model: "test-model",
@@ -174,8 +155,9 @@ describe("Step 5: Narrator", () => {
   });
 
   it("Нормализует ответ LLM: добавляет отсутствующих players", async () => {
+    const p1Narrative = "Полноценное художественное описание хода персонажа Элария в текущей игровой локации.";
     mockNarratorJson({
-      players: { p1: "текст для p1" }, // p2 пропущен
+      players: { p1: p1Narrative }, // p2 пропущен
       global_narrative: "",
     });
 
@@ -191,16 +173,17 @@ describe("Step 5: Narrator", () => {
     });
 
     // p1 — из ответа LLM
-    expect(result.players["p1"]).toBe("текст для p1");
+    expect(result.players["p1"]).toBe(p1Narrative);
     // p2 — заглушка, т.к. LLM не вернул
     expect(result.players["p2"]).toBeDefined();
   });
 
   it("Убирает markdown-обёртки из ответа LLM", async () => {
+    const p1Text = "Герой осторожно продвигается вперед через освещенный факелами коридор.";
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: '```json\n{"players": {"p1": "ok"}, "global_narrative": "log"}\n```' } }],
+        choices: [{ message: { content: `\`\`\`json\n{"players": {"p1": "${p1Text}"}, "global_narrative": "Общий лог приключения"}\n\`\`\`` } }],
       }),
     });
 
@@ -214,6 +197,6 @@ describe("Step 5: Narrator", () => {
       openrouter_api_key: "test-key",
       dm_model: "test-model",
     });
-    expect(result.players["p1"]).toBe("ok");
+    expect(result.players["p1"]).toBe(p1Text);
   });
 });

@@ -15,6 +15,22 @@ export class MoveHandler extends BaseActionHandler {
     const destination = action.target_item_name || "новое местоположение";
 
     // ============================================
+    // Если перемещение отклонено GPS (неплаузибильно / невозможно)
+    // ============================================
+    if ((action as any).movement_rejected) {
+      const reason = (action as any).rejection_reason || `Такого места ("${destination}") поблизости нет.`;
+      return {
+        result: {
+          action_type: this.action_type,
+          success: false,
+          details: reason,
+        },
+        mutations: [],
+        system_facts: [`${player.name} попытался отправиться к "${destination}", но не смог: ${reason}`],
+      };
+    }
+
+    // ============================================
     // Если есть DC — это проверка (например преодоление сложного участка)
     // ============================================
     if (action.ai_custom_dc && action.ai_custom_dc > 0) {

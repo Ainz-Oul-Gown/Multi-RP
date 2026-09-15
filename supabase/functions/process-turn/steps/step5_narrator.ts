@@ -434,17 +434,24 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
 
 
       // Валидация: проверяем, что все players из SystemTruthDto присутствуют и очищены от псевдо-тегов
-      const PLACEHOLDERS = [
-        '<narrative text>', '\u0442екст...', '...', '[narrative]', '{narrative}',
+      const EXACT_PLACEHOLDERS = [
+        '<narrative text>', 'текст...', '...', '…', '[narrative]', '{narrative}',
         '<text>', 'нарратив', 'narrative text',
       ];
       const validatedPlayers: Record<string, string> = {};
       let hasPlaceholder = false;
       for (const pid of Object.keys(system_truth.player_truths)) {
-        const text = typeof parsed.players[pid] === 'string' ? parsed.players[pid] : '…';
-        const cleaned = cleanNarrativeText(text);
-        // Проверка на placeholder: если ответ пустой или шаблонный — переключаемся на следующую модель
-        if (cleaned.trim().length < 15 || PLACEHOLDERS.some(p => cleaned.trim().toLowerCase().includes(p.toLowerCase()))) {
+        let rawText = typeof parsed.players[pid] === 'string' ? parsed.players[pid] : null;
+        if (!rawText || rawText.trim().length === 0) {
+          rawText = 'Персонаж внимательно следит за происходящим вокруг.';
+        }
+        const cleaned = cleanNarrativeText(rawText);
+        const lowerCleaned = cleaned.trim().toLowerCase();
+        // Проверка на placeholder: если ответ слишком короткий (< 10) или состоит из плейсхолдера
+        const isPlaceholder = EXACT_PLACEHOLDERS.some(p => lowerCleaned === p.toLowerCase())
+          || lowerCleaned.startsWith('<narrative')
+          || lowerCleaned.startsWith('[narrative');
+        if (cleaned.trim().length < 10 || isPlaceholder) {
           hasPlaceholder = true;
           console.warn(`[step5_narrator] Placeholder detected for player ${pid}: "${cleaned.slice(0, 50)}"`);
         }

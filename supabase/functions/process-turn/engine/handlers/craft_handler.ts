@@ -17,24 +17,13 @@ export class CraftHandler extends BaseActionHandler {
    */
   private handleCraft(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     const player = context.acting_player;
-    const blueprint = action.dynamic_blueprint;
+    const rawText = String(
+      (context as any)?.raw_action_text ||
+      (context.router_output as any)?.raw_action_text ||
+      action.target_item_name ||
+      ""
+    ).trim();
     const targetDc = action.ai_custom_dc || 12;
-
-    // ============================================
-    // Проверка наличия материалов
-    // ============================================
-    const requiredMaterials = action.consumed_materials || [];
-    if (requiredMaterials.length === 0) {
-      return {
-        result: {
-          action_type: action.action_type,
-          success: false,
-          details: "Не указаны материалы для крафта",
-        },
-        mutations: [],
-        system_facts: [`${player.name} попытался крафтить без указания материалов.`],
-      };
-    }
 
     // Строим Map инвентаря для быстрого поиска (по ID и по имени предмета для устойчивости к бесплатным LLM)
     const inventoryMap = new Map<string, EngineInventoryItem>();
@@ -54,6 +43,76 @@ export class CraftHandler extends BaseActionHandler {
           needle.includes((i.item_name || "").trim().toLowerCase())
       );
     };
+
+    // ============================================
+    // Проверка наличия материалов (с авто-подбором из инвентаря, если LLM-роутер не заполнил consumed_materials)
+    // ============================================
+    let requiredMaterials = [...(action.consumed_materials || [])];
+    if (requiredMaterials.length === 0 && player.inventory.length > 0) {
+      const lowerRaw = rawText.toLowerCase();
+      // Ищем упоминание материала из инвентаря в тексте действия
+      const matchedByText = player.inventory.find((item) => {
+        if ((item.quantity || 0) < 1) return false;
+        const words = (item.item_name || "")
+          .toLowerCase()
+          .replace(/[^a-zа-яё0-9\s-]/gi, " ")
+          .split(/\s+/)
+          .filter((w) => w.length >= 3);
+        return words.some((w) => {
+          const stem = w.length >= 5 ? w.slice(0, -2) : w.length === 4 ? w.slice(0, -1) : w;
+          return lowerRaw.includes(stem);
+        });
+      });
+      const fallbackMat =
+        matchedByText ||
+        (action.used_item_id ? inventoryMap.get(action.used_item_id) : undefined) ||
+        player.inventory.find((i) => i.type === "material" && (i.quantity || 0) >= 1);
+
+      if (fallbackMat && (fallbackMat.quantity || 0) >= 1) {
+        requiredMaterials = [{ id: fallbackMat.id, quantity: 1 }];
+      }
+    }
+
+    if (requiredMaterials.length === 0) {
+      return {
+        result: {
+          action_type: action.action_type,
+          success: false,
+          details: "Не указаны материалы для крафта",
+        },
+        mutations: [],
+        system_facts: [`${player.name} попытался крафтить без указания материалов.`],
+      };
+    }
+
+    // Определяем итоговый чертёж предмета (dynamic_blueprint или эвристика по тексту/цели)
+    let blueprint = action.dynamic_blueprint;
+    if (!blueprint || (!blueprint.item_name && !blueprint.name)) {
+      let inferredName = (action.target_item_name || "").trim();
+      const lowerClean = `${inferredName} ${rawText}`.toLowerCase();
+      if (/копь[еёя]/i.test(lowerClean)) inferredName = "Деревянное копьё";
+      else if (/факел/i.test(lowerClean)) inferredName = "Самодельный факел";
+      else if (/стрел/i.test(lowerClean)) inferredName = "Связка стрел";
+      else if (/лук/i.test(lowerClean)) inferredName = "Самодельный лук";
+      else if (/дубин|палиц/i.test(lowerClean)) inferredName = "Тяжёлая дубина";
+      else if (/нож|кинжал|заточк/i.test(lowerClean)) inferredName = "Самодельный нож";
+      else if (/бинт|повязк/i.test(lowerClean)) inferredName = "Перевязочный бинт";
+      else if (/зель|отвар|настой/i.test(lowerClean)) inferredName = "Травяной отвар";
+      else if (!inferredName || inferredName.length > 35 || /^(затачива|смастер|скрафт|сдела|созда|выструг)/i.test(inferredName)) {
+        const intoMatch = rawText.match(/(?:в|сделать|смастерить|создать|скрафтить|выстругать)\s+([а-яёa-z0-9\s-]{3,30})/i);
+        inferredName = intoMatch ? intoMatch[1].trim() : (inferredName || "Самодельный предмет");
+        inferredName = inferredName.charAt(0).toUpperCase() + inferredName.slice(1);
+      }
+
+      const isWeapon = /копь|меч|лук|кинжал|нож|дубин|топор|посох/i.test(inferredName);
+      const isConsumable = /бинт|повязк|зель|отвар|настой|мазь/i.test(inferredName);
+      blueprint = {
+        item_name: inferredName,
+        type: isWeapon ? "weapon" : isConsumable ? "consumable" : "misc",
+        quantity: 1,
+        attributes: isWeapon ? { damage: "1d6" } : {},
+      };
+    }
 
     // Проверяем что все материалы есть в инвентаре и сохраняем их реальные ID
     const resolvedMaterials: { item_id: string; quantity: number; name: string }[] = [];

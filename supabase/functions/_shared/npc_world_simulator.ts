@@ -109,23 +109,35 @@ export async function executeRoundCycleNpcSimulation(params: {
   // 3. Загружаем данные отобранных NPC
   const { data: npcsData, error: npcErr } = await supabase
     .from("npcs")
-    .select("id, name, race, class, level, hp, max_hp, role, location_id, status_tags, temperament, motivation, current_activity, locations(name)")
+    .select("id, name, race, class, category, is_hostile, level, hp, max_hp, role, location_id, status_tags, temperament, motivation, current_activity, locations(name)")
     .in("id", Array.from(contactedNpcIds));
 
   if (npcErr || !npcsData || npcsData.length === 0) {
     return { simulated_count: 0, round_number: roundNumber, actions: [] };
   }
 
-  // 4. Фильтруем: берем только живых и тех, кто НЕ находится рядом с игроком
+  // 4. Фильтруем: берем только живых РАЗУМНЫХ NPC (исключаем диких зверей и неразумных монстров вроде грибных споровиков и волков), которые НЕ находятся рядом с игроком
   const isCompanion = (n: any) => {
     const role = (n.role || "").toLowerCase();
     const tags = Array.isArray(n.status_tags) ? n.status_tags.map((t: string) => String(t).toLowerCase()) : [];
     return role === "companion" || tags.some((t: string) => ["companion", "спутник", "в_отряде", "питомец", "приручен"].includes(t));
   };
 
+  const isNonIntelligentCreature = (n: any) => {
+    const cat = String(n.category || "").toLowerCase();
+    const role = String(n.role || "").toLowerCase();
+    const nameLower = String(n.name || "").toLowerCase();
+    if (cat === "beast" || cat === "monster") return true;
+    if (role === "tertiary" && n.is_hostile) return true;
+    if (/споровик|слизень|крыс|волк|кабан|паук|скелет|зомби|гниль|червь|нетопыр|жук/i.test(nameLower)) return true;
+    return false;
+  };
+
   const distantNpcs = npcsData.filter((n: any) => {
     // Проверка жизнеспособности
     if (n.hp !== null && n.hp <= 0) return false;
+    // Исключаем неразумных монстров и диких зверей из городской хроники торговли/ремесла
+    if (isNonIntelligentCreature(n)) return false;
     // Спутники в текущем отряде путешествуют вместе с игроком — исключаем
     if (isCompanion(n)) return false;
     // Если NPC в той же локации, что и игроки — он уже в текущей сцене
@@ -134,7 +146,7 @@ export async function executeRoundCycleNpcSimulation(params: {
   }).slice(0, 8); // Лимит до 8 NPC в 1 запрос для оптимизации токенов и фокуса
 
   if (distantNpcs.length === 0) {
-    console.log("[npc_world_simulator] All contacted NPCs are either companions or in the same location.");
+    console.log("[npc_world_simulator] All contacted NPCs are either companions, beasts/monsters, or in the same location.");
     return { simulated_count: 0, round_number: roundNumber, actions: [] };
   }
 
@@ -144,12 +156,27 @@ export async function executeRoundCycleNpcSimulation(params: {
   let availableLocations: Array<{ id: string; name: string; type: string }> = [];
   if (worldId) {
     try {
-      const { data: locs } = await supabase
-        .from("locations")
-        .select("id, name, type")
-        .eq("world_id", worldId)
-        .limit(20);
-      if (locs) availableLocations = locs;
+      const { data: statesData } = await supabase
+        .from("states")
+        .select("id, locations(id, name, type)")
+        .eq("world_id", worldId);
+      if (Array.isArray(statesData) && statesData.length > 0) {
+        for (const st of statesData) {
+          if (Array.isArray(st.locations)) {
+            for (const loc of st.locations) {
+              availableLocations.push({ id: loc.id, name: loc.name, type: loc.type });
+            }
+          }
+        }
+      }
+      if (availableLocations.length === 0) {
+        const { data: locs } = await supabase
+          .from("locations")
+          .select("id, name, type")
+          .eq("world_id", worldId)
+          .limit(20);
+        if (locs) availableLocations = locs;
+      }
     } catch (locErr) {
       console.warn("[npc_world_simulator] Locations query failed:", locErr);
     }

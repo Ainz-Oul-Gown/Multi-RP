@@ -24,9 +24,31 @@ export function escapeHtml(text) {
     .replace(/'/g, '&#039;');
 }
 
+export function cleanLeakedJsonWrapper(raw) {
+  if (!raw) return '';
+  let cleaned = String(raw).trim();
+  if (cleaned.startsWith('{')) {
+    cleaned = cleaned.replace(
+      /^\s*\{\s*(?:"[^"]*"\s*:\s*\{\s*)?"[0-9a-f-]{20,}"\s*:\s*"/i,
+      ''
+    );
+    cleaned = cleaned.replace(
+      /^\s*\{\s*"(?:narrative|text|description|content|story)"\s*:\s*"/i,
+      ''
+    );
+    cleaned = cleaned.replace(/"\s*,?\s*"choices"\s*:[\s\S]*$/i, '');
+    cleaned = cleaned.replace(/"\s*\}\s*\}?\s*$/, '');
+    cleaned = cleaned
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"');
+  }
+  return cleaned.trim();
+}
+
 export function formatRpText(text) {
   if (!text) return '';
-  let escaped = escapeHtml(text);
+  const cleaned = cleanLeakedJsonWrapper(text);
+  let escaped = escapeHtml(cleaned);
   // 1. Direct spoken speech in quotes FIRST, before any HTML attributes are added:
   escaped = escaped.replace(/&quot;([^&]+?)&quot;/g, "<span class='rp-speech'>«$1»</span>");
   escaped = escaped.replace(/«([^»]+?)»/g, "<span class='rp-speech'>«$1»</span>");

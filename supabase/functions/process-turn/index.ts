@@ -227,18 +227,24 @@ serve(async (req: any) => {
     const currentWildZone: string | null = session.current_wild_zone || null;
     let parentLocationDanger = "normal";
     let parentLocationName: string | null = null;
+    let currentLocationPosX: number | null = null;
+    let currentLocationPosY: number | null = null;
+    let currentLocationSubzones: any[] = [];
 
     // Всегда загружаем данные базовой/родительской локации, даже если игрок в дикой зоне
     if (session.current_location_id) {
       try {
         const { data: locData } = await supabase
           .from("locations")
-          .select("name, type, danger_level, states(name)")
+          .select("id, name, type, danger_level, pos_x, pos_y, states(name), subzones(id, name, description, pos_x, pos_y, radius)")
           .eq("id", session.current_location_id)
           .maybeSingle();
         if (locData) {
           parentLocationDanger = locData.danger_level || "normal";
           parentLocationName = locData.name || null;
+          currentLocationPosX = typeof locData.pos_x === "number" ? locData.pos_x : null;
+          currentLocationPosY = typeof locData.pos_y === "number" ? locData.pos_y : null;
+          currentLocationSubzones = Array.isArray(locData.subzones) ? locData.subzones : [];
           if (!currentWildZone) {
             currentLocationName = locData.name;
             currentLocationType = locData.type || null;
@@ -261,12 +267,21 @@ serve(async (req: any) => {
       currentDangerLevel = parentLocationDanger;
     }
 
-    let availableLocations: { id: string; name: string; type: string; state_name: string; danger_level?: "safe" | "normal" | "danger" | "lethal" }[] = [];
+    let availableLocations: {
+      id: string;
+      name: string;
+      type: string;
+      state_name: string;
+      danger_level?: "safe" | "normal" | "danger" | "lethal";
+      pos_x?: number;
+      pos_y?: number;
+      subzones?: any[];
+    }[] = [];
     if (session.world_id) {
       try {
         const { data: statesWithLocs } = await supabase
           .from("states")
-          .select("id, name, locations(id, name, type, danger_level)")
+          .select("id, name, locations(id, name, type, danger_level, pos_x, pos_y, subzones(id, name, description, pos_x, pos_y, radius))")
           .eq("world_id", session.world_id);
         if (statesWithLocs) {
           for (const s of statesWithLocs) {
@@ -278,12 +293,49 @@ serve(async (req: any) => {
                 type: l.type,
                 danger_level: l.danger_level || "normal",
                 state_name: s.name,
+                pos_x: l.pos_x,
+                pos_y: l.pos_y,
+                subzones: Array.isArray(l.subzones) ? l.subzones : [],
               });
             }
           }
         }
       } catch (locsErr) {
         console.warn(`[${requestId}] Failed to load available locations:`, locsErr);
+      }
+    }
+
+    // Авто-синхронизация координат игрока, если они рассинхронизировались с текущей локацией сессии
+    if (
+      !currentWildZone &&
+      session.current_location_id &&
+      currentLocationPosX !== null &&
+      currentLocationPosY !== null
+    ) {
+      const px = typeof player.pos_x === "number" ? player.pos_x : 0;
+      const py = typeof player.pos_y === "number" ? player.pos_y : 0;
+      const distToLoc = Math.hypot(px - currentLocationPosX, py - currentLocationPosY);
+      if (distToLoc > 120) {
+        const activeSub = currentLocationSubzones.find(
+          (s: any) => s.id === player.subzone_id || (player.current_zone && s.name?.toLowerCase().includes(player.current_zone.toLowerCase()))
+        ) || currentLocationSubzones[0] || null;
+        player.pos_x = typeof activeSub?.pos_x === "number" ? activeSub.pos_x : currentLocationPosX;
+        player.pos_y = typeof activeSub?.pos_y === "number" ? activeSub.pos_y : currentLocationPosY;
+        if (activeSub) {
+          player.subzone_id = activeSub.id;
+          if (!player.current_zone) player.current_zone = activeSub.name;
+        }
+        try {
+          await supabase.from("players").update({
+            pos_x: player.pos_x,
+            pos_y: player.pos_y,
+            subzone_id: player.subzone_id || null,
+            current_zone: player.current_zone || null,
+          }).eq("id", player.id);
+          console.log(`[${requestId}] [POS_SYNC] Synced out-of-bounds player coords to location "${currentLocationName}": (${player.pos_x}, ${player.pos_y})`);
+        } catch (syncErr) {
+          console.warn(`[${requestId}] [POS_SYNC] Failed to sync player coords:`, syncErr);
+        }
       }
     }
 
@@ -860,73 +912,202 @@ serve(async (req: any) => {
       wild_zone_changed = false,
       travel_description = "";
 
+    // Вспомогательная нормализация русских корней для точного сопоставления локаций и подзон в любых падежах
+    const normalizeRuStem = (word: string): string =>
+      word
+        .toLowerCase()
+        .replace(/ё/g, "е")
+        .replace(/(?:ами|ями|ого|его|ому|ему|ыми|ими|ую|юю|ой|ей|ом|ем|ах|ях|ам|ям|ов|ев|ий|ый|ая|яя|ое|ее|ие|ые|а|я|у|ю|е|и|ы|ь)$/i, "");
+
+    const matchesNamedPlace = (inputText: string, placeName: string): boolean => {
+      if (!inputText || !placeName) return false;
+      const normInput = inputText.toLowerCase().replace(/ё/g, "е");
+      const fullNormPlace = placeName.toLowerCase().replace(/ё/g, "е").trim();
+      const baseNormPlace = fullNormPlace.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+
+      if (baseNormPlace.length >= 3 && normInput.includes(baseNormPlace)) return true;
+      if (fullNormPlace.length >= 3 && normInput.includes(fullNormPlace)) return true;
+
+      const stopWords = new Set(["в", "к", "на", "из", "по", "у", "за", "над", "под", "при", "для", "или"]);
+      const tokens = baseNormPlace
+        .split(/[\s,.\-«»"()]+/)
+        .filter((w) => w.length >= 3 && !stopWords.has(w));
+      if (tokens.length === 0) return false;
+
+      const stems = tokens.map((w) => {
+        const st = normalizeRuStem(w);
+        return st.length >= 3 ? st : w.slice(0, 3);
+      });
+
+      return stems.every((st) => normInput.includes(st));
+    };
+
+    // Объединяем подзоны из БД (subzones) и из кэша locationMap
+    const dbSubzoneNames = (currentLocationSubzones || []).map((s: any) => s.name).filter(Boolean);
+    const mapSubzoneNames = locationMap && Object.keys(locationMap).length > 0 ? Object.keys(locationMap) : [];
+    const combinedSubzoneNames = Array.from(new Set([...dbSubzoneNames, ...mapSubzoneNames]));
+
+    // 1. Детерминированный поиск явного упоминания подзоны или мировой локации в заявке игрока
+    const deterministicSubzoneObj = (currentLocationSubzones || []).find((s: any) =>
+      matchesNamedPlace(safeActionText, s.name)
+    ) || null;
+    const deterministicSubzoneName =
+      deterministicSubzoneObj?.name ||
+      combinedSubzoneNames.find((zName) => matchesNamedPlace(safeActionText, zName)) ||
+      null;
+
+    // Если игрок явно не назвал подзону текущей локации, проверяем мировые локации
+    const deterministicWorldLoc = !deterministicSubzoneName
+      ? availableLocations.find((l) => matchesNamedPlace(safeActionText, l.name)) || null
+      : null;
+
     // Детектор намерения перемещения или выхода из помещения
-    const isMovementAction = routerResult.actions?.some((a: any) => a.action_type === "move") ||
-      /выход|выйти|выхожу|покинуть|покидаю|уйти|ухожу|отправиться|иду |еду |бегу |на улиц|наружу|за пределы|на тракт|в лес|в город|к озеру|в путь|зайти в |вернуться/i.test(safeActionText);
+    const isMovementAction =
+      Boolean(deterministicSubzoneName) ||
+      Boolean(deterministicWorldLoc) ||
+      routerResult.actions?.some((a: any) => a.action_type === "move") ||
+      /выход|выйти|выхожу|покинуть|покидаю|уйти|ухожу|отправиться|отправляюсь|иду |пойду|шагаю|двигаюсь|направляюсь|перехожу|еду |бегу |на улиц|наружу|за пределы|на тракт|в лес|в город|к озеру|в путь|зайти в |вернуться/i.test(safeActionText);
+
+    // Гарантируем наличие действия move в routerResult, если распознан переход в локацию/подзону
+    if (isMovementAction && routerResult.status === "success" && !routerResult.actions?.some((a: any) => a.action_type === "move")) {
+      routerResult.actions = routerResult.actions || [];
+      routerResult.actions.push({
+        action_type: "move",
+        target_entity_id: null,
+        target_name: null,
+        target_item_name: deterministicSubzoneName || deterministicWorldLoc?.name || safeActionText.slice(0, 60),
+        item_type: null,
+        used_item_id: null,
+        consumed_materials: null,
+        stat_to_check: "none",
+        ai_custom_dc: null,
+        improper_tool_usage: null,
+        dynamic_blueprint: null,
+        raw_action_text: safeActionText,
+      });
+    }
 
     let gpsMovedToSubzone: string | null = null;
     if (isMovementAction) {
-      try {
-        const gpsSystemPrompt = buildGpsPrompt({
-          playerName: cleanTextForAI(player.name || "Герой"),
-          actionText: safeActionText,
-          intentType: "router",
-          intentDescription: safeActionText,
-          currentYear: session.game_year || 1248, currentMonth: session.game_month || 5,
-          currentDay: session.game_day || 14, currentHour: session.game_hour || 10,
-          currentMinute: session.game_minute || 0,
-          currentLocation: currentLocationName, currentState: currentStateName,
-          currentWildZone,
-          currentDangerLevel,
-          wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
-          availableLocations,
-          availableSubzones: locationMap && Object.keys(locationMap).length > 0 ? Object.keys(locationMap) : undefined,
-          terrainType: currentTerrain || currentLocationType || "unknown",
-        } as any);
+      // Случай А: Игрок явно переходит в известную подзону текущей локации (0 мс без риска галлюцинации GPS)
+      if (deterministicSubzoneName && !deterministicWorldLoc) {
+        gpsMovedToSubzone = deterministicSubzoneName;
+        time_passed_minutes = Math.max(5, Math.min(60, Number(routerResult.time_estimate_minutes) || 15));
+        travel_description = `${player.name} направляется через «${currentLocationName || "локацию"}» и переходит в подзону «${deterministicSubzoneName}».`;
+        console.log(`[${requestId}] [GPS_DETERMINISTIC] 🎯 Subzone match: "${deterministicSubzoneName}" (${time_passed_minutes} min)`);
+      }
+      // Случай Б: Игрок явно отправляется в известную именную локацию мира (или возвращается в неё из дикой зоны)
+      else if (deterministicWorldLoc && (deterministicWorldLoc.id !== session.current_location_id || Boolean(currentWildZone))) {
+        location_changed = true;
+        new_location_id = deterministicWorldLoc.id;
+        wild_zone_changed = true;
+        new_wild_zone = null;
+        currentDangerLevel = deterministicWorldLoc.danger_level || "normal";
 
-        const gpsResp = await callAI(gpsSystemPrompt, "Определи время и маршрут.", openrouterApiKey, 2, gpsModel);
-        const gpsParsed = parseAIJson(gpsResp);
-        if (gpsParsed) {
-          gpsMovedToSubzone = gpsParsed?.moved_to_subzone || null;
-          time_passed_minutes = Math.max(1, Math.min(1440, Number(gpsParsed.time_minutes) || Number(routerResult.time_estimate_minutes) || 10));
-
-          // ПЛАУЗИБИЛЬНОСТЬ: если игрок пытался сменить локацию, но GPS отверг её как невозможную рядом
-          const moveAction = routerResult.actions?.find((a: any) => a.action_type === "move");
-          if (isMovementAction && (gpsParsed.is_plausible === false || (!gpsParsed.location_changed && !gpsParsed.moved_to_subzone && gpsParsed.travel_description))) {
-            if (moveAction) {
-              moveAction.movement_rejected = true;
-              moveAction.rejection_reason = gpsParsed.travel_description || "Такого места поблизости нет.";
-              console.log(`[${requestId}] [GPS_REJECT] 🚫 Movement rejected (implausible): ${moveAction.rejection_reason}`);
-            }
-          }
-
-          if (gpsParsed.location_changed === true) {
-            if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
-              // Переход в дикую зону (лес, пещера, поле, тракт)
-              wild_zone_changed = true;
-              new_wild_zone = gpsParsed.new_location_name;
-              travel_description = gpsParsed.travel_description || "";
-              const gpsWildDanger = gpsParsed.wild_zone_danger_level;
-              const validDangers = ["safe", "normal", "danger", "lethal"];
-              currentDangerLevel = (validDangers.includes(gpsWildDanger) ? gpsWildDanger : parentLocationDanger) || "normal";
-              console.log(`[${requestId}] [GPS] Wild zone: ${new_wild_zone} (danger: ${currentDangerLevel})`);
-            } else if (gpsParsed.new_location_id) {
-              // Переход в именованную локацию
-              location_changed = true;
-              new_location_id = gpsParsed.new_location_id;
-              wild_zone_changed = true;
-              new_wild_zone = null; // очищаем дикую зону
-              travel_description = gpsParsed.travel_description || "";
-              try {
-                const { data: newLocRow } = await supabase.from("locations").select("danger_level").eq("id", new_location_id).maybeSingle();
-                if (newLocRow?.danger_level) currentDangerLevel = newLocRow.danger_level;
-              } catch (_) {}
-              console.log(`[${requestId}] [GPS] Location change → ${new_location_id} (danger: ${currentDangerLevel})`);
-            }
-          }
+        // Рассчитываем реалистичное время в пути по координатам карты
+        if (
+          typeof deterministicWorldLoc.pos_x === "number" &&
+          typeof deterministicWorldLoc.pos_y === "number" &&
+          typeof player.pos_x === "number" &&
+          typeof player.pos_y === "number"
+        ) {
+          const dist = Math.hypot(deterministicWorldLoc.pos_x - player.pos_x, deterministicWorldLoc.pos_y - player.pos_y);
+          time_passed_minutes = Math.max(15, Math.min(720, Math.round(dist * 0.25) || 30));
+        } else {
+          time_passed_minutes = Math.max(20, Math.min(240, Number(routerResult.time_estimate_minutes) || 30));
         }
-      } catch (e) {
-        time_passed_minutes = Math.max(1, Math.min(1440, Number(routerResult.time_estimate_minutes) || 15));
+
+        // Проверяем, не упомянута ли сразу и подзона целевой локации
+        const targetLocSubs = Array.isArray(deterministicWorldLoc.subzones) ? deterministicWorldLoc.subzones : [];
+        const matchedTargetSub = targetLocSubs.find((s: any) => matchesNamedPlace(safeActionText, s.name));
+        if (matchedTargetSub) {
+          gpsMovedToSubzone = matchedTargetSub.name;
+        }
+
+        travel_description = `${player.name} совершает переход и прибывает в локацию «${deterministicWorldLoc.name}»${deterministicWorldLoc.state_name ? ` (${deterministicWorldLoc.state_name})` : ""}.`;
+        console.log(`[${requestId}] [GPS_DETERMINISTIC] 🗺️ World location match: "${deterministicWorldLoc.name}" (${new_location_id}, ${time_passed_minutes} min)`);
+      }
+      // Случай В: Произвольное перемещение, исследование, выход в дикую зону или проверка правдоподобия через ИИ GPS
+      else {
+        try {
+          const gpsSystemPrompt = buildGpsPrompt({
+            playerName: cleanTextForAI(player.name || "Герой"),
+            actionText: safeActionText,
+            intentType: "router",
+            intentDescription: safeActionText,
+            currentYear: session.game_year || 1248, currentMonth: session.game_month || 5,
+            currentDay: session.game_day || 14, currentHour: session.game_hour || 10,
+            currentMinute: session.game_minute || 0,
+            currentLocation: currentLocationName, currentState: currentStateName,
+            currentWildZone,
+            currentDangerLevel,
+            wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
+            availableLocations,
+            availableSubzones: combinedSubzoneNames.length > 0 ? combinedSubzoneNames : undefined,
+            terrainType: currentTerrain || currentLocationType || "unknown",
+          } as any);
+
+          const gpsResp = await callAI(gpsSystemPrompt, "Определи время и маршрут.", openrouterApiKey, 2, gpsModel);
+          const gpsParsed = parseAIJson(gpsResp);
+          if (gpsParsed) {
+            gpsMovedToSubzone = gpsParsed?.moved_to_subzone || null;
+            time_passed_minutes = Math.max(1, Math.min(1440, Number(gpsParsed.time_minutes) || Number(routerResult.time_estimate_minutes) || 10));
+
+            // ПЛАУЗИБИЛЬНОСТЬ: отклоняем перемещение ТОЛЬКО если ИИ явно вернул is_plausible === false
+            const moveAction = routerResult.actions?.find((a: any) => a.action_type === "move");
+            if (isMovementAction && gpsParsed.is_plausible === false) {
+              if (moveAction) {
+                moveAction.movement_rejected = true;
+                moveAction.rejection_reason = gpsParsed.travel_description || "Такого места поблизости нет.";
+                console.log(`[${requestId}] [GPS_REJECT] 🚫 Movement rejected (implausible): ${moveAction.rejection_reason}`);
+              }
+            } else if (gpsParsed.travel_description) {
+              travel_description = gpsParsed.travel_description;
+            }
+
+            if (gpsParsed.location_changed === true && gpsParsed.is_plausible !== false) {
+              if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
+                // Переход в дикую зону (лес, пещера, поле, тракт)
+                wild_zone_changed = true;
+                new_wild_zone = gpsParsed.new_location_name;
+                travel_description = gpsParsed.travel_description || "";
+                const gpsWildDanger = gpsParsed.wild_zone_danger_level;
+                const validDangers = ["safe", "normal", "danger", "lethal"];
+                currentDangerLevel = (validDangers.includes(gpsWildDanger) ? gpsWildDanger : parentLocationDanger) || "normal";
+                console.log(`[${requestId}] [GPS] Wild zone: ${new_wild_zone} (danger: ${currentDangerLevel})`);
+              } else if (gpsParsed.new_location_id || gpsParsed.new_location_name) {
+                // Сопоставляем ID или название локации со списком реальных локаций мира
+                const resolvedLoc =
+                  availableLocations.find((l) => l.id === gpsParsed.new_location_id) ||
+                  availableLocations.find((l) => matchesNamedPlace(String(gpsParsed.new_location_name || gpsParsed.new_location_id || ""), l.name)) ||
+                  null;
+
+                if (resolvedLoc) {
+                  location_changed = true;
+                  new_location_id = resolvedLoc.id;
+                  wild_zone_changed = true;
+                  new_wild_zone = null;
+                  travel_description = gpsParsed.travel_description || "";
+                  currentDangerLevel = resolvedLoc.danger_level || "normal";
+                  console.log(`[${requestId}] [GPS] Location change → ${resolvedLoc.name} (${new_location_id}, danger: ${currentDangerLevel})`);
+                } else if (typeof gpsParsed.new_location_id === "string" && /^[0-9a-f-]{32,36}$/i.test(gpsParsed.new_location_id)) {
+                  location_changed = true;
+                  new_location_id = gpsParsed.new_location_id;
+                  wild_zone_changed = true;
+                  new_wild_zone = null;
+                  travel_description = gpsParsed.travel_description || "";
+                  try {
+                    const { data: newLocRow } = await supabase.from("locations").select("danger_level").eq("id", new_location_id).maybeSingle();
+                    if (newLocRow?.danger_level) currentDangerLevel = newLocRow.danger_level;
+                  } catch (_) {}
+                  console.log(`[${requestId}] [GPS] Location change → ${new_location_id} (danger: ${currentDangerLevel})`);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          time_passed_minutes = Math.max(1, Math.min(1440, Number(routerResult.time_estimate_minutes) || 15));
+        }
       }
     } else {
       // Экономия токенов и времени: если перемещения нет, берем оценку времени напрямую из Step 1 Router!
@@ -951,6 +1132,76 @@ serve(async (req: any) => {
       travel_description = `Вы возвращаетесь внутрь таверны в тёплое помещение.`;
       time_passed_minutes = Math.max(time_passed_minutes, 5);
       console.log(`[${requestId}] [ENTER_BUILDING] Player stepped back inside tavern`);
+    }
+
+    // ============================================
+    // НЕМЕДЛЕННОЕ ОБНОВЛЕНИЕ КОНТЕКСТА ЛОКАЦИИ И NPC ПЕРЕД STEP 2 (ENGINE) И STEP 4 (SYSTEM TRUTH)
+    // ============================================
+    if (location_changed && new_location_id) {
+      const targetLocMeta = availableLocations.find((l) => l.id === new_location_id) || null;
+      session.current_location_id = new_location_id;
+      session.current_wild_zone = null;
+      if (targetLocMeta) {
+        currentLocationName = targetLocMeta.name;
+        currentLocationType = targetLocMeta.type;
+        currentStateName = targetLocMeta.state_name || currentStateName;
+        currentDangerLevel = targetLocMeta.danger_level || currentDangerLevel;
+        currentLocationPosX = typeof targetLocMeta.pos_x === "number" ? targetLocMeta.pos_x : currentLocationPosX;
+        currentLocationPosY = typeof targetLocMeta.pos_y === "number" ? targetLocMeta.pos_y : currentLocationPosY;
+        currentLocationSubzones = Array.isArray(targetLocMeta.subzones) ? targetLocMeta.subzones : [];
+      } else {
+        try {
+          const { data: newLocRow } = await supabase
+            .from("locations")
+            .select("id, name, type, danger_level, pos_x, pos_y, states(name), subzones(id, name, description, pos_x, pos_y, radius)")
+            .eq("id", new_location_id)
+            .maybeSingle();
+          if (newLocRow) {
+            currentLocationName = newLocRow.name || currentLocationName;
+            currentLocationType = newLocRow.type || currentLocationType;
+            currentDangerLevel = newLocRow.danger_level || currentDangerLevel;
+            currentLocationPosX = typeof newLocRow.pos_x === "number" ? newLocRow.pos_x : currentLocationPosX;
+            currentLocationPosY = typeof newLocRow.pos_y === "number" ? newLocRow.pos_y : currentLocationPosY;
+            currentLocationSubzones = Array.isArray(newLocRow.subzones) ? newLocRow.subzones : [];
+            const stObj = Array.isArray(newLocRow.states) ? newLocRow.states[0] : newLocRow.states;
+            if (stObj?.name) currentStateName = stObj.name;
+          }
+        } catch (_) {}
+      }
+
+      // Переносим спутников в новую локацию и перезагружаем NPC новой локации ДО запуска Engine!
+      try {
+        const companionIdsToMove = allNpcs.filter((n: any) => isCompanionNpc(n)).map((n: any) => n.id);
+        if (companionIdsToMove.length > 0) {
+          await supabase.from("npcs").update({ location_id: new_location_id }).in("id", companionIdsToMove);
+        }
+        const { data: newLocNpcs } = await supabase
+          .from("npcs")
+          .select("id, name, race, class, role, category, hp, max_hp, armor_class, level, is_hostile, status_tags, stats, background, appearance, habits, catchphrases, special_attacks, base_attacks, current_activity, activity_data, last_activity_time, temperament, motivation, current_mood, secrets, rumors, speech_style, daily_routine")
+          .eq("location_id", new_location_id);
+        if (newLocNpcs) {
+          allNpcs = newLocNpcs.map((n: any) => ({
+            ...n,
+            is_alive: (n.hp ?? 10) > 0,
+          }));
+          console.log(`[${requestId}] [LOCATION_RELOAD] Reloaded ${allNpcs.length} NPC(s) for new location "${currentLocationName}"`);
+        }
+      } catch (reloadErr) {
+        console.warn(`[${requestId}] [LOCATION_RELOAD] Failed to reload NPCs for new location:`, reloadErr);
+      }
+
+      // Обновляем цель действия move в routerResult, чтобы MoveHandler записал точное имя новой локации
+      const moveAct = routerResult.actions?.find((a: any) => a.action_type === "move");
+      if (moveAct && currentLocationName) {
+        moveAct.target_item_name = gpsMovedToSubzone
+          ? `${currentLocationName} (${gpsMovedToSubzone})`
+          : currentLocationName;
+      }
+    } else if (gpsMovedToSubzone) {
+      const moveAct = routerResult.actions?.find((a: any) => a.action_type === "move");
+      if (moveAct) {
+        moveAct.target_item_name = gpsMovedToSubzone;
+      }
     }
 
     // ============================================
@@ -1274,12 +1525,36 @@ serve(async (req: any) => {
         current_wild_zone_danger_level: null,
       }).eq("id", session_id);
 
-      // Игроки двигаются: сбрасываем подзону переместившегося игрока
+      // Определяем целевую подзону и координаты новой локации
+      const entrySubzone =
+        (gpsMovedToSubzone
+          ? currentLocationSubzones.find((s: any) => matchesNamedPlace(gpsMovedToSubzone || "", s.name))
+          : null) ||
+        currentLocationSubzones[0] ||
+        null;
+
+      const nextPosX = typeof entrySubzone?.pos_x === "number"
+        ? entrySubzone.pos_x
+        : (typeof currentLocationPosX === "number" ? currentLocationPosX : player.pos_x);
+      const nextPosY = typeof entrySubzone?.pos_y === "number"
+        ? entrySubzone.pos_y
+        : (typeof currentLocationPosY === "number" ? currentLocationPosY : player.pos_y);
+      const nextZoneName = entrySubzone?.name || gpsMovedToSubzone || null;
+      const nextSubzoneId = entrySubzone?.id || null;
+
       try {
-        await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
-        player.current_zone = null;
+        await supabase.from("players").update({
+          current_zone: nextZoneName,
+          subzone_id: nextSubzoneId,
+          pos_x: nextPosX,
+          pos_y: nextPosY,
+        }).eq("id", player.id);
+        player.current_zone = nextZoneName;
+        player.subzone_id = nextSubzoneId;
+        player.pos_x = nextPosX;
+        player.pos_y = nextPosY;
       } catch (pzErr) {
-        console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
+        console.warn(`[${requestId}] Failed to update player position on location change:`, pzErr);
       }
 
       // Члены одного отряда, находившиеся в той же зоне/локации, перемещаются вместе!
@@ -1291,17 +1566,25 @@ serve(async (req: any) => {
       if (partyFellowsInSameZone.length > 0) {
         const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
         try {
-          await supabase.from("players").update({ current_zone: null }).in("id", fellowIds);
+          await supabase.from("players").update({
+            current_zone: nextZoneName,
+            subzone_id: nextSubzoneId,
+            pos_x: nextPosX,
+            pos_y: nextPosY,
+          }).in("id", fellowIds);
           for (const fellow of partyFellowsInSameZone) {
-            fellow.current_zone = null;
+            fellow.current_zone = nextZoneName;
+            fellow.subzone_id = nextSubzoneId;
+            fellow.pos_x = nextPosX;
+            fellow.pos_y = nextPosY;
           }
           console.log(`[${requestId}] [PARTY] Fellows ${partyFellowsInSameZone.map((p: any) => p.name).join(", ")} followed ${player.name} to new location ${new_location_id}`);
         } catch (fErr) {
-          console.warn(`[${requestId}] Failed to reset party fellows current_zone:`, fErr);
+          console.warn(`[${requestId}] Failed to update party fellows position:`, fErr);
         }
       }
 
-      // Сгенерировать карту расстояний зон и тип местности для новой локации через ИИ
+      // Сгенерировать карту расстояний зон и тип местности для новой локации
       try {
         const newLocMap = await ensureLocationMapAndTerrain({
           supabase,
@@ -1353,8 +1636,9 @@ serve(async (req: any) => {
 
       // Игроки двигаются: сбрасываем подзону переместившегося игрока
       try {
-        await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
+        await supabase.from("players").update({ current_zone: null, subzone_id: null }).eq("id", player.id);
         player.current_zone = null;
+        player.subzone_id = null;
       } catch (pzErr) {
         console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
       }
@@ -1368,9 +1652,10 @@ serve(async (req: any) => {
       if (partyFellowsInSameZone.length > 0) {
         const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
         try {
-          await supabase.from("players").update({ current_zone: null }).in("id", fellowIds);
+          await supabase.from("players").update({ current_zone: null, subzone_id: null }).in("id", fellowIds);
           for (const fellow of partyFellowsInSameZone) {
             fellow.current_zone = null;
+            fellow.subzone_id = null;
           }
           console.log(`[${requestId}] [PARTY] Fellows ${partyFellowsInSameZone.map((p: any) => p.name).join(", ")} followed ${player.name} to wild zone ${new_wild_zone}`);
         } catch (fErr) {
@@ -1406,41 +1691,60 @@ serve(async (req: any) => {
       console.log(`[${requestId}] [WILD_ZONE] Player entered wild zone: ${new_wild_zone}`);
     }
 
-    // Отслеживание перемещения игрока внутри подзон локации (AI GPS + regex fallback)
-    if (!location_changed && !wild_zone_changed && locationMap && Object.keys(locationMap).length > 0) {
-      const availableZones = Object.keys(locationMap);
-
-      // 1. AI GPS результат (приоритет)
-      let matchedZone: string | null = gpsMovedToSubzone || null;
-      if (matchedZone && !availableZones.includes(matchedZone)) matchedZone = null;
-      if (matchedZone) {
-        console.log(`[${requestId}] [ZONE] AI GPS subzone: "${matchedZone}"`);
-      } else {
-        // 2. Улучшенный regex fallback
-        const lowerAction = safeActionText.toLowerCase();
-        matchedZone = availableZones.find((z) => {
-          const normZone = z.toLowerCase();
-          return lowerAction.includes(normZone) ||
-            normZone.split(/\s+/).some((word) =>
-              word.length > 3 && (
-                lowerAction.includes(word) ||
-                lowerAction.includes(word.slice(0, -1)) ||
-                lowerAction.includes(word.slice(0, -2))
-              )
-            );
-        }) || null;
-        if (matchedZone) console.log(`[${requestId}] [ZONE] Regex fallback: "${matchedZone}"`);
+    // Отслеживание перемещения игрока внутри подзон локации (реальные subzones из БД + locationMap)
+    if (!location_changed && !wild_zone_changed && (currentLocationSubzones.length > 0 || (locationMap && Object.keys(locationMap).length > 0))) {
+      // 1. Сопоставление с реальными подзонами из таблицы subzones (с нечётким поиском по корням слов)
+      let matchedDbSubzone: any = null;
+      if (gpsMovedToSubzone) {
+        matchedDbSubzone = currentLocationSubzones.find(
+          (s: any) => s.name.toLowerCase() === gpsMovedToSubzone!.toLowerCase() || matchesNamedPlace(gpsMovedToSubzone!, s.name)
+        ) || null;
+      }
+      if (!matchedDbSubzone) {
+        matchedDbSubzone = currentLocationSubzones.find((s: any) => matchesNamedPlace(safeActionText, s.name)) || null;
       }
 
-      if (matchedZone && matchedZone !== (player.current_zone || "")) {
+      let matchedZone: string | null = matchedDbSubzone?.name || null;
+
+      // 2. Если в БД-подзонах не нашлось, проверяем кэш locationMap
+      if (!matchedZone && locationMap && Object.keys(locationMap).length > 0) {
+        const availableZones = Object.keys(locationMap);
+        if (gpsMovedToSubzone) {
+          matchedZone = availableZones.find(
+            (z) => z.toLowerCase() === gpsMovedToSubzone!.toLowerCase() || matchesNamedPlace(gpsMovedToSubzone!, z)
+          ) || null;
+        }
+        if (!matchedZone) {
+          matchedZone = availableZones.find((z) => matchesNamedPlace(safeActionText, z)) || null;
+        }
+      }
+
+      if (matchedZone && (matchedZone !== (player.current_zone || "") || (matchedDbSubzone && matchedDbSubzone.id !== player.subzone_id))) {
         const prevZone = player.current_zone || null;
         console.log(`[${requestId}] [ZONE] ${player.name} -> "${matchedZone}" (was: "${player.current_zone || 'основная'}")`);
+        gpsMovedToSubzone = matchedZone;
         player.current_zone = matchedZone;
+
+        const playerZoneUpdate: Record<string, any> = { current_zone: matchedZone };
+        if (matchedDbSubzone) {
+          player.subzone_id = matchedDbSubzone.id;
+          playerZoneUpdate.subzone_id = matchedDbSubzone.id;
+          if (typeof matchedDbSubzone.pos_x === "number") {
+            player.pos_x = matchedDbSubzone.pos_x;
+            playerZoneUpdate.pos_x = matchedDbSubzone.pos_x;
+          }
+          if (typeof matchedDbSubzone.pos_y === "number") {
+            player.pos_y = matchedDbSubzone.pos_y;
+            playerZoneUpdate.pos_y = matchedDbSubzone.pos_y;
+          }
+        }
+
         try {
-          await supabase.from("players").update({ current_zone: matchedZone }).eq("id", player.id);
+          await supabase.from("players").update(playerZoneUpdate).eq("id", player.id);
         } catch (zErr) {
           console.warn(`[${requestId}] Failed to update player current_zone:`, zErr);
         }
+
         const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
           p.id !== player.id &&
           arePlayersInSameParty(player, p, session) &&
@@ -1449,8 +1753,15 @@ serve(async (req: any) => {
         if (partyFellowsInSameZone.length > 0) {
           const fellowIds = partyFellowsInSameZone.map((p: any) => p.id);
           try {
-            await supabase.from("players").update({ current_zone: matchedZone }).in("id", fellowIds);
-            for (const fellow of partyFellowsInSameZone) fellow.current_zone = matchedZone;
+            await supabase.from("players").update(playerZoneUpdate).in("id", fellowIds);
+            for (const fellow of partyFellowsInSameZone) {
+              fellow.current_zone = matchedZone;
+              if (matchedDbSubzone) {
+                fellow.subzone_id = matchedDbSubzone.id;
+                if (typeof matchedDbSubzone.pos_x === "number") fellow.pos_x = matchedDbSubzone.pos_x;
+                if (typeof matchedDbSubzone.pos_y === "number") fellow.pos_y = matchedDbSubzone.pos_y;
+              }
+            }
             console.log(`[${requestId}] [PARTY] Fellows moved together to "${matchedZone}"`);
           } catch (fErr) {
             console.warn(`[${requestId}] Failed to update party fellows current_zone:`, fErr);
@@ -2379,7 +2690,7 @@ serve(async (req: any) => {
 
     // ============================================
     // ФОНОВЫЙ ПРОЦЕСС СИМУЛЯЦИИ ЖИЗНИ МИРА ПОСЛЕ КРУГА ХОДОВ
-    // (Ровно 1 запрос к ИИ на всех удаленных NPC, контактировавших с игроками)
+    // (В соло-игре запускается раз в 3 раунда, чтобы не спамить в чат каждый ход)
     // ============================================
     let worldSimResult: any = null;
     if (isRoundCompleted) {
@@ -2387,18 +2698,23 @@ serve(async (req: any) => {
         const nextRound = (session.current_round || 1) + 1;
         await supabase.from("sessions").update({ current_round: nextRound }).eq("id", session_id);
 
-        worldSimResult = await executeRoundCycleNpcSimulation({
-          supabase,
-          sessionId: session_id,
-          roundNumber: nextRound,
-          currentLocationId: session.current_location_id,
-          worldId: session.world_id,
-          loreContext,
-          storyline: sessionStoryline,
-          openrouterApiKey,
-          model: dmModel,
-        });
-        console.log(`[${requestId}] [WORLD_SIM] 🌍 Round ${nextRound} simulated: ${worldSimResult?.simulated_count || 0} distant NPC(s) acted.`);
+        const isMultiplayerSession = (allPlayers || []).length > 1;
+        const shouldSimulateWorldThisRound = isMultiplayerSession || nextRound % 3 === 0;
+
+        if (shouldSimulateWorldThisRound) {
+          worldSimResult = await executeRoundCycleNpcSimulation({
+            supabase,
+            sessionId: session_id,
+            roundNumber: nextRound,
+            currentLocationId: session.current_location_id,
+            worldId: session.world_id,
+            loreContext,
+            storyline: sessionStoryline,
+            openrouterApiKey,
+            model: dmModel,
+          });
+          console.log(`[${requestId}] [WORLD_SIM] 🌍 Round ${nextRound} simulated: ${worldSimResult?.simulated_count || 0} distant NPC(s) acted.`);
+        }
       } catch (simErr) {
         console.warn(`[${requestId}] [WORLD_SIM] executeRoundCycleNpcSimulation failed:`, simErr);
       }
@@ -2429,10 +2745,15 @@ serve(async (req: any) => {
       game_time: systemTruth.environment.time,
       time_minutes: time_passed_minutes,
       location_changed: location_changed || wild_zone_changed,
-      new_location_id,
+      moved_to_subzone: gpsMovedToSubzone || null,
+      new_location_id: session.current_location_id || new_location_id,
       current_location_name: currentLocationName,
       current_state_name: currentStateName,
       current_wild_zone: session.current_wild_zone || null,
+      current_zone: player.current_zone || null,
+      subzone_id: player.subzone_id || null,
+      pos_x: player.pos_x,
+      pos_y: player.pos_y,
       story_progress: storyProgressResult ? {
         completed_goals: storyProgressResult.completedGoalTitles,
         advanced_arc: storyProgressResult.advancedArc,

@@ -167,25 +167,59 @@ function safeParseJson(text: string): any | null {
   if (cleaned.startsWith("```")) {
     cleaned = cleaned.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   }
-  // Ищем первую { и последнюю }
   const firstBrace = cleaned.indexOf("{");
+  if (firstBrace === -1) return null;
+
   const lastBrace = cleaned.lastIndexOf("}");
-  if (firstBrace === -1 || lastBrace === -1) return null;
-  const candidate = cleaned.slice(firstBrace, lastBrace + 1);
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    // Попробуем починить неэкранированные переносы строк и висячие запятые
+  if (lastBrace > firstBrace) {
+    const candidate = cleaned.slice(firstBrace, lastBrace + 1);
     try {
-      const fixed = fixUnescapedNewlinesInJson(candidate)
-        .replace(/,\s*}/g, "}")
-        .replace(/,\s*]/g, "]")
-        .replace(/\\"/g, '"');
-      return JSON.parse(fixed);
+      return JSON.parse(candidate);
     } catch {
-      return null;
+      try {
+        const fixed = fixUnescapedNewlinesInJson(candidate)
+          .replace(/,\s*}/g, "}")
+          .replace(/,\s*]/g, "]");
+        return JSON.parse(fixed);
+      } catch {
+        // Продолжаем к восстановлению обрезанного JSON ниже
+      }
     }
   }
+
+  // Восстановление обрезанного (truncated) JSON или нестандартных ключей вида {"": {"<uuid>": "Текст..."}}
+  const sliceFromBrace = cleaned.slice(firstBrace);
+  const extractedPlayers: Record<string, string> = {};
+
+  // Ищем пары "<uuid или ключ игрока>": "<длинный русский текст..." даже если закрывающая кавычка/скобка в конце оборвалась
+  const playerEntryRegex = /"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|player[^"]*|p\d+)"\s*:\s*"((?:[^"\\]|\\.)*)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = playerEntryRegex.exec(sliceFromBrace)) !== null) {
+    const key = match[1];
+    let val = match[2]
+      .replace(/\\n/g, "\n")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\")
+      .trim();
+    // Если текст оборвался на полуслове из-за лимита токенов, аккуратно обрезаем по последнюю законченную фразу
+    if (val.length > 80 && !/[.!?»…"']$/.test(val)) {
+      const lastPunct = Math.max(val.lastIndexOf("."), val.lastIndexOf("!"), val.lastIndexOf("?"), val.lastIndexOf("»"));
+      if (lastPunct > val.length * 0.5) {
+        val = val.slice(0, lastPunct + 1);
+      } else {
+        val = val + "…";
+      }
+    }
+    if (val.length >= 15) {
+      extractedPlayers[key] = val;
+    }
+  }
+
+  if (Object.keys(extractedPlayers).length > 0) {
+    return { players: extractedPlayers, global_narrative: "" };
+  }
+
+  return null;
 }
 
 // ============================================
@@ -521,21 +555,55 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
 
       let parsed = safeParseJson(content);
       if (!parsed || typeof parsed !== "object") {
-        // Если модель ответила художественным текстом напрямую вместо JSON
-        const isRussianText = /[а-яёА-ЯЁ]{15,}/.test(content);
-        if (isRussianText && content.trim().length > 30) {
+        // Если модель ответила художественным текстом напрямую вместо JSON (но НЕ сломанным JSON!)
+        const trimmedContent = content.trim();
+        const looksLikeBrokenJson = trimmedContent.startsWith("{") || /"[0-9a-f]{8}-[0-9a-f]{4}/i.test(trimmedContent);
+        const isRussianText = /[а-яёА-ЯЁ]{15,}/.test(trimmedContent);
+        if (!looksLikeBrokenJson && isRussianText && trimmedContent.length > 30) {
           parsed = { players: {} };
           for (const pid of Object.keys(system_truth.player_truths)) {
-            parsed.players[pid] = content.trim();
+            parsed.players[pid] = trimmedContent;
           }
         } else {
-          throw new Error(`Failed to parse narrator JSON from response: "${content.slice(0, 100)}..."`);
+          throw new Error(`Failed to parse narrator JSON from response: "${trimmedContent.slice(0, 100)}..."`);
+        }
+      }
+
+      // Нормализуем структуру parsed.players, если ИИ вернул {"": {"<pid>": "..."}} или {"narratives": {"<pid>": "..."}}
+      if (parsed && typeof parsed === "object" && (!parsed.players || typeof parsed.players !== "object")) {
+        const candidateMap =
+          (parsed.narratives && typeof parsed.narratives === "object" ? parsed.narratives : null) ||
+          (parsed[""] && typeof parsed[""] === "object" ? parsed[""] : null) ||
+          null;
+        if (candidateMap) {
+          parsed.players = candidateMap;
+        } else {
+          // Проверяем, не лежат ли UUID игроков прямо в корне parsed или внутри любого вложенного объекта
+          const rootPlayers: Record<string, string> = {};
+          for (const [k, v] of Object.entries(parsed)) {
+            if (typeof v === "string" && k !== "global_narrative" && v.length > 20) {
+              rootPlayers[k] = v;
+            } else if (v && typeof v === "object" && !Array.isArray(v) && k !== "choices") {
+              for (const [subK, subV] of Object.entries(v as Record<string, any>)) {
+                if (typeof subV === "string" && subV.length > 20) {
+                  rootPlayers[subK] = subV;
+                }
+              }
+            }
+          }
+          if (Object.keys(rootPlayers).length > 0) {
+            parsed.players = rootPlayers;
+          }
         }
       }
 
       const cleanNarrativeText = (raw: string): string => {
         if (!raw) return raw;
         return raw
+          // Защита от утечки сырых JSON-обёрток вида { "": { "uuid": "..."
+          .replace(/^\s*\{\s*(?:"[^"]*"\s*:\s*\{\s*)?(?:"[^"]*"\s*:\s*")?/g, "")
+          .replace(/"\s*\}\s*\}?\s*$/g, "")
+          .replace(/\\n/g, "\n")
           .replace(/(?:^|\n)\s*Пролога нет\.?\s*(?=\n|$)/gi, "\n")
           .replace(/\[\s*(?:Навык|Проверка|Выживание|Внимательность|Скрытность|Атлетика|Ловкость|Сила|Интеллект|Харизма|Мудрость|Ремесло|Убеждение|Атака)\s*:\s*(?:Успех|Провал|Крит|Победа)[^\]]*\]/gi, "")
           .replace(/\[\s*(?:Получен предмет|Выброшен предмет|Найден предмет|Утрачен предмет)\s*:[^\]]*\]/gi, "")

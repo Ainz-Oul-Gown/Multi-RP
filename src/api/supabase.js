@@ -459,7 +459,7 @@ export function generateDbInviteUrl(url = activeUrl, anonKey = activeAnonKey) {
   return `${origin}${basePath}#/auth?custom_db=${encodeURIComponent(token)}`;
 }
 
-// Безопасный вызов Edge Functions через прямой fetch
+// Безопасный вызов Edge Functions (с приоритетом локального актуального движка /api/edge-functions в Vite и fallback на облачный Supabase)
 export async function invokeFunction(functionName, body) {
   const { data: { session } } = await supabase.auth.getSession();
   const headers = { 'Content-Type': 'application/json' };
@@ -467,6 +467,37 @@ export async function invokeFunction(functionName, body) {
     headers['Authorization'] = `Bearer ${session.access_token}`;
   }
   const payload = JSON.stringify(body ?? {});
+
+  const isTestEnv =
+    typeof process !== 'undefined' && (process.env?.VITEST || process.env?.NODE_ENV === 'test');
+
+  if (!isTestEnv && typeof window !== 'undefined' && window.location?.origin && !activeIsCustom) {
+    try {
+      const localRes = await fetch(`/api/edge-functions/${functionName}`, {
+        method: 'POST',
+        headers,
+        body: payload,
+        cache: 'no-store',
+      });
+      const contentType = localRes.headers?.get?.('content-type') || '';
+      if (localRes.status !== 404 && contentType.includes('application/json')) {
+        const localData = await localRes.json();
+        if (!localRes.ok) {
+          const err = new Error(localData.error || `HTTP ${localRes.status}`);
+          err.status = localRes.status;
+          err.data = localData;
+          throw err;
+        }
+        return localData;
+      }
+    } catch (localErr) {
+      if (localErr && typeof localErr.status === 'number') {
+        throw localErr;
+      }
+      console.warn(`[invokeFunction] Local edge runner fallback for ${functionName}:`, localErr?.message || localErr);
+    }
+  }
+
   const res = await fetch(`${getActiveSupabaseUrl()}/functions/v1/${functionName}`, {
     method: 'POST',
     headers,

@@ -492,9 +492,12 @@ export async function renderGame(container, sessionId, user) {
     const hour = session?.game_hour ?? session?.game_time?.hour ?? 10;
     const minute = session?.game_minute ?? session?.game_time?.minute ?? 0;
     const timeStr = formatGameCalendarDate(day, month, year, hour, minute);
-    const locationStr = session?.current_wild_zone
+    const baseLocStr = session?.current_wild_zone
       ? `🌲 ${session.current_wild_zone}`
       : (session?.current_location_name || '');
+    const locationStr = baseLocStr && currentPlayer?.current_zone && currentPlayer.current_zone !== baseLocStr && !session?.current_wild_zone
+      ? `${baseLocStr} • ${currentPlayer.current_zone}`
+      : baseLocStr;
 
     const visibleMessages = messages.filter(isMessageVisibleToCurrentPlayer);
     let latestMasterIdx = -1;
@@ -2299,10 +2302,11 @@ export async function renderGame(container, sessionId, user) {
         
         const sg = document.createElementNS(SVG_NS, 'g');
         sg.setAttribute('class', 'map-subzone-marker');
+        sg.style.cursor = 'pointer';
         
         const sdot = document.createElementNS(SVG_NS, 'circle');
-        sdot.setAttribute('r', '3');
-        sdot.setAttribute('fill', '#38bdf8');
+        sdot.setAttribute('r', '3.5');
+        sdot.setAttribute('fill', currentPlayer?.subzone_id === sz.id || currentPlayer?.current_zone === sz.name ? '#10b981' : '#38bdf8');
         sdot.setAttribute('stroke', '#ffffff');
         sdot.setAttribute('stroke-width', '1');
         sg.appendChild(sdot);
@@ -2317,6 +2321,11 @@ export async function renderGame(container, sessionId, user) {
         stext.style.textShadow = '0px 1px 3px rgba(0,0,0,0.8)';
         stext.textContent = sz.name;
         sg.appendChild(stext);
+
+        sg.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showLocationPopup(loc, sz);
+        });
         
         outerG.appendChild(sg);
         markersG.appendChild(outerG);
@@ -2448,15 +2457,41 @@ export async function renderGame(container, sessionId, user) {
   }
 
 
-  function showLocationPopup(loc) {
+  function triggerMapTravelAction(actionText) {
+    if (!actionText || isSubmitting) return;
+    const popup = document.getElementById('mapLocationPopup');
+    if (popup) popup.style.display = 'none';
+    if (activePanel === 'map') {
+      togglePanel('map');
+    }
+    const input = document.getElementById('actionInput');
+    if (input) {
+      input.value = actionText;
+      handleSend();
+    }
+  }
+
+  function showLocationPopup(loc, highlightSubzone = null) {
     const popup = document.getElementById('mapLocationPopup');
     if (!popup) return;
 
-    const subzonesList = (loc.subzones || []).map(sz => `
-      <span class="badge badge-info" style="font-size: 0.65rem;">
-        ${escapeHtml(sz.name)} (R:${sz.radius || 10})
-      </span>
-    `).join(' ') || '<span style="color: var(--text-muted); font-size: 0.75rem;">Нет сабзон</span>';
+    const isCurrentLoc = session?.current_location_id === loc.id || session?.current_location_name === loc.name;
+    const subzonesList = (loc.subzones || []).map(sz => {
+      const isCurrentSz = currentPlayer?.subzone_id === sz.id || currentPlayer?.current_zone === sz.name;
+      const isHighlighted = highlightSubzone?.id === sz.id || highlightSubzone?.name === sz.name;
+      return `
+        <button
+          type="button"
+          class="badge ${isCurrentSz ? 'badge-success' : 'badge-info'} map-subzone-travel-btn"
+          data-subzone-name="${escapeHtml(sz.name)}"
+          style="font-size: 0.7rem; cursor: pointer; border: 1px solid ${isHighlighted ? '#fbbf24' : 'rgba(56,189,248,0.4)'}; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px;"
+          title="Нажмите, чтобы отправиться в подзону «${escapeHtml(sz.name)}»"
+        >
+          <span>${isCurrentSz ? '📍' : '🚶'}</span>
+          <span>${escapeHtml(sz.name)}</span>
+        </button>
+      `;
+    }).join(' ') || '<span style="color: var(--text-muted); font-size: 0.75rem;">Нет подзон</span>';
 
     const dx = (loc.pos_x ?? 0) - (currentPlayer?.pos_x ?? 0);
     const dy = (loc.pos_y ?? 0) - (currentPlayer?.pos_y ?? 0);
@@ -2466,7 +2501,7 @@ export async function renderGame(container, sessionId, user) {
     popup.style.display = 'flex';
     popup.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(212, 163, 89, 0.3); padding-bottom: 4px;">
-        <div style="display: flex; align-items: center; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
           <strong style="color: var(--accent-gold); font-size: var(--fs-md);">${escapeHtml(loc.name)}</strong>
           <span class="badge ${loc.danger_level === 'deadly' || loc.danger_level === 'extreme' ? 'badge-danger' : loc.danger_level === 'hard' ? 'badge-warning' : 'badge-success'}" style="font-size: 0.65rem;">
             ${escapeHtml(loc.danger_level || 'normal')}
@@ -2480,15 +2515,42 @@ export async function renderGame(container, sessionId, user) {
       </div>
       ${loc.description ? `<p style="font-size: var(--fs-xs); color: var(--text-main); margin: 3px 0; line-height: 1.3;">${escapeHtml(loc.description)}</p>` : ''}
       <div style="margin-top: 4px;">
-        <small style="color: var(--text-muted); display: block; margin-bottom: 2px;">Сабзоны:</small>
-        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+        <small style="color: var(--text-muted); display: block; margin-bottom: 4px;">Подзоны (нажмите для перехода):</small>
+        <div style="display: flex; flex-wrap: wrap; gap: 5px;">
           ${subzonesList}
         </div>
+      </div>
+      <div style="margin-top: 8px; display: flex; gap: 6px;">
+        ${!isCurrentLoc ? `
+          <button type="button" class="btn btn-primary btn-xs" id="travelToLocBtn" style="width: 100%; font-size: 0.78rem; padding: 5px 10px;">
+            🚶 Отправиться в «${escapeHtml(loc.name)}»
+          </button>
+        ` : `
+          <span class="badge badge-success" style="width: 100%; text-align: center; padding: 4px 8px; font-size: 0.72rem;">
+            📍 Вы находитесь в этой локации${currentPlayer?.current_zone ? ` (${escapeHtml(currentPlayer.current_zone)})` : ''}
+          </span>
+        `}
       </div>
     `;
 
     document.getElementById('closeLocPopupBtn')?.addEventListener('click', () => {
       popup.style.display = 'none';
+    });
+
+    document.getElementById('travelToLocBtn')?.addEventListener('click', () => {
+      triggerMapTravelAction(`Отправляюсь в локацию «${loc.name}»`);
+    });
+
+    popup.querySelectorAll('.map-subzone-travel-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const szName = btn.getAttribute('data-subzone-name');
+        if (!szName) return;
+        if (!isCurrentLoc) {
+          triggerMapTravelAction(`Отправляюсь в локацию «${loc.name}», в подзону «${szName}»`);
+        } else {
+          triggerMapTravelAction(`Иду в «${szName}»`);
+        }
+      });
     });
   }
 
@@ -2795,21 +2857,36 @@ export async function renderGame(container, sessionId, user) {
         updatePlayerUI();
       }
 
-      // Обновление локации при смене или генерации начальной локации
+      // Обновление локации и подзоны при смене
       if (result.current_location_name || result.current_wild_zone !== undefined) {
         session = {
           ...session,
-          current_location_name: result.current_location_name,
+          current_location_name: result.current_location_name || session?.current_location_name,
           current_state_name: result.current_state_name || session?.current_state_name,
           current_location_id: result.new_location_id || session?.current_location_id,
           current_wild_zone: result.current_wild_zone !== undefined ? result.current_wild_zone : session?.current_wild_zone,
         };
-        updatePlayerUI();
       }
 
+      if (result.current_zone !== undefined || result.subzone_id !== undefined || result.pos_x !== undefined) {
+        currentPlayer = {
+          ...currentPlayer,
+          current_zone: result.current_zone !== undefined ? result.current_zone : currentPlayer?.current_zone,
+          subzone_id: result.subzone_id !== undefined ? result.subzone_id : currentPlayer?.subzone_id,
+          pos_x: result.pos_x !== undefined ? result.pos_x : currentPlayer?.pos_x,
+          pos_y: result.pos_y !== undefined ? result.pos_y : currentPlayer?.pos_y,
+        };
+      }
 
-      // Обновление локации при смене
+      updatePlayerUI();
+
+      // Оповещение и обновление сессии при смене локации/подзоны
       if (result.location_changed) {
+        if (result.current_location_name) {
+          toast.success(`🗺️ Вы прибыли в локацию: ${result.current_location_name}`);
+        } else if (result.current_wild_zone) {
+          toast.info(`🌲 Вы вышли в дикую зону: ${result.current_wild_zone}`);
+        }
         try {
           const freshSession = await getSession(sessionId);
           if (freshSession) session = freshSession;
@@ -2818,6 +2895,8 @@ export async function renderGame(container, sessionId, user) {
         } catch (e) {
           console.warn('Failed to reload session after location change:', e);
         }
+      } else if (result.moved_to_subzone) {
+        toast.info(`📍 Перемещение: ${result.moved_to_subzone}`);
       }
 
       // Оповещения об изменении отношений и памяти NPC
@@ -2998,7 +3077,10 @@ export async function renderGame(container, sessionId, user) {
 
     // Update location and time in header without full re-render
     const locEl = document.querySelector('.game-header-location');
-    const locStr = session?.current_wild_zone ? `🌲 ${session.current_wild_zone}` : (session?.current_location_name || '');
+    const baseLocStr = session?.current_wild_zone ? `🌲 ${session.current_wild_zone}` : (session?.current_location_name || '');
+    const locStr = baseLocStr && currentPlayer?.current_zone && currentPlayer.current_zone !== baseLocStr && !session?.current_wild_zone
+      ? `${baseLocStr} • ${currentPlayer.current_zone}`
+      : baseLocStr;
 
     if (locStr) {
       if (locEl) {

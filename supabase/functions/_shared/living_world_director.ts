@@ -33,20 +33,44 @@ function simpleHash(str: string): number {
 
 export function isPassiveOrRoutineAction(actionText: string, knowledgeFacts: string[]): boolean {
   const clean = (actionText || "").trim();
-  if (!clean || clean.length < 22) {
-    if (PASSIVE_ACTION_PATTERNS.some((rx) => rx.test(clean))) return true;
+  const lower = clean.toLowerCase();
+
+  // Если игрок выполняет целенаправленное действие (диалог, атака, ремесло, сбор, торговля, лечение) — это НЕ пассивный ход
+  if (/говор|спраш|обраща|отвеча|атак|бью|удар|стреля|мастер|крафт|собира|среза|покупа|прода|лечу|выпива|перевяз|переда|отда/i.test(lower)) {
+    return false;
   }
+
+  // Пассивный осмотр, ожидание или простой выход на улицу / из таверны
   if (PASSIVE_ACTION_PATTERNS.some((rx) => rx.test(clean))) return true;
-  // Если в фактах хода нет ни боя, ни крафта, ни находки, ни диалога с конкретным ответом
+
+  // Если в фактах хода уже зафиксировано конкретное достижение или переход в конкретную именованную локацию/подзону
   if (!knowledgeFacts || knowledgeFacts.length === 0) return true;
   const joinedFacts = knowledgeFacts.join(" ").toLowerCase();
+  if (
+    joinedFacts.includes("нанёс") ||
+    joinedFacts.includes("получил предмет") ||
+    joinedFacts.includes("собрал") ||
+    joinedFacts.includes("создал") ||
+    joinedFacts.includes("смастерил") ||
+    joinedFacts.includes("передал") ||
+    joinedFacts.includes("обращается") ||
+    joinedFacts.includes("подзону") ||
+    joinedFacts.includes("прибывает в локацию")
+  ) {
+    return false;
+  }
+
   if (
     joinedFacts.includes("переместился в направлении") &&
     !joinedFacts.includes("ун") &&
     !joinedFacts.includes("наш") &&
     !joinedFacts.includes("обращается")
   ) {
-    return true;
+    // Если игрок просто идёт по улице/тракту без конкретной именованной цели — считаем рутинным шагом
+    if (/улиц|тракт|дорог|наружу|таверн|просто иду|бреду|гуляю/i.test(lower)) {
+      return true;
+    }
+    return false;
   }
   return false;
 }
@@ -264,7 +288,73 @@ export function buildProactiveWorldDirective(params: {
     : [];
   const nextStoryGoal = remainingGoals.length > 0 ? remainingGoals[0] : null;
 
-  // 3. Если в локации есть живые NPC — пусть NPC САМ проявит инициативу или создаст ситуацию!
+  // 2.5. Если игрок выполняет КОНКРЕТНОЕ ЦЕЛЕНАПРАВЛЕННОЕ ДЕЙСТВИЕ (!isPassive: переход в конкретную локацию/подзону, диалог, ремесло, сбор, обыск)
+  if (!isPassive) {
+    const lowerAct = (action_text || "").toLowerCase();
+    const isMoving =
+      /иду|пойду|отправля|направля|перехож|двига|убега|вхож|возвраща/i.test(lowerAct) ||
+      knowledgeFacts.some((k) => /переместился|отправился|прибывает|подзону/i.test(k));
+    const subzoneLabel = playerTruth?.current_zone ? ` (подзона «${playerTruth.current_zone}»)` : "";
+    const leadNpc = presentNpcs[0] || null;
+    const npcNamesList = presentNpcs.map((n: any) => `${n.name} (${n.role || n.race || "житель"})`).join(", ");
+
+    if (isMoving) {
+      return {
+        is_passive_or_routine_action: false,
+        event_category: leadNpc ? "npc_initiative" : "world_incident",
+        headline: `Прибытие и обстановка: ${locationName}${subzoneLabel}`,
+        master_instruction:
+          `Игрок целенаправленно переместился в «${locationName}»${subzoneLabel}. ` +
+          `Подробно и атмосферно опиши переход и открывшуюся перед героем картину именно этого места${subzoneLabel}. ` +
+          (presentNpcs.length > 0
+            ? `Здесь находятся: ${npcNamesList}. Покажи их занятия и естественную реакцию на появление героя.`
+            : `Опиши ключевые ориентиры, детали окружения и пути дальнейшего исследования в «${locationName}»${subzoneLabel}.`) +
+          ` НЕ придумывай случайных уличных аварий или взрывов, не связанных с этим местом!`,
+        fallback_narrative_hook: presentNpcs.length > 0
+          ? `Вы достигаете нужного места в «${locationName}»${subzoneLabel}. Поблизости находятся ${npcNamesList}, и ваше появление привлекает их внимание.`
+          : `Вы выходите к намеченной точке в «${locationName}»${subzoneLabel} и осматриваете открывшиеся перед вами ориентиры и подходы.`,
+        suggested_choices: presentNpcs.length > 0
+          ? [
+              `Подойти к ${leadNpc.name} и завести разговор`,
+              `Внимательно осмотреть «${locationName}»${subzoneLabel} в поисках важных деталей`,
+              `Перевести дух после перехода и проверить снаряжение`,
+            ]
+          : [
+              `Тщательно обследовать «${locationName}»${subzoneLabel} на предмет находок и следов`,
+              `Осмотреть подходы и убедиться в безопасности места`,
+              `Сделать краткий привал и наметить следующий шаг`,
+            ],
+      };
+    }
+
+    return {
+      is_passive_or_routine_action: false,
+      event_category: leadNpc ? "npc_initiative" : "world_incident",
+      headline: `Развитие действия игрока в «${locationName}»${subzoneLabel}`,
+      master_instruction:
+        `Игрок совершает конкретное действие: «${action_text}». ` +
+        `Внимательно опиши прямой результат этого действия по фактам из knowledge без посторонних случайных происшествий. ` +
+        (leadNpc
+          ? `Если игрок обращался к NPC — собеседник (${leadNpc.name}) ОБЯЗАН прямо и по существу ответить на вопрос или слова героя вслух («— ...»)!`
+          : `Покажи естественный отклик мира в «${locationName}»${subzoneLabel} и новые возможности, открывшиеся после действия.`),
+      fallback_narrative_hook: leadNpc
+        ? `${leadNpc.name} внимательно реагирует на ваши действия в «${locationName}»${subzoneLabel} и готов продолжить разговор.`
+        : `Окружение в «${locationName}»${subzoneLabel} откликается на ваши действия, открывая простор для следующего шага.`,
+      suggested_choices: leadNpc
+        ? [
+            `Продолжить разговор с ${leadNpc.name} и уточнить детали`,
+            `Осмотреть обстановку вокруг в «${locationName}»${subzoneLabel}`,
+            `Проверить снаряжение и последовать полученному совету`,
+          ]
+        : [
+            `Развить успех и продолжить исследование в «${locationName}»${subzoneLabel}`,
+            `Осмотреть полученные результаты и доступные ресурсы`,
+            `Отправиться дальше по намеченному маршруту`,
+          ],
+    };
+  }
+
+  // 3. Если в локации есть живые NPC (и ход пассивный/рутинный) — пусть NPC САМ проявит инициативу или создаст ситуацию!
   if (presentNpcs.length > 0) {
     // Приоритет: сюжетный NPC из key_npcs или тот, кто меньше упоминался в последнем сообщении
     const keyNpcNames = (currentArc?.key_npcs || []).map((k: string) => k.toLowerCase());

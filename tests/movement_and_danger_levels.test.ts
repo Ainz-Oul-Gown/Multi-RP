@@ -164,4 +164,47 @@ describe("Movement & Plausibility Handling", () => {
     expect(prompt).toContain("сокровищница");
     expect(prompt).toContain("Если игрок находится внутри здания, таверны или подземелья и выходит наружу");
   });
+
+  it("CraftHandler auto-infers materials and blueprint when omitted by router fallback", () => {
+    const context: any = {
+      acting_player: {
+        id: "p1",
+        name: "Влад",
+        stats: { DEX: 18 },
+        inventory: [
+          { id: "mat-branch-1", item_name: "Сухие ветки", type: "material", quantity: 3 },
+        ],
+      },
+      session: { difficulty: "easy" },
+      targets: { players: new Map(), npcs: new Map() },
+      raw_action_text: "Затачиваю сухие ветки в деревянное копьё",
+      router_output: {
+        status: "success",
+        actions: [
+          {
+            action_type: "craft_recipe",
+            target_entity_id: null,
+            target_item_name: "Затачиваю сухие ветки в деревянное копьё",
+            used_item_id: null,
+            consumed_materials: null,
+            stat_to_check: "dexterity",
+            ai_custom_dc: 2,
+            dynamic_blueprint: null,
+          },
+        ],
+        encounter_intent: { type: "none", target_name: null },
+        time_estimate_minutes: 30,
+        atmosphere: { sounds: [], visuals: [] },
+      },
+    };
+
+    const res = executeEngine(context);
+    expect(res.action_results[0].success).toBe(true);
+    expect(res.mutations.some(m => m.type === "DELETE_ITEM" && (m as any).item_id === "mat-branch-1")).toBe(true);
+    const inserted = res.mutations.find(m => m.type === "INSERT_ITEM") as any;
+    expect(inserted).toBeDefined();
+    expect(inserted.item.item_name).toBe("Деревянное копьё");
+    expect(inserted.item.type).toBe("weapon");
+  });
 });
+

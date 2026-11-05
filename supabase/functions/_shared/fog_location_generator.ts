@@ -186,8 +186,57 @@ export async function ensureLocationMapAndTerrain(params: {
 
   const fallback = buildFallbackLocationMap(locationName, locationType);
   let result: LocationMapResult = fallback;
+  let usedDbSubzones = false;
 
-  if (openrouterApiKey) {
+  // Если у локации уже есть подзоны в таблице subzones, строим карту расстояний напрямую по ним
+  if (locationId && supabase) {
+    try {
+      const { data: dbSubzones } = await supabase
+        .from("subzones")
+        .select("name, pos_x, pos_y")
+        .eq("location_id", locationId);
+
+      if (Array.isArray(dbSubzones) && dbSubzones.length >= 2) {
+        const zones = dbSubzones
+          .map((s: any) => String(s?.name || "").trim())
+          .filter(Boolean);
+        if (zones.length >= 2) {
+          const map: Record<string, Record<string, number>> = {};
+          for (let i = 0; i < zones.length; i++) {
+            map[zones[i]] = {};
+            for (let j = 0; j < zones.length; j++) {
+              if (i === j) continue;
+              const sA = dbSubzones[i];
+              const sB = dbSubzones[j];
+              if (
+                sA?.pos_x !== null && sA?.pos_x !== undefined &&
+                sB?.pos_x !== null && sB?.pos_x !== undefined
+              ) {
+                const dist = Math.hypot(
+                  Number(sA.pos_x) - Number(sB.pos_x),
+                  Number(sA.pos_y || 0) - Number(sB.pos_y || 0)
+                );
+                const tier = dist < 4 ? 1 : dist < 10 ? 2 : dist < 20 ? 3 : 4;
+                map[zones[i]][zones[j]] = tier;
+              } else {
+                map[zones[i]][zones[j]] = Math.min(4, Math.abs(i - j) + 1);
+              }
+            }
+          }
+          result = {
+            terrain_type: fallback.terrain_type,
+            zones,
+            location_map: map,
+          };
+          usedDbSubzones = true;
+        }
+      }
+    } catch (subErr) {
+      console.warn("[fog_location_generator] Failed to load subzones from DB:", subErr);
+    }
+  }
+
+  if (!usedDbSubzones && openrouterApiKey) {
     try {
       const prompt = buildLocationMapPrompt({
         locationName,

@@ -383,7 +383,7 @@ function validateRouterOutput(parsed: any): asserts parsed is RouterOutputPayloa
   const validActionTypes = [
     "attack", "stealth_attack", "move", "loot",
     "craft_recipe", "craft_custom", "transfer", "drop",
-    "talk", "search", "harvest_ambient"
+    "talk", "search", "harvest_ambient", "use_item", "trade"
   ];
   const validStats = [
     "strength", "dexterity", "stealth", "survival",

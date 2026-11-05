@@ -88,6 +88,7 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
           temperature: 0.5,
           max_tokens: 800,
         }),
+        signal: AbortSignal.timeout(15000),
       });
       if (!response.ok) {
         lastError = new Error(`AI API error: ${response.status}`);
@@ -315,16 +316,20 @@ serve(async (req: any) => {
 
     const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type, sender_name").eq("session_id", session_id).order("created_at", { ascending: false }).limit(8);
     const recentMessages = (recentMsgs || []).reverse().map((m: any) => {
-      const cleaned = cleanTextForAI(m.content || "");
       if (m.sender_type === "master") {
-        // Берём концовку ответа Мастера (реакция мира / реплика NPC), а не первый абзац,
+        // Разбиваем на абзацы ДО вызова cleanTextForAI (т.к. cleanTextForAI схлопывает \n\n в пробел),
+        // и берём только концовку ответа Мастера (реакция мира / реплика NPC), а не первый абзац,
         // чтобы бесплатные LLM не копировали вступительный абзац прошлого хода слово в слово!
-        const paragraphs = cleaned.split(/\n\s*\n/).map((p: string) => p.trim()).filter(Boolean);
-        const summaryPart = paragraphs.length >= 2
-          ? paragraphs.slice(-2).join(" ").slice(-260)
-          : cleaned.slice(-260);
+        const rawParagraphs = String(m.content || "")
+          .split(/\n\s*\n/)
+          .map((p: string) => cleanTextForAI(p))
+          .filter(Boolean);
+        const summaryPart = rawParagraphs.length >= 2
+          ? rawParagraphs.slice(-2).join(" ").slice(-260)
+          : cleanTextForAI(m.content || "").slice(-260);
         return `[Итог прошлого шага]: ${summaryPart}`;
       }
+      const cleaned = cleanTextForAI(m.content || "");
       return `[${m.sender_name || "Игрок"}]: ${cleaned.slice(0, 240)}`;
     });
 
@@ -808,6 +813,45 @@ serve(async (req: any) => {
       console.log(`[${requestId}] [MOVE_INJECT] ⚡ Injected move action (router missed it): dest="${_moveDest}"`);
     }
 
+    // ============================================
+    // CONSUMABLE / HEALING & TRADE SAFETY NETS
+    // ============================================
+    const _useItemRegex = /\b(?:выпива|выпью|пью\s+(?:зель|эликсир|отвар|настойк)|перевязыва|перевяжу|накладыва.*повязк|использу.*(?:зель|аптечк|бинт|стимулятор|свиток)|влива.*зель|оказыва.*первую помощь|реанимиру)\b/i;
+    const _tradeRegex = /\b(?:покупаю|куплю|хочу купить|продаю|продам|торгуюсь с|заказываю\s+(?:эль|пив|вин|обед|ужин|рагу|комнат))\b/i;
+    if (routerResult.status === "success" && (!routerResult.actions || routerResult.actions.length === 0)) {
+      if (_useItemRegex.test(safeActionText)) {
+        routerResult.actions = [{
+          action_type: "use_item",
+          target_entity_id: null,
+          target_name: null,
+          target_item_name: null,
+          item_type: "consumable",
+          used_item_id: null,
+          consumed_materials: null,
+          stat_to_check: "none",
+          ai_custom_dc: null,
+          improper_tool_usage: null,
+          raw_action_text: safeActionText,
+        }];
+        console.log(`[${requestId}] [USE_ITEM_INJECT] 🧪 Injected use_item action`);
+      } else if (_tradeRegex.test(safeActionText)) {
+        routerResult.actions = [{
+          action_type: "trade",
+          target_entity_id: null,
+          target_name: null,
+          target_item_name: null,
+          item_type: null,
+          used_item_id: null,
+          consumed_materials: null,
+          stat_to_check: "insight",
+          ai_custom_dc: 12,
+          improper_tool_usage: null,
+          raw_action_text: safeActionText,
+        }];
+        console.log(`[${requestId}] [TRADE_INJECT] 🪙 Injected trade action`);
+      }
+    }
+
     // Apply GPS time/location (still here, as it's pre-engine)
     let time_passed_minutes = 0;
     let location_changed = startingLocationGenerated,
@@ -820,7 +864,7 @@ serve(async (req: any) => {
     const isMovementAction = routerResult.actions?.some((a: any) => a.action_type === "move") ||
       /выход|выйти|выхожу|покинуть|покидаю|уйти|ухожу|отправиться|иду |еду |бегу |на улиц|наружу|за пределы|на тракт|в лес|в город|к озеру|в путь|зайти в |вернуться/i.test(safeActionText);
 
-    (globalThis as any).__gpsSubzone = null;
+    let gpsMovedToSubzone: string | null = null;
     if (isMovementAction) {
       try {
         const gpsSystemPrompt = buildGpsPrompt({
@@ -843,7 +887,7 @@ serve(async (req: any) => {
         const gpsResp = await callAI(gpsSystemPrompt, "Определи время и маршрут.", openrouterApiKey, 2, gpsModel);
         const gpsParsed = parseAIJson(gpsResp);
         if (gpsParsed) {
-          (globalThis as any).__gpsSubzone = gpsParsed?.moved_to_subzone || null;
+          gpsMovedToSubzone = gpsParsed?.moved_to_subzone || null;
           time_passed_minutes = Math.max(1, Math.min(1440, Number(gpsParsed.time_minutes) || Number(routerResult.time_estimate_minutes) || 10));
 
           // ПЛАУЗИБИЛЬНОСТЬ: если игрок пытался сменить локацию, но GPS отверг её как невозможную рядом
@@ -1367,7 +1411,7 @@ serve(async (req: any) => {
       const availableZones = Object.keys(locationMap);
 
       // 1. AI GPS результат (приоритет)
-      let matchedZone: string | null = (globalThis as any).__gpsSubzone || null;
+      let matchedZone: string | null = gpsMovedToSubzone || null;
       if (matchedZone && !availableZones.includes(matchedZone)) matchedZone = null;
       if (matchedZone) {
         console.log(`[${requestId}] [ZONE] AI GPS subzone: "${matchedZone}"`);
@@ -1659,16 +1703,65 @@ serve(async (req: any) => {
     await supabase.from("messages").insert({
       session_id, sender_type: "player", sender_id: player.user_id, sender_name: player.name || "Герой", content: safeActionText,
     });
-    // 2) Master narratives — по одному сообщению на игрока
+    // 2) Master narratives — по одному сообщению на игрока с наглядными RPG-бейджами итогов хода
     for (const [targetPlayerId, narrative] of Object.entries(narratorOutput.players)) {
       const playerChoices = narratorOutput.choices?.[targetPlayerId] || [];
+      const pTruth = systemTruth.player_truths[targetPlayerId];
+      const turnBadges: Array<{ icon: string; label: string; tone: string }> = [];
+
+      if (targetPlayerId === player.id) {
+        for (const ar of engineResult.action_results || []) {
+          if (ar.dice_roll) {
+            const dr = ar.dice_roll;
+            const statusLabel = dr.is_crit ? "КРИТ!" : dr.success ? "Успех" : "Промах";
+            turnBadges.push({
+              icon: dr.is_crit ? "💥" : dr.success ? "🎲" : "💨",
+              label: `${ar.details || `${dr.total} vs СЛ ${dr.target_dc}`} (${statusLabel})`,
+              tone: dr.is_crit ? "gold" : dr.success ? "success" : "muted",
+            });
+          } else if (ar.details && ar.action_type !== "move" && ar.action_type !== "talk") {
+            turnBadges.push({
+              icon: ar.success ? "✨" : "⚠️",
+              label: ar.details,
+              tone: ar.success ? "info" : "muted",
+            });
+          }
+        }
+        if (skillProgress?.name) {
+          turnBadges.push({
+            icon: "⬆️",
+            label: `${skillProgress.name}: ур. ${skillProgress.level}`,
+            tone: skillProgress.leveled_up ? "gold" : "info",
+          });
+        }
+      }
+
+      if (pTruth?.hp_status && pTruth.hp_status.delta !== 0) {
+        const hpDelta = pTruth.hp_status.delta;
+        turnBadges.push({
+          icon: hpDelta > 0 ? "💚" : "🩸",
+          label: `${hpDelta > 0 ? `+${hpDelta}` : hpDelta} HP (${pTruth.hp_status.current_hp}/${pTruth.hp_status.max_hp})`,
+          tone: hpDelta > 0 ? "success" : "danger",
+        });
+      }
+
+      if (pTruth?.inventory_delta) {
+        for (const gained of pTruth.inventory_delta.gained || []) {
+          turnBadges.push({ icon: "🎒", label: `+${gained}`, tone: "success" });
+        }
+        for (const lost of pTruth.inventory_delta.lost || []) {
+          turnBadges.push({ icon: "📦", label: `-${lost}`, tone: "muted" });
+        }
+      }
+
       await supabase.from("messages").insert({
         session_id, sender_type: "master", sender_name: "Мастер", content: narrative,
         metadata: {
           target_player_id: targetPlayerId,
           turn_status: systemTruth.turn_status,
-          hp_status: systemTruth.player_truths[targetPlayerId]?.hp_status,
-          inventory_delta: systemTruth.player_truths[targetPlayerId]?.inventory_delta,
+          hp_status: pTruth?.hp_status,
+          inventory_delta: pTruth?.inventory_delta,
+          turn_badges: turnBadges,
           game_time: systemTruth.environment.time,
           choices: playerChoices,
         },

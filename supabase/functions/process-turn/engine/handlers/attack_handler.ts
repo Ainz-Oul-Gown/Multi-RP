@@ -12,8 +12,132 @@ export class AttackHandler extends BaseActionHandler {
 
   override handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     const player = context.acting_player;
-    const target = this.findNpcById(context, action.target_entity_id || "")
+    const rawActionText =
+      (context as any)?.raw_action_text ||
+      (context.router_output as any)?.raw_action_text ||
+      (action as any)?.raw_action_text ||
+      "";
+    const hint = (
+      (action as any).target_entity_name ||
+      (action as any).target_name ||
+      action.target_item_name ||
+      ""
+    ).trim();
+
+    let target = this.findNpcById(context, action.target_entity_id || "")
       || this.findPlayerById(context, action.target_entity_id || "");
+
+    // Если UUID цели не передан, пробуем сопоставить по имени/описанию среди живых NPC и игроков
+    if (!target && !action.target_entity_id && hint) {
+      const hintLower = hint.toLowerCase();
+      for (const [_id, npc] of context.targets.npcs.entries()) {
+        if (npc.is_alive !== false && npc.name) {
+          const nLower = npc.name.toLowerCase();
+          if (nLower.includes(hintLower) || hintLower.includes(nLower)) {
+            target = npc;
+            break;
+          }
+        }
+      }
+      if (!target) {
+        for (const [id, p] of context.targets.players.entries()) {
+          if (id !== player.id && p.name) {
+            const pLower = p.name.toLowerCase();
+            if (pLower.includes(hintLower) || hintLower.includes(pLower)) {
+              target = p;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    const isPracticeOrObjectTarget =
+      !target &&
+      !action.target_entity_id &&
+      /ветк|сухосто|мишен|чучел|бревн|дерев|кам|пен[ья]|бутылк|ящик|бочк|замок|цеп|веревк|тренир|прицел|провер.*тетив/i.test(
+        `${hint} ${rawActionText}`
+      );
+
+    // Если цель не найдена, это не выстрел по предмету, и UUID не был задан явно — берём ближайшего живого враждебного NPC
+    if (!target && !action.target_entity_id && !isPracticeOrObjectTarget) {
+      const hostileNpc = Array.from(context.targets.npcs.values()).find(
+        (n: any) => n.is_hostile && n.is_alive !== false
+      );
+      if (hostileNpc) {
+        target = hostileNpc;
+      }
+    }
+
+    // Модификаторы (с учётом травм)
+    const injuryPenalties: Record<string, number> = {};
+    for (const injury of player.injuries || []) {
+      if (injury.stat_penalties) {
+        for (const [stat, penalty] of Object.entries(injury.stat_penalties)) {
+          injuryPenalties[stat] = (injuryPenalties[stat] || 0) + penalty;
+        }
+      }
+    }
+
+    // Определение оружия и соответствующего боевого навыка игрока
+    const weapon = action.used_item_id
+      ? this.findItemById(player, action.used_item_id)
+      : (player.inventory || []).find((i) => i.type === "weapon") || null;
+    const weaponSkill = resolveWeaponSkill(
+      weapon,
+      `${(action as any).details || ""} ${action.target_item_name || ""} ${rawActionText}`
+    );
+    const skillInfo = player.skills?.[weaponSkill.key];
+    const skillEffects = skillInfo?.effects || {};
+    const skillAttackBonus = skillEffects.attack_bonus || skillEffects.accuracy_bonus || 0;
+    const skillDmgBonusPct = skillEffects.damage_bonus_pct || skillEffects.ranged_damage_pct || 0;
+    const critBonusPct = skillEffects.crit_chance_bonus_pct || 0;
+
+    const defaultAttackStat = weaponSkill.key === "archery" ? "dexterity" : "strength";
+    const statMod = this.getStatToCheckMod(player, action.stat_to_check || defaultAttackStat, injuryPenalties);
+    const proficiency = this.getProficiency(player);
+
+    const forceAdvantage = Boolean((action as any)._force_advantage) || this.action_type === "stealth_attack";
+    const advantage = forceAdvantage || context.session.difficulty === "easy";
+    const disadvantage = !forceAdvantage && context.session.difficulty === "hard";
+
+    // Тренировочный выстрел / удар по неодушевлённому объекту окружения (ветка, мишень, замок и т.д.)
+    if (isPracticeOrObjectTarget) {
+      const objectName = hint || "выбранную цель";
+      const targetDc = action.ai_custom_dc || 12;
+      const roll = this.performCheck(statMod + skillAttackBonus, targetDc, proficiency, advantage, disadvantage);
+      const isCritHit = roll.is_crit || (critBonusPct > 0 && roll.d20 >= 19);
+      const mutations: EngineMutation[] = [];
+      const systemFacts: string[] = [];
+
+      if (action.improper_tool_usage?.is_improper && weapon) {
+        const durMutation = this.buildDurabilityMutation(weapon, action.improper_tool_usage);
+        if (durMutation) mutations.push(durMutation);
+      }
+
+      if (roll.success) {
+        systemFacts.push(
+          `${player.name} метко поразил цель «${objectName}» (${weapon ? weapon.item_name : weaponSkill.name}, бросок ${roll.total} vs DC=${targetDc}${isCritHit ? " — филигранное попадание!" : ""}).`
+        );
+      } else {
+        systemFacts.push(
+          `${player.name} прицелился и атаковал «${objectName}», но удар прошёл вскользь (${roll.total} vs DC=${targetDc}).`
+        );
+      }
+
+      return {
+        result: {
+          action_type: this.action_type,
+          success: roll.success ?? false,
+          dice_roll: roll,
+          details: roll.success
+            ? `Точное попадание по «${objectName}» (${roll.total} vs ${targetDc})`
+            : `Промах по «${objectName}» (${roll.total} vs ${targetDc})`,
+        },
+        mutations,
+        system_facts: systemFacts,
+      };
+    }
 
     if (!target) {
       return {
@@ -48,41 +172,32 @@ export class AttackHandler extends BaseActionHandler {
       }
     }
 
-    // ============================================
-    // Модификаторы (с учётом травм)
-    // ============================================
-    const injuryPenalties: Record<string, number> = {};
-    for (const injury of player.injuries || []) {
-      if (injury.stat_penalties) {
-        for (const [stat, penalty] of Object.entries(injury.stat_penalties)) {
-          injuryPenalties[stat] = (injuryPenalties[stat] || 0) + penalty;
-        }
-      }
-    }
-
-    // STR-мод для melee, DEX для ranged (упрощение: STR)
-    const statMod = this.getStatToCheckMod(player, action.stat_to_check || "strength", injuryPenalties);
-    const proficiency = this.getProficiency(player);
-
-    // Преимущество/помеха по сложности сессии (или форсированное преимущество от скрытой атаки)
-    const forceAdvantage = Boolean((action as any)._force_advantage) || this.action_type === "stealth_attack";
-    let advantage = forceAdvantage || context.session.difficulty === "easy";
-    let disadvantage = !forceAdvantage && context.session.difficulty === "hard";
-
     // DC: AC цели (или кастомный)
     const targetAc = target.armor_class;
     const targetDc = action.ai_custom_dc || targetAc;
 
-    // Определение оружия и соответствующего боевого навыка игрока (мечи, кинжалы, топоры, копья, луки, кулаки, магия)
-    const weapon = action.used_item_id ? this.findItemById(player, action.used_item_id) : null;
-    const weaponSkill = resolveWeaponSkill(weapon, (action as any).details || (action as any).target_item_name || "");
-    const skillInfo = player.skills?.[weaponSkill.key];
-    const skillEffects = skillInfo?.effects || {};
-    const skillAttackBonus = skillEffects.attack_bonus || skillEffects.accuracy_bonus || 0;
-    const skillDmgBonusPct = skillEffects.damage_bonus_pct || skillEffects.ranged_damage_pct || 0;
-    const critBonusPct = skillEffects.crit_chance_bonus_pct || 0;
+    // Тактическое использование окружения в бою (жаровня, люстра, песок в глаза, стол, уступ, подсечка)
+    const isEnvironmentalStunt = /жаровн|угл[ией]|люстр|песок в глаз|грязь в глаз|пина.*стол|переворачива.*стол|бочк|сталкива.*с|толка.*в огонь|подсечк|укрыт/i.test(
+      rawActionText
+    );
 
-    const roll = this.performCheck(statMod + skillAttackBonus, targetDc, proficiency, advantage, disadvantage);
+    // Кооперативная синергия (фланговый обход / атака в отряде с соратником или спутником)
+    const hasCoopAllyPresent =
+      Array.from(context.targets.players.keys()).some((id) => id !== player.id) ||
+      Array.from(context.targets.npcs.values()).some(
+        (n: any) => !n.is_hostile && n.is_alive !== false && /companion|спутник|питомец|приручен/i.test(`${(n as any).role || ""} ${((n as any).status_tags || []).join(" ")}`)
+      );
+    const isExplicitCoopAttack = /вместе|одновременно|с фланга|со спины|по сигналу|прикрыва|вдвоём|вдвоем|комбо/i.test(rawActionText);
+    const flankingAttackBonus = (hasCoopAllyPresent && isExplicitCoopAttack) ? 2 : 0;
+
+    const effectiveAdvantage = advantage || isEnvironmentalStunt;
+    const roll = this.performCheck(
+      statMod + skillAttackBonus + flankingAttackBonus,
+      targetDc,
+      proficiency,
+      effectiveAdvantage,
+      disadvantage && !effectiveAdvantage
+    );
 
     // Дополнительный шанс крита для кинжалов/высоких боевых навыков (крит при d20 >= 19)
     const isCritHit = roll.is_crit || (critBonusPct > 0 && roll.d20 >= 19);
@@ -127,6 +242,20 @@ export class AttackHandler extends BaseActionHandler {
     if (isCritHit) {
       const critRoll = rollDamage(damageDice);
       totalDamage = (damageRoll.total + critRoll.total) + statMod;
+    }
+
+    // Бонус за тактический приём с окружением (+1d4 урона и дезориентация врага)
+    if (isEnvironmentalStunt) {
+      const envBonus = rollDamage("1d4").total;
+      totalDamage += envBonus;
+      systemFacts.push(`Тактический приём с использованием окружения приносит +${envBonus} дополнительного урона и ошеломляет противника!`);
+    }
+
+    // Бонус за слаженную фланговую атаку с соратником (+1d4)
+    if (flankingAttackBonus > 0) {
+      const coopBonus = rollDamage("1d4").total;
+      totalDamage += coopBonus;
+      systemFacts.push(`Слаженная фланговая атака с соратником (+2 к точности, +${coopBonus} бонусного урона)!`);
     }
 
     // Применяем растущий бонус навыка к урону (1..100)

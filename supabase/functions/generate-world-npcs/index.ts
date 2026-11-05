@@ -69,7 +69,7 @@ function cleanNPC(npc: any, world_id: string) {
   
   // Calculate special attacks count by tier
   const specialAttacksCount = Math.max(1, Math.min(5, tier));
-  const baseAttacksCount = Math.max(2, Math.min(10, 2 + Math.floor((level - 1) / 10)));
+  const baseAttacksCount = Math.max(1, Math.min(10, 1 + Math.floor((level - 1) / 10)));
   
   // Clean attacks arrays
   const specialAttacks = Array.isArray(npc.special_attacks) 

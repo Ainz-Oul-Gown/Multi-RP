@@ -10,7 +10,12 @@ export class TalkHandler extends BaseActionHandler {
 
   handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
     const player = context.acting_player;
-    const rawText = (context as any)?.raw_action_text || (action as any)?.speech || "";
+    const rawText =
+      (context as any)?.raw_action_text ||
+      (context.router_output as any)?.raw_action_text ||
+      (action as any)?.raw_action_text ||
+      (action as any)?.speech ||
+      "";
     const rawLower = rawText.toLowerCase();
     const hint = (((action as any).target_entity_name || (action as any).target_name || action.target_item_name || "") as string).toLowerCase().trim();
 
@@ -153,8 +158,13 @@ export class TalkHandler extends BaseActionHandler {
     // ============================================
     // Диалог с NPC: insight (WIS) или persuasion (CHA)
     // ============================================
-    const npcSpeechMatch = rawText.match(/[«"“]([^»"”]{1,220})[»"”]/);
-    const npcSpeechContent = npcSpeechMatch ? npcSpeechMatch[1].trim() : rawText.trim().slice(0, 220);
+    const npcSpeechMatch = rawText.match(/[«"“]([^»"”]{2,260})[»"”]/);
+    const cleanedUnquoted = rawText
+      .replace(/^(?:я\s+)?(?:подхожу|подойду|окликаю|обращаюсь|вежливо\s+спрашиваю|спрашиваю|говорю|кричу|шепчу)[^:«"“]*?:\s*/i, "")
+      .trim();
+    const npcSpeechContent = npcSpeechMatch
+      ? npcSpeechMatch[1].trim()
+      : cleanedUnquoted.slice(0, 220);
 
     // Если проверка характеристик не требуется (stat_to_check === "none" или DC <= 0) — обычный диалог успешен без кубиков
     if (action.stat_to_check === "none" || (action.ai_custom_dc !== null && action.ai_custom_dc !== undefined && action.ai_custom_dc <= 0)) {
@@ -172,7 +182,7 @@ export class TalkHandler extends BaseActionHandler {
         mutations: [],
         system_facts: [
           npcSpeechContent
-            ? `${player.name} обращается, чтобы поговорить с ${targetNpc.name}: «${npcSpeechContent}». (${targetNpc.name} слышит слова героя и должен дать осмысленный, живой ответ вслух в соответствии со своим характером и знаниями).`
+            ? `${player.name} обращается, чтобы поговорить с ${targetNpc.name}: «${npcSpeechContent}». (${targetNpc.name} слышит слова героя и даёт осмысленный, живой ответ вслух в соответствии со своим характером и знаниями).`
             : `${player.name} обращается, чтобы поговорить с ${targetNpc.name}.`,
         ],
       };

@@ -269,10 +269,18 @@ export function executeNpcAttack(params: {
   const statMod = Math.max(strMod, dexMod);
   const prof = getProficiencyBonus(npc.level || 1);
 
+  const npcHp = npc.hp ?? 10;
+  const npcMaxHp = npc.max_hp || 10;
+  const isCriticalWounded = npcHp > 0 && (npcHp / npcMaxHp) <= 0.25;
+  const isSentientHumanoid =
+    npc.category !== "beast" &&
+    !/волк|медведь|паук|крыс|кабан|зомби|скелет|нежить|голем|слиз/i.test(`${npc.name || ""} ${npc.race || ""}`);
+  const moralePenalty = isCriticalWounded ? -2 : 0;
+
   const d20 = rollD20();
   const isCrit = d20 === 20;
   const isCritMiss = d20 === 1;
-  const totalAttack = d20 + statMod + prof;
+  const totalAttack = d20 + statMod + prof + moralePenalty;
 
   const isHit = !isCritMiss && (isCrit || totalAttack >= targetPlayer.armor_class);
 
@@ -286,7 +294,13 @@ export function executeNpcAttack(params: {
     }
   }
 
-  const logMessage = `⚔️ [Ход NPC: ${npc.name}] атакует ${targetPlayer.name} способностью «${decision.attack_name}»! (d20=${d20}, всего=${totalAttack} vs КД=${targetPlayer.armor_class} — ${isHit ? (isCrit ? "КРИТИЧЕСКИЙ УДАР!" : "Попадание!") : "Промах!"}${isHit ? `, Урон: ${damage}` : ""})`;
+  const moraleSuffix = isCriticalWounded
+    ? isSentientHumanoid
+      ? ` 🩸 [На грани поражения (${npcHp}/${npcMaxHp} HP)! ${npc.name} тяжело дышит, пятится и готов сдаться или выдать ценные сведения в обмен на пощаду!]`
+      : ` 🩸 [Зверь тяжело ранен (${npcHp}/${npcMaxHp} HP) и слабеет!]`
+    : "";
+
+  const logMessage = `⚔️ [Ход NPC: ${npc.name}] атакует ${targetPlayer.name} способностью «${decision.attack_name}»! (d20=${d20}, всего=${totalAttack} vs КД=${targetPlayer.armor_class} — ${isHit ? (isCrit ? "КРИТИЧЕСКИЙ УДАР!" : "Попадание!") : "Промах!"}${isHit ? `, Урон: ${damage}` : ""})${moraleSuffix}`;
 
   return {
     npc_id: npc.id,

@@ -93,6 +93,17 @@ function enrichSystemFacts(engine_output: EngineOutputPayload, rpcResult: any): 
       case "ADVANCE_TIME":
         facts.push(`Время сдвинулось на ${m.minutes} минут.`);
         break;
+      case "SET_PLAYER_BUSY":
+        facts.push(`Персонаж занят делом «${m.activity || m.activity_description || "Длительное занятие"}» на ${m.minutes || m.duration_minutes || 60} мин.`);
+        break;
+      case "SET_PLAYER_SUBZONE":
+        if (m.subzone_id) {
+          facts.push(`Персонаж перешёл в подзону ${String(m.subzone_id).slice(0, 8)}.`);
+        }
+        break;
+      case "UPDATE_ENTITY_COORDS":
+        facts.push(`Координаты обновлены (${m.pos_x}, ${m.pos_y}).`);
+        break;
     }
   }
 

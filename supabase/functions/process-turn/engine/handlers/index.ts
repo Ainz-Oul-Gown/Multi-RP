@@ -11,6 +11,8 @@ import { TalkHandler } from "./talk_handler.ts";
 import { LootSearchHandler, SearchHandler } from "./loot_search_handler.ts";
 import { MoveHandler } from "./move_handler.ts";
 import { DropHandler } from "./drop_handler.ts";
+import { UseItemHandler } from "./use_item_handler.ts";
+import { TradeHandler } from "./trade_handler.ts";
 
 /**
  * Маппинг action_type → хендлер
@@ -33,6 +35,8 @@ register(new TalkHandler());
 register(new LootSearchHandler());
 register(new SearchHandler());
 register(new MoveHandler());
+register(new UseItemHandler());
+register(new TradeHandler());
 
 /**
  * Получить хендлер для действия

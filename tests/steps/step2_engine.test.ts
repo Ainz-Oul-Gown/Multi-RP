@@ -339,6 +339,36 @@ describe("AttackHandler", () => {
     expect((durMutation as any).delta).toBe(-2);
     expect((durMutation as any).set_broken).toBe(true);
   });
+
+  it("тренировочный выстрел по неодушевлённой цели (ветка сухостоя) выполняет проверку меткости без ошибки 'Цель не найдена'", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.85);
+    try {
+      const ctx = makeContext({
+        router_output: {
+          ...makeRouterOutput([
+            {
+              action_type: "attack",
+              target_entity_id: null,
+              target_item_name: "ветка сухостоя",
+              used_item_id: null,
+              consumed_materials: null,
+              stat_to_check: "dexterity",
+              ai_custom_dc: 10,
+              improper_tool_usage: null,
+            },
+          ]),
+          raw_action_text: "Натягиваю лук и прицельно стреляю по ветке сухостоя",
+        } as any,
+      });
+
+      const result = executeEngine(ctx);
+      expect(result.action_results[0].success).toBe(true);
+      expect(result.action_results[0].details).toContain("ветка сухостоя");
+      expect(result.raw_system_facts[0]).toContain("поразил цель «ветка сухостоя»");
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
 });
 
 // ============================================
@@ -799,5 +829,160 @@ describe("MoveHandler", () => {
       }
     });
   });
+
+  // ============================================
+  // ТЕСТЫ: UseItemHandler (зелья, расходники и спасение союзников)
+  // ============================================
+  describe("UseItemHandler", () => {
+    it("использование зелья лечения списывает предмет и восстанавливает HP", () => {
+      const playerWithPotion = makePlayer({
+        hp: 15,
+        max_hp: 40,
+        inventory: [
+          {
+            id: "item-potion-1",
+            item_name: "Малое зелье лечения",
+            type: "consumable",
+            quantity: 2,
+          },
+        ],
+      });
+
+      const ctx = makeContext({
+        acting_player: playerWithPotion,
+        router_output: {
+          ...makeRouterOutput([
+            {
+              action_type: "use_item",
+              target_entity_id: null,
+              target_item_name: "Малое зелье лечения",
+              used_item_id: "item-potion-1",
+              consumed_materials: null,
+              stat_to_check: "none",
+              ai_custom_dc: null,
+              improper_tool_usage: null,
+            },
+          ]),
+          raw_action_text: "Выпиваю малое зелье лечения",
+        } as any,
+      });
+
+      const result = executeEngine(ctx);
+      expect(result.success).toBe(true);
+      expect(result.action_results[0].success).toBe(true);
+
+      const delMut = result.mutations.find((m) => m.type === "DELETE_ITEM");
+      const hpMut = result.mutations.find((m) => m.type === "UPDATE_HP");
+      expect(delMut).toBeDefined();
+      expect((delMut as any).item_id).toBe("item-potion-1");
+      expect(hpMut).toBeDefined();
+      expect((hpMut as any).delta).toBeGreaterThan(0);
+    });
+
+    it("спасение упавшего без сознания соратника (0 HP) возвращает его в строй", () => {
+      const downedAlly = makePlayer({ id: "player-2", name: "Ирис", hp: 0, max_hp: 30 });
+      const playerWithBandage = makePlayer({
+        inventory: [
+          {
+            id: "item-bandage-1",
+            item_name: "Перевязочный бинт",
+            type: "consumable",
+            quantity: 1,
+          },
+        ],
+      });
+
+      const ctx = makeContext({
+        acting_player: playerWithBandage,
+        targets: {
+          players: new Map([
+            ["player-1", playerWithBandage],
+            ["player-2", downedAlly],
+          ]),
+          npcs: new Map(),
+          location_items: new Map(),
+        },
+        router_output: {
+          ...makeRouterOutput([
+            {
+              action_type: "use_item",
+              target_entity_id: "player-2",
+              target_item_name: "Перевязочный бинт",
+              used_item_id: "item-bandage-1",
+              consumed_materials: null,
+              stat_to_check: "none",
+              ai_custom_dc: null,
+              improper_tool_usage: null,
+            },
+          ]),
+          raw_action_text: "Подбегаю к Ирис и перевязываю ей рану бинтом",
+        } as any,
+      });
+
+      const result = executeEngine(ctx);
+      expect(result.action_results[0].success).toBe(true);
+      const hpMut = result.mutations.find((m) => m.type === "UPDATE_HP" && (m as any).id === "player-2");
+      expect(hpMut).toBeDefined();
+      expect((hpMut as any).delta).toBeGreaterThan(0);
+      expect(result.raw_system_facts.some((f) => f.includes("СПАСЕНИЕ ЖИЗНИ") && f.includes("Ирис"))).toBe(true);
+    });
+  });
+
+  // ============================================
+  // ТЕСТЫ: TradeHandler (покупка, продажа и торг с NPC)
+  // ============================================
+  describe("TradeHandler", () => {
+    it("продажа трофея торговцу списывает предмет и начисляет золотые монеты", () => {
+      const playerWithPelt = makePlayer({
+        inventory: [
+          {
+            id: "item-pelt-1",
+            item_name: "Волчья шкура",
+            type: "material",
+            quantity: 2,
+          },
+        ],
+      });
+      const merchantNpc = makeNpc({
+        id: "npc-merchant-1",
+        name: "Торговец Ганс",
+        is_hostile: false,
+      });
+
+      const ctx = makeContext({
+        acting_player: playerWithPelt,
+        targets: {
+          players: new Map([["player-1", playerWithPelt]]),
+          npcs: new Map([["npc-merchant-1", merchantNpc]]),
+          location_items: new Map(),
+        },
+        router_output: {
+          ...makeRouterOutput([
+            {
+              action_type: "trade",
+              target_entity_id: "npc-merchant-1",
+              target_item_name: "Волчья шкура",
+              used_item_id: "item-pelt-1",
+              consumed_materials: [{ id: "item-pelt-1", quantity: 1 }],
+              stat_to_check: "insight",
+              ai_custom_dc: 10,
+              improper_tool_usage: null,
+            },
+          ]),
+          raw_action_text: "Продаю волчью шкуру торговцу Гансу",
+        } as any,
+      });
+
+      const result = executeEngine(ctx);
+      expect(result.action_results[0].success).toBe(true);
+      const delMut = result.mutations.find((m) => m.type === "DELETE_ITEM");
+      const insMut = result.mutations.find((m) => m.type === "INSERT_ITEM");
+      expect(delMut).toBeDefined();
+      expect(insMut).toBeDefined();
+      expect((insMut as any).item.item_name).toContain("монет");
+      expect((insMut as any).item.quantity).toBeGreaterThan(0);
+    });
+  });
 });
+
 

@@ -119,7 +119,9 @@ export type ActionType =
   | "drop"
   | "talk"
   | "search"
-  | "harvest_ambient";
+  | "harvest_ambient"
+  | "use_item"
+  | "trade";
 
 export type StatToCheck =
   | "strength"

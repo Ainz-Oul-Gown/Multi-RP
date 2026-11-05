@@ -216,12 +216,34 @@ export function buildFallbackNarrative(systemTruth: SystemTruthDto, actionText =
     }
 
     // Факты хода
+    const joinedKnowledge = truth.knowledge.join("\n");
     if (truth.knowledge.length > 0) {
-      lines.push(truth.knowledge.join("\n"));
+      lines.push(joinedKnowledge);
     }
 
-    // Если ход был пассивным или без ярких событий — добавляем проактивный крючок Живого Мира!
-    if (truth.knowledge.length === 0 || directive.is_passive_or_routine_action) {
+    // Если игрок обратился к NPC в диалоге — формируем живой ответ собеседника из npc_context/present_npcs
+    const isNpcDialogue = /обращается.*?(?:к|поговорить с)\s+([А-ЯЁA-Z][а-яёa-zA-Z\s-]{1,35}?)(?:[:.,]|со словами)/i.exec(joinedKnowledge);
+    if (isNpcDialogue) {
+      const targetName = isNpcDialogue[1].trim();
+      const npcEntries = Object.values(systemTruth.npc_context || {});
+      const matchedNpc: any =
+        npcEntries.find((c: any) => c?.name && (c.name.toLowerCase().includes(targetName.toLowerCase()) || targetName.toLowerCase().includes(c.name.toLowerCase()))) ||
+        npcEntries[0] ||
+        (systemTruth.present_npcs || []).find((n: any) => !n.is_hostile);
+      if (matchedNpc) {
+        const npcDisplayName = matchedNpc.name || targetName;
+        const rumorOrInfo =
+          (Array.isArray(matchedNpc.rumors) && matchedNpc.rumors[0]) ||
+          matchedNpc.motivation ||
+          "На восточной тропе сейчас неспокойно — путники видели следы хищников у старых камней, так что держи ухо востро";
+        lines.push(
+          `${npcDisplayName} внимательно выслушивает вас и отвечает: «— Рад встрече, путник. ${rumorOrInfo}. Если решишь проверить окрестности — будь начеку.»`
+        );
+      } else {
+        lines.push(directive.fallback_narrative_hook);
+      }
+    } else if (truth.knowledge.length === 0 || directive.is_passive_or_routine_action) {
+      // Если ход был пассивным или без ярких событий — добавляем проактивный крючок Живого Мира!
       lines.push(directive.fallback_narrative_hook);
     }
 

@@ -450,7 +450,7 @@ CREATE POLICY "Player skills: read for session players" ON player_skills FOR SEL
 );
 CREATE POLICY "Player skills: system manage" ON player_skills FOR ALL USING (true);
 
--- 4. RPC ФУНКЦИЯ ДЛЯ USER SETTINGS
+-- 4. RPC ФУНКЦИИ ДЛЯ USER SETTINGS (поддержка обеих сигнатур: JSONB и 6 аргументов)
 CREATE OR REPLACE FUNCTION public.upsert_user_settings(
   p_user_id UUID,
   p_openrouter_key TEXT,
@@ -479,6 +479,115 @@ BEGIN
   RETURN jsonb_build_object('success', true);
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.upsert_user_settings(
+  p_user_id UUID,
+  p_openrouter_key TEXT,
+  p_card_model TEXT,
+  p_dm_model TEXT,
+  p_gps_model TEXT,
+  p_satellite_model TEXT
+) RETURNS VOID SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  INSERT INTO public.user_settings (
+    id, openrouter_key, card_model, dm_model, gps_model, satellite_model, updated_at
+  ) VALUES (
+    p_user_id,
+    COALESCE(p_openrouter_key, ''),
+    COALESCE(p_card_model, 'google/gemma-4-31b-it:free'),
+    COALESCE(p_dm_model, 'minimax/minimax-m3:free'),
+    COALESCE(p_gps_model, 'google/gemma-4-31b-it:free'),
+    COALESCE(p_satellite_model, 'google/gemma-4-31b-it:free'),
+    NOW()
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    openrouter_key = EXCLUDED.openrouter_key,
+    card_model = COALESCE(EXCLUDED.card_model, user_settings.card_model),
+    dm_model = COALESCE(EXCLUDED.dm_model, user_settings.dm_model),
+    gps_model = COALESCE(EXCLUDED.gps_model, user_settings.gps_model),
+    satellite_model = COALESCE(EXCLUDED.satellite_model, user_settings.satellite_model),
+    updated_at = NOW();
+END;
+$$ LANGUAGE plpgsql;
+
+-- 4.1 ДОПОЛНИТЕЛЬНЫЕ ТАБЛИЦЫ И КОЛОНКИ (ФИЗИЧЕСКОЕ ПРОСТРАНСТВО, НАВЫКИ, СТРУКТУРЫ)
+CREATE TABLE IF NOT EXISTS subzones (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  pos_x FLOAT NOT NULL DEFAULT 0,
+  pos_y FLOAT NOT NULL DEFAULT 0,
+  radius FLOAT NOT NULL DEFAULT 10,
+  danger_level TEXT DEFAULT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS location_structures (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'shelter',
+  hp INT NOT NULL DEFAULT 50,
+  max_hp INT NOT NULL DEFAULT 50,
+  tags TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS creature_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+  species_name TEXT NOT NULL,
+  race TEXT DEFAULT 'Чудовище',
+  category TEXT DEFAULT 'beast',
+  tier INT DEFAULT 1,
+  level_min INT DEFAULT 1,
+  level_max INT DEFAULT 5,
+  base_attacks JSONB DEFAULT '[]',
+  special_attacks JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS scale_unit TEXT NOT NULL DEFAULT 'метры';
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS current_round INT DEFAULT 1;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS current_wild_zone_danger_level TEXT DEFAULT 'normal';
+
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS pos_x FLOAT NOT NULL DEFAULT 0;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS pos_y FLOAT NOT NULL DEFAULT 0;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS bounds_shape TEXT NOT NULL DEFAULT 'circle';
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS bounds_data JSONB NOT NULL DEFAULT '{"radius": 100}'::jsonb;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS danger_level TEXT NOT NULL DEFAULT 'normal';
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS biome TEXT DEFAULT NULL;
+
+ALTER TABLE players ADD COLUMN IF NOT EXISTS pos_x FLOAT NOT NULL DEFAULT 0;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS pos_y FLOAT NOT NULL DEFAULT 0;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS subzone_id UUID REFERENCES subzones(id) ON DELETE SET NULL;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS is_busy BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS busy_activity TEXT DEFAULT NULL;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS busy_remaining_minutes INT NOT NULL DEFAULT 0;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS busy_target_minutes INT NOT NULL DEFAULT 0;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS busy_reward_meta JSONB DEFAULT '{}'::jsonb;
+
+ALTER TABLE npcs ADD COLUMN IF NOT EXISTS is_hostile BOOLEAN DEFAULT FALSE;
+ALTER TABLE npcs ADD COLUMN IF NOT EXISTS pos_x FLOAT NOT NULL DEFAULT 0;
+ALTER TABLE npcs ADD COLUMN IF NOT EXISTS pos_y FLOAT NOT NULL DEFAULT 0;
+ALTER TABLE npcs ADD COLUMN IF NOT EXISTS subzone_id UUID REFERENCES subzones(id) ON DELETE SET NULL;
+ALTER TABLE npcs ADD COLUMN IF NOT EXISTS party_id UUID DEFAULT NULL;
+ALTER TABLE npcs ADD COLUMN IF NOT EXISTS xp INT DEFAULT 0;
+ALTER TABLE npcs ADD COLUMN IF NOT EXISTS stat_points INT DEFAULT 0;
+ALTER TABLE npcs ADD COLUMN IF NOT EXISTS base_attacks JSONB DEFAULT '[]';
+ALTER TABLE npcs ADD COLUMN IF NOT EXISTS special_attacks JSONB DEFAULT '[]';
+
+ALTER TABLE player_skills ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT 'Навык';
+ALTER TABLE player_skills ADD COLUMN IF NOT EXISTS xp INT NOT NULL DEFAULT 0;
+ALTER TABLE player_skills ADD COLUMN IF NOT EXISTS xp_to_next_level INT NOT NULL DEFAULT 100;
+ALTER TABLE player_skills ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+ALTER TABLE player_skills ADD COLUMN IF NOT EXISTS effects JSONB DEFAULT '{}';
+
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS npc_id UUID REFERENCES npcs(id) ON DELETE CASCADE;
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS durability INT DEFAULT 100;
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS condition TEXT DEFAULT 'good';
 
 -- 5. RPC ДЛЯ РАСПРЕДЕЛЕНИЯ ОЧКОВ ХАРАКТЕРИСТИК (ОХ)
 CREATE OR REPLACE FUNCTION public.allocate_stat_points(
@@ -577,6 +686,315 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.allocate_stat_points(UUID, TEXT, INT) TO authenticated, anon, service_role;
+
+-- 5.1 RPC ДЛЯ ПРОКАЧКИ НАВЫКОВ (1..100) И ПРИМЕНЕНИЯ МУТАЦИЙ ХОДА
+CREATE OR REPLACE FUNCTION public.add_player_skill_xp(
+  p_player_id UUID,
+  p_skill_key TEXT,
+  p_skill_name TEXT,
+  p_xp_amount INT
+) RETURNS JSONB AS $$
+DECLARE
+  v_skill RECORD;
+  v_cur_lvl INT;
+  v_cur_xp INT;
+  v_next_xp INT;
+  v_new_lvl INT;
+  v_new_xp INT;
+  v_leveled_up BOOLEAN := false;
+  v_effects JSONB;
+BEGIN
+  p_skill_key := LOWER(TRIM(p_skill_key));
+  IF p_xp_amount <= 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Количество опыта должно быть больше нуля');
+  END IF;
+
+  SELECT * INTO v_skill FROM public.player_skills
+  WHERE player_id = p_player_id AND skill_key = p_skill_key
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    v_cur_lvl := 1;
+    v_cur_xp := 0;
+    v_next_xp := 100;
+  ELSE
+    v_cur_lvl := COALESCE(v_skill.level, 1);
+    v_cur_xp := COALESCE(v_skill.xp, 0);
+    v_next_xp := COALESCE(v_skill.xp_to_next_level, 100);
+  END IF;
+
+  IF v_cur_lvl >= 100 THEN
+    RETURN jsonb_build_object('success', true, 'skill_key', p_skill_key, 'level', 100, 'xp', v_next_xp, 'leveled_up', false, 'is_max', true);
+  END IF;
+
+  v_new_lvl := v_cur_lvl;
+  v_new_xp := v_cur_xp + p_xp_amount;
+
+  WHILE v_new_xp >= v_next_xp AND v_new_lvl < 100 LOOP
+    v_new_xp := v_new_xp - v_next_xp;
+    v_new_lvl := v_new_lvl + 1;
+    v_next_xp := v_new_lvl * 100;
+    v_leveled_up := true;
+  END LOOP;
+
+  v_effects := jsonb_build_object(
+    'bonus_pct', v_new_lvl,
+    'accuracy_bonus', FLOOR(v_new_lvl / 10)::INT,
+    'time_reduction_pct', LEAST(50, FLOOR(v_new_lvl * 0.5)::INT)
+  );
+
+  INSERT INTO public.player_skills (player_id, skill_key, name, level, xp, xp_to_next_level, effects, updated_at)
+  VALUES (p_player_id, p_skill_key, p_skill_name, v_new_lvl, v_new_xp, v_next_xp, v_effects, NOW())
+  ON CONFLICT (player_id, skill_key) DO UPDATE SET
+    name = EXCLUDED.name,
+    level = v_new_lvl,
+    xp = v_new_xp,
+    xp_to_next_level = v_next_xp,
+    effects = v_effects,
+    updated_at = NOW();
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'skill_key', p_skill_key,
+    'name', p_skill_name,
+    'old_level', v_cur_lvl,
+    'level', v_new_lvl,
+    'xp', v_new_xp,
+    'xp_to_next_level', v_next_xp,
+    'leveled_up', v_leveled_up,
+    'effects', v_effects
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.interrupt_busy_activity(p_player_id UUID)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_player RECORD;
+  v_time_spent INT;
+BEGIN
+  SELECT * INTO v_player FROM public.players WHERE id = p_player_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Player not found');
+  END IF;
+  IF NOT v_player.is_busy THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Player is not busy');
+  END IF;
+  v_time_spent := GREATEST(0, v_player.busy_target_minutes - v_player.busy_remaining_minutes);
+  UPDATE public.players
+  SET is_busy = false, busy_activity = NULL, busy_remaining_minutes = 0, busy_target_minutes = 0
+  WHERE id = p_player_id;
+  RETURN jsonb_build_object(
+    'success', true,
+    'player_id', p_player_id,
+    'interrupted_activity', v_player.busy_activity,
+    'time_spent_minutes', v_time_spent,
+    'reward_meta', v_player.busy_reward_meta
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.apply_turn_mutations(
+  p_mutations JSONB,
+  p_session_id UUID
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_mutation JSONB;
+  v_mutation_type TEXT;
+  v_applied_count INT := 0;
+  v_session_year INT;
+  v_session_month INT;
+  v_session_day INT;
+  v_session_hour INT;
+  v_session_minute INT;
+  v_total_minutes INT;
+  v_new_minute INT;
+  v_new_hour INT;
+  v_new_day INT;
+  v_new_month INT;
+  v_new_year INT;
+  v_target_type TEXT;
+  v_target_id UUID;
+  v_delta INT;
+  v_current_hp INT;
+  v_max_hp INT;
+  v_item_id UUID;
+  v_durability_delta INT;
+  v_set_broken BOOLEAN;
+  v_current_durability INT;
+  v_attrs JSONB;
+  v_item_name TEXT;
+  v_item_quantity INT;
+  v_delete_qty INT;
+  v_owner_id UUID;
+  v_owner_type TEXT;
+  v_item JSONB;
+  v_from_id UUID;
+  v_to_id UUID;
+  v_from_type TEXT;
+  v_to_type TEXT;
+  v_transfer_qty INT;
+  v_location_id UUID;
+  v_structure JSONB;
+  v_busy_player_id UUID;
+  v_busy_activity TEXT;
+  v_busy_minutes INT;
+  v_reward_preview TEXT;
+  v_entity_type TEXT;
+  v_entity_id UUID;
+  v_pos_x FLOAT;
+  v_pos_y FLOAT;
+  v_subzone_id UUID;
+BEGIN
+  SELECT game_year, game_month, game_day, game_hour, game_minute
+  INTO v_session_year, v_session_month, v_session_day, v_session_hour, v_session_minute
+  FROM public.sessions WHERE id = p_session_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'SESSION_NOT_FOUND: %', p_session_id USING ERRCODE = 'P0001';
+  END IF;
+
+  FOR v_mutation IN SELECT * FROM jsonb_array_elements(p_mutations) LOOP
+    v_mutation_type := v_mutation->>'type';
+    CASE v_mutation_type
+      WHEN 'UPDATE_HP' THEN
+        v_target_type := v_mutation->>'target_type';
+        v_target_id := (v_mutation->>'id')::UUID;
+        v_delta := (v_mutation->>'delta')::INT;
+        IF v_target_type = 'player' THEN
+          SELECT hp, max_hp INTO v_current_hp, v_max_hp FROM public.players WHERE id = v_target_id FOR UPDATE;
+          IF NOT FOUND THEN RAISE EXCEPTION 'TARGET_PLAYER_NOT_FOUND: %', v_target_id USING ERRCODE = 'P0001'; END IF;
+          UPDATE public.players SET hp = GREATEST(0, LEAST(v_max_hp, v_current_hp + v_delta)) WHERE id = v_target_id;
+        ELSIF v_target_type = 'npc' THEN
+          SELECT hp, max_hp INTO v_current_hp, v_max_hp FROM public.npcs WHERE id = v_target_id FOR UPDATE;
+          IF NOT FOUND THEN RAISE EXCEPTION 'TARGET_NPC_NOT_FOUND: %', v_target_id USING ERRCODE = 'P0001'; END IF;
+          UPDATE public.npcs SET hp = GREATEST(0, LEAST(v_max_hp, v_current_hp + v_delta)), is_alive = (GREATEST(0, LEAST(v_max_hp, v_current_hp + v_delta)) > 0) WHERE id = v_target_id;
+        END IF;
+        v_applied_count := v_applied_count + 1;
+
+      WHEN 'UPDATE_DURABILITY' THEN
+        v_item_id := (v_mutation->>'item_id')::UUID;
+        v_durability_delta := (v_mutation->>'delta')::INT;
+        v_set_broken := COALESCE((v_mutation->>'set_broken')::BOOLEAN, false);
+        SELECT durability, attributes INTO v_current_durability, v_attrs FROM public.inventory WHERE id = v_item_id FOR UPDATE;
+        IF NOT FOUND THEN RAISE EXCEPTION 'ITEM_NOT_FOUND: %', v_item_id USING ERRCODE = 'P0001'; END IF;
+        UPDATE public.inventory SET
+          durability = CASE WHEN v_set_broken THEN 0 ELSE GREATEST(0, COALESCE(v_current_durability, 100) + v_durability_delta) END,
+          attributes = CASE WHEN v_set_broken THEN jsonb_set(COALESCE(v_attrs, '{}'::jsonb), '{broken}', 'true'::jsonb) ELSE v_attrs END
+        WHERE id = v_item_id;
+        v_applied_count := v_applied_count + 1;
+
+      WHEN 'DELETE_ITEM' THEN
+        v_item_id := (v_mutation->>'item_id')::UUID;
+        v_delete_qty := (v_mutation->>'quantity')::INT;
+        SELECT quantity INTO v_item_quantity FROM public.inventory WHERE id = v_item_id FOR UPDATE;
+        IF NOT FOUND THEN RAISE EXCEPTION 'ITEM_NOT_FOUND: %', v_item_id USING ERRCODE = 'P0001'; END IF;
+        IF v_item_quantity <= v_delete_qty THEN
+          DELETE FROM public.inventory WHERE id = v_item_id;
+        ELSE
+          UPDATE public.inventory SET quantity = quantity - v_delete_qty WHERE id = v_item_id;
+        END IF;
+        v_applied_count := v_applied_count + 1;
+
+      WHEN 'INSERT_ITEM' THEN
+        v_owner_id := (v_mutation->>'owner_id')::UUID;
+        v_owner_type := v_mutation->>'owner_type';
+        v_item := v_mutation->'item';
+        IF v_owner_type = 'player' THEN
+          INSERT INTO public.inventory (player_id, item_name, quantity, type, attributes)
+          VALUES (v_owner_id, COALESCE(v_item->>'item_name', v_item->>'name', 'Предмет'), COALESCE((v_item->>'quantity')::INT, 1), COALESCE(v_item->>'type', 'misc'), COALESCE(v_item->'attributes', '{}'::jsonb));
+        END IF;
+        v_applied_count := v_applied_count + 1;
+
+      WHEN 'TRANSFER_ITEM' THEN
+        v_item_id := (v_mutation->>'item_id')::UUID;
+        v_from_id := (v_mutation->>'from_id')::UUID;
+        v_to_id := (v_mutation->>'to_id')::UUID;
+        v_from_type := v_mutation->>'from_type';
+        v_to_type := v_mutation->>'to_type';
+        v_transfer_qty := (v_mutation->>'quantity')::INT;
+        SELECT item_name, quantity INTO v_item_name, v_item_quantity FROM public.inventory WHERE id = v_item_id FOR UPDATE;
+        IF NOT FOUND THEN RAISE EXCEPTION 'ITEM_NOT_FOUND: %', v_item_id USING ERRCODE = 'P0001'; END IF;
+        IF v_item_quantity < v_transfer_qty THEN RAISE EXCEPTION 'INSUFFICIENT_QUANTITY: has %, needs %', v_item_quantity, v_transfer_qty USING ERRCODE = 'P0001'; END IF;
+        IF v_item_quantity = v_transfer_qty THEN
+          DELETE FROM public.inventory WHERE id = v_item_id;
+        ELSE
+          UPDATE public.inventory SET quantity = quantity - v_transfer_qty WHERE id = v_item_id;
+        END IF;
+        IF v_to_type = 'player' THEN
+          INSERT INTO public.inventory (player_id, item_name, quantity, type, attributes)
+          VALUES (v_to_id, v_item_name, v_transfer_qty, 'misc', jsonb_build_object('transferred', true));
+        END IF;
+        v_applied_count := v_applied_count + 1;
+
+      WHEN 'SPAWN_STRUCTURE' THEN
+        v_location_id := (v_mutation->>'location_id')::UUID;
+        v_structure := v_mutation->'structure';
+        INSERT INTO public.location_structures (location_id, name, type, hp, max_hp)
+        VALUES (v_location_id, COALESCE(v_structure->>'name', 'Структура'), COALESCE(v_structure->>'type', 'shelter'), COALESCE((v_structure->>'hp')::INT, 50), COALESCE((v_structure->>'max_hp')::INT, 50));
+        v_applied_count := v_applied_count + 1;
+
+      WHEN 'ADVANCE_TIME' THEN
+        v_total_minutes := (v_mutation->>'minutes')::INT;
+        v_new_minute := v_session_minute + (v_total_minutes % 60);
+        v_new_hour := v_session_hour + (v_total_minutes / 60);
+        IF v_new_minute >= 60 THEN v_new_hour := v_new_hour + (v_new_minute / 60); v_new_minute := v_new_minute % 60; END IF;
+        v_new_day := v_session_day; v_new_month := v_session_month; v_new_year := v_session_year;
+        IF v_new_hour >= 24 THEN
+          v_new_day := v_new_day + (v_new_hour / 24); v_new_hour := v_new_hour % 24;
+          WHILE v_new_day > 30 LOOP
+            v_new_day := v_new_day - 30; v_new_month := v_new_month + 1;
+            IF v_new_month > 12 THEN v_new_month := 1; v_new_year := v_new_year + 1; END IF;
+          END LOOP;
+        END IF;
+        v_session_minute := v_new_minute; v_session_hour := v_new_hour; v_session_day := v_new_day; v_session_month := v_new_month; v_session_year := v_new_year;
+        UPDATE public.sessions SET game_year = v_new_year, game_month = v_new_month, game_day = v_new_day, game_hour = v_new_hour, game_minute = v_new_minute, updated_at = NOW() WHERE id = p_session_id;
+        UPDATE public.players SET busy_remaining_minutes = GREATEST(0, busy_remaining_minutes - v_total_minutes), is_busy = (GREATEST(0, busy_remaining_minutes - v_total_minutes) > 0) WHERE session_id = p_session_id AND is_busy = true;
+        v_applied_count := v_applied_count + 1;
+
+      WHEN 'SET_PLAYER_BUSY' THEN
+        v_busy_player_id := (v_mutation->>'player_id')::UUID;
+        v_busy_activity := COALESCE(v_mutation->>'activity', v_mutation->>'activity_description', 'Длительное занятие');
+        v_busy_minutes := COALESCE((v_mutation->>'minutes')::INT, (v_mutation->>'duration_minutes')::INT, 60);
+        v_reward_preview := v_mutation->>'reward_preview';
+        UPDATE public.players
+        SET is_busy = true, busy_activity = v_busy_activity, busy_remaining_minutes = v_busy_minutes, busy_target_minutes = v_busy_minutes, busy_reward_meta = jsonb_build_object('preview', v_reward_preview)
+        WHERE id = v_busy_player_id;
+        v_applied_count := v_applied_count + 1;
+
+      WHEN 'UPDATE_ENTITY_COORDS' THEN
+        v_entity_type := v_mutation->>'entity_type';
+        v_entity_id := (v_mutation->>'id')::UUID;
+        v_pos_x := (v_mutation->>'pos_x')::FLOAT;
+        v_pos_y := (v_mutation->>'pos_y')::FLOAT;
+        IF v_entity_type = 'player' THEN
+          UPDATE public.players SET pos_x = v_pos_x, pos_y = v_pos_y WHERE id = v_entity_id;
+        ELSIF v_entity_type = 'npc' THEN
+          UPDATE public.npcs SET pos_x = v_pos_x, pos_y = v_pos_y WHERE id = v_entity_id;
+        END IF;
+        v_applied_count := v_applied_count + 1;
+
+      WHEN 'SET_PLAYER_SUBZONE' THEN
+        v_busy_player_id := (v_mutation->>'player_id')::UUID;
+        v_subzone_id := NULLIF(v_mutation->>'subzone_id', '')::UUID;
+        UPDATE public.players SET subzone_id = v_subzone_id WHERE id = v_busy_player_id;
+        v_applied_count := v_applied_count + 1;
+
+      ELSE
+        RAISE EXCEPTION 'UNKNOWN_MUTATION_TYPE: %', v_mutation_type USING ERRCODE = 'P0001';
+    END CASE;
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'applied_count', v_applied_count,
+    'new_time', jsonb_build_object('year', v_session_year, 'month', v_session_month, 'day', v_session_day, 'hour', v_session_hour, 'minute', v_session_minute)
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN jsonb_build_object('success', false, 'error_code', 'RACE_CONDITION_CONFLICT', 'details', SQLERRM, 'sql_state', SQLSTATE);
+END;
+$$;
 
 -- 6. RPC ДЛЯ УДАЛЕНИЯ УЧАСТНИКА СЕССИИ СОЗДАТЕЛЕМ
 CREATE OR REPLACE FUNCTION public.remove_session_player(

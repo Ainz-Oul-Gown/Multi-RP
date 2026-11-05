@@ -34,6 +34,56 @@ export function renderChoicesBlock(choices = []) {
   `;
 }
 
+export function renderTurnBadgesBlock(metadata = {}) {
+  if (!metadata || typeof metadata !== 'object') return '';
+  let badges = [];
+
+  if (Array.isArray(metadata.turn_badges) && metadata.turn_badges.length > 0) {
+    badges = metadata.turn_badges;
+  } else {
+    if (metadata.hp_status && typeof metadata.hp_status.delta === 'number' && metadata.hp_status.delta !== 0) {
+      const d = metadata.hp_status.delta;
+      badges.push({
+        icon: d > 0 ? '💚' : '🩸',
+        label: `${d > 0 ? `+${d}` : d} HP (${metadata.hp_status.current_hp}/${metadata.hp_status.max_hp})`,
+        tone: d > 0 ? 'success' : 'danger',
+      });
+    }
+    if (metadata.inventory_delta) {
+      for (const gained of metadata.inventory_delta.gained || []) {
+        badges.push({ icon: '🎒', label: `+${gained}`, tone: 'success' });
+      }
+      for (const lost of metadata.inventory_delta.lost || []) {
+        badges.push({ icon: '📦', label: `-${lost}`, tone: 'muted' });
+      }
+    }
+  }
+
+  if (badges.length === 0) return '';
+
+  const toneStyles = {
+    gold: 'background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.45); color: #fbbf24;',
+    success: 'background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.35); color: #6ee7b7;',
+    danger: 'background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5;',
+    info: 'background: rgba(139, 92, 246, 0.14); border: 1px solid rgba(139, 92, 246, 0.35); color: #c4b5fd;',
+    muted: 'background: rgba(148, 163, 184, 0.1); border: 1px solid rgba(148, 163, 184, 0.25); color: #cbd5e1;',
+  };
+
+  return `
+    <div class="master-turn-badges" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 0.65rem;">
+      ${badges.slice(0, 6).map(b => {
+        const style = toneStyles[b.tone] || toneStyles.info;
+        return `
+          <span class="turn-outcome-badge" style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 6px; font-size: 0.76rem; font-weight: 500; line-height: 1.3; ${style}">
+            <span>${escapeHtml(b.icon || '🎲')}</span>
+            <span>${escapeHtml(b.label || '')}</span>
+          </span>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 export function renderMessage(msg, currentUserId, currentPlayerId, options = {}) {
   const safeMsgId = escapeHtml(msg.id || '');
   if (msg.sender_type === 'master') {
@@ -63,6 +113,7 @@ export function renderMessage(msg, currentUserId, currentPlayerId, options = {})
           ? msg.metadata.choices
           : (options.fallbackChoices || []))
       : [];
+    const badgesHtml = !isGlobalLog ? renderTurnBadgesBlock(msg.metadata) : '';
 
     return `
       <div class="message ${isGlobalLog ? 'message-system' : 'message-master'}" data-message-id="${safeMsgId}">
@@ -70,6 +121,7 @@ export function renderMessage(msg, currentUserId, currentPlayerId, options = {})
         <div class="message-body">
           ${isGlobalLog ? '<div class="message-sender" style="font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: 2px;">Событие мира</div>' : ''}
           <div class="message-text">${formatRpText(msg.content)}</div>
+          ${badgesHtml}
           ${showChoices ? renderChoicesBlock(effectiveChoices) : ''}
         </div>
       </div>

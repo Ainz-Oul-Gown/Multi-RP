@@ -33,19 +33,35 @@ export class BuildHandler extends BaseActionHandler {
       inventoryMap.set(item.id, item);
     }
 
+    const findInventoryItem = (idOrName: string) => {
+      if (!idOrName) return undefined;
+      const byId = inventoryMap.get(idOrName);
+      if (byId) return byId;
+      const needle = idOrName.trim().toLowerCase();
+      return player.inventory.find(
+        (i) =>
+          (i.item_name || "").trim().toLowerCase() === needle ||
+          (i.item_name || "").trim().toLowerCase().includes(needle) ||
+          needle.includes((i.item_name || "").trim().toLowerCase())
+      );
+    };
+
+    const resolvedMaterials: { item_id: string; quantity: number }[] = [];
     for (const required of requiredMaterials) {
-      const owned = inventoryMap.get(required.id);
+      const reqKey = required.id || (required as any).name || (required as any).item_name || "";
+      const owned = findInventoryItem(reqKey);
       if (!owned || owned.quantity < required.quantity) {
         return {
           result: {
             action_type: this.action_type,
             success: false,
-            details: `Недостаточно материалов: ${owned?.item_name || required.id}`,
+            details: `Недостаточно материалов: ${owned?.item_name || reqKey}`,
           },
           mutations: [],
           system_facts: [`${player.name} не смог построить: не хватает материалов.`],
         };
       }
+      resolvedMaterials.push({ item_id: owned.id, quantity: required.quantity });
     }
 
     // ============================================
@@ -63,9 +79,9 @@ export class BuildHandler extends BaseActionHandler {
 
     if (!roll.success) {
       // Провал: 30% материалов испорчено
-      for (const required of requiredMaterials) {
+      for (const required of resolvedMaterials) {
         const lost = Math.ceil(required.quantity * 0.3);
-        if (lost > 0) mutations.push({ type: "DELETE_ITEM", item_id: required.id, quantity: lost });
+        if (lost > 0) mutations.push({ type: "DELETE_ITEM", item_id: required.item_id, quantity: lost });
       }
       systemFacts.push(`${player.name} неудачно построил: потеряно ~30% материалов.`);
       return {
@@ -83,8 +99,8 @@ export class BuildHandler extends BaseActionHandler {
     // ============================================
     // Успех: списать материалы + создать структуру
     // ============================================
-    for (const required of requiredMaterials) {
-      mutations.push({ type: "DELETE_ITEM", item_id: required.id, quantity: required.quantity });
+    for (const required of resolvedMaterials) {
+      mutations.push({ type: "DELETE_ITEM", item_id: required.item_id, quantity: required.quantity });
     }
 
     if (context.session.current_location_id) {

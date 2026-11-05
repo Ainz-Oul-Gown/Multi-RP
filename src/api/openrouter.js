@@ -224,7 +224,7 @@ async function getCardModel() {
   return settings.card_model || AI_MODEL;
 }
 
-// Call OpenRouter directly from frontend (no Edge Function limits)
+// Call OpenRouter directly from frontend (no Edge Function limits) with automatic fallback across free/cheap models
 export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
   const apiKey = await getApiKey();
   if (!apiKey) {
@@ -232,75 +232,85 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
   }
 
   // Use specified model or get from user settings
-  const model = options.model || await getCardModel();
-  
-  // Determine provider based on model
-  const getProvider = (modelId) => {
-    if (modelId.includes('xiaomi')) return ['Xiaomi'];
-    if (modelId.includes('z-ai')) return ['Z-AI'];
-    if (modelId.includes('thinkingmachines')) return ['Thinking Machines'];
-    if (modelId.includes('minimax')) return ['MiniMax'];
-    if (modelId.includes('meta-llama')) return ['Meta'];
-    if (modelId === 'openrouter/free') return []; // Auto-select
-    return ['Xiaomi']; // default
-  };
+  const primaryModel = options.model || await getCardModel();
+  const fallbackCandidates = [
+    primaryModel,
+    'google/gemma-4-31b-it:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'qwen/qwen-2.5-72b-instruct:free',
+    'deepseek/deepseek-chat:free',
+    'google/gemini-2.0-flash-exp:free',
+    'mistralai/mistral-small-24b-instruct-2501:free',
+  ].filter(Boolean);
+  const modelsToTry = [...new Set(fallbackCandidates)];
 
-  const requestBody = {
-    model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ],
-    temperature: options.temperature ?? 0.7,
-    provider: {
-      order: getProvider(model),
-      allow_fallbacks: options.allow_fallbacks ?? false,
-    },
-    reasoning: {
-      effort: options.reasoningEffort || 'low',
-    },
-  };
+  let lastErrorText = '';
+  let lastStatus = 0;
 
-  console.log('[callOpenRouter] Request:', {
-    model: requestBody.model,
-    provider: requestBody.provider,
-    reasoning: requestBody.reasoning,
-    userMsgLength: userMessage.length,
-  });
+  for (const currentModel of modelsToTry) {
+    const requestBody = {
+      model: currentModel,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: options.temperature ?? 0.7,
+    };
 
-  console.log('[callOpenRouter] Request:', {
-    model: requestBody.model,
-    provider: requestBody.provider,
-    reasoning: requestBody.reasoning,
-    userMsgLength: userMessage.length,
-    systemMsgLength: systemPrompt.length,
-  });
+    if (options.max_tokens) {
+      requestBody.max_tokens = options.max_tokens;
+    }
 
-  const response = await fetch(OPENROUTER_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': window.location.origin,
-      'X-Title': 'MultiRP-AI',
-    },
-    body: JSON.stringify(requestBody),
-  });
+    console.log('[callOpenRouter] Request:', {
+      model: requestBody.model,
+      userMsgLength: userMessage.length,
+      systemMsgLength: systemPrompt.length,
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenRouter error: ${response.status} - ${errText}`);
+    try {
+      const response = await fetch(OPENROUTER_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://multirp.ai',
+          'X-Title': 'MultiRP-AI',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        lastStatus = response.status;
+        lastErrorText = await response.text();
+        console.warn(`[callOpenRouter] Model ${currentModel} returned ${response.status}, trying next fallback...`, lastErrorText.slice(0, 200));
+        if (response.status === 401) {
+          throw new Error(`Неверный API-ключ OpenRouter (401): ${lastErrorText}`);
+        }
+        continue;
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      if (!content.trim() && modelsToTry.length > 1) {
+        console.warn(`[callOpenRouter] Model ${currentModel} returned empty content, trying next fallback...`);
+        continue;
+      }
+
+      console.log('[callOpenRouter] Response:', {
+        provider: data.provider,
+        model: data.model || currentModel,
+        totalTokens: data.usage?.total_tokens,
+        contentLength: content.length,
+      });
+      return content;
+    } catch (err) {
+      if (err.message?.includes('401')) throw err;
+      lastErrorText = err.message || String(err);
+      console.warn(`[callOpenRouter] Fetch error with ${currentModel}:`, lastErrorText);
+    }
   }
 
-  const data = await response.json();
-  console.log('[callOpenRouter] Response:', {
-    provider: data.provider,
-    model: data.model,
-    reasoningTokens: data.usage?.completion_tokens_details?.reasoning_tokens,
-    totalTokens: data.usage?.total_tokens,
-    contentLength: data.choices?.[0]?.message?.content?.length,
-  });
-  return data.choices?.[0]?.message?.content || '';
+  throw new Error(`OpenRouter error: ${lastStatus || 'network'} - ${lastErrorText}`);
 }
 
 // Count NPCs in text

@@ -42,7 +42,7 @@ export async function processNpcInteractions(params: {
     narrator_output,
     all_npcs,
     openrouter_api_key,
-    chat_model = "xiaomi/mimo-v2.5",
+    chat_model = "google/gemma-4-31b-it:free",
   } = params;
 
   if (!all_npcs || all_npcs.length === 0) return [];
@@ -125,51 +125,61 @@ export async function processNpcInteractions(params: {
             outcome_text: outcomeSnippet,
           });
 
-          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${openrouter_api_key}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: chat_model,
-              messages: [
-                { role: "system", content: "Ты — модуль формирования воспоминаний NPC. Отвечай строго в формате JSON." },
-                { role: "user", content: prompt },
-              ],
-              temperature: 0.7,
-              max_tokens: 500,
-            }),
-            signal: AbortSignal.timeout(15000),
-          });
+          const modelsToTry = Array.from(new Set([
+            chat_model,
+            "google/gemma-4-31b-it:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "deepseek/deepseek-chat:free",
+          ].filter(Boolean)));
 
-          if (resp.ok) {
-            const data = await resp.json();
-            const rawContent = data.choices?.[0]?.message?.content || "";
-            const parsed = parseAIJson(rawContent);
-
-            if (parsed && typeof parsed.memory_text === "string") {
-              const vividness = Math.max(1, Math.min(10, Number(parsed.vividness) || 5));
-              const delta = Math.max(-30, Math.min(30, Number(parsed.relationship_delta) || 0));
-              evaluation = {
-                memory_text: parsed.memory_text.trim(),
-                vividness,
-                tier: getMemoryTierFromVividness(vividness),
-                emotional_tone: parsed.emotional_tone || "neutral",
-                relationship_delta: delta,
-                status_tags: Array.isArray(parsed.status_tags) ? parsed.status_tags : [],
-                significance_reason: parsed.significance_reason || "",
-              };
-            } else {
-              evaluation = buildFallbackMemoryEvaluation({
-                npc: { name: npc.name },
-                player: { name: acting_player.name },
-                action_text,
-                action_type: actions[0]?.action_type,
-                outcome_text: outcomeSnippet,
-                is_attack: isAttackAction,
+          let parsedEval: any = null;
+          for (const curModel of modelsToTry) {
+            try {
+              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${openrouter_api_key}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  model: curModel,
+                  messages: [
+                    { role: "system", content: "Ты — модуль формирования воспоминаний NPC. Отвечай строго в формате JSON." },
+                    { role: "user", content: prompt },
+                  ],
+                  temperature: 0.7,
+                  max_tokens: 500,
+                }),
+                signal: AbortSignal.timeout(10000),
               });
+
+              if (resp.ok) {
+                const data = await resp.json();
+                const rawContent = data.choices?.[0]?.message?.content || "";
+                const candidate = parseAIJson(rawContent);
+                if (candidate && typeof candidate.memory_text === "string") {
+                  parsedEval = candidate;
+                  break;
+                }
+              }
+            } catch {
+              // Пробуем следующую модель из списка
             }
+          }
+
+          if (parsedEval && typeof parsedEval.memory_text === "string") {
+            const vividness = Math.max(1, Math.min(10, Number(parsedEval.vividness) || 5));
+            const delta = Math.max(-30, Math.min(30, Number(parsedEval.relationship_delta) || 0));
+            evaluation = {
+              memory_text: parsedEval.memory_text.trim(),
+              vividness,
+              tier: getMemoryTierFromVividness(vividness),
+              emotional_tone: parsedEval.emotional_tone || "neutral",
+              relationship_delta: delta,
+              status_tags: Array.isArray(parsedEval.status_tags) ? parsedEval.status_tags : [],
+              significance_reason: parsedEval.significance_reason || "",
+            };
           } else {
             evaluation = buildFallbackMemoryEvaluation({
               npc: { name: npc.name },

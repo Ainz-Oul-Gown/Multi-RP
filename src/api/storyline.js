@@ -160,6 +160,70 @@ function safeParseStorylineJson(rawText) {
 }
 
 /**
+ * Надёжный вызов OpenRouter с перебором резервных бесплатных/экономных моделей для генерации сюжета
+ */
+async function callStorylineLLM(apiKey, chosenModel, systemPrompt, userPrompt, temperature = 0.7) {
+  const modelsToTry = [...new Set([
+    chosenModel,
+    'google/gemma-4-31b-it:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'qwen/qwen-2.5-72b-instruct:free',
+    'deepseek/deepseek-chat:free',
+    'google/gemini-2.0-flash-exp:free',
+    'mistralai/mistral-small-24b-instruct-2501:free',
+  ].filter(Boolean))];
+
+  let lastStatus = 0;
+  let lastErrorText = '';
+
+  for (const currentModel of modelsToTry) {
+    try {
+      const res = await fetch(OPENROUTER_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature,
+          max_tokens: 2500,
+        }),
+      });
+
+      if (!res.ok) {
+        lastStatus = res.status;
+        lastErrorText = await res.text();
+        console.warn(`[Storyline] Model ${currentModel} failed (${res.status}), trying next...`);
+        if (res.status === 401) {
+          throw new Error(`OpenRouter error (${res.status}): ${lastErrorText}`);
+        }
+        continue;
+      }
+
+      const data = await res.json();
+      const rawContent = data.choices?.[0]?.message?.content;
+      if (!rawContent) {
+        lastErrorText = 'Пустой ответ от нейросети';
+        continue;
+      }
+
+      return safeParseStorylineJson(rawContent);
+    } catch (err) {
+      if (err.message?.includes('(401)')) throw err;
+      lastErrorText = err.message || String(err);
+      console.warn(`[Storyline] Error with model ${currentModel}:`, lastErrorText);
+    }
+  }
+
+  throw new Error(`OpenRouter error (${lastStatus || 'parse'}): ${lastErrorText}`);
+}
+
+/**
  * Сгенерировать сюжетную линию для сессии на основе мира
  */
 export async function generateStorylineForSession({
@@ -183,36 +247,7 @@ export async function generateStorylineForSession({
   }
 
   const { systemPrompt, userPrompt } = buildStorylinePrompt(worldCtx, customWishes);
-
-  const res = await fetch(OPENROUTER_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: chosenModel,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 2500,
-    }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`OpenRouter error (${res.status}): ${errText}`);
-  }
-
-  const data = await res.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    throw new Error('Пустой ответ от нейросети при генерации сюжета');
-  }
-
-  const parsed = safeParseStorylineJson(rawContent);
+  const parsed = await callStorylineLLM(apiKey, chosenModel, systemPrompt, userPrompt, 0.7);
 
   // Нормализация структуры сюжета
   const storyline = {
@@ -281,32 +316,7 @@ export async function rewriteStoryline({
   }
 
   const { systemPrompt, userPrompt } = buildStorylinePrompt(worldCtx, customWishes, currentStoryline);
-
-  const res = await fetch(OPENROUTER_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: chosenModel,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.75,
-      max_tokens: 2500,
-    }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`OpenRouter error (${res.status}): ${errText}`);
-  }
-
-  const data = await res.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-  const parsed = safeParseStorylineJson(rawContent);
+  const parsed = await callStorylineLLM(apiKey, chosenModel, systemPrompt, userPrompt, 0.75);
 
   const storyline = {
     title: parsed.title || currentStoryline?.title || `Хроники мира ${worldCtx.world.name}`,

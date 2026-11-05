@@ -427,7 +427,7 @@ export async function ensureStartingLocation(params: {
     lore_context = "",
     available_locations = [],
     openrouter_api_key,
-    model = "xiaomi/mimo-v2.5",
+    model = "google/gemma-4-31b-it:free",
   } = params;
 
   // Если локация уже есть и это не первый ход сессии — возвращаем метаданные существующей локации
@@ -481,49 +481,64 @@ export async function ensureStartingLocation(params: {
         player_level: player.level || 1,
       });
 
-      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openrouter_api_key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: "Ты — модуль генерации стартовых локаций ЛитРПГ. Отвечай строго в формате JSON." },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.7,
-          max_tokens: 700,
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
+      const modelsToTry = Array.from(new Set([
+        model,
+        "google/gemma-4-31b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen-2.5-72b-instruct:free",
+        "deepseek/deepseek-chat:free",
+      ].filter(Boolean)));
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const rawContent = data.choices?.[0]?.message?.content || "";
-        const parsed = parseAIJson(rawContent);
-        if (parsed && typeof parsed.location_name === "string" && parsed.location_name.trim().length > 0) {
-          generatedData = {
-            location_name: parsed.location_name.trim(),
-            location_type: parsed.location_type || "settlement",
-            state_name: parsed.state_name || "Центральные земли",
-            selected_subzone: parsed.selected_subzone || parsed.subzone || parsed.subzone_name || "",
-            description: parsed.description || "",
-            weather: parsed.weather || "Ясно",
-            atmosphere: {
-              sounds: Array.isArray(parsed.atmosphere?.sounds) ? parsed.atmosphere.sounds : [],
-              visuals: Array.isArray(parsed.atmosphere?.visuals) ? parsed.atmosphere.visuals : [],
+      for (const curModel of modelsToTry) {
+        try {
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openrouter_api_key}`,
+              "Content-Type": "application/json",
             },
-            time: {
-              year: Number(parsed.time?.year) || 1248,
-              month: Number(parsed.time?.month) || 5,
-              day: Number(parsed.time?.day) || 14,
-              hour: Number(parsed.time?.hour) ?? 10,
-              minute: Number(parsed.time?.minute) ?? 0,
-            },
-            initial_npcs: Array.isArray(parsed.initial_npcs) ? parsed.initial_npcs : [],
-          };
+            body: JSON.stringify({
+              model: curModel,
+              messages: [
+                { role: "system", content: "Ты — модуль генерации стартовых локаций ЛитРПГ. Отвечай строго в формате JSON." },
+                { role: "user", content: prompt },
+              ],
+              temperature: 0.7,
+              max_tokens: 700,
+            }),
+            signal: AbortSignal.timeout(12000),
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            const rawContent = data.choices?.[0]?.message?.content || "";
+            const parsed = parseAIJson(rawContent);
+            if (parsed && typeof parsed.location_name === "string" && parsed.location_name.trim().length > 0) {
+              generatedData = {
+                location_name: parsed.location_name.trim(),
+                location_type: parsed.location_type || "settlement",
+                state_name: parsed.state_name || "Центральные земли",
+                selected_subzone: parsed.selected_subzone || parsed.subzone || parsed.subzone_name || "",
+                description: parsed.description || "",
+                weather: parsed.weather || "Ясно",
+                atmosphere: {
+                  sounds: Array.isArray(parsed.atmosphere?.sounds) ? parsed.atmosphere.sounds : [],
+                  visuals: Array.isArray(parsed.atmosphere?.visuals) ? parsed.atmosphere.visuals : [],
+                },
+                time: {
+                  year: Number(parsed.time?.year) || 1248,
+                  month: Number(parsed.time?.month) || 5,
+                  day: Number(parsed.time?.day) || 14,
+                  hour: Number(parsed.time?.hour) ?? 10,
+                  minute: Number(parsed.time?.minute) ?? 0,
+                },
+                initial_npcs: Array.isArray(parsed.initial_npcs) ? parsed.initial_npcs : [],
+              };
+              break;
+            }
+          }
+        } catch (mErr) {
+          console.warn(`[starting_location_generator] Model ${curModel} failed, trying next:`, mErr);
         }
       }
     } catch (llmErr) {

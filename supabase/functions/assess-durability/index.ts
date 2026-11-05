@@ -7,7 +7,7 @@ import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
-const AI_MODEL = "xiaomi/mimo-v2.5";
+const AI_MODEL = "google/gemma-4-31b-it:free";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -78,12 +78,15 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    let userModel = AI_MODEL;
     const { data: userSettings } = await supabase
       .from("user_settings")
-      .select("openrouter_key")
+      .select("openrouter_key, satellite_model, dm_model")
       .eq("id", user_id)
       .maybeSingle();
     if (userSettings?.openrouter_key) apiKey = sanitizeKey(userSettings.openrouter_key);
+    if (userSettings?.satellite_model) userModel = userSettings.satellite_model;
+    else if (userSettings?.dm_model) userModel = userSettings.dm_model;
 
     if (!apiKey) {
       return new Response(JSON.stringify({
@@ -94,50 +97,71 @@ serve(async (req) => {
 
     const userMessage = `Предмет: ${item_name} (тип: ${item_type}, состояние: ${item_condition}, прочность: ${item_durability}%)\nДействие: ${action_description}\nКонтекст: ${use_context}\n\nОцени износ и новое состояние предмета.`;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": SUPABASE_URL,
-        "X-Title": "MultiRP-AI",
-      },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userMessage },
-        ],
-        temperature: 0.7,
-        max_tokens: 500,
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
+    const modelsToTry = Array.from(new Set([
+      userModel,
+      "google/gemma-4-31b-it:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "qwen/qwen-2.5-72b-instruct:free",
+      "deepseek/deepseek-chat:free",
+    ].filter(Boolean)));
 
-    console.log('assess-durability OpenRouter status:', response.status);
+    let rawContent = "";
+    let assessment: any = null;
+    let lastStatus = 502;
+    let errDetails = "";
 
-    if (!response.ok) {
-      let errDetails = "";
-      try {
-        const errJson = await response.json();
-        errDetails = errJson?.error?.message || errJson?.error || JSON.stringify(errJson);
-      } catch {
-        errDetails = await response.text();
+    for (const curModel of modelsToTry) {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": SUPABASE_URL,
+          "X-Title": "MultiRP-AI",
+        },
+        body: JSON.stringify({
+          model: curModel,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.7,
+          max_tokens: 500,
+        }),
+        signal: AbortSignal.timeout(25000),
+      });
+
+      console.log(`assess-durability OpenRouter status (${curModel}):`, response.status);
+
+      if (!response.ok) {
+        lastStatus = response.status;
+        try {
+          const errJson = await response.json();
+          errDetails = errJson?.error?.message || errJson?.error || JSON.stringify(errJson);
+        } catch {
+          errDetails = await response.text();
+        }
+        console.warn(`AI API error (${curModel}):`, errDetails);
+        if (response.status === 401) break;
+        continue;
       }
-      console.error("AI API error:", errDetails);
+
+      const data = await response.json();
+      rawContent = data.choices?.[0]?.message?.content || "";
+      console.log('assess-durability AI raw:', rawContent);
+      assessment = parseAIJson(rawContent);
+      if (assessment) break;
+    }
+
+    if (!assessment && !rawContent) {
       return new Response(JSON.stringify({
         error: "Ошибка AI API",
         details: errDetails,
-        status: response.status,
+        status: lastStatus,
       }), {
         status: 502, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
-
-    const data = await response.json();
-    const rawContent = data.choices?.[0]?.message?.content || "";
-    console.log('assess-durability AI raw:', rawContent);
-    const assessment = parseAIJson(rawContent);
 
     if (!assessment) {
       return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent || null }), {

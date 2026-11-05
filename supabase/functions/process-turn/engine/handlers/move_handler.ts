@@ -30,6 +30,26 @@ export class MoveHandler extends BaseActionHandler {
       };
     }
 
+    // Подготавливаем мутации перемещения (применяются при успехе)
+    const moveMutations: EngineMutation[] = [];
+    if (action.target_subzone_id) {
+      moveMutations.push({
+        type: "SET_PLAYER_SUBZONE",
+        player_id: player.id,
+        subzone_id: action.target_subzone_id,
+      });
+    }
+
+    if (action.target_coords) {
+      moveMutations.push({
+        type: "UPDATE_ENTITY_COORDS",
+        entity_type: "player",
+        id: player.id,
+        pos_x: action.target_coords.x,
+        pos_y: action.target_coords.y,
+      });
+    }
+
     // ============================================
     // Если есть DC — это проверка (например преодоление сложного участка)
     // ============================================
@@ -39,8 +59,6 @@ export class MoveHandler extends BaseActionHandler {
       const advantage = context.session.difficulty === "easy";
       const disadvantage = context.session.difficulty === "hard";
       const roll = this.performCheck(statMod, action.ai_custom_dc, proficiency, advantage, disadvantage);
-
-
 
       if (!roll.success) {
         const result: ActionResult = {
@@ -76,7 +94,7 @@ export class MoveHandler extends BaseActionHandler {
       };
       return {
         result,
-        mutations: [],
+        mutations: moveMutations,
         system_facts: [`${player.name} успешно преодолел препятствие и переместился к "${destination}" (бросок ${roll.total} vs DC ${action.ai_custom_dc}).`],
       };
     }
@@ -84,24 +102,7 @@ export class MoveHandler extends BaseActionHandler {
     // ============================================
     // Свободное перемещение без проверки (DC = null или 0)
     // ============================================
-    const mutations: EngineMutation[] = [];
-    if (action.target_subzone_id) {
-      mutations.push({
-        type: "SET_PLAYER_SUBZONE",
-        player_id: player.id,
-        subzone_id: action.target_subzone_id,
-      });
-    }
-
-    if (action.target_coords) {
-      mutations.push({
-        type: "UPDATE_ENTITY_COORDS",
-        entity_type: "player",
-        id: player.id,
-        pos_x: action.target_coords.x,
-        pos_y: action.target_coords.y,
-      });
-    }
+    const mutations: EngineMutation[] = moveMutations;
 
     const result: ActionResult = {
       action_type: this.action_type,

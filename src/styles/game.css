@@ -753,6 +753,118 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
+/* Интерактивные варианты действий под сообщением Мастера */
+.master-choices-box {
+  margin-top: 0.65rem;
+  padding: 0.7rem 0.85rem;
+  background: linear-gradient(135deg, rgba(30, 22, 16, 0.92) 0%, rgba(20, 15, 11, 0.96) 100%);
+  border: 1px solid rgba(212, 163, 89, 0.28);
+  border-left: 3px solid var(--accent-gold-bright, #e5b869);
+  border-radius: 4px var(--radius-md) var(--radius-md) 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  animation: fadeIn 0.25s ease-out;
+}
+
+.master-choices-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-gold-bright, #e5b869);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 0.5rem;
+  opacity: 0.92;
+}
+
+.master-choices-icon {
+  font-size: 0.85rem;
+}
+
+.master-choices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+}
+
+.choice-action-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.choice-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: rgba(212, 163, 89, 0.08);
+  border: 1px solid rgba(212, 163, 89, 0.26);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.choice-action-btn:hover {
+  background: rgba(212, 163, 89, 0.18);
+  border-color: var(--accent-gold-bright, #e5b869);
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(212, 163, 89, 0.2);
+}
+
+.choice-action-btn:active {
+  transform: translateX(0);
+}
+
+.choice-action-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(212, 163, 89, 0.2);
+  border: 1px solid rgba(212, 163, 89, 0.45);
+  color: var(--accent-gold-bright, #e5b869);
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.choice-action-text {
+  flex: 1;
+}
+
+.choice-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(212, 163, 89, 0.2);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.16s ease;
+}
+
+.choice-edit-btn:hover {
+  background: rgba(212, 163, 89, 0.16);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold-bright);
+}
+
 /* DM Typing Indicator Animation */
 .typing-indicator-bubble {
   animation: fadeIn 0.25s ease-out;

@@ -60,13 +60,13 @@ export async function handleCompanionInSceneAction(params: {
   // 1. Попытка через Free LLM: анализируем намерение игрока и даем живую инициативу спутнику
   if (openrouter_api_key) {
     try {
-      const modelsToTry = [
+      const modelsToTry = Array.from(new Set([
         model,
         "google/gemma-4-31b-it:free",
-        "minimax/minimax-m3:free",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "minimax/minimax-m2.7:free",
-      ].filter(Boolean);
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen-2.5-72b-instruct:free",
+        "deepseek/deepseek-chat:free",
+      ].filter(Boolean)));
 
       const companionInfo = `Имя: ${companion.name}, Раса: ${companion.race || "Человек"}, Класс: ${companion.class || "Спутник"}.
 Характер/привычки: ${Array.isArray(companion.habits) ? companion.habits.join(", ") : companion.habits || "Преданный соратник"}.
@@ -106,7 +106,6 @@ export async function handleCompanionInSceneAction(params: {
               ],
               temperature: 0.6,
               max_tokens: 300,
-              response_format: { type: "json_object" },
             }),
             signal: AbortSignal.timeout(7000),
           });

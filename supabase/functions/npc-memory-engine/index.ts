@@ -2,14 +2,14 @@
 // Движок Каскадной Памяти NPC: управление воспоминаниями (vivid -> medium -> belief)
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitizeKey, cleanTextForAI } from "../_shared/utils.ts";
+import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
 
 const EMBEDDING_MODEL = "baai/bge-m3";
-const CHAT_MODEL = "xiaomi/mimo-v2.5";
+const CHAT_MODEL = "google/gemma-4-31b-it:free";
 const OPENROUTER_EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings";
 const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -26,59 +26,98 @@ const CASCADE_LIMIT = 5;
 // API-вызовы к OpenRouter
 // ============================================
 
-async function generateEmbedding(text: string, apiKey: string): Promise<number[]> {
-  const response = await fetch(OPENROUTER_EMBEDDINGS_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": SUPABASE_URL,
-      "X-Title": "MultiRP-AI",
-    },
-    body: JSON.stringify({
-      model: EMBEDDING_MODEL,
-      input: text,
-    }),
-    signal: AbortSignal.timeout(30000),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Embedding API error: ${response.status} - ${errText}`);
+function buildDeterministicEmbedding(text: string, dims = 1024): number[] {
+  const vec = new Array<number>(dims).fill(0);
+  const words = (text || "").toLowerCase().split(/\s+/).filter(Boolean);
+  for (let w = 0; w < words.length; w++) {
+    const word = words[w];
+    let hash = 2166136261;
+    for (let i = 0; i < word.length; i++) {
+      hash ^= word.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const idx = Math.abs(hash) % dims;
+    vec[idx] += 1;
   }
-
-  const data = await response.json();
-  return data.data[0].embedding;
+  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0)) || 1;
+  return vec.map((v) => Number((v / norm).toFixed(6)));
 }
 
-async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string): Promise<string> {
-  const response = await fetch(OPENROUTER_CHAT_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": SUPABASE_URL,
-      "X-Title": "MultiRP-AI",
-    },
-    body: JSON.stringify({
-      model: CHAT_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      temperature: 0.7,
-      max_tokens: 1000,
-    }),
-    signal: AbortSignal.timeout(60000),
-  });
+async function generateEmbedding(text: string, apiKey: string): Promise<number[]> {
+  try {
+    const response = await fetch(OPENROUTER_EMBEDDINGS_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": SUPABASE_URL,
+        "X-Title": "MultiRP-AI",
+      },
+      body: JSON.stringify({
+        model: EMBEDDING_MODEL,
+        input: text,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Chat API error: ${response.status} - ${errText}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data?.data?.[0]?.embedding)) {
+        return data.data[0].embedding;
+      }
+    }
+    console.warn(`[npc-memory-engine] Embedding API returned ${response.status}, using deterministic local vector fallback`);
+  } catch (err) {
+    console.warn(`[npc-memory-engine] Embedding API error, using deterministic local vector fallback:`, err);
   }
+  return buildDeterministicEmbedding(text, 1024);
+}
 
-  const data = await response.json();
-  return data.choices[0].message.content;
+async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string, preferredModel = CHAT_MODEL): Promise<string> {
+  const modelsToTry = Array.from(new Set([
+    preferredModel,
+    "google/gemma-4-31b-it:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "deepseek/deepseek-chat:free",
+  ].filter(Boolean)));
+
+  let lastErr = "";
+  for (const curModel of modelsToTry) {
+    try {
+      const response = await fetch(OPENROUTER_CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": SUPABASE_URL,
+          "X-Title": "MultiRP-AI",
+        },
+        body: JSON.stringify({
+          model: curModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+
+      if (!response.ok) {
+        lastErr = `${response.status} - ${await response.text()}`;
+        continue;
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (content) return content;
+    } catch (err: any) {
+      lastErr = err.message || String(err);
+    }
+  }
+  throw new Error(`Chat API error: ${lastErr}`);
 }
 
 // ============================================
@@ -372,9 +411,9 @@ serve(async (req) => {
 
         console.log(`[npc-memory-engine] 🏷️ LLM response: ${tagsResponse}`);
 
-        // Парсим JSON ответ
-        const parsed = JSON.parse(tagsResponse);
-        if (parsed.tags && Array.isArray(parsed.tags)) {
+        // Парсим JSON ответ безопасно
+        const parsed = parseAIJson(tagsResponse);
+        if (parsed?.tags && Array.isArray(parsed.tags)) {
           await supabase
             .from("npcs")
             .update({ status_tags: parsed.tags })

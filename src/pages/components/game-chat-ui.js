@@ -1,7 +1,40 @@
 // src/pages/components/game-chat-ui.js
 import { escapeHtml, formatRpText } from '../../utils/text.js';
 
-export function renderMessage(msg, currentUserId, currentPlayerId) {
+export function renderChoicesBlock(choices = []) {
+  if (!Array.isArray(choices) || choices.length === 0) return '';
+  const validChoices = choices
+    .filter(c => typeof c === 'string' && c.trim().length > 0)
+    .slice(0, 4);
+  if (validChoices.length === 0) return '';
+
+  return `
+    <div class="master-choices-box">
+      <div class="master-choices-header">
+        <span class="master-choices-icon">⚡</span>
+        <span>Выберите решение или напишите свой вариант ниже:</span>
+      </div>
+      <div class="master-choices-list">
+        ${validChoices.map((choice, idx) => {
+          const safeChoice = escapeHtml(choice.trim());
+          return `
+            <div class="choice-action-row">
+              <button type="button" class="choice-action-btn" data-choice-action="${safeChoice}">
+                <span class="choice-action-num">${idx + 1}</span>
+                <span class="choice-action-text">${safeChoice}</span>
+              </button>
+              <button type="button" class="choice-edit-btn" data-choice-edit="${safeChoice}" title="Изменить действие перед отправкой" aria-label="Изменить действие">
+                ✏️
+              </button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+export function renderMessage(msg, currentUserId, currentPlayerId, options = {}) {
   const safeMsgId = escapeHtml(msg.id || '');
   if (msg.sender_type === 'master') {
     const isGlobalLog = msg.metadata?.is_global === true || msg.metadata?.type === 'global_log';
@@ -24,12 +57,20 @@ export function renderMessage(msg, currentUserId, currentPlayerId) {
       `;
     }
 
+    const showChoices = !isGlobalLog && (options.isLatestMasterMsg === true || (options.isLatestMasterMsg === undefined && Array.isArray(msg.metadata?.choices) && msg.metadata.choices.length > 0));
+    const effectiveChoices = showChoices
+      ? ((Array.isArray(msg.metadata?.choices) && msg.metadata.choices.length > 0)
+          ? msg.metadata.choices
+          : (options.fallbackChoices || []))
+      : [];
+
     return `
       <div class="message ${isGlobalLog ? 'message-system' : 'message-master'}" data-message-id="${safeMsgId}">
         <div class="message-avatar">${isGlobalLog ? '📜' : '🎭'}</div>
         <div class="message-body">
           ${isGlobalLog ? '<div class="message-sender" style="font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: 2px;">Событие мира</div>' : ''}
           <div class="message-text">${formatRpText(msg.content)}</div>
+          ${showChoices ? renderChoicesBlock(effectiveChoices) : ''}
         </div>
       </div>
     `;

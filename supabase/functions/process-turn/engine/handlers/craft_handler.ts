@@ -36,25 +36,42 @@ export class CraftHandler extends BaseActionHandler {
       };
     }
 
-    // Строим Map инвентаря для быстрого поиска
+    // Строим Map инвентаря для быстрого поиска (по ID и по имени предмета для устойчивости к бесплатным LLM)
     const inventoryMap = new Map<string, EngineInventoryItem>();
     for (const item of player.inventory) {
       inventoryMap.set(item.id, item);
     }
 
-    // Проверяем что все материалы есть в инвентаре
+    const findInventoryItem = (idOrName: string): EngineInventoryItem | undefined => {
+      if (!idOrName) return undefined;
+      const byId = inventoryMap.get(idOrName);
+      if (byId) return byId;
+      const needle = idOrName.trim().toLowerCase();
+      return player.inventory.find(
+        (i) =>
+          (i.item_name || "").trim().toLowerCase() === needle ||
+          (i.item_name || "").trim().toLowerCase().includes(needle) ||
+          needle.includes((i.item_name || "").trim().toLowerCase())
+      );
+    };
+
+    // Проверяем что все материалы есть в инвентаре и сохраняем их реальные ID
+    const resolvedMaterials: { item_id: string; quantity: number; name: string }[] = [];
     const missingMaterials: { id: string; required: number; available: number; name: string }[] = [];
     for (const required of requiredMaterials) {
-      const owned = inventoryMap.get(required.id);
+      const reqKey = required.id || (required as any).name || (required as any).item_name || "";
+      const owned = findInventoryItem(reqKey);
       if (!owned) {
-        missingMaterials.push({ id: required.id, required: required.quantity, available: 0, name: required.id });
+        missingMaterials.push({ id: reqKey, required: required.quantity, available: 0, name: reqKey });
       } else if (owned.quantity < required.quantity) {
         missingMaterials.push({
-          id: required.id,
+          id: owned.id,
           required: required.quantity,
           available: owned.quantity,
           name: owned.item_name,
         });
+      } else {
+        resolvedMaterials.push({ item_id: owned.id, quantity: required.quantity, name: owned.item_name });
       }
     }
 
@@ -86,17 +103,17 @@ export class CraftHandler extends BaseActionHandler {
 
     if (!roll.success) {
       // Провал: списываем 50% материалов как испорченные
-      for (const required of requiredMaterials) {
+      for (const required of resolvedMaterials) {
         const lostQuantity = Math.ceil(required.quantity * 0.5);
         if (lostQuantity > 0) {
           mutations.push({
             type: "DELETE_ITEM",
-            item_id: required.id,
+            item_id: required.item_id,
             quantity: lostQuantity,
           });
         }
       }
-      systemFacts.push(`${player.name} неудачно скрафтил: потеряно ${Math.ceil(requiredMaterials.length * 0.5)} материалов.`);
+      systemFacts.push(`${player.name} неудачно скрафтил: потеряно ${Math.ceil(resolvedMaterials.length * 0.5)} материалов.`);
       return {
         result: {
           action_type: action.action_type,
@@ -112,10 +129,10 @@ export class CraftHandler extends BaseActionHandler {
     // ============================================
     // Успех: списываем все материалы + создаём предмет
     // ============================================
-    for (const required of requiredMaterials) {
+    for (const required of resolvedMaterials) {
       mutations.push({
         type: "DELETE_ITEM",
-        item_id: required.id,
+        item_id: required.item_id,
         quantity: required.quantity,
       });
     }

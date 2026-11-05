@@ -64,11 +64,10 @@ export class AttackHandler extends BaseActionHandler {
     const statMod = this.getStatToCheckMod(player, action.stat_to_check || "strength", injuryPenalties);
     const proficiency = this.getProficiency(player);
 
-    // Преимущество/помеха по сложности сессии
-    let advantage = false;
-    let disadvantage = false;
-    if (context.session.difficulty === "easy") advantage = true;
-    if (context.session.difficulty === "hard") disadvantage = true;
+    // Преимущество/помеха по сложности сессии (или форсированное преимущество от скрытой атаки)
+    const forceAdvantage = Boolean((action as any)._force_advantage) || this.action_type === "stealth_attack";
+    let advantage = forceAdvantage || context.session.difficulty === "easy";
+    let disadvantage = !forceAdvantage && context.session.difficulty === "hard";
 
     // DC: AC цели (или кастомный)
     const targetAc = target.armor_class;
@@ -148,7 +147,7 @@ export class AttackHandler extends BaseActionHandler {
     });
 
     systemFacts.push(
-      `${player.name} попал по ${target.name} (d20=${roll.d20}, total=${roll.total} vs DC=${targetDc}, урон ${totalDamage}${roll.is_crit ? " — КРИТ" : ""}${skillDmgBonusPct > 0 ? ` [+${skillDmgBonusPct}% урона от навыка]` : ""}).`
+      `${player.name} попал по ${target.name} (d20=${roll.d20}, total=${roll.total} vs DC=${targetDc}, урон ${totalDamage}${isCritHit ? " — КРИТ" : ""}${skillDmgBonusPct > 0 ? ` [+${skillDmgBonusPct}% урона от навыка]` : ""}).`
     );
 
     return {
@@ -172,12 +171,12 @@ export class StealthAttackHandler extends AttackHandler {
   override readonly action_type: string = "stealth_attack";
 
   override handle(action: RouterAction, context: EngineInputContext): ActionHandlerResult {
-    // Выполняем базовую атаку, но форсируем преимущество
-    const result = super.handle(action, context);
+    // Выполняем базовую атаку с форсированным преимуществом
+    const result = super.handle({ ...action, _force_advantage: true } as any, context);
 
-    // Бонус +1d6 к урону за скрытность
+    // Бонус +6 (1d6) к урону за скрытность при попадании (если это не чистый натур. 20 крит, где урон уже удвоен по спеке)
     if (result.result.success && result.result.dice_roll && result.result.dice_roll.is_crit !== true) {
-      const bonusDmg = 6; // 1d6 = 6 в среднем
+      const bonusDmg = 6;
       result.result.damage_dealt = (result.result.damage_dealt || 0) + bonusDmg;
 
       const hpMutation = result.mutations.find((m) => m.type === "UPDATE_HP" && m.id === action.target_entity_id);

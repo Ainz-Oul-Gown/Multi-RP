@@ -7,7 +7,7 @@ import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
-const AI_MODEL = "xiaomi/mimo-v2.5";
+const AI_MODEL = "google/gemma-4-31b-it:free";
 const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const CORS = {
@@ -18,34 +18,52 @@ const CORS = {
 
 const SYSTEM_PROMPT = `Прошло дней: [days_passed]. Опиши 1 предложением, что NPC сделал за кадром (на основе его background и habits). Если он нашел или создал предмет, укажи его. JSON: { action_summary: 'текст', obtained_item_name: 'Название или null', item_type: 'weapon|misc' }`;
 
-async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string): Promise<string> {
-  const response = await fetch(OPENROUTER_CHAT_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": SUPABASE_URL,
-      "X-Title": "MultiRP-AI",
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      temperature: 0.7,
-      max_tokens: 1000,
-    }),
-    signal: AbortSignal.timeout(60000),
-  });
+async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string, preferredModel = AI_MODEL): Promise<string> {
+  const modelsToTry = Array.from(new Set([
+    preferredModel,
+    "google/gemma-4-31b-it:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "deepseek/deepseek-chat:free",
+  ].filter(Boolean)));
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Chat API error: ${response.status} - ${errText}`);
+  let lastErr = "";
+  for (const curModel of modelsToTry) {
+    try {
+      const response = await fetch(OPENROUTER_CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": SUPABASE_URL,
+          "X-Title": "MultiRP-AI",
+        },
+        body: JSON.stringify({
+          model: curModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+
+      if (!response.ok) {
+        lastErr = `${response.status} - ${await response.text()}`;
+        continue;
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (content) return content;
+    } catch (err: any) {
+      lastErr = err.message || String(err);
+    }
   }
 
-  const data = await response.json();
-  return data.choices[0].message.content;
+  throw new Error(`Chat API error: ${lastErr}`);
 }
 
 serve(async (req) => {

@@ -317,7 +317,9 @@ export async function evaluatePetTamingAttempt(params: PetTamingAttemptParams): 
     await supabase.from("npc_memories").insert({
       npc_id: target_creature.id,
       player_id: acting_player.id,
+      memory_text: beastMemory,
       content: beastMemory,
+      memory_type: isSuccess ? (isCrit ? "vivid" : "medium") : "impression",
       importance: isSuccess ? (isCrit ? "vivid" : "ordinary") : "ordinary",
       vividness: isSuccess ? (isCrit ? 95 : 70) : 40,
     });
@@ -400,7 +402,7 @@ export async function evaluatePetLoyaltyCheck(params: {
 
   await supabase
     .from("npc_relationships")
-    .update({ score: newScore, tier: newScore <= -10 ? "hostile" : (newScore < 20 ? "wary" : "friendly") })
+    .update({ score: newScore, tier: newScore <= -10 ? "hostile" : (newScore < 20 ? "unfriendly" : "friendly") })
     .eq("npc_id", pet.id)
     .eq("player_id", player_id);
 

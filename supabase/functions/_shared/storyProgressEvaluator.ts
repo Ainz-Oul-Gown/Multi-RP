@@ -49,7 +49,13 @@ export function evaluateStoryProgress({
     announcements: [] as string[],
   };
 
-  if (!storyline || !Array.isArray(storyline.arcs) || storyline.arcs.length === 0) {
+  if (
+    !storyline ||
+    storyline.status === "sandbox" ||
+    storyline.status === "completed" ||
+    !Array.isArray(storyline.arcs) ||
+    storyline.arcs.length === 0
+  ) {
     return result;
   }
 
@@ -63,17 +69,22 @@ export function evaluateStoryProgress({
     currentArc.completed_goals = [];
   }
 
-  const combinedText = [
+  const activeInteractionText = [
     playerAction || "",
     ...(systemFacts || []),
     narrativeText || "",
+  ].join(" ").toLowerCase();
+
+  const combinedText = [
+    activeInteractionText,
     currentLocation || "",
-    ...(nearbyNpcs || []).map((n) => n.name || ""),
   ].join(" ").toLowerCase();
 
   // Очистка основ слов для надёжного сопоставления
   const cleanStem = (w: string) =>
     w.replace(/(?:а|ов|ев|и|ы|у|е|ом|ам|ами|ях|ых|их|ого|его|ому|ему|ым|им|ую|ею|ей|я)$/i, "").toLowerCase();
+
+  const stopWords = new Set(["осмотреть", "поговорить", "найти", "исследовать", "узнать", "отыскать", "расспросить", "добраться", "отправиться"]);
 
   const textWords = combinedText.split(/[\s,.-:;!?()]+/).map(cleanStem).filter((w) => w.length >= 3);
 
@@ -84,13 +95,15 @@ export function evaluateStoryProgress({
 
     const goalWords = goal
       .split(/[\s,.-:;!?()]+/)
+      .map((w) => w.toLowerCase())
+      .filter((w) => w.length >= 3 && !stopWords.has(w))
       .map(cleanStem)
-      .filter((w) => w.length >= 3 && !["осмотреть", "поговорить", "найти", "исследовать", "узнать", "отыскать"].includes(w));
+      .filter((w) => w.length >= 3);
 
-    // Проверяем ключевые именованные сущности (NPC и локации)
+    // Проверяем ключевые именованные сущности (NPC в активном взаимодействии, а не просто стоящие рядом)
     const hasNpcMatch = (currentArc.key_npcs || []).some((npc) => {
       const npcLower = npc.toLowerCase();
-      return goal.toLowerCase().includes(npcLower) && combinedText.includes(npcLower);
+      return goal.toLowerCase().includes(npcLower) && activeInteractionText.includes(npcLower);
     });
 
     const hasLocationMatch = (currentArc.key_locations || []).some((loc) => {
@@ -104,7 +117,10 @@ export function evaluateStoryProgress({
     ).length;
 
     const wordMatchThreshold = Math.max(2, Math.ceil(goalWords.length * 0.45));
-    const isGoalAchieved = hasNpcMatch || (hasLocationMatch && matchedWordsCount >= 2) || (matchedWordsCount >= wordMatchThreshold);
+    const isGoalAchieved =
+      (hasNpcMatch && matchedWordsCount >= 2) ||
+      (hasLocationMatch && matchedWordsCount >= 2) ||
+      matchedWordsCount >= wordMatchThreshold;
 
     if (isGoalAchieved) {
       currentArc.completed_goals.push(goal);

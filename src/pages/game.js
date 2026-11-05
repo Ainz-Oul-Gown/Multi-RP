@@ -27,7 +27,7 @@ import {
   deleteStoryline,
   toggleGoalCompletion,
 } from '../api/storyline.js';
-import { renderMessage } from './components/game-chat-ui.js';
+import { renderMessage, renderChoicesBlock } from './components/game-chat-ui.js';
 
 import { sanitizeAIText, escapeHtml, formatRpText } from '../utils/text.js';
 import { formatGameCalendarDate } from '../utils/gameDate.js';
@@ -423,6 +423,57 @@ export async function renderGame(container, sessionId, user) {
     }
   }
 
+  function buildContextualFallbackChoices(lastMasterContent = '') {
+    const choices = [];
+    const locName = session?.current_wild_zone || session?.current_location_name || 'окрестностях';
+    const subZone = currentPlayer?.current_zone || '';
+    const isWild = Boolean(session?.current_wild_zone) || /лес|чащ|гор|троп|болот|пустош|дорог|руин|пещер/i.test(locName);
+
+    // 1. Активная цель сюжета
+    const storyline = session?.storyline;
+    const currentArc = storyline?.arcs?.[storyline?.current_arc_index || 0];
+    const activeGoal = Array.isArray(currentArc?.goals)
+      ? currentArc.goals.find(g => typeof g === 'object' && g !== null && !g.completed)
+      : null;
+    const goalTitle = typeof activeGoal === 'object' && activeGoal ? activeGoal.title : (typeof currentArc?.goals?.[0] === 'string' ? currentArc.goals[0] : null);
+    const keyNpc = Array.isArray(currentArc?.key_npcs) && currentArc.key_npcs.length > 0 ? currentArc.key_npcs[0] : null;
+
+    // 2. Рядом находящиеся NPC
+    const aliveNpcs = (cachedNpcData || []).filter(n => (n.hp === undefined || n.hp > 0) && !n.is_dead);
+    const primaryNpc = aliveNpcs[0];
+
+    // 3. Проверка контекста последнего сообщения Мастера
+    const hasDialogue = /[«"—]/.test(lastMasterContent);
+    const hasDanger = /враг|атак|клинок|кров|рыча|засад|страж|угроз|бой|драк/i.test(lastMasterContent);
+
+    if (hasDanger) {
+      choices.push('Приготовить оружие, занять выгодную позицию и дать отпор');
+      choices.push('Попытаться разрядить обстановку словами или запугиванием');
+    } else if (primaryNpc) {
+      choices.push(`Подойти к ${primaryNpc.name} и расспросить о последних событиях и слухах`);
+    } else if (keyNpc) {
+      choices.push(`Расспросить местных о том, где сейчас можно найти ${keyNpc}`);
+    } else if (hasDialogue) {
+      choices.push('Ответить собеседнику и выяснить, какую выгоду или опасность сулит это дело');
+    }
+
+    if (goalTitle) {
+      const shortGoal = goalTitle.length > 65 ? goalTitle.slice(0, 62) + '...' : goalTitle;
+      choices.push(`Заняться целью «${shortGoal}»: разузнать зацепки и действовать`);
+    }
+
+    if (isWild) {
+      choices.push('Исследовать следы, тайники и необычные приметы поблизости');
+      choices.push('Двинуться дальше по маршруту, держа оружие наготове');
+    } else {
+      choices.push(`Вмешаться в происходящее в ${subZone ? `зоне «${subZone}»` : `локации «${locName}»`} и проявить инициативу`);
+      choices.push('Осмотреть подозрительных личностей поблизости и подслушать чужие разговоры');
+      choices.push('Направиться в самую оживлённую часть локации в поисках выгодного дела или интриги');
+    }
+
+    return Array.from(new Set(choices)).slice(0, 4);
+  }
+
   function render() {
     const chatEl = document.getElementById('gameChat');
     const wasNearBottom = chatEl ? (chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 80) : true;
@@ -445,6 +496,27 @@ export async function renderGame(container, sessionId, user) {
       ? `🌲 ${session.current_wild_zone}`
       : (session?.current_location_name || '');
 
+    const visibleMessages = messages.filter(isMessageVisibleToCurrentPlayer);
+    let latestMasterIdx = -1;
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      const m = visibleMessages[i];
+      if (
+        m.sender_type === 'master' &&
+        !m.metadata?.is_global &&
+        m.metadata?.type !== 'global_log' &&
+        !m.metadata?.fog_filtered &&
+        m.metadata?.type !== 'fog_perception'
+      ) {
+        latestMasterIdx = i;
+        break;
+      }
+    }
+
+    const starterPrologue = session?.storyline?.prologue
+      ? formatRpText(session.storyline.prologue)
+      : formatRpText(
+          `Вы находитесь в **${session?.current_location_name || 'начальной точке вашего странствия'}**${currentPlayer?.current_zone ? ` (${currentPlayer.current_zone})` : ''}. Вокруг кипит жизнь: доносятся обрывки тревожных разговоров, взгляды прохожих задерживаются на вашем снаряжении, и мир уже готов бросить вам первый вызов.`
+        );
 
     container.innerHTML = `
       <div class="game-page">
@@ -478,7 +550,7 @@ export async function renderGame(container, sessionId, user) {
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/></svg>
               </button>
               <button class="btn btn-ghost btn-icon" id="settingsBtn" title="Настройки" aria-label="Настройки">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               </button>
             </div>
           </div>
@@ -497,15 +569,21 @@ export async function renderGame(container, sessionId, user) {
         <!-- Chat Zone -->
         <main class="game-chat" id="gameChat">
           <div class="chat-messages" id="chatMessages">
-            ${messages.length
-              ? messages
-                  .filter(isMessageVisibleToCurrentPlayer)
-                  .map(msg => renderMessage(msg, user?.id, currentPlayer?.id))
+            ${visibleMessages.length
+              ? visibleMessages
+                  .map((msg, idx) => renderMessage(msg, user?.id, currentPlayer?.id, {
+                    isLatestMasterMsg: idx === latestMasterIdx && !isSubmitting,
+                    fallbackChoices: idx === latestMasterIdx ? buildContextualFallbackChoices(msg.content) : [],
+                  }))
                   .join('')
               : `
-              <div class="chat-empty">
-                <div class="empty-icon">📜</div>
-                <p>История пока пуста. Начните действие!</p>
+              <div class="message message-master chat-starter-scene">
+                <div class="message-avatar">🎭</div>
+                <div class="message-body">
+                  <div class="message-sender">Пролог приключения</div>
+                  <div class="message-text">${starterPrologue}</div>
+                  ${!isSubmitting ? renderChoicesBlock(buildContextualFallbackChoices('')) : ''}
+                </div>
               </div>
             `}
             ${isSubmitting ? `
@@ -1620,202 +1698,33 @@ export async function renderGame(container, sessionId, user) {
       }
     });
 
-    // Toggle Rewrite Container
-    const rewriteBtn = document.getElementById('rewriteStoryBtn');
-    const rewriteContainer = document.getElementById('rewriteStoryPromptContainer');
-    rewriteBtn?.addEventListener('click', () => {
-      if (rewriteContainer) {
-        const isHidden = rewriteContainer.style.display === 'none';
-        rewriteContainer.style.display = isHidden ? 'flex' : 'none';
-      }
-    });
-    document.getElementById('cancelRewriteStoryBtn')?.addEventListener('click', () => {
-      if (rewriteContainer) rewriteContainer.style.display = 'none';
-    });
-
-    // Confirm Rewrite Story
-    document.getElementById('confirmRewriteStoryBtn')?.addEventListener('click', async () => {
-      const wishesInput = document.getElementById('rewriteStoryWishes');
-      const wishes = wishesInput?.value?.trim() || '';
-      const confirmBtn = document.getElementById('confirmRewriteStoryBtn');
-      try {
-        if (confirmBtn) {
-          confirmBtn.disabled = true;
-          confirmBtn.textContent = '⏳ Переписываю...';
-        }
-        toast.info('ИИ переписывает сюжет...');
-        const updated = await rewriteStoryline({
-          sessionId,
-          worldId: session?.world_id,
-          customWishes: wishes,
-          currentStoryline: session?.storyline,
-        });
-        session.storyline = updated;
-        toast.success('Сюжет обновлен!');
-        await refreshStoryPanel();
-      } catch (err) {
-        toast.error('Ошибка обновления сюжета: ' + (err.message || err));
-        if (confirmBtn) {
-          confirmBtn.disabled = false;
-          confirmBtn.textContent = 'Переписать';
-        }
-      }
-    });
-
-    // Toggle Edit JSON Container
-    const editJsonBtn = document.getElementById('editStoryJsonBtn');
-    const editJsonContainer = document.getElementById('editStoryJsonContainer');
-    const editJsonArea = document.getElementById('editStoryJsonArea');
-    editJsonBtn?.addEventListener('click', () => {
-      if (editJsonContainer) {
-        const isHidden = editJsonContainer.style.display === 'none';
-        editJsonContainer.style.display = isHidden ? 'flex' : 'none';
-        if (isHidden && editJsonArea && session?.storyline) {
-          editJsonArea.value = JSON.stringify(session.storyline, null, 2);
-        }
-      }
-    });
-    document.getElementById('cancelEditStoryJsonBtn')?.addEventListener('click', () => {
-      if (editJsonContainer) editJsonContainer.style.display = 'none';
-    });
-
-    // Save Edit JSON
-    document.getElementById('saveStoryJsonBtn')?.addEventListener('click', async () => {
-      if (!editJsonArea) return;
-      try {
-        const parsed = JSON.parse(editJsonArea.value);
-        await updateStoryline(sessionId, parsed);
-        session.storyline = parsed;
-        toast.success('Сюжет сохранён!');
-        await refreshStoryPanel();
-      } catch (err) {
-        toast.error('Ошибка сохранения JSON: ' + (err.message || err));
-      }
-    });
-
-    // Delete Story (Sandbox)
-    document.getElementById('deleteStoryBtn')?.addEventListener('click', async () => {
-      if (!confirm('Перейти в режим свободной песочницы и удалить текущий сюжет?')) return;
-      try {
-        await deleteStoryline(sessionId);
-        session.storyline = null;
-        toast.info('Сюжет удалён. Активен режим свободной песочницы.');
-        await refreshStoryPanel();
-      } catch (err) {
-        toast.error('Ошибка удаления: ' + (err.message || err));
-      }
-    });
-
-    // Interactive Goal Toggle Checkbox
-    document.querySelectorAll('.story-goal-item').forEach((itemEl) => {
-      itemEl.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const arcIdx = parseInt(itemEl.dataset.arcIndex, 10);
-        const goalTitle = itemEl.dataset.goalTitle;
-        if (isNaN(arcIdx) || !goalTitle || !session?.storyline) return;
-
-        try {
-          const updated = await toggleGoalCompletion(sessionId, session.storyline, arcIdx, goalTitle);
-          session.storyline = updated;
-          await refreshStoryPanel();
-        } catch (err) {
-          toast.error('Ошибка переключения цели: ' + (err.message || err));
-        }
-      });
-    });
-  }
-
-  function bindEvents() {
-    // Back
-    document.getElementById('backBtn')?.addEventListener('click', () => router.navigate('/'));
-
-    // Panel toggles
-    document.getElementById('storyBtn')?.addEventListener('click', () => togglePanel('story'));
-    document.getElementById('profileBtn')?.addEventListener('click', () => togglePanel('profile'));
-    document.getElementById('inventoryBtn')?.addEventListener('click', () => togglePanel('inventory'));
-    document.getElementById('npcBtn')?.addEventListener('click', () => togglePanel('npc'));
-    document.getElementById('mapBtn')?.addEventListener('click', () => togglePanel('map'));
-    document.getElementById('settingsBtn')?.addEventListener('click', () => togglePanel('settings'));
-
-    // Close panels
-    document.getElementById('closeStoryBtn')?.addEventListener('click', () => togglePanel(null));
-    document.getElementById('closeProfileBtn')?.addEventListener('click', () => togglePanel(null));
-    document.getElementById('closeInventoryBtn')?.addEventListener('click', () => togglePanel(null));
-    document.getElementById('closeNpcBtn')?.addEventListener('click', () => togglePanel(null));
-    document.getElementById('closeMapBtn')?.addEventListener('click', () => togglePanel(null));
-    document.getElementById('closeSettingsBtn')?.addEventListener('click', () => togglePanel(null));
-    document.getElementById('panelOverlay')?.addEventListener('click', () => togglePanel(null));
-
-    if (activePanel === 'story') {
-      bindStoryEvents();
-    }
-    if (activePanel === 'map') {
-      refreshMapPanel();
-    }
-
-    // Busy state: interrupt long term activity
-    document.getElementById('interruptBusyBtn')?.addEventListener('click', async () => {
-      if (!currentPlayer?.is_busy) return;
-      try {
-        toast.info('Прерывание деятельности...');
-        const { data, error } = await supabase.rpc('interrupt_busy_activity', {
-          p_player_id: currentPlayer.id,
-        });
-        if (error) {
-          toast.error('Не удалось прервать: ' + error.message);
-          return;
-        }
-        toast.success(`Деятельность "${data.interrupted_activity || 'Занятие'}" прервана. Прошло времени: ${data.time_spent_minutes || 0} мин.`);
-        currentPlayer.is_busy = false;
-        currentPlayer.busy_activity = null;
-        currentPlayer.busy_remaining_minutes = 0;
-        const banner = document.getElementById('busyStateBanner');
-        if (banner) banner.style.display = 'none';
-        updateInputState();
-      } catch (err) {
-        toast.error('Ошибка: ' + err.message);
-      }
-    });
-
-    // Multi-player: take turn button
-    document.getElementById('takeTurnBtn')?.addEventListener('click', async () => {
-      try {
-        toast.info('Переключение хода...');
-        await passTurn(sessionId, currentPlayer.id);
-        isMyTurn = true;
-        activePlayerName = currentPlayer.name || 'Герой';
-        updateInputState();
-      } catch (err) {
-        toast.error('Не удалось переключить ход: ' + err.message);
-      }
-    });
-
-    // Multi-player: copy invite link & ID
-    document.getElementById('copyInviteBtnGame')?.addEventListener('click', () => {
-      const base = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
-      const url = `${window.location.origin}${base}#/session/${sessionId}`;
-      navigator.clipboard.writeText(url);
-      toast.success('Инвайт-ссылка скопирована!');
-    });
-
-    document.getElementById('copyIdBtnGame')?.addEventListener('click', () => {
-      navigator.clipboard.writeText(sessionId);
-      toast.success('ID сессии скопирован!');
-    });
-
-    // Auto-resize textarea
-    const input = document.getElementById('actionInput');
-    input?.addEventListener('input', () => {
-      input.style.height = 'auto';
-      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-    });
-
-    // Submit action
-    document.getElementById('sendBtn')?.addEventListener('click', handleSend);
-    input?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    // Интерактивные кнопки выбора действий в ответах Мастера
+    const chatMessagesEl = document.getElementById('chatMessages');
+    chatMessagesEl?.addEventListener('click', (e) => {
+      const editBtn = e.target.closest('.choice-edit-btn');
+      if (editBtn) {
         e.preventDefault();
-        handleSend();
+        e.stopPropagation();
+        const choiceText = editBtn.getAttribute('data-choice-edit') || '';
+        if (input && choiceText) {
+          input.value = choiceText;
+          input.style.height = 'auto';
+          input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+          input.focus();
+        }
+        return;
+      }
+
+      const actionBtn = e.target.closest('.choice-action-btn');
+      if (actionBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isSubmitting || !isMyTurn) return;
+        const choiceText = actionBtn.getAttribute('data-choice-action') || '';
+        if (input && choiceText) {
+          input.value = choiceText;
+          handleSend();
+        }
       }
     });
 
@@ -2953,17 +2862,21 @@ export async function renderGame(container, sessionId, user) {
         toast.success(`🎉 Новый уровень ${result.level_up.new_level}! Получено +2 свободных очка характеристик (ОХ)!`);
       }
 
-      // Обновление данных игрока, навыков и инвентаря
+      // Обновление данных игрока, навыков, инвентаря и истории сообщений (защита от задержек Realtime)
       try {
-        const [freshPlayer, freshSkills] = await Promise.all([
+        const [freshPlayer, freshSkills, freshMessages] = await Promise.all([
           getPlayer(currentPlayer.id),
           getPlayerSkills(currentPlayer.id),
+          getSessionMessages(sessionId),
         ]);
         if (freshPlayer) {
           currentPlayer = freshPlayer;
         }
         if (freshSkills) {
           playerSkills = freshSkills;
+        }
+        if (Array.isArray(freshMessages) && freshMessages.length > 0) {
+          messages = freshMessages;
         }
       } catch {
         await refreshInventory();
@@ -3034,11 +2947,26 @@ export async function renderGame(container, sessionId, user) {
       removeDmTypingIndicator();
     }
 
-    // Remove empty state if present
-    const empty = chatMessages.querySelector('.chat-empty');
+    // Remove empty state or starter scene if present
+    const empty = chatMessages.querySelector('.chat-empty, .chat-starter-scene');
     if (empty) empty.remove();
 
-    const html = renderMessage(msg, user?.id, currentPlayer?.id);
+    // Скрываем старые блоки выбора при отправке хода или появлении нового сообщения Мастера
+    const isPersonalMasterMsg =
+      msg.sender_type === 'master' &&
+      !msg.metadata?.is_global &&
+      msg.metadata?.type !== 'global_log' &&
+      !msg.metadata?.fog_filtered &&
+      msg.metadata?.type !== 'fog_perception';
+
+    if (msg.sender_type === 'player' || isPersonalMasterMsg) {
+      chatMessages.querySelectorAll('.master-choices-box').forEach((el) => el.remove());
+    }
+
+    const html = renderMessage(msg, user?.id, currentPlayer?.id, {
+      isLatestMasterMsg: isPersonalMasterMsg && !isSubmitting,
+      fallbackChoices: isPersonalMasterMsg ? buildContextualFallbackChoices(msg.content) : [],
+    });
     if (!html) return;
 
     const div = document.createElement('div');

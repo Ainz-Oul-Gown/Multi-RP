@@ -181,7 +181,7 @@ export async function ensureLocationMapAndTerrain(params: {
     locationDescription,
     isWildZone,
     openrouterApiKey,
-    model = "xiaomi/mimo-v2.5",
+    model = "google/gemma-4-31b-it:free",
   } = params;
 
   const fallback = buildFallbackLocationMap(locationName, locationType);
@@ -196,33 +196,48 @@ export async function ensureLocationMapAndTerrain(params: {
         isWildZone,
       });
 
-      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openrouterApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: "system",
-              content: "Ты — картограф ЛитРПГ. Отвечай строго валидным JSON без лишних слов.",
-            },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.3,
-          max_tokens: 1000,
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
+      const modelsToTry = Array.from(new Set([
+        model,
+        "google/gemma-4-31b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen-2.5-72b-instruct:free",
+        "deepseek/deepseek-chat:free",
+      ].filter(Boolean)));
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const content = data?.choices?.[0]?.message?.content || "";
-        const parsed = parseAIJson(content);
-        if (parsed) {
-          result = normalizeLocationMap(parsed, fallback);
+      for (const curModel of modelsToTry) {
+        try {
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openrouterApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: curModel,
+              messages: [
+                {
+                  role: "system",
+                  content: "Ты — картограф ЛитРПГ. Отвечай строго валидным JSON без лишних слов.",
+                },
+                { role: "user", content: prompt },
+              ],
+              temperature: 0.3,
+              max_tokens: 1000,
+            }),
+            signal: AbortSignal.timeout(12000),
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            const content = data?.choices?.[0]?.message?.content || "";
+            const parsed = parseAIJson(content);
+            if (parsed) {
+              result = normalizeLocationMap(parsed, fallback);
+              break;
+            }
+          }
+        } catch (mErr) {
+          console.warn(`[fog_location_generator] Model ${curModel} failed, trying next:`, mErr);
         }
       }
     } catch (err) {

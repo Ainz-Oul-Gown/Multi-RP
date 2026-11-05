@@ -1621,7 +1621,7 @@ serve(async (req: any) => {
     // ШАГ 5: Narrator
     // ============================================
     console.log(`[${requestId}] [STEP 5] Narrator...`);
-    let narratorOutput: { players: Record<string, string>; global_narrative: string };
+    let narratorOutput: { players: Record<string, string>; global_narrative: string; choices?: Record<string, string[]> };
     let narratorStatus: "ok" | "fallback" = "ok";
     let narratorError: string | null = null;
     const backupKeys = [
@@ -1647,7 +1647,7 @@ serve(async (req: any) => {
       console.warn(`[${requestId}] [STEP 5] LLM failed, using fallback:`, narratorErr);
       narratorStatus = "fallback";
       narratorError = narratorErr?.message || String(narratorErr);
-      narratorOutput = buildFallbackNarrative(systemTruth);
+      narratorOutput = buildFallbackNarrative(systemTruth, safeActionText);
     }
     console.log(`[${requestId}] [STEP 5] ${Object.keys(narratorOutput.players).length} player narratives (status: ${narratorStatus})`);
 
@@ -1661,6 +1661,7 @@ serve(async (req: any) => {
     });
     // 2) Master narratives — по одному сообщению на игрока
     for (const [targetPlayerId, narrative] of Object.entries(narratorOutput.players)) {
+      const playerChoices = narratorOutput.choices?.[targetPlayerId] || [];
       await supabase.from("messages").insert({
         session_id, sender_type: "master", sender_name: "Мастер", content: narrative,
         metadata: {
@@ -1669,6 +1670,7 @@ serve(async (req: any) => {
           hp_status: systemTruth.player_truths[targetPlayerId]?.hp_status,
           inventory_delta: systemTruth.player_truths[targetPlayerId]?.inventory_delta,
           game_time: systemTruth.environment.time,
+          choices: playerChoices,
         },
       });
     }

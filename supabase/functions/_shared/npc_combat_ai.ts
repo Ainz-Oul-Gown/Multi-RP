@@ -199,13 +199,14 @@ export async function decideNpcCombatAction(params: {
   "tactical_reason": "краткое живое обоснование тактики (1 предложение)"
 }`;
 
-  const modelsToTry = [
+  const modelsToTry = Array.from(new Set([
     model,
     "google/gemma-4-31b-it:free",
-    "minimax/minimax-m3:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "minimax/minimax-m2.7:free",
-  ].filter(Boolean);
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "deepseek/deepseek-chat:free",
+    "google/gemini-2.0-flash-lite-001",
+  ].filter(Boolean)));
 
   for (const curModel of modelsToTry) {
     try {
@@ -218,12 +219,11 @@ export async function decideNpcCombatAction(params: {
         body: JSON.stringify({
           model: curModel,
           messages: [
-            { role: "system", content: "Ты — продвинутый боевой ИИ D&D. Отвечай строго валидным JSON объектом." },
+            { role: "system", content: "Ты — продвинутый боевой ИИ D&D. Отвечай строго валидным JSON объектом без markdown." },
             { role: "user", content: prompt },
           ],
           temperature: 0.4,
           max_tokens: 300,
-          response_format: { type: "json_object" },
         }),
         signal: AbortSignal.timeout(6000),
       });

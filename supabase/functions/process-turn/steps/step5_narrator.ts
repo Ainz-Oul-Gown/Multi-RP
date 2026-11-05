@@ -5,10 +5,12 @@
 // смертельные исходы или события, которых нет в объекте player_truths[id].knowledge.
 
 import { SystemTruthDto } from "./step4_system_truth.ts";
+import { buildProactiveWorldDirective, ensurePlayerChoices } from "../../_shared/living_world_director.ts";
 
 export interface NarratorOutputPayload {
   players: Record<string, string>; // player_id -> индивидуальный художественный текст
   global_narrative: string;        // Общий лог комнаты
+  choices?: Record<string, string[]>; // player_id -> 3-4 конкретных варианта действий для выбора кнопками
 }
 
 export interface NarratorInputContext {
@@ -18,7 +20,7 @@ export interface NarratorInputContext {
   player_race: string;
   player_class: string;
   lore_context: string;
-  recent_history: string[]; // последние 6 сообщений для контекста ДМ
+  recent_history?: string[]; // последние 6 сообщений для контекста ДМ
   openrouter_api_key: string;
   backup_api_keys?: string[];
   dm_model: string;
@@ -59,14 +61,14 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
   }
 
   return `Ты — профессиональный Dungeon Master в текстовой многопользовательской ЛитРПГ.
-Твоя задача — превратить сухой SystemTruthDto в живой, динамичный литературный текст для КАЖДОГО игрока индивидуально.
+Твоя задача — превратить сухой SystemTruthDto в живой, динамичный литературный текст для КАЖДОГО игрока индивидуально, а также предложить игроку 3–4 увлекательных варианта действий (choices).
 
 🔴 АБСОЛЮТНОЕ ПРАВИЛО №0 — ЯЗЫК ОТВЕТА:
-ВЕСЬ твой текст (художественный нарратив, реплики NPC, описания) ОБЯЗАН быть написан ИСКЛЮЧИТЕЛЬНО НА РУССКОМ ЯЗЫКЕ.
+ВЕСЬ твой текст (художественный нарратив, реплики NPC, описания, варианты выборов) ОБЯЗАН быть написан ИСКЛЮЧИТЕЛЬНО НА РУССКОМ ЯЗЫКЕ.
 Английский, немецкий, китайские иероглифы или любой другой язык — СТРОГО ЗАПРЕЩЕНЫ. Никогда не пиши фразы вроде «Пролога нет».
 
 ПРАВИЛА:
-1. Опирайся СТРОГО на массив knowledge для каждого игрока в player_truths.
+1. Опирайся СТРОГО на массив knowledge для каждого игрока в player_truths и на РЕЖИССЁРСКУЮ ДИРЕКТИВУ ЖИВОГО МИРА.
 2. КРИТИЧЕСКИЙ ЗАПРЕТ: НИКАКОГО выдуманного лута, урона, смертей или изменений ХП, кроме явно указанных в knowledge и hp_status!
 3. СТРОЖАЙШИЙ ЗАПРЕТ НА МЕТА-КОММЕНТАРИИ И КУБИКИ:
    - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО обсуждать в тексте кубики, числа d20, модификаторы и формулы ("Бросок d20 с вашим бонусом в 2 дает 22...", "Ваш d20 показал..."). Ты — литературный рассказчик, а не калькулятор! Описывай только физические действия персонажа, его мастерство, удачу и живой мир вокруг.
@@ -81,7 +83,6 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
 6. ЖИВЫЕ NPC В ЛОКАЦИИ И ОБЯЗАТЕЛЬНЫЙ ОТВЕТ В ДИАЛОГЕ:
    - Если игрок обратился к NPC с вопросом, репликой или просьбой — в 3-м абзаце («МИР ОТВЕЧАЕТ») этот NPC ОБЯЗАН ответить содержательной прямой речью в кавычках («...»)!
    - В ответе NPC обязан прямо ответить на заданный вопрос игрока, используя свои слухи (rumors), мотивацию (motivation), характер (temperament) и манеру речи (speech_style). НИКОГДА не оставляй вопрос игрока к NPC без ответа вслух!
-   - Если игрок НЕ взаимодействует с фоновыми NPC (занят боем, бегом, одиночным исследованием) — не вставляй одних и тех же фоновых NPC в каждый пост.
    - КРИТИЧЕСКИ ВАЖНО: НИКОГДА не перемещай городских NPC в дикие зоны (лес, горы, пещеры).
 7. ХАРАКТЕР, ПСИХОЛОГИЯ И ОТЫГРЫШ NPC НА 100% (npc_context и present_npcs):
    - СТИЛЬ РЕЧИ (speech_style): NPC говорит СТРОГО в своём уникальном стиле (жаргон, архаизмы, высокомерие мага, просторечие, солдатская лаконичность, присказки).
@@ -92,7 +93,9 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
 8. СТРУКТУРА ОТВЕТА (строго соблюдать, 3 абзаца, разделённых пустой строкой \\n\\n):
    ▸ АБЗАЦ 1 — «КАРТИНА И МОМЕНТ»: Сенсорное погружение в НОВЫЙ момент сцены (2–3 предложения). Звуки, освещение, запахи, перемена обстановки. НЕ копируй прошлый ход и НЕ начинай с имени героя.
    ▸ АБЗАЦ 2 — «ДЕЙСТВИЕ И РЕЗУЛЬТАТ»: Физическое описание того, что сделал герой и что из этого вышло согласно ФАКТАМ (2–4 предложения). При успехе навыка — покажи конкретную находку, деталь, улику или мастерство.
-   ▸ АБЗАЦ 3 — «МИР ОТВЕЧАЕТ»: Живая реакция мира, природы или собеседника (2–3 предложения). Если был диалог с NPC — здесь ОБЯЗАТЕЛЬНА его прямая речь («— ...») с ответом по сути и зацепкой для следующего шага игрока!
+   ▸ АБЗАЦ 3 — «МИР БРОСАЕТ ВЫЗОВ / ИНИЦИАТИВА МИРА»: Живая, проактивная реакция мира, природы или NPC (2–4 предложения).
+     - ЗАПРЕЩЕНО оставлять героя в пустоте, где «ничего не происходит»! Игрок НЕ должен сам придумывать себе приключения!
+     - Если игрок просто вышел из таверны, идёт по улице, осматривается или ждёт — САМ МИР или NPC в локации проявляет инициативу согласно РЕЖИССЁРСКОЙ ДИРЕКТИВЕ: кто-то окликает героя с предложением/проблемой, перед ним разворачивается острая сценка/стычка, обнаруживается подозрительная улика или дилемма, требующая решения!
 9. ВЗАИМОДЕЙСТВИЕ МЕЖДУ ИГРОКАМИ И СТРОГИЙ ЗАПРЕТ КУКЛОВОДСТВА (No Puppeteering / No Godmoding):
    - СТРОЖАЙШИЙ ЗАПРЕТ КУКЛОВОДСТВА (NO GODMODING): ДМ категорически ЗАПРЕЩЕНО совершать действия, принимать решения, соглашаться, отказываться или произносить реплики ЗА ДРУГОГО ЖИВОГО ИГРОКА!
    - Опиши обращение к сопартийцу, но ОСТАВЬ РЕАКЦИЮ И ОТВЕТ ЦЕЛИКОМ НА УСМОТРЕНИЕ САМОГО ИГРОКА в его собственный ход!
@@ -108,8 +111,15 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
 
 {
   "players": {
-    "<player_id_1>": "текст для игрока 1",
+    "<player_id_1>": "текст для игрока 1 (3 абзаца через \\n\\n)",
     "<player_id_2>": "текст для игрока 2"
+  },
+  "choices": {
+    "<player_id_1>": [
+      "Вариант 1: решительное / прямое действие или ответ NPC",
+      "Вариант 2: хитрое / тактическое действие или проверка улик",
+      "Вариант 3: альтернативный манёвр, сделка или движение по зацепке"
+    ]
   },
   "global_narrative": "краткая сводка для общего лога"
 }
@@ -118,8 +128,9 @@ ${arc.key_locations && arc.key_locations.length > 0 ? `Ключевые лока
 ${storylineSection}
 ${loreContext ? `Лор мира:\n${loreContext}\n` : ''}
 
-13. ВАРИАТИВНОСТЬ НАЧАЛА:
-   НИКОГДА не начинай два хода подряд одинаково! Чередуй начало с действия, звука, тактильного ощущения, детали окружения или реплики собеседника.`;
+13. ВАРИАТИВНОСТЬ НАЧАЛА И АКТИВНЫЕ ВЫБОРЫ (choices):
+   - НИКОГДА не начинай два хода подряд одинаково! Чередуй начало с действия, звука, тактильного ощущения, детали окружения или реплики собеседника.
+   - Для каждого игрока в поле "choices" выдай 3 конкретных, увлекательных варианта следующего хода (от первого лица, по 6–15 слов), которые напрямую решают возникшую в 3-м абзаце задачу или дилемму!`;
 }
 
 
@@ -180,8 +191,19 @@ function safeParseJson(text: string): any | null {
 // ============================================
 // Fallback-нарратор (если LLM упал)
 // ============================================
-export function buildFallbackNarrative(systemTruth: SystemTruthDto): NarratorOutputPayload {
+export function buildFallbackNarrative(systemTruth: SystemTruthDto, actionText = ""): NarratorOutputPayload {
   const players: Record<string, string> = {};
+  const choices: Record<string, string[]> = {};
+  const actingPid = Object.keys(systemTruth.player_truths).find(
+    (id) => systemTruth.player_truths[id]?.is_acting_player
+  ) || Object.keys(systemTruth.player_truths)[0] || "";
+
+  const directive = buildProactiveWorldDirective({
+    system_truth: systemTruth,
+    acting_player_id: actingPid,
+    action_text: actionText,
+  });
+
   for (const [pid, truth] of Object.entries(systemTruth.player_truths)) {
     const lines: string[] = [];
 
@@ -196,8 +218,11 @@ export function buildFallbackNarrative(systemTruth: SystemTruthDto): NarratorOut
     // Факты хода
     if (truth.knowledge.length > 0) {
       lines.push(truth.knowledge.join("\n"));
-    } else {
-      lines.push("Ничего особенного не произошло.");
+    }
+
+    // Если ход был пассивным или без ярких событий — добавляем проактивный крючок Живого Мира!
+    if (truth.knowledge.length === 0 || directive.is_passive_or_routine_action) {
+      lines.push(directive.fallback_narrative_hook);
     }
 
     // HP изменение (только если было)
@@ -220,7 +245,12 @@ export function buildFallbackNarrative(systemTruth: SystemTruthDto): NarratorOut
       lines.push(`Некоторые предметы пострадали в бою.`);
     }
 
-    players[pid] = lines.join("\n");
+    players[pid] = lines.join("\n\n");
+    choices[pid] = ensurePlayerChoices({
+      directive,
+      system_truth: systemTruth,
+      player_id: pid,
+    });
   }
 
   const globalParts: string[] = [];
@@ -235,6 +265,7 @@ export function buildFallbackNarrative(systemTruth: SystemTruthDto): NarratorOut
   return {
     players,
     global_narrative: globalParts.join(" | "),
+    choices,
   };
 }
 
@@ -244,6 +275,17 @@ export function buildFallbackNarrative(systemTruth: SystemTruthDto): NarratorOut
 export function buildNarratorContext(system_truth: SystemTruthDto, action_text: string, recent_history?: string[]): string {
   const t = system_truth.environment.time;
   const lines: string[] = [];
+
+  const actingPid = Object.keys(system_truth.player_truths).find(
+    (id) => system_truth.player_truths[id]?.is_acting_player
+  ) || Object.keys(system_truth.player_truths)[0] || "";
+
+  const directive = buildProactiveWorldDirective({
+    system_truth,
+    acting_player_id: actingPid,
+    action_text,
+    recent_history,
+  });
 
   // Предыстория — последние ходы (если есть)
   if (recent_history && recent_history.length > 0) {
@@ -265,7 +307,7 @@ export function buildNarratorContext(system_truth: SystemTruthDto, action_text: 
   }
 
   lines.push("");
-  lines.push("ФАКТЫ ЭТОГО ХОДА (только эти факты переводить в художественный текст!):");
+  lines.push("ФАКТЫ ЭТОГО ХОДА (перевести в художественный текст и развить сцену!):");
   for (const [pid, truth] of Object.entries(system_truth.player_truths)) {
     const playerLabel = truth.player_name
       ? `[Игрок ${truth.player_name} (${truth.player_race || 'Человек'} ${truth.player_class || 'Герой'}, ID: ${pid})${truth.is_acting_player ? ' — СОВЕРШАЕТ ДЕЙСТВИЕ' : ' — НАПАРНИК В ОТРЯДЕ РЯДОМ'}]`
@@ -274,7 +316,7 @@ export function buildNarratorContext(system_truth: SystemTruthDto, action_text: 
     if (truth.knowledge.length > 0) {
       truth.knowledge.forEach((k) => lines.push(`  • ${k}`));
     } else {
-      lines.push(`  • Ничего особенного не произошло, персонаж осматривается или выжидает.`);
+      lines.push(`  • Персонаж оценивает обстановку и готов к немедленному развитию событий.`);
     }
     if (truth.hp_status.delta !== 0) {
       const sign = truth.hp_status.delta > 0 ? "+" : "";
@@ -345,6 +387,12 @@ export function buildNarratorContext(system_truth: SystemTruthDto, action_text: 
     lines.push("");
     lines.push(`⚠️ ВСТРЕЧА: Появляется ${system_truth.encounter_alert.creature_name || "существо"} (тир ${system_truth.encounter_alert.tier || 1})`);
   }
+
+  // Проактивная режиссёрская директива Живого Мира (чтобы мир сам двигал сюжет и события!)
+  lines.push("");
+  lines.push(`🎬 РЕЖИССЁРСКАЯ ДИРЕКТИВА ЖИВОГО МИРА [${directive.headline}]:`);
+  lines.push(`  • ${directive.master_instruction}`);
+  lines.push(`  • В поле "choices" JSON-ответа обязательно предложи 3 конкретных варианта действий для игрока, чтобы он мог сразу выбрать решение!`);
 
   return lines.join("\n");
 }
@@ -532,9 +580,26 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
       }
       if (hasPlaceholder) throw new Error('Narrator returned placeholder text — retry next model');
 
+      const directive = buildProactiveWorldDirective({
+        system_truth,
+        acting_player_id: Object.keys(system_truth.player_truths)[0] || "",
+        action_text,
+        recent_history,
+      });
+      const validatedChoices: Record<string, string[]> = {};
+      for (const pid of Object.keys(system_truth.player_truths)) {
+        validatedChoices[pid] = ensurePlayerChoices({
+          llmChoices: parsed.choices,
+          directive,
+          system_truth,
+          player_id: pid,
+        });
+      }
+
       return {
         players: validatedPlayers,
         global_narrative: typeof parsed.global_narrative === "string" ? cleanNarrativeText(parsed.global_narrative) : "",
+        choices: validatedChoices,
       };
       } catch (err: any) {
         lastErr = err;

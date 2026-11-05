@@ -399,11 +399,19 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
       }
       if (m.type === "TRANSFER_ITEM") {
         const tm = m as any;
+        let transferredItemName = "предмет";
+        for (const p of players) {
+          const foundItem = (p.inventory || []).find((i: any) => i.id === tm.item_id);
+          if (foundItem?.item_name) {
+            transferredItemName = foundItem.item_name;
+            break;
+          }
+        }
         if (tm.to_type === "player" && tm.to_id === player.id) {
-          added.push(`+${tm.quantity} предмета (получено)`);
+          added.push(`${transferredItemName} x${tm.quantity || 1} (получено)`);
         }
         if (tm.from_type === "player" && tm.from_id === player.id) {
-          removed.push(`-${tm.quantity} предмета (передано)`);
+          removed.push(`${transferredItemName} x${tm.quantity || 1} (передано)`);
         }
       }
     }
@@ -489,7 +497,15 @@ export async function compileSystemTruth(context: SystemTruthInputContext): Prom
       // Передача предметов
       if (receivedTransfers.length > 0) {
         for (const tm of receivedTransfers as any[]) {
-          knowledge.push(`${attackerName} передал вам предмет (x${tm.quantity || 1}).`);
+          let transferredItemName = "предмет";
+          for (const p of players) {
+            const foundItem = (p.inventory || []).find((i: any) => i.id === tm.item_id);
+            if (foundItem?.item_name) {
+              transferredItemName = foundItem.item_name;
+              break;
+            }
+          }
+          knowledge.push(`${attackerName} передал вам предмет «${transferredItemName}» (x${tm.quantity || 1}).`);
         }
       }
 

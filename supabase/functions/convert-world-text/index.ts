@@ -7,7 +7,7 @@ import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
-const AI_MODEL = "xiaomi/mimo-v2.5";
+const AI_MODEL = "google/gemma-4-31b-it:free";
 
 const SYSTEM_PROMPT = `Ты — D&D-дизайнер мира. Твоя задача: проанализировать текстовое описание ролевого мира и превратить его в структурированный JSON-объект настроек.
 
@@ -69,12 +69,15 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
     let apiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
+    let userModel = AI_MODEL;
     const { data: userSettings } = await supabase
       .from("user_settings")
-      .select("openrouter_key")
+      .select("openrouter_key, card_model, dm_model")
       .eq("id", user_id)
       .maybeSingle();
     if (userSettings?.openrouter_key) apiKey = sanitizeKey(userSettings.openrouter_key);
+    if (userSettings?.card_model) userModel = userSettings.card_model;
+    else if (userSettings?.dm_model) userModel = userSettings.dm_model;
 
     if (!apiKey) {
       return new Response(JSON.stringify({
@@ -85,39 +88,58 @@ serve(async (req) => {
 
     const userMessage = `Мир: "${world_name}"\n\nОписание:\n${safeDescription}`;
 
-    const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userMessage },
-        ],
-        temperature: 0.5,
-        max_tokens: 1500,
-      }),
-    });
+    const modelsToTry = Array.from(new Set([
+      userModel,
+      "google/gemma-4-31b-it:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "qwen/qwen-2.5-72b-instruct:free",
+      "deepseek/deepseek-chat:free",
+    ].filter(Boolean)));
 
-    console.log('convert-world-text OpenRouter status:', aiRes.status);
+    let rawContent = "";
+    let settings: any = null;
 
-    if (!aiRes.ok) {
-      const errText = await aiRes.text();
-      console.error("AI error:", errText);
+    for (const curModel of modelsToTry) {
+      const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: curModel,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.5,
+          max_tokens: 1500,
+        }),
+      });
+
+      console.log(`convert-world-text OpenRouter status (${curModel}):`, aiRes.status);
+
+      if (!aiRes.ok) {
+        const errText = await aiRes.text();
+        console.warn(`AI error (${curModel}):`, errText);
+        if (aiRes.status === 401) break;
+        continue;
+      }
+
+      const aiData = await aiRes.json();
+      rawContent = aiData.choices?.[0]?.message?.content || "";
+      console.log('convert-world-text AI raw:', rawContent);
+
+      try { settings = parseAIJson(rawContent); } catch {}
+      if (settings) break;
+    }
+
+    if (!settings && !rawContent) {
       return new Response(JSON.stringify({ error: "Ошибка AI API" }), {
         status: 502, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
 
-    const aiData = await aiRes.json();
-    const rawContent = aiData.choices[0].message.content || "";
-    console.log('convert-world-text AI raw:', rawContent);
-
-    let settings = null;
-    try { settings = parseAIJson(rawContent); } catch {}
     if (!settings) {
       return new Response(JSON.stringify({ error: "Не удалось распарсить ответ ИИ", raw: rawContent }), {
         status: 422, headers: { ...CORS, "Content-Type": "application/json" },

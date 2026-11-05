@@ -47,7 +47,7 @@ export async function executeRoundCycleNpcSimulation(params: {
     loreContext = "",
     storyline,
     openrouterApiKey,
-    model = "xiaomi/mimo-v2.5",
+    model = "google/gemma-4-31b-it:free",
   } = params;
 
   console.log(`[npc_world_simulator] 🌍 Starting round ${roundNumber} simulation for session ${sessionId}...`);
@@ -198,50 +198,64 @@ export async function executeRoundCycleNpcSimulation(params: {
 
       const userMessage = `ЛОКАЦИИ МИРА:\n${locListText}\n\nПЕРСОНАЖИ:\n${npcListText}\n\n${loreContext ? `КОНТЕКСТ МИРА:\n${loreContext.slice(0, 400)}\n\n` : ""}Смоделируй действия каждого персонажа. Верни JSON.`;
 
-      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openrouterApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-          temperature: 0.6,
-          max_tokens: 1200,
-          response_format: { type: "json_object" },
-        }),
-        signal: AbortSignal.timeout(18000),
-      });
+      const modelsToTry = Array.from(new Set([
+        model,
+        "google/gemma-4-31b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen-2.5-72b-instruct:free",
+        "deepseek/deepseek-chat:free",
+      ].filter(Boolean)));
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const content = data?.choices?.[0]?.message?.content;
-        if (content) {
-          const parsed = parseAIJson(content);
-          if (parsed && Array.isArray(parsed.npc_actions)) {
-            for (const act of parsed.npc_actions) {
-              const matchedNpc = distantNpcs.find((n: any) => n.id === act.npc_id);
-              if (matchedNpc) {
-                const matchedLoc = availableLocations.find((l: any) => l.id === act.new_location_id);
-                simulationActions.push({
-                  npc_id: matchedNpc.id,
-                  npc_name: matchedNpc.name,
-                  action_type: act.action_type || "trade_craft",
-                  new_location_id: matchedLoc ? matchedLoc.id : null,
-                  new_location_name: matchedLoc ? matchedLoc.name : null,
-                  level_delta: Math.max(0, Math.min(2, Number(act.level_delta) || 0)),
-                  xp_gained: Math.max(0, Math.min(200, Number(act.xp_gained) || 0)),
-                  obtained_item: act.obtained_item && String(act.obtained_item) !== "null" ? String(act.obtained_item).trim() : null,
-                  item_type: act.item_type || "misc",
-                  narrative_log: act.narrative_log || `${matchedNpc.name} завершил свои дела.`,
-                });
+      for (const curModel of modelsToTry) {
+        try {
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openrouterApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: curModel,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userMessage },
+              ],
+              temperature: 0.6,
+              max_tokens: 1200,
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            const content = data?.choices?.[0]?.message?.content;
+            if (content) {
+              const parsed = parseAIJson(content);
+              if (parsed && Array.isArray(parsed.npc_actions)) {
+                for (const act of parsed.npc_actions) {
+                  const matchedNpc = distantNpcs.find((n: any) => n.id === act.npc_id);
+                  if (matchedNpc) {
+                    const matchedLoc = availableLocations.find((l: any) => l.id === act.new_location_id);
+                    simulationActions.push({
+                      npc_id: matchedNpc.id,
+                      npc_name: matchedNpc.name,
+                      action_type: act.action_type || "trade_craft",
+                      new_location_id: matchedLoc ? matchedLoc.id : null,
+                      new_location_name: matchedLoc ? matchedLoc.name : null,
+                      level_delta: Math.max(0, Math.min(2, Number(act.level_delta) || 0)),
+                      xp_gained: Math.max(0, Math.min(200, Number(act.xp_gained) || 0)),
+                      obtained_item: act.obtained_item && String(act.obtained_item) !== "null" ? String(act.obtained_item).trim() : null,
+                      item_type: act.item_type || "misc",
+                      narrative_log: act.narrative_log || `${matchedNpc.name} завершил свои дела.`,
+                    });
+                  }
+                }
+                if (simulationActions.length > 0) break;
               }
             }
           }
+        } catch (mErr) {
+          console.warn(`[npc_world_simulator] Model ${curModel} failed, trying next:`, mErr);
         }
       }
     } catch (llmErr) {

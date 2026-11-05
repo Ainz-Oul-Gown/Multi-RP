@@ -198,5 +198,28 @@ describe("Step 5: Narrator", () => {
       dm_model: "test-model",
     });
     expect(result.players["p1"]).toBe(p1Text);
+    expect(Array.isArray(result.choices?.["p1"])).toBe(true);
+    expect(result.choices?.["p1"].length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("Режиссёр Живого Мира: при пассивном ходе ('выхожу из таверны, иду по улице, жду') генерирует активное событие и 3-4 варианта выбора", () => {
+    const truth = makeBaseTruth();
+    truth.player_truths["p1"].knowledge = [];
+    truth.npc_context = {
+      "Маркус": {
+        role: "Капитан стражи",
+        tier_label: "Нейтральный",
+        score: 0,
+        speech_style: "Отрывистый",
+        motivation: "Поймать контрабандистов на пристани",
+      },
+    };
+
+    const fallback = buildFallbackNarrative(truth, "Я выхожу из таверны, иду по улице и жду");
+    expect(fallback.players["p1"]).not.toContain("Ничего особенного не произошло");
+    expect(fallback.players["p1"]).toContain("Маркус");
+    expect(Array.isArray(fallback.choices?.["p1"])).toBe(true);
+    expect(fallback.choices?.["p1"].length).toBeGreaterThanOrEqual(3);
   });
 });
+

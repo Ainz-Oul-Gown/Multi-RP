@@ -153,6 +153,9 @@ export class TalkHandler extends BaseActionHandler {
     // ============================================
     // Диалог с NPC: insight (WIS) или persuasion (CHA)
     // ============================================
+    const npcSpeechMatch = rawText.match(/[«"“]([^»"”]{1,220})[»"”]/);
+    const npcSpeechContent = npcSpeechMatch ? npcSpeechMatch[1].trim() : rawText.trim().slice(0, 220);
+
     // Если проверка характеристик не требуется (stat_to_check === "none" или DC <= 0) — обычный диалог успешен без кубиков
     if (action.stat_to_check === "none" || (action.ai_custom_dc !== null && action.ai_custom_dc !== undefined && action.ai_custom_dc <= 0)) {
       return {
@@ -162,11 +165,15 @@ export class TalkHandler extends BaseActionHandler {
           target_entity_id: targetNpc.id,
           target_type: "npc",
           target_id: targetNpc.id,
-          details: `Разговор с ${targetNpc.name}`,
+          details: npcSpeechContent
+            ? `Разговор с ${targetNpc.name}: «${npcSpeechContent}»`
+            : `Разговор с ${targetNpc.name}`,
         } as any,
         mutations: [],
         system_facts: [
-          `${player.name} обращается, чтобы поговорить с ${targetNpc.name}.`,
+          npcSpeechContent
+            ? `${player.name} обращается, чтобы поговорить с ${targetNpc.name}: «${npcSpeechContent}». (${targetNpc.name} слышит слова героя и должен дать осмысленный, живой ответ вслух в соответствии со своим характером и знаниями).`
+            : `${player.name} обращается, чтобы поговорить с ${targetNpc.name}.`,
         ],
       };
     }
@@ -181,7 +188,9 @@ export class TalkHandler extends BaseActionHandler {
     const roll = this.performCheck(statMod, targetDc, proficiency, advantage, disadvantage);
 
     const systemFacts: string[] = [
-      `${player.name} попытался поговорить с ${targetNpc.name} (${roll.total} vs DC=${targetDc}).`,
+      npcSpeechContent
+        ? `${player.name} попытался поговорить с ${targetNpc.name}: «${npcSpeechContent}» (${roll.total} vs DC=${targetDc}) → ${roll.success ? "успех, собеседник расположен к разговору и отвечает откровенно" : "неудача, собеседник отвечает неохотно или с подозрением"}.`
+        : `${player.name} попытался поговорить с ${targetNpc.name} (${roll.total} vs DC=${targetDc}).`,
     ];
 
     if (!roll.success) {

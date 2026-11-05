@@ -1,12 +1,12 @@
 // supabase/functions/process-turn/index.ts
-// 5-РЎв‚¬Р В°Р С–Р С•Р Р†РЎвЂ№Р в„– Р С”Р С•Р Р…Р Р†Р ВµР в„–Р ВµРЎР‚ process-turn: Router РІвЂ вЂ™ Engine РІвЂ вЂ™ Persistence РІвЂ вЂ™ SystemTruth РІвЂ вЂ™ Narrator
+// 5-шаговый конвейер process-turn: Router → Engine → Persistence → SystemTruth → Narrator
 //
-// Р РЃР В°Р С–Р С‘:
-//   1. AI Router  (step1_router.ts)        РІР‚вЂќ Р С—Р В°РЎР‚РЎРѓР С‘Р Р…Р С– Р Р…Р В°Р СР ВµРЎР‚Р ВµР Р…Р С‘Р в„– Р С‘Р С–РЎР‚Р С•Р С”Р В° РІвЂ вЂ™ JSON actions
-//   2. Game Engine (engine/step2_engine.ts) РІР‚вЂќ Р В±РЎР‚Р С•РЎРѓР С”Р С‘ Р С”РЎС“Р В±Р С‘Р С”Р С•Р Р†, Р С—РЎР‚Р С•Р Р†Р ВµРЎР‚Р С”Р С‘, Р СРЎС“РЎвЂљР В°РЎвЂ Р С‘Р С‘
-//   3. Persistence (step3_persistence.ts)   РІР‚вЂќ Р В°РЎвЂљР С•Р СР В°РЎР‚Р Р…Р С•Р Вµ Р С—РЎР‚Р С‘Р СР ВµР Р…Р ВµР Р…Р С‘Р Вµ Р СРЎС“РЎвЂљР В°РЎвЂ Р С‘Р в„– РЎвЂЎР ВµРЎР‚Р ВµР В· RPC
-//   4. System Truth (step4_system_truth.ts) РІР‚вЂќ Р СћРЎС“Р СР В°Р Р… Р вЂ™Р С•Р в„–Р Р…РЎвЂ№, РЎР‚Р В°Р В·Р Т‘Р ВµР В»Р ВµР Р…Р С‘Р Вµ Р Р†Р С‘Р Т‘Р С‘Р СР С•РЎРѓРЎвЂљР С‘, RAG
-//   5. Narrator  (step5_narrator.ts)        РІР‚вЂќ LLM-Р Р…Р В°РЎР‚РЎР‚Р В°РЎвЂљР С•РЎР‚ (Р С‘Р В»Р С‘ fallback)
+// Шаги:
+//   1. AI Router  (step1_router.ts)        — парсинг намерений игрока → JSON actions
+//   2. Game Engine (engine/step2_engine.ts) — броски кубиков, проверки, мутации
+//   3. Persistence (step3_persistence.ts)   — атомарное применение мутаций через RPC
+//   4. System Truth (step4_system_truth.ts) — Туман Войны, разделение видимости, RAG
+//   5. Narrator  (step5_narrator.ts)        — LLM-нарратор (или fallback)
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -54,7 +54,7 @@ function arePlayersInSameParty(p1: any, p2: any, session: any): boolean {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
-const AI_MODEL = "xiaomi/mimo-v2.5";
+const AI_MODEL = "google/gemma-4-31b-it:free";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -85,8 +85,8 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage },
           ],
-          temperature: 0.7,
-          max_tokens: 2000,
+          temperature: 0.5,
+          max_tokens: 800,
         }),
       });
       if (!response.ok) {
@@ -98,10 +98,10 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
       }
       const data = await response.json();
       const content = data?.choices?.[0]?.message?.content;
-      // OpenRouter sometimes returns null/empty content РІР‚вЂќ treat as transient error, retry
+      // OpenRouter sometimes returns null/empty content — treat as transient error, retry
       if (!content || content.trim() === "") {
-        lastError = new Error("AI Router: Р С—РЎС“РЎРѓРЎвЂљР С•Р в„– Р С•РЎвЂљР Р†Р ВµРЎвЂљ Р С•РЎвЂљ LLM");
-        console.warn(`[callAI] attempt ${attempt + 1}/${retries} РІР‚вЂќ empty content, retrying...`);
+        lastError = new Error("AI Router: пустой ответ от LLM");
+        console.warn(`[callAI] attempt ${attempt + 1}/${retries} — empty content, retrying...`);
         continue;
       }
       return content;
@@ -109,14 +109,11 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
       lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
-  throw new Error(`AI Router: Р Р…Р Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ Р С—Р С•Р В»РЎС“РЎвЂЎР С‘РЎвЂљРЎРЉ Р Р†Р В°Р В»Р С‘Р Т‘Р Р…РЎвЂ№Р в„– Р С•РЎвЂљР Р†Р ВµРЎвЂљ Р С—Р С•РЎРѓР В»Р Вµ ${retries} Р С—Р С•Р С—РЎвЂ№РЎвЂљР С•Р С”. Р СџР С•РЎРѓР В»Р ВµР Т‘Р Р…РЎРЏРЎРЏ Р С•РЎв‚¬Р С‘Р В±Р С”Р В°: ${lastError?.message || "unknown"}`);
+  throw new Error(`AI Router: не удалось получить валидный ответ после ${retries} попыток. Последняя ошибка: ${lastError?.message || "unknown"}`);
 }
 
-
 // ============================================
-
-// ============================================
-// Main Handler РІР‚вЂќ 5-РЎв‚¬Р В°Р С–Р С•Р Р†РЎвЂ№Р в„– Р С”Р С•Р Р…Р Р†Р ВµР в„–Р ВµРЎР‚
+// Main Handler — 5-шаговый конвейер
 // ============================================
 serve(async (req: any) => {
   if (req.method === "OPTIONS") {
@@ -124,7 +121,7 @@ serve(async (req: any) => {
   }
 
   const requestId = crypto.randomUUID().slice(0, 8);
-  console.log(`\n[${requestId}] РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’ PROCESS-TURN (5-step pipeline) START РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’`);
+  console.log(`\n[${requestId}] ════════ PROCESS-TURN (5-step pipeline) START ════════`);
 
   try {
     const { session_id, player_id, action_text } = await req.json();
@@ -138,7 +135,7 @@ serve(async (req: any) => {
 
     const imagePattern = /\b(image|img|photo|picture|avatar|icon|base64|data)\b[\s\S]*?\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi;
     if (imagePattern.test(safeActionText)) {
-      return new Response(JSON.stringify({ error: "Р С›Р В±Р Р…Р В°РЎР‚РЎС“Р В¶Р ВµР Р…РЎвЂ№ РЎРѓРЎРѓРЎвЂ№Р В»Р С”Р С‘ Р Р…Р В° Р С‘Р В·Р С•Р В±РЎР‚Р В°Р В¶Р ВµР Р…Р С‘РЎРЏ. Р Р€Р Т‘Р В°Р В»Р С‘РЎвЂљР Вµ Р С‘РЎвЂ¦ Р С‘ Р С—Р С•Р С—РЎР‚Р С•Р В±РЎС“Р в„–РЎвЂљР Вµ РЎРѓР Р…Р С•Р Р†Р В°." }), {
+      return new Response(JSON.stringify({ error: "Обнаружены ссылки на изображения. Удалите их и попробуйте снова." }), {
         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
       });
     }
@@ -169,16 +166,16 @@ serve(async (req: any) => {
     const sessionStoryline = session.storyline || session.worlds?.settings?.storyline || null;
 
     // Resolve API key + models:
-    // Р СџР С•Р Т‘Р Т‘Р ВµРЎР‚Р В¶Р С”Р В° РЎР‚Р ВµР В¶Р С‘Р СР В° Р С•Р В±РЎвЂ°Р ВµР С–Р С• Р С”Р В»РЎР‹РЎвЂЎР В° РЎвЂ¦Р С•РЎРѓРЎвЂљР В° (ai_key_mode: 'host' | 'individual')
-    // Р СџР С• РЎС“Р СР С•Р В»РЎвЂЎР В°Р Р…Р С‘РЎР‹ 'host': РЎвЂ¦Р С•Р Т‘РЎвЂ№ Р Р†РЎРѓР ВµРЎвЂ¦ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р† Р С‘РЎРѓР С—Р С•Р В»РЎРЉР В·РЎС“РЎР‹РЎвЂљ Р С”Р В»РЎР‹РЎвЂЎ Р С‘ Р СР С•Р Т‘Р ВµР В»Р С‘ РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљР ВµР В»РЎРЏ РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘/Р СР С‘РЎР‚Р В°,
-    // Р ВµРЎРѓР В»Р С‘ Р Р…Р Вµ Р Р†РЎвЂ№Р В±РЎР‚Р В°Р Р… РЎР‚Р ВµР В¶Р С‘Р С 'individual' (Р С”Р В°Р В¶Р Т‘РЎвЂ№Р в„– РЎРѓР С• РЎРѓР Р†Р С•Р С‘Р С).
+    // Поддержка режима общего ключа хоста (ai_key_mode: 'host' | 'individual')
+    // По умолчанию 'host': ходы всех игроков используют ключ и модели создателя сессии/мира,
+    // если не выбран режим 'individual' (каждый со своим).
     const aiKeyMode = session.ai_key_mode || 'host';
     const hostUserId = session.worlds?.owner_id || null;
 
     let openrouterApiKey = sanitizeKey(FALLBACK_OPENROUTER_KEY);
     let satelliteModel = AI_MODEL, gpsModel = AI_MODEL, dmModel = AI_MODEL;
 
-    // 1. Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР С” РЎвЂљР ВµР С”РЎС“РЎвЂ°Р ВµР С–Р С• Р С‘Р С–РЎР‚Р С•Р С”Р В° (Р ВµРЎРѓР В»Р С‘ Р ВµРЎРѓРЎвЂљРЎРЉ)
+    // 1. Загрузка настроек текущего игрока (если есть)
     let playerSettings: any = null;
     if (player.user_id) {
       const { data: us } = await supabase.from("user_settings")
@@ -187,7 +184,7 @@ serve(async (req: any) => {
       playerSettings = us;
     }
 
-    // 2. Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В° Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р ВµР С” РЎвЂ¦Р С•РЎРѓРЎвЂљР В° (РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљР ВµР В»РЎРЏ Р СР С‘РЎР‚Р В°/РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘)
+    // 2. Загрузка настроек хоста (создателя мира/сессии)
     let hostSettings: any = null;
     if (hostUserId && hostUserId !== player.user_id) {
       const { data: hs } = await supabase.from("user_settings")
@@ -198,16 +195,16 @@ serve(async (req: any) => {
       hostSettings = playerSettings;
     }
 
-    // 3. Р вЂ™РЎвЂ№Р В±Р С•РЎР‚ Р С‘РЎРѓРЎвЂљР С•РЎвЂЎР Р…Р С‘Р С”Р В° Р С”Р В»РЎР‹РЎвЂЎР В° Р С‘ Р СР С•Р Т‘Р ВµР В»Р ВµР в„– Р Р† Р В·Р В°Р Р†Р С‘РЎРѓР С‘Р СР С•РЎРѓРЎвЂљР С‘ Р С•РЎвЂљ ai_key_mode
+    // 3. Выбор источника ключа и моделей в зависимости от ai_key_mode
     if (aiKeyMode === 'host') {
-      // Р СџРЎР‚Р С‘Р С•РЎР‚Р С‘РЎвЂљР ВµРЎвЂљ Р ТђР С•РЎРѓРЎвЂљР В°: РЎРѓР Р…Р В°РЎвЂЎР В°Р В»Р В° Р С”Р В»РЎР‹РЎвЂЎ Р С‘ Р СР С•Р Т‘Р ВµР В»Р С‘ РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљР ВµР В»РЎРЏ РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘
+      // Приоритет Хоста: сначала ключ и модели создателя сессии
       const targetSettings = hostSettings?.openrouter_key ? hostSettings : playerSettings;
       if (targetSettings?.openrouter_key) openrouterApiKey = sanitizeKey(targetSettings.openrouter_key);
       if (targetSettings?.satellite_model) satelliteModel = targetSettings.satellite_model;
       if (targetSettings?.gps_model) gpsModel = targetSettings.gps_model;
       if (targetSettings?.dm_model) dmModel = targetSettings.dm_model;
     } else {
-      // Р В Р ВµР В¶Р С‘Р С 'individual': Р С”Р В°Р В¶Р Т‘РЎвЂ№Р в„– Р С‘Р С–РЎР‚Р С•Р С” Р С‘РЎРѓР С—Р С•Р В»РЎРЉР В·РЎС“Р ВµРЎвЂљ РЎРѓР Р†Р С•Р в„– Р С”Р В»РЎР‹РЎвЂЎ; Р ВµРЎРѓР В»Р С‘ РЎС“ Р С‘Р С–РЎР‚Р С•Р С”Р В° Р Р…Р ВµРЎвЂљ Р С”Р В»РЎР‹РЎвЂЎР В° РІР‚вЂќ РЎвЂћР С•Р В»Р В»Р В±РЎРЊР С” Р Р…Р В° Р С”Р В»РЎР‹РЎвЂЎ РЎвЂ¦Р С•РЎРѓРЎвЂљР В°
+      // Режим 'individual': каждый игрок использует свой ключ; если у игрока нет ключа — фоллбэк на ключ хоста
       const targetSettings = playerSettings?.openrouter_key ? playerSettings : hostSettings;
       if (targetSettings?.openrouter_key) openrouterApiKey = sanitizeKey(targetSettings.openrouter_key);
       if (targetSettings?.satellite_model) satelliteModel = targetSettings.satellite_model;
@@ -217,8 +214,8 @@ serve(async (req: any) => {
 
     if (!openrouterApiKey) {
       const errorMsg = aiKeyMode === 'host'
-        ? "Р СњР Вµ Р В·Р В°Р Т‘Р В°Р Р… OpenRouter API Key РЎРѓР С•Р В·Р Т‘Р В°РЎвЂљР ВµР В»РЎРЏ РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘. Р ТђР С•РЎРѓРЎвЂљ Р Т‘Р С•Р В»Р В¶Р ВµР Р… РЎС“Р С”Р В°Р В·Р В°РЎвЂљРЎРЉ Р С”Р В»РЎР‹РЎвЂЎ Р Р† Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р в„–Р С”Р В°РЎвЂ¦ Р В°Р С”Р С”Р В°РЎС“Р Р…РЎвЂљР В°."
-        : "Р Р€Р С”Р В°Р В¶Р С‘РЎвЂљР Вµ Р Р†Р В°РЎв‚¬ OpenRouter API Key Р Р† Р Р…Р В°РЎРѓРЎвЂљРЎР‚Р С•Р в„–Р С”Р В°РЎвЂ¦ Р В°Р С”Р С”Р В°РЎС“Р Р…РЎвЂљР В°.";
+        ? "Не задан OpenRouter API Key создателя сессии. Хост должен указать ключ в настройках аккаунта."
+        : "Укажите ваш OpenRouter API Key в настройках аккаунта.";
       return new Response(JSON.stringify({ error: errorMsg, code: "MISSING_API_KEY" }), {
         status: 402, headers: { ...CORS, "Content-Type": "application/json" },
       });
@@ -295,7 +292,7 @@ serve(async (req: any) => {
         .from("lore_files")
         .select("title, content")
         .eq("world_id", session.world_id)
-        .limit(20) // было 10;
+        .limit(20);
 
       if (loreFiles && loreFiles.length > 0) {
         const keywords = [safeActionText, currentLocationName || "", currentWildZone || ""]
@@ -311,19 +308,31 @@ serve(async (req: any) => {
 
         const allLore = relevantLore.length > 0 ? relevantLore : loreFiles.slice(0, 2);
         loreContext = allLore
-          .map((f: any) => `### ${f.title}
-${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
+          .map((f: any) => `### ${f.title}\n${cleanTextForAI(f.content).slice(0, 1500)}`)
           .join("\n\n");
       }
     }
-    const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type, sender_name").eq("session_id", session_id).order("created_at", { ascending: false }).limit(10);
-    const recentMessages = (recentMsgs || []).reverse().map((m: any) => `[${m.sender_name || (m.sender_type === "master" ? "Мастер" : "Игрок")}]: ${cleanTextForAI(m.content).slice(0, 300)}`);
+
+    const { data: recentMsgs } = await supabase.from("messages").select("content, sender_type, sender_name").eq("session_id", session_id).order("created_at", { ascending: false }).limit(8);
+    const recentMessages = (recentMsgs || []).reverse().map((m: any) => {
+      const cleaned = cleanTextForAI(m.content || "");
+      if (m.sender_type === "master") {
+        // Берём концовку ответа Мастера (реакция мира / реплика NPC), а не первый абзац,
+        // чтобы бесплатные LLM не копировали вступительный абзац прошлого хода слово в слово!
+        const paragraphs = cleaned.split(/\n\s*\n/).map((p: string) => p.trim()).filter(Boolean);
+        const summaryPart = paragraphs.length >= 2
+          ? paragraphs.slice(-2).join(" ").slice(-260)
+          : cleaned.slice(-260);
+        return `[Итог прошлого шага]: ${summaryPart}`;
+      }
+      return `[${m.sender_name || "Игрок"}]: ${cleaned.slice(0, 240)}`;
+    });
 
     // Load all players in session (for router, engine and system truth context)
     const { data: allPlayersData } = await supabase.from("players").select("*, inventory(*), current_zone").eq("session_id", session_id).order("created_at", { ascending: true });
     const allPlayers = allPlayersData || [];
 
-    // Р вЂ”Р В°Р С–РЎР‚РЎС“Р В¶Р В°Р ВµР С Р С”Р В°РЎР‚РЎвЂљРЎС“ РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р В·Р С•Р Р… Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р С‘Р В· Р С”РЎРЊРЎв‚¬Р В° РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘ (Р В·Р В°Р С—Р С•Р В»Р Р…РЎРЏР ВµРЎвЂљРЎРѓРЎРЏ Р С—РЎР‚Р С‘ РЎРѓР С•Р В·Р Т‘Р В°Р Р…Р С‘Р С‘/РЎРѓР СР ВµР Р…Р Вµ Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘)
+    // Загружаем карту расстояний зон и тип местности из кэша сессии (заполняется при создании/смене локации)
     let locationMap: Record<string, Record<string, number>> = session.location_map || {};
     let currentTerrain: string | null = session.current_terrain_type || null;
 
@@ -345,25 +354,25 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     const isCompanionNpc = (n: any) => {
       const role = (n.role || "").toLowerCase();
       const tags = Array.isArray(n.status_tags) ? n.status_tags.map((t: string) => String(t).toLowerCase()) : [];
-      return role === "companion" || role === "РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”" || tags.some((t: string) => ["companion", "РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”", "Р Р†_Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р Вµ", "Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ", "Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…"].includes(t));
+      return role === "companion" || role === "спутник" || tags.some((t: string) => ["companion", "спутник", "в_отряде", "питомец", "приручен"].includes(t));
     };
 
-    // Р вЂўРЎРѓР В»Р С‘ Р С‘Р С–РЎР‚Р С•Р С” Р Р…Р В°РЎвЂ¦Р С•Р Т‘Р С‘РЎвЂљРЎРѓРЎРЏ Р Р† Р Т‘Р С‘Р С”Р С•Р в„– Р В·Р С•Р Р…Р Вµ (Р В»Р ВµРЎРѓ, Р С—Р ВµРЎвЂ°Р ВµРЎР‚Р В°, Р С—РЎС“РЎРѓРЎвЂљР С•РЎв‚¬РЎРЉ), Р С–Р С•РЎР‚Р С•Р Т‘РЎРѓР С”Р С‘Р Вµ NPC (РЎвЂљР С•РЎР‚Р С–Р С•Р Р†РЎвЂ РЎвЂ№, Р В¶Р С‘РЎвЂљР ВµР В»Р С‘) Р С•РЎРѓРЎвЂљР В°РЎР‹РЎвЂљРЎРѓРЎРЏ Р Р† Р С–Р С•РЎР‚Р С•Р Т‘Р Вµ!
-    // Р вЂ™ РЎРѓРЎвЂ Р ВµР Р…Р Вµ РЎРѓ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р С Р С—РЎР‚Р С‘РЎРѓРЎС“РЎвЂљРЎРѓРЎвЂљР Р†РЎС“РЎР‹РЎвЂљ Р СћР С›Р вЂєР В¬Р С™Р С› РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”Р С‘/Р С—Р С‘РЎвЂљР С•Р СРЎвЂ РЎвЂ№ Р С‘Р В»Р С‘ Р Т‘Р С‘Р С”Р С‘Р Вµ Р Р†РЎР‚Р В°Р С–Р С‘/РЎРѓРЎС“РЎвЂ°Р ВµРЎРѓРЎвЂљР Р†Р В°.
+    // Если игрок находится в дикой зоне (лес, пещера, пустошь), городские NPC (торговцы, жители) остаются в городе!
+    // В сцене с игроком присутствуют ТОЛЬКО спутники/питомцы или дикие враги/существа.
     if (currentWildZone) {
       const totalLoaded = allNpcs.length;
       allNpcs = allNpcs.filter((n: any) =>
         isCompanionNpc(n) ||
         n.is_hostile === true ||
-        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р Т‘Р С‘Р С”Р С‘Р в„–", "Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚", "Р Т‘Р С‘Р С”Р В°РЎРЏ_Р В·Р С•Р Р…Р В°", "Р В·Р Р†Р ВµРЎР‚РЎРЉ", "РЎвЂ¦Р С‘РЎвЂ°Р Р…Р С‘Р С”"].includes(String(t).toLowerCase())))
+        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))
       );
       console.log(`[${requestId}] [WILD_ZONE] In wild zone "${currentWildZone}": filtered out town NPCs (${totalLoaded} -> ${allNpcs.length} present)`);
     }
 
-    console.log(`[${requestId}] [START] СЂСџР‹Р‡ Turn for player "${player.name}" (${player.id}) in session "${session_id}". Action: "${safeActionText}"`);
-    console.log(`[${requestId}] [LOCATION] СЂСџвЂњРЊ LocationID=${session.current_location_id}, Name="${currentLocationName}", WildZone="${session.current_wild_zone || 'none'}", NPCs present=${allNpcs.length} (${allNpcs.map((n: any) => n.name).join(', ') || 'none'})`);
+    console.log(`[${requestId}] [START] 🎲 Turn for player "${player.name}" (${player.id}) in session "${session_id}". Action: "${safeActionText}"`);
+    console.log(`[${requestId}] [LOCATION] 📍 LocationID=${session.current_location_id}, Name="${currentLocationName}", WildZone="${session.current_wild_zone || 'none'}", NPCs present=${allNpcs.length} (${allNpcs.map((n: any) => n.name).join(', ') || 'none'})`);
 
-    // Р СџРЎР‚Р С•Р Р†Р ВµРЎР‚РЎРЏР ВµР С, Р С—Р ВµРЎР‚Р Р†РЎвЂ№Р в„– Р В»Р С‘ РЎРЊРЎвЂљР С• РЎвЂ¦Р С•Р Т‘ Р Р† РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘ (Р Р…Р ВµРЎвЂљ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘Р в„– Р С‘Р С–РЎР‚Р С•Р С”Р В° Р С‘Р В»Р С‘ Р В»Р С•Р С”Р В°РЎвЂ Р С‘РЎРЏ Р Р…Р Вµ Р В·Р В°Р Т‘Р В°Р Р…Р В°)
+    // Проверяем, первый ли это ход в сессии (нет сообщений игрока или локация не задана)
     const isFirstTurn = !session.current_location_id || !(recentMsgs || []).some((m: any) => m.sender_type === "player");
     let startingLocationGenerated = false;
 
@@ -565,14 +574,14 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       }
     }
 
-    // Р вЂўРЎРѓР В»Р С‘ Р С”Р В°РЎР‚РЎвЂљР В° РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р С‘Р В»Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р ВµРЎвЂ°РЎвЂ Р Р…Р Вµ РЎРѓР С•Р В·Р Т‘Р В°Р Р…РЎвЂ№ РІР‚вЂќ Р С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚РЎС“Р ВµР С РЎвЂЎР ВµРЎР‚Р ВµР В· Р ВР В
+    // Если карта расстояний или тип местности ещё не созданы — генерируем через ИИ
     if (Object.keys(locationMap).length === 0 && (session.current_location_id || currentWildZone || currentLocationName)) {
       try {
         const initLocMap = await ensureLocationMapAndTerrain({
           supabase,
           sessionId: session_id,
           locationId: session.current_location_id,
-          locationName: currentLocationName || "Р вЂєР С•Р С”Р В°РЎвЂ Р С‘РЎРЏ",
+          locationName: currentLocationName || "Локация",
           isWildZone: Boolean(currentWildZone),
           openrouterApiKey,
           model: satelliteModel,
@@ -587,7 +596,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     }
 
     // ============================================
-    // Р В§Р В°РЎвЂљ: РЎР‚Р В°РЎРѓР С—РЎР‚Р ВµР Т‘Р ВµР В»Р ВµР Р…Р С‘Р Вµ Р С•РЎвЂЎР С”Р С•Р Р† РЎвЂ¦Р В°РЎР‚Р В°Р С”РЎвЂљР ВµРЎР‚Р С‘РЎРѓРЎвЂљР С‘Р С”
+    // Чат: распределение очков характеристик
     // ============================================
     let statAllocatedFact: string | null = null;
     const statAllocIntent = parseStatAllocationIntent(safeActionText);
@@ -629,13 +638,14 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     }
 
     // ============================================
-    // Р РЃР С’Р вЂњ 1: AI Router (parsePlayerIntent)
+    // ШАГ 1: AI Router (parsePlayerIntent)
     // ============================================
     console.log(`[${requestId}] [STEP 1] AI Router...`);
-    // Р СџР С•Р Т‘Р С–РЎР‚РЎС“Р В¶Р В°Р ВµР С Р С‘РЎРѓРЎвЂљР С•РЎР‚Р С‘РЎР‹ Р Т‘Р В»РЎРЏ Р С”Р С•Р Р…РЎвЂљР ВµР С”РЎРѓРЎвЂљР В° Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘РЎРЏ РЎРѓ NPC/Р С‘Р С–РЎР‚Р С•Р С”Р В°Р СР С‘
+    // Подгружаем историю для контекста общения с NPC/игроками
     let recentHistoryStr = "";
-    const { data: routerRecentMsgs } = await supabase.from("messages").select("sender_name, content, sender_type").eq("session_id", session_id).order("created_at", { ascending: false }).limit(3); if (routerRecentMsgs && routerRecentMsgs.length > 0) {
-      recentHistoryStr = routerRecentMsgs.reverse().map((m: any) => `${m.sender_name || (m.sender_type === 'master' ? 'Р вЂќР Сљ' : 'Р РЋР С‘РЎРѓРЎвЂљР ВµР СР В°')}: "${m.content}"`).join("\n");
+    const { data: routerRecentMsgs } = await supabase.from("messages").select("sender_name, content, sender_type").eq("session_id", session_id).order("created_at", { ascending: false }).limit(3);
+    if (routerRecentMsgs && routerRecentMsgs.length > 0) {
+      recentHistoryStr = routerRecentMsgs.reverse().map((m: any) => `${m.sender_name || (m.sender_type === 'master' ? 'ДМ' : 'Система')}: "${cleanTextForAI(m.content || "").slice(0, 220)}"`).join("\n");
     }
 
     const routerInput: RouterInputContext = {
@@ -644,8 +654,8 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       player: {
         id: player.id,
         name: player.name || "Герой",
-        race: player.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
-        class: player.class || "Р вЂ™Р С•Р С‘Р Р…",
+        race: player.race || "Человек",
+        class: player.class || "Воин",
         level: player.level || 1,
         hp: player.hp ?? 100,
         max_hp: player.max_hp ?? 100,
@@ -655,7 +665,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       },
       inventory: (player.inventory || []).map((i: any) => ({
         id: i.id,
-        item_name: i.item_name || i.name || "Р СџРЎР‚Р ВµР Т‘Р СР ВµРЎвЂљ",
+        item_name: i.item_name || i.name || "Предмет",
         item_type: i.type || i.item_type || "misc",
         quantity: i.quantity || 1,
         condition: i.condition ?? null,
@@ -665,7 +675,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       nearby_npcs: allNpcs.map((n: any) => ({
         id: n.id,
         name: n.name || "NPC",
-        race: n.race || "Р вЂњРЎС“Р СР В°Р Р…Р С•Р С‘Р Т‘",
+        race: n.race || "Гуманоид",
         is_hostile: n.is_hostile || false,
         hp: n.hp ?? 10,
         max_hp: n.max_hp ?? 10,
@@ -676,8 +686,8 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         .map((p: any) => ({
           id: p.id,
           name: p.name || "Герой",
-          race: p.race || "Р В§Р ВµР В»Р С•Р Р†Р ВµР С”",
-          class: p.class || "Р ВР С–РЎР‚Р С•Р С”",
+          race: p.race || "Человек",
+          class: p.class || "Игрок",
           level: p.level || 1,
           hp: p.hp ?? 100,
           max_hp: p.max_hp ?? 100,
@@ -714,7 +724,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       storyline: sessionStoryline ? {
         title: sessionStoryline.title,
         current_arc: sessionStoryline.arcs?.[sessionStoryline.current_arc_index || 0] || null,
-      lore_context: loreContext.slice(0, 1500), // FIX 7: world context for router
+        lore_context: loreContext.slice(0, 1500),
       } : null,
     };
 
@@ -799,7 +809,6 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     }
 
     // Apply GPS time/location (still here, as it's pre-engine)
-
     let time_passed_minutes = 0;
     let location_changed = startingLocationGenerated,
       new_location_id: string | null = startingLocationGenerated ? session.current_location_id : null,
@@ -807,76 +816,84 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       wild_zone_changed = false,
       travel_description = "";
 
-    // Р вЂќР ВµРЎвЂљР ВµР С”РЎвЂљР С•РЎР‚ Р Р…Р В°Р СР ВµРЎР‚Р ВµР Р…Р С‘РЎРЏ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ Р С‘Р В»Р С‘ Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘Р В° Р С‘Р В· Р С—Р С•Р СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ
+    // Детектор намерения перемещения или выхода из помещения
     const isMovementAction = routerResult.actions?.some((a: any) => a.action_type === "move") ||
-      /Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘|Р Р†РЎвЂ№Р в„–РЎвЂљР С‘|Р Р†РЎвЂ№РЎвЂ¦Р С•Р В¶РЎС“|Р С—Р С•Р С”Р С‘Р Р…РЎС“РЎвЂљРЎРЉ|Р С—Р С•Р С”Р С‘Р Т‘Р В°РЎР‹|РЎС“Р в„–РЎвЂљР С‘|РЎС“РЎвЂ¦Р С•Р В¶РЎС“|Р С•РЎвЂљР С—РЎР‚Р В°Р Р†Р С‘РЎвЂљРЎРЉРЎРѓРЎРЏ|Р С‘Р Т‘РЎС“ |Р ВµР Т‘РЎС“ |Р В±Р ВµР С–РЎС“ |Р Р…Р В° РЎС“Р В»Р С‘РЎвЂ |Р Р…Р В°РЎР‚РЎС“Р В¶РЎС“|Р В·Р В° Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎвЂ№|Р Р…Р В° РЎвЂљРЎР‚Р В°Р С”РЎвЂљ|Р Р† Р В»Р ВµРЎРѓ|Р Р† Р С–Р С•РЎР‚Р С•Р Т‘|Р С” Р С•Р В·Р ВµРЎР‚РЎС“|Р Р† Р С—РЎС“РЎвЂљРЎРЉ|Р В·Р В°Р в„–РЎвЂљР С‘ Р Р† |Р Р†Р ВµРЎР‚Р Р…РЎС“РЎвЂљРЎРЉРЎРѓРЎРЏ/i.test(safeActionText);
+      /выход|выйти|выхожу|покинуть|покидаю|уйти|ухожу|отправиться|иду |еду |бегу |на улиц|наружу|за пределы|на тракт|в лес|в город|к озеру|в путь|зайти в |вернуться/i.test(safeActionText);
 
-    try {
-      const gpsSystemPrompt = buildGpsPrompt({
-        playerName: cleanTextForAI(player.name || "Герой"),
-        actionText: safeActionText,
-        intentType: "router",
-        intentDescription: safeActionText,
-        currentYear: session.game_year || 1248, currentMonth: session.game_month || 5,
-        currentDay: session.game_day || 14, currentHour: session.game_hour || 10,
-        currentMinute: session.game_minute || 0,
-        currentLocation: currentLocationName, currentState: currentStateName,
-        currentWildZone,
-        currentDangerLevel,
-        wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
-        availableLocations,
-        availableSubzones: locationMap && Object.keys(locationMap).length > 0 ? Object.keys(locationMap) : undefined,
-        terrainType: currentTerrain || currentLocationType || "unknown",
-      } as any);
+    (globalThis as any).__gpsSubzone = null;
+    if (isMovementAction) {
+      try {
+        const gpsSystemPrompt = buildGpsPrompt({
+          playerName: cleanTextForAI(player.name || "Герой"),
+          actionText: safeActionText,
+          intentType: "router",
+          intentDescription: safeActionText,
+          currentYear: session.game_year || 1248, currentMonth: session.game_month || 5,
+          currentDay: session.game_day || 14, currentHour: session.game_hour || 10,
+          currentMinute: session.game_minute || 0,
+          currentLocation: currentLocationName, currentState: currentStateName,
+          currentWildZone,
+          currentDangerLevel,
+          wantsLocationChange: isMovementAction, locationChangeDescription: safeActionText,
+          availableLocations,
+          availableSubzones: locationMap && Object.keys(locationMap).length > 0 ? Object.keys(locationMap) : undefined,
+          terrainType: currentTerrain || currentLocationType || "unknown",
+        } as any);
 
-      const gpsResp = await callAI(gpsSystemPrompt, "Р С›Р С—РЎР‚Р ВµР Т‘Р ВµР В»Р С‘ Р Р†РЎР‚Р ВµР СРЎРЏ.", openrouterApiKey, 2, gpsModel);
-      const gpsParsed = parseAIJson(gpsResp);
-      if (gpsParsed) {
-        (globalThis as any).__gpsSubzone = gpsParsed?.moved_to_subzone || null;
-        time_passed_minutes = Math.max(0, Math.min(1440, Number(gpsParsed.time_minutes) || 0));
+        const gpsResp = await callAI(gpsSystemPrompt, "Определи время и маршрут.", openrouterApiKey, 2, gpsModel);
+        const gpsParsed = parseAIJson(gpsResp);
+        if (gpsParsed) {
+          (globalThis as any).__gpsSubzone = gpsParsed?.moved_to_subzone || null;
+          time_passed_minutes = Math.max(1, Math.min(1440, Number(gpsParsed.time_minutes) || Number(routerResult.time_estimate_minutes) || 10));
 
-        // ПЛАУЗИБИЛЬНОСТЬ: если игрок пытался сменить локацию, но GPS отверг её как невозможную рядом
-        const moveAction = routerResult.actions?.find((a: any) => a.action_type === "move");
-        if (isMovementAction && (gpsParsed.is_plausible === false || (!gpsParsed.location_changed && !gpsParsed.moved_to_subzone && gpsParsed.travel_description))) {
-          if (moveAction) {
-            moveAction.movement_rejected = true;
-            moveAction.rejection_reason = gpsParsed.travel_description || "Такого места поблизости нет.";
-            console.log(`[${requestId}] [GPS_REJECT] 🚫 Movement rejected (implausible): ${moveAction.rejection_reason}`);
+          // ПЛАУЗИБИЛЬНОСТЬ: если игрок пытался сменить локацию, но GPS отверг её как невозможную рядом
+          const moveAction = routerResult.actions?.find((a: any) => a.action_type === "move");
+          if (isMovementAction && (gpsParsed.is_plausible === false || (!gpsParsed.location_changed && !gpsParsed.moved_to_subzone && gpsParsed.travel_description))) {
+            if (moveAction) {
+              moveAction.movement_rejected = true;
+              moveAction.rejection_reason = gpsParsed.travel_description || "Такого места поблизости нет.";
+              console.log(`[${requestId}] [GPS_REJECT] 🚫 Movement rejected (implausible): ${moveAction.rejection_reason}`);
+            }
+          }
+
+          if (gpsParsed.location_changed === true) {
+            if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
+              // Переход в дикую зону (лес, пещера, поле, тракт)
+              wild_zone_changed = true;
+              new_wild_zone = gpsParsed.new_location_name;
+              travel_description = gpsParsed.travel_description || "";
+              const gpsWildDanger = gpsParsed.wild_zone_danger_level;
+              const validDangers = ["safe", "normal", "danger", "lethal"];
+              currentDangerLevel = (validDangers.includes(gpsWildDanger) ? gpsWildDanger : parentLocationDanger) || "normal";
+              console.log(`[${requestId}] [GPS] Wild zone: ${new_wild_zone} (danger: ${currentDangerLevel})`);
+            } else if (gpsParsed.new_location_id) {
+              // Переход в именованную локацию
+              location_changed = true;
+              new_location_id = gpsParsed.new_location_id;
+              wild_zone_changed = true;
+              new_wild_zone = null; // очищаем дикую зону
+              travel_description = gpsParsed.travel_description || "";
+              try {
+                const { data: newLocRow } = await supabase.from("locations").select("danger_level").eq("id", new_location_id).maybeSingle();
+                if (newLocRow?.danger_level) currentDangerLevel = newLocRow.danger_level;
+              } catch (_) {}
+              console.log(`[${requestId}] [GPS] Location change → ${new_location_id} (danger: ${currentDangerLevel})`);
+            }
           }
         }
-
-        if (gpsParsed.location_changed === true) {
-          if (gpsParsed.is_wild_zone === true && gpsParsed.new_location_name) {
-            // Переход в дикую зону (лес, пещера, поле, тракт)
-            wild_zone_changed = true;
-            new_wild_zone = gpsParsed.new_location_name;
-            travel_description = gpsParsed.travel_description || "";
-            const gpsWildDanger = gpsParsed.wild_zone_danger_level;
-            const validDangers = ["safe", "normal", "danger", "lethal"];
-            currentDangerLevel = (validDangers.includes(gpsWildDanger) ? gpsWildDanger : parentLocationDanger) || "normal";
-            console.log(`[${requestId}] [GPS] Wild zone: ${new_wild_zone} (danger: ${currentDangerLevel})`);
-          } else if (gpsParsed.new_location_id) {
-            // Переход в именованную локацию
-            location_changed = true;
-            new_location_id = gpsParsed.new_location_id;
-            wild_zone_changed = true;
-            new_wild_zone = null; // очищаем дикую зону
-            travel_description = gpsParsed.travel_description || "";
-            try {
-              const { data: newLocRow } = await supabase.from("locations").select("danger_level").eq("id", new_location_id).maybeSingle();
-              if (newLocRow?.danger_level) currentDangerLevel = newLocRow.danger_level;
-            } catch (_) {}
-            console.log(`[${requestId}] [GPS] Location change → ${new_location_id} (danger: ${currentDangerLevel})`);
-          }
-        }
+      } catch (e) {
+        time_passed_minutes = Math.max(1, Math.min(1440, Number(routerResult.time_estimate_minutes) || 15));
       }
-    } catch (e) { /* ignore GPS errors, game continues */ }
+    } else {
+      // Экономия токенов и времени: если перемещения нет, берем оценку времени напрямую из Step 1 Router!
+      time_passed_minutes = Math.max(1, Math.min(1440, Number(routerResult.time_estimate_minutes) || 5));
+    }
 
-    // Р вЂќР ВµРЎвЂљР ВµРЎР‚Р СР С‘Р Р…Р С‘РЎР‚Р С•Р Р†Р В°Р Р…Р Р…Р В°РЎРЏ Р С–Р В°РЎР‚Р В°Р Р…РЎвЂљР С‘РЎРЏ: Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘ Р С‘Р В· Р В·Р Т‘Р В°Р Р…Р С‘РЎРЏ/РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎвЂ№ Р Р…Р В°РЎР‚РЎС“Р В¶РЎС“, Р ВµРЎРѓР В»Р С‘ GPS Р Р…Р Вµ Р С—Р ВµРЎР‚Р ВµР С”Р В»РЎР‹РЎвЂЎР С‘Р В» Р В·Р С•Р Р…РЎС“
-    const isBuildingLocation = /РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…|РЎвЂљРЎР‚Р В°Р С”РЎвЂљР С‘РЎР‚|Р С—Р С•РЎРѓРЎвЂљР С•РЎРЏР В»|Р Т‘Р С•Р С|Р С—Р С•Р Т‘Р Р†Р В°Р В»|Р С–РЎР‚Р С•РЎвЂљ|Р С”Р В°РЎвЂљР В°Р С”Р С•Р СР В±|Р С—Р С•Р С–РЎР‚Р ВµР В±|tavern|building|dungeon/i.test(currentLocationType || "") ||
-      /РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…|РЎвЂљРЎР‚Р В°Р С”РЎвЂљР С‘РЎР‚|Р С—Р С•РЎРѓРЎвЂљР С•РЎРЏР В»|Р Т‘Р С•Р С|Р В±Р В°РЎв‚¬Р Р…|Р С”Р В°РЎвЂљР В°Р С”Р С•Р СР В±|Р С—Р С•Р С–РЎР‚Р ВµР В±/i.test(currentLocationName || "");
-    const isExitingBuilding = /Р Р†РЎвЂ№РЎвЂ¦Р С•Р Т‘|Р Р†РЎвЂ№Р в„–РЎвЂљР С‘|Р Р†РЎвЂ№РЎвЂ¦Р С•Р В¶РЎС“|Р С—Р С•Р С”Р С‘Р Т‘Р В°|Р Р…Р В°РЎР‚РЎС“Р В¶РЎС“|Р Р…Р В° РЎС“Р В»Р С‘РЎвЂ |Р Р…Р В° Р Р†Р С•Р В·Р Т‘РЎС“РЎвЂ¦|Р Р†Р С• Р Т‘Р Р†Р С•РЎР‚|Р Р…Р В° Р Т‘Р Р†Р С•РЎР‚|Р Р…Р В° РЎвЂљРЎР‚Р В°Р С”РЎвЂљ|Р Р…Р В° Р Т‘Р С•РЎР‚Р С•Р С–|Р Р† Р С—РЎС“РЎвЂљРЎРЉ/i.test(safeActionText);
-    const isEnteringBuilding = /Р В·Р В°Р в„–РЎвЂљР С‘ Р Р† РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎС“|Р В·Р В°РЎвЂ¦Р С•Р В¶РЎС“ Р Р† РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎС“|Р Р†Р ВµРЎР‚Р Р…РЎС“РЎвЂљРЎРЉРЎРѓРЎРЏ Р Р† РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎС“|Р Р†РЎвЂ¦Р С•Р В¶РЎС“ Р Р† РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎС“|Р В·Р В°Р в„–РЎвЂљР С‘ Р Р†Р Р…РЎС“РЎвЂљРЎР‚РЎРЉ|Р Р†Р ВµРЎР‚Р Р…РЎС“РЎвЂљРЎРЉРЎРѓРЎРЏ Р Р†Р Р…РЎС“РЎвЂљРЎР‚РЎРЉ/i.test(safeActionText);
+    // Детерминированная гарантия: выход из здания/таверны наружу, если GPS не переключил зону
+    const isBuildingLocation = /таверн|трактир|постоял|дом|подвал|грот|катакомб|погреб|tavern|building|dungeon/i.test(currentLocationType || "") ||
+      /таверн|трактир|постоял|дом|башн|катакомб|погреб/i.test(currentLocationName || "");
+    const isExitingBuilding = /выход|выйти|выхожу|покида|наружу|на улиц|на воздух|во двор|на двор|на тракт|на дорог|в путь/i.test(safeActionText);
+    const isEnteringBuilding = /зайти в таверну|захожу в таверну|вернуться в таверну|вхожу в таверну|зайти внутрь|вернуться внутрь/i.test(safeActionText);
 
     if (isBuildingLocation && isExitingBuilding && !location_changed && !wild_zone_changed) {
       wild_zone_changed = true;
@@ -887,19 +904,18 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     } else if (currentWildZone && isEnteringBuilding && !location_changed) {
       wild_zone_changed = true;
       new_wild_zone = null;
-      travel_description = `Р вЂ™РЎвЂ№ Р Р†Р С•Р В·Р Р†РЎР‚Р В°РЎвЂ°Р В°Р ВµРЎвЂљР ВµРЎРѓРЎРЉ Р Р†Р Р…РЎС“РЎвЂљРЎР‚РЎРЉ РЎвЂљР В°Р Р†Р ВµРЎР‚Р Р…РЎвЂ№ Р Р† РЎвЂљРЎвЂР С—Р В»Р С•Р Вµ Р С—Р С•Р СР ВµРЎвЂ°Р ВµР Р…Р С‘Р Вµ.`;
+      travel_description = `Вы возвращаетесь внутрь таверны в тёплое помещение.`;
       time_passed_minutes = Math.max(time_passed_minutes, 5);
       console.log(`[${requestId}] [ENTER_BUILDING] Player stepped back inside tavern`);
     }
 
-
     // ============================================
-    // Р Р€Р СџР В Р С’Р вЂ™Р вЂєР вЂўР СњР ВР вЂў Р С›Р СћР В Р Р‡Р вЂќР С›Р Сљ Р В Р РЋР С›Р СџР С›Р РЋР СћР С’Р вЂ™Р вЂєР вЂўР СњР ВР вЂў Р ВР вЂњР В Р С›Р С™Р С›Р вЂ™ (Party & Player Resolution)
+    // УПРАВЛЕНИЕ ОТРЯДОМ И СОПОСТАВЛЕНИЕ ИГРОКОВ (Party & Player Resolution)
     // ============================================
     let partyEventFact: string | null = null;
     const lowerAct = safeActionText.toLowerCase();
 
-    // Р вЂќР ВµРЎвЂљР ВµРЎР‚Р СР С‘Р Р…Р С‘РЎР‚Р С•Р Р†Р В°Р Р…Р Р…Р С•Р Вµ РЎРѓР С•Р С—Р С•РЎРѓРЎвЂљР В°Р Р†Р В»Р ВµР Р…Р С‘Р Вµ РЎвЂ Р ВµР В»Р С‘ РЎРѓ Р В¶Р С‘Р Р†РЎвЂ№Р СР С‘ Р С‘Р С–РЎР‚Р С•Р С”Р В°Р СР С‘ Р С—Р С• Р С‘Р СР ВµР Р…Р С‘ Р Р† РЎвЂљР ВµР С”РЎРѓРЎвЂљР Вµ
+    // Детерминированное сопоставление цели с живыми игроками по имени в тексте
     const targetedOtherPlayer = (allPlayers || []).filter((p: any) => p.id !== player.id).find((p: any) => {
       if (!p.name) return false;
       const pNameLower = p.name.trim().toLowerCase();
@@ -1025,7 +1041,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       }
     }
 
-    // Р РЋР С•Р С”РЎР‚Р В°РЎвЂ°Р ВµР Р…Р С‘Р Вµ Р Р†РЎР‚Р ВµР СР ВµР Р…Р С‘ Р Р…Р В° Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†Р С‘РЎРЏ Р С•РЎвЂљ Р Р…Р В°Р Р†РЎвЂ№Р С”Р С•Р Р† (РЎРѓР С•Р В±Р С‘РЎР‚Р В°РЎвЂљР ВµР В»РЎРЉРЎРѓРЎвЂљР Р†Р С•, Р Р†РЎвЂ№Р В¶Р С‘Р Р†Р В°Р Р…Р С‘Р Вµ, Р С–Р С•РЎР‚Р Р…Р С•Р Вµ Р Т‘Р ВµР В»Р С• Р С‘ РЎвЂљ.Р Т‘.)
+    // Сокращение времени на действия от навыков (собирательство, выживание, горное дело и т.д.)
     if (time_passed_minutes > 0) {
       let maxTimeRedPct = 0;
       for (const s of Object.values(skillsMap)) {
@@ -1178,7 +1194,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     console.log(`[${requestId}] [STEP 2] Engine done: mutations=${JSON.stringify(engineResult.mutations.map((m: any) => m.type))}, facts=${engineResult.raw_system_facts?.length ?? 0}`);
 
     // ============================================
-    // Р РЃР С’Р вЂњ 3: DB Persistence
+    // ШАГ 3: DB Persistence
     // ============================================
     console.log(`[${requestId}] [STEP 3] Persistence...`);
     const persistenceResult = await applyTurnMutations({
@@ -1209,12 +1225,12 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     if (location_changed && new_location_id) {
       await supabase.from("sessions").update({
         current_location_id: new_location_id,
-        current_wild_zone: null, // Р Р†Р ВµРЎР‚Р Р…РЎС“Р В»Р С‘РЎРѓРЎРЉ Р Р† Р С‘Р СР ВµР Р…Р С•Р Р†Р В°Р Р…Р Р…РЎС“РЎР‹ Р В»Р С•Р С”Р В°РЎвЂ Р С‘РЎР‹
+        current_wild_zone: null, // вернулись в именованную локацию
         current_wild_zone_description: null,
         current_wild_zone_danger_level: null,
       }).eq("id", session_id);
 
-      // Р ВР С–РЎР‚Р С•Р С”Р С‘ Р Т‘Р Р†Р С‘Р С–Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ: РЎРѓР В±РЎР‚Р В°РЎРѓРЎвЂ№Р Р†Р В°Р ВµР С Р С—Р С•Р Т‘Р В·Р С•Р Р…РЎС“ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎРѓРЎвЂљР С‘Р Р†РЎв‚¬Р ВµР С–Р С•РЎРѓРЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В°
+      // Игроки двигаются: сбрасываем подзону переместившегося игрока
       try {
         await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
         player.current_zone = null;
@@ -1222,7 +1238,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
       }
 
-      // Р В§Р В»Р ВµР Р…РЎвЂ№ Р С•Р Т‘Р Р…Р С•Р С–Р С• Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В°, Р Р…Р В°РЎвЂ¦Р С•Р Т‘Р С‘Р Р†РЎв‚¬Р С‘Р ВµРЎРѓРЎРЏ Р Р† РЎвЂљР С•Р в„– Р В¶Р Вµ Р В·Р С•Р Р…Р Вµ/Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘, Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ!
+      // Члены одного отряда, находившиеся в той же зоне/локации, перемещаются вместе!
       const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
         p.id !== player.id &&
         arePlayersInSameParty(player, p, session) &&
@@ -1241,7 +1257,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         }
       }
 
-      // Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С”Р В°РЎР‚РЎвЂљРЎС“ РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р В·Р С•Р Р… Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р Т‘Р В»РЎРЏ Р Р…Р С•Р Р†Р С•Р в„– Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘ РЎвЂЎР ВµРЎР‚Р ВµР В· Р ВР В
+      // Сгенерировать карту расстояний зон и тип местности для новой локации через ИИ
       try {
         const newLocMap = await ensureLocationMapAndTerrain({
           supabase,
@@ -1259,7 +1275,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         console.warn(`[${requestId}] [FOG] Failed to generate location_map on location change:`, locChangeMapErr);
       }
 
-      // Р РЋР С—РЎС“РЎвЂљР Р…Р С‘Р С”Р С‘ Р С‘ РЎвЂЎР В»Р ВµР Р…РЎвЂ№ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В° Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ РЎРѓ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р С Р Р† Р Р…Р С•Р Р†РЎС“РЎР‹ Р В»Р С•Р С”Р В°РЎвЂ Р С‘РЎР‹
+      // Спутники и члены отряда перемещаются вместе с игроком в новую локацию
       try {
         const { data: compNpcs } = await supabase
           .from("npcs")
@@ -1268,7 +1284,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         const companionIds = (compNpcs || [])
           .filter((n: any) =>
             n.role === "companion" ||
-            (Array.isArray(n.status_tags) && (n.status_tags.includes("РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”") || n.status_tags.includes("Р Р†_Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р Вµ") || n.status_tags.includes("Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ") || n.status_tags.includes("Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…")))
+            (Array.isArray(n.status_tags) && (n.status_tags.includes("спутник") || n.status_tags.includes("в_отряде") || n.status_tags.includes("питомец") || n.status_tags.includes("приручен")))
           )
           .map((n: any) => n.id);
 
@@ -1291,7 +1307,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       session.current_wild_zone = new_wild_zone;
       session.current_wild_zone_danger_level = currentDangerLevel;
 
-      // Р ВР С–РЎР‚Р С•Р С”Р С‘ Р Т‘Р Р†Р С‘Р С–Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ: РЎРѓР В±РЎР‚Р В°РЎРѓРЎвЂ№Р Р†Р В°Р ВµР С Р С—Р С•Р Т‘Р В·Р С•Р Р…РЎС“ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎРѓРЎвЂљР С‘Р Р†РЎв‚¬Р ВµР С–Р С•РЎРѓРЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В°
+      // Игроки двигаются: сбрасываем подзону переместившегося игрока
       try {
         await supabase.from("players").update({ current_zone: null }).eq("id", player.id);
         player.current_zone = null;
@@ -1299,7 +1315,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         console.warn(`[${requestId}] Failed to reset player current_zone:`, pzErr);
       }
 
-      // Р В§Р В»Р ВµР Р…РЎвЂ№ Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р В° Р С—Р ВµРЎР‚Р ВµРЎвЂ¦Р С•Р Т‘РЎРЏРЎвЂљ Р Р† Р Т‘Р С‘Р С”РЎС“РЎР‹ Р В·Р С•Р Р…РЎС“ Р Р†Р СР ВµРЎРѓРЎвЂљР Вµ
+      // Члены отряда переходят в дикую зону вместе
       const partyFellowsInSameZone = (allPlayers || []).filter((p: any) =>
         p.id !== player.id &&
         arePlayersInSameParty(player, p, session) &&
@@ -1318,7 +1334,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         }
       }
 
-      // Р РЋР С–Р ВµР Р…Р ВµРЎР‚Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С”Р В°РЎР‚РЎвЂљРЎС“ РЎР‚Р В°РЎРѓРЎРѓРЎвЂљР С•РЎРЏР Р…Р С‘Р в„– Р В·Р С•Р Р… Р С‘ РЎвЂљР С‘Р С— Р СР ВµРЎРѓРЎвЂљР Р…Р С•РЎРѓРЎвЂљР С‘ Р Т‘Р В»РЎРЏ Р Т‘Р С‘Р С”Р С•Р в„– Р В·Р С•Р Р…РЎвЂ№ РЎвЂЎР ВµРЎР‚Р ВµР В· Р ВР В
+      // Сгенерировать карту расстояний зон и тип местности для дикой зоны через ИИ
       try {
         const wildLocMap = await ensureLocationMapAndTerrain({
           supabase,
@@ -1341,13 +1357,12 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       allNpcs = allNpcs.filter((n: any) =>
         isCompanionNpc(n) ||
         n.is_hostile === true ||
-        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р Т‘Р С‘Р С”Р С‘Р в„–", "Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚", "Р Т‘Р С‘Р С”Р В°РЎРЏ_Р В·Р С•Р Р…Р В°", "Р В·Р Р†Р ВµРЎР‚РЎРЉ", "РЎвЂ¦Р С‘РЎвЂ°Р Р…Р С‘Р С”"].includes(String(t).toLowerCase())))
+        (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))
       );
       console.log(`[${requestId}] [WILD_ZONE] Player entered wild zone: ${new_wild_zone}`);
     }
 
-    // Р С›РЎвЂљРЎРѓР В»Р ВµР В¶Р С‘Р Р†Р В°Р Р…Р С‘Р Вµ Р С—Р ВµРЎР‚Р ВµР СР ВµРЎвЂ°Р ВµР Р…Р С‘РЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р В° Р Р†Р Р…РЎС“РЎвЂљРЎР‚Р С‘ Р С—Р С•Р Т‘Р В·Р С•Р Р… Р В»Р С•Р С”Р В°РЎвЂ Р С‘Р С‘ (Р Т‘Р В»РЎРЏ Р СћРЎС“Р СР В°Р Р…Р В° Р вЂ™Р С•Р в„–Р Р…РЎвЂ№ / Р В­РЎвЂ¦Р В° Р вЂ™Р С•Р в„–Р Р…РЎвЂ№)
-// Отслеживание перемещения игрока внутри подзон локации (AI GPS + regex fallback)
+    // Отслеживание перемещения игрока внутри подзон локации (AI GPS + regex fallback)
     if (!location_changed && !wild_zone_changed && locationMap && Object.keys(locationMap).length > 0) {
       const availableZones = Object.keys(locationMap);
 
@@ -1400,9 +1415,8 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       }
     }
 
-
     // ============================================
-    // Р С’Р вЂ™Р СћР С›Р СњР С›Р СљР СњР В«Р вЂў Р В­Р С™Р РЋР СџР вЂўР вЂќР ВР В¦Р ВР В NPC (0 РЎвЂљР С•Р С”Р ВµР Р…Р С•Р Р†, Lazy Calendar Simulation)
+    // АВТОНОМНЫЕ ЭКСПЕДИЦИИ NPC (0 токенов, Lazy Calendar Simulation)
     // ============================================
     let expeditionEvents: any[] = [];
     if (time_passed_minutes > 0 && session.world_id) {
@@ -1424,32 +1438,34 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     }
 
     // ============================================
-    // Р ВР СњР ВР В¦Р ВР С’Р СћР ВР вЂ™Р С’ Р РЋР СџР Р€Р СћР СњР ВР С™Р С›Р вЂ™ Р вЂ™ Р СћР вЂўР С™Р Р€Р В©Р вЂўР в„ў Р РЋР В¦Р вЂўР СњР вЂў (Р СљР С‘РЎР‚Р Р…РЎвЂ№Р Вµ Р С‘ РЎР‚Р С•Р В»Р ВµР Р†РЎвЂ№Р Вµ Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†Р С‘РЎРЏ)
+    // ИНИЦИАТИВА СПУТНИКОВ В ТЕКУЩЕЙ СЦЕНЕ (Мирные и ролевые действия)
     // ============================================
     let companionAction: any = null;
-    try {
-      companionAction = await handleCompanionInSceneAction({
-        supabase,
-        player_action_text: safeActionText,
-        acting_player_name: player.name || "Герой",
-        location_npcs: allNpcs,
-        session_id,
-        openrouter_api_key: openrouterApiKey,
-        model: satelliteModel || "meta-llama/llama-3.3-70b-instruct:free",
-      });
-      console.log(`[${requestId}] [COMPANION] СЂСџВ¤Сњ Checked:`, companionAction ? `${companionAction.npc_name} did: ${companionAction.action_description}` : "none (no party companions in scene)");
-    } catch (compErr) {
-      console.warn(`[${requestId}] Companion action failed:`, compErr);
+    if (allNpcs.some((n: any) => isCompanionNpc(n))) {
+      try {
+        companionAction = await handleCompanionInSceneAction({
+          supabase,
+          player_action_text: safeActionText,
+          acting_player_name: player.name || "Герой",
+          location_npcs: allNpcs,
+          session_id,
+          openrouter_api_key: openrouterApiKey,
+          model: satelliteModel || "google/gemma-4-31b-it:free",
+        });
+        console.log(`[${requestId}] [COMPANION] 🤝 Checked:`, companionAction ? `${companionAction.npc_name} did: ${companionAction.action_description}` : "none");
+      } catch (compErr) {
+        console.warn(`[${requestId}] Companion action failed:`, compErr);
+      }
     }
 
     // ============================================
-    // Р вЂќР ВР СњР С’Р СљР ВР В§Р вЂўР РЋР С™Р ВР вЂў Р СњР С’Р вЂ™Р В«Р С™Р В Р ВР вЂњР В Р С›Р С™Р С’ (1..100)
+    // ДИНАМИЧЕСКИЕ НАВЫКИ ИГРОКА (1..100)
     // ============================================
     let skillProgress: any = null;
     try {
       const detectedSkill = detectSkillFromAction({
         action_text: safeActionText,
-        action_type: routerResult.actions[0]?.type,
+        action_type: routerResult.actions[0]?.action_type || routerResult.actions[0]?.type,
         skill_hint: routerResult.skill_hint,
       });
 
@@ -1472,11 +1488,11 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     }
 
     // ============================================
-    // Р СџР В Р С›Р С™Р С’Р В§Р С™Р С’ Р Р€Р В Р С›Р вЂ™Р СњР Р‡ Р СџР вЂўР В Р РЋР С›Р СњР С’Р вЂ“Р С’ (1..100, +2 Р С›Р Тђ, HP/MP)
+    // ПРОКАЧКА УРОВНЯ ПЕРСОНАЖА (1..100, +2 ОХ, HP/MP)
     // ============================================
     let playerLevelUp: any = null;
     try {
-      const isCombatAction = routerResult.actions.some((a: any) => a.type === "attack");
+      const isCombatAction = routerResult.actions.some((a: any) => (a.action_type || a.type) === "attack");
       const baseTurnXp = isCombatAction ? 50 : 25;
       const currentLevel = player.level || 1;
       const currentXp = (player.xp || 0) + baseTurnXp;
@@ -1546,7 +1562,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     }
 
     // ============================================
-    // Р РЃР С’Р вЂњ 4: System Truth Compiler
+    // ШАГ 4: System Truth Compiler
     // ============================================
     console.log(`[${requestId}] [STEP 4] System Truth...`);
     const systemTruth = await compileSystemTruth({
@@ -1560,15 +1576,15 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         game_minute: session.game_minute || 0,
         current_location_id: session.current_location_id,
       },
-      location: { name: currentLocationName || currentWildZone || "Р С›РЎвЂљР С”РЎР‚РЎвЂ№РЎвЂљРЎвЂ№Р в„– Р СР С‘РЎР‚", weather: routerInput.weather?.description || null },
+      location: { name: currentLocationName || currentWildZone || "Открытый мир", weather: routerInput.weather?.description || null },
       players: (allPlayers || []).map((p: any) => ({
         id: p.id, name: p.name || "Герой", hp: p.hp ?? 100, max_hp: p.max_hp ?? 100, inventory: p.inventory || [],
       })),
-      npcs: (session.current_wild_zone ? allNpcs.filter((n: any) => isCompanionNpc(n) || n.is_hostile === true || (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["Р Т‘Р С‘Р С”Р С‘Р в„–", "Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚", "Р Т‘Р С‘Р С”Р В°РЎРЏ_Р В·Р С•Р Р…Р В°", "Р В·Р Р†Р ВµРЎР‚РЎРЉ", "РЎвЂ¦Р С‘РЎвЂ°Р Р…Р С‘Р С”"].includes(String(t).toLowerCase())))) : allNpcs).map((n: any) => ({
+      npcs: (session.current_wild_zone ? allNpcs.filter((n: any) => isCompanionNpc(n) || n.is_hostile === true || (Array.isArray(n.status_tags) && n.status_tags.some((t: string) => ["дикий", "монстр", "дикая_зона", "зверь", "хищник"].includes(String(t).toLowerCase())))) : allNpcs).map((n: any) => ({
         id: n.id,
         name: n.name || "NPC",
-        race: n.race || "Р РЋРЎС“РЎвЂ°Р ВµРЎРѓРЎвЂљР Р†Р С•",
-        role: n.role || "Р С›Р В±РЎвЂ№Р Р†Р В°РЎвЂљР ВµР В»РЎРЉ",
+        race: n.race || "Существо",
+        role: n.role || "Обыватель",
         category: n.category,
         status_tags: n.status_tags || [],
         is_alive: n.is_alive,
@@ -1588,7 +1604,11 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       })),
       atmosphere: routerResult.atmosphere || { sounds: [], visuals: [] },
       time_passed_minutes,
-      encounter_alert: null,
+      encounter_alert: engineResult.encounter_triggered?.triggered ? {
+        spawned: true,
+        tier: engineResult.encounter_triggered.tier,
+        creature_name: engineResult.encounter_triggered.creature_name || undefined,
+      } : null,
       storyline: sessionStoryline ? {
         title: sessionStoryline.title,
         prologue: sessionStoryline.prologue,
@@ -1639,7 +1659,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     await supabase.from("messages").insert({
       session_id, sender_type: "player", sender_id: player.user_id, sender_name: player.name || "Герой", content: safeActionText,
     });
-    // 2) Master narratives РІР‚вЂќ Р С—Р С• Р С•Р Т‘Р Р…Р С•Р СРЎС“ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘РЎР‹ Р Р…Р В° Р С‘Р С–РЎР‚Р С•Р С”Р В°
+    // 2) Master narratives — по одному сообщению на игрока
     for (const [targetPlayerId, narrative] of Object.entries(narratorOutput.players)) {
       await supabase.from("messages").insert({
         session_id, sender_type: "master", sender_name: "Мастер", content: narrative,
@@ -1652,7 +1672,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         },
       });
     }
-    // 3) Global log (РЎвЂљР С•Р В»РЎРЉР С”Р С• Р С—РЎР‚Р С‘ Р Р…Р В°Р В»Р С‘РЎвЂЎР С‘Р С‘ > 1 Р С‘Р С–РЎР‚Р С•Р С”Р В°, РЎвЂЎРЎвЂљР С•Р В±РЎвЂ№ Р Р† РЎРѓР С•Р В»Р С• Р Р…Р Вµ Р Т‘РЎС“Р В±Р В»Р С‘РЎР‚Р С•Р Р†Р В°РЎвЂљРЎРЉ Р С—Р ВµРЎР‚РЎРѓР С•Р Р…Р В°Р В»РЎРЉР Р…РЎвЂ№Р в„– Р Р…Р В°РЎР‚РЎР‚Р В°РЎвЂљР С‘Р Р†)
+    // 3) Global log (только при наличии > 1 игрока, чтобы в соло не дублировать персональный нарратив)
     if (narratorOutput.global_narrative && allPlayers.length > 1) {
       await supabase.from("messages").insert({
         session_id, sender_type: "master", sender_name: "Лог",
@@ -1667,18 +1687,18 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       });
     }
 
-    // 3.5) Р СћР Р€Р СљР С’Р Сњ Р вЂ™Р С›Р в„ўР СњР В« РІР‚вЂќ fog-РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘РЎРЏ Р Т‘Р В»РЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р† Р Р† Р Т‘РЎР‚РЎС“Р С–Р С‘РЎвЂ¦ Р В·Р С•Р Р…Р В°РЎвЂ¦
-    // Р В Р В°Р В±Р С•РЎвЂљР В°Р ВµРЎвЂљ РЎвЂљР С•Р В»РЎРЉР С”Р С• Р С—РЎР‚Р С‘ Р Р…Р В°Р В»Р С‘РЎвЂЎР С‘Р С‘ Р Р…Р ВµРЎРѓР С”Р С•Р В»РЎРЉР С”Р С‘РЎвЂ¦ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р† Р Р† РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘
+    // 3.5) ТУМАН ВОЙНЫ — fog-сообщения для игроков в других зонах
+    // Работает только при наличии нескольких игроков в сессии
     if (allPlayers.length > 1) {
       try {
-        // AI Р С•Р С—РЎР‚Р ВµР Т‘Р ВµР В»РЎРЏР ВµРЎвЂљ event_type Р Р† Router РІР‚вЂќ Р Р…Р С‘Р С”Р В°Р С”Р С‘РЎвЂ¦ regex-РЎРЊР Р†РЎР‚Р С‘РЎРѓРЎвЂљР С‘Р С”!
+        // AI определяет event_type в Router — никаких regex-эвристик!
         const eventType = routerResult.event_type || null;
         if (eventType) {
           const thresholds = fogGetEffectiveThresholds(eventType, currentTerrain);
           const actorZone: string | null = player.current_zone || null;
           const speechContent = fogExtractSpeech(safeActionText);
 
-          // Р СњР В°Р В±Р В»РЎР‹Р Т‘Р В°РЎвЂљР ВµР В»Р С‘ = Р Р†РЎРѓР Вµ Р С‘Р С–РЎР‚Р С•Р С”Р С‘, Р С”РЎР‚Р С•Р СР Вµ Р В°Р Р†РЎвЂљР С•РЎР‚Р В° Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†Р С‘РЎРЏ
+          // Наблюдатели = все игроки, кроме автора действия
           const observers = allPlayers.filter((p: any) => p.id !== player.id);
 
           let fogCount = 0;
@@ -1686,12 +1706,12 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
             const obsZone: string | null = obs.current_zone || null;
             const tier = fogGetDistanceTier(actorZone, obsZone, locationMap);
 
-            // same_room (tier 0) РІР‚вЂќ РЎРЊРЎвЂљР С•РЎвЂљ Р С‘Р С–РЎР‚Р С•Р С” РЎС“Р В¶Р Вµ Р Р…Р В°РЎвЂ¦Р С•Р Т‘Р С‘РЎвЂљРЎРѓРЎРЏ Р Р† РЎвЂљР С•Р в„– Р В¶Р Вµ Р В·Р С•Р Р…Р Вµ/Р С”Р С•Р СР Р…Р В°РЎвЂљР Вµ
+            // same_room (tier 0) — этот игрок уже находится в той же зоне/комнате
             if (tier === DISTANCE_TIER.SAME_ROOM) continue;
 
-            const hears  = tier <= thresholds.audioTier;
-            const sees   = tier <= thresholds.visualTier;
-            if (!hears && !sees) continue; // РЎРѓР В»Р С‘РЎв‚¬Р С”Р С•Р С Р Т‘Р В°Р В»Р ВµР С”Р С• РІР‚вЂќ Р Р…Р С‘РЎвЂЎР ВµР С–Р С• Р Р…Р Вµ Р Т‘Р С•РЎвЂ¦Р С•Р Т‘Р С‘РЎвЂљ
+            const hears = tier <= thresholds.audioTier;
+            const sees = tier <= thresholds.visualTier;
+            if (!hears && !sees) continue; // слишком далеко — ничего не доходит
 
             const fogText = fogPickNarrative(eventType, tier, speechContent);
             if (!fogText) continue;
@@ -1712,7 +1732,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
               },
             });
             fogCount++;
-            console.log(`[${requestId}] [FOG] СЂСџРЉВ«РїС‘РЏ ${player.name} (${eventType}, terrain=${currentTerrain || 'default'}) РІвЂ вЂ™ ${obs.name} tier=${tier}: "${fogText.slice(0, 60)}..."`);
+            console.log(`[${requestId}] [FOG] 🌫️ ${player.name} (${eventType}, terrain=${currentTerrain || 'default'}) → ${obs.name} tier=${tier}: "${fogText.slice(0, 60)}..."`);
           }
           if (fogCount > 0) {
             console.log(`[${requestId}] [FOG] Dispatched ${fogCount} fog message(s) for AI event_type="${eventType}", terrain="${currentTerrain || 'default'}"`);
@@ -1740,7 +1760,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         session_id,
         sender_type: "master",
         sender_name: "Мир",
-        content: `СЂСџвЂњСљ **Р РЋР С•Р В±РЎвЂ№РЎвЂљР С‘Р Вµ Р СР С‘РЎР‚Р В°**: ${ev.summary}`,
+        content: `📜 **Событие мира**: ${ev.summary}`,
         metadata: { type: "npc_expedition", npc_id: ev.npc_id, loot: ev.loot, leveled_up: ev.leveled_up },
       });
     }
@@ -1767,7 +1787,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       });
     }
 
-    // 7.1) Storyline Progress Evaluation (Р В°Р Р†РЎвЂљР С•Р СР В°РЎвЂљР С‘РЎвЂЎР ВµРЎРѓР С”Р С•Р Вµ Р С•РЎвЂљРЎРѓР В»Р ВµР В¶Р С‘Р Р†Р В°Р Р…Р С‘Р Вµ РЎвЂ Р ВµР В»Р ВµР в„– Р В°РЎР‚Р С”Р С‘)
+    // 7.1) Storyline Progress Evaluation (автоматическое отслеживание целей арки)
     let storyProgressResult: any = null;
     if (sessionStoryline && sessionStoryline.status !== "completed" && sessionStoryline.status !== "sandbox") {
       try {
@@ -1868,11 +1888,11 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       }
     }
 
-    // 10) Pet Taming interaction (Р С‘Р Р…РЎвЂљР ВµР В»Р В»Р ВµР С”РЎвЂљРЎС“Р В°Р В»РЎРЉР Р…Р С•Р Вµ Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…Р С‘Р Вµ Р В·Р Р†Р ВµРЎР‚РЎРЏ/Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚Р В°)
+    // 10) Pet Taming interaction (интеллектуальное приручение зверя/монстра)
     try {
       const targetCreature = allNpcs.find((n: any) =>
         n.category === "beast" || n.category === "monster" ||
-        (n.race && ["Р В·Р Р†Р ВµРЎР‚РЎРЉ", "Р Р†Р С•Р В»Р С”", "Р В¶Р С‘Р Р†Р С•РЎвЂљР Р…Р С•Р Вµ", "Р СР С•Р Р…РЎРѓРЎвЂљРЎР‚"].some(r => n.race.toLowerCase().includes(r)))
+        (n.race && ["зверь", "волк", "животное", "монстр"].some(r => n.race.toLowerCase().includes(r)))
       );
       if (targetCreature) {
         const tamingResult = await evaluatePetTamingAttempt({
@@ -1906,7 +1926,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       console.warn(`[${requestId}] [PET] evaluatePetTamingAttempt failed:`, tameErr);
     }
 
-    // 11) Proactive Companion Offer (NPC РЎРѓР В°Р С Р С—РЎР‚Р ВµР Т‘Р В»Р В°Р С–Р В°Р ВµРЎвЂљ Р С—Р С•Р в„–РЎвЂљР С‘ Р Р† Р С—РЎС“РЎвЂљРЎРЉ Р С—РЎР‚Р С‘ Р Р†РЎвЂ№РЎРѓР С•Р С”Р С•Р С Р Т‘Р С•Р Р†Р ВµРЎР‚Р С‘Р С‘)
+    // 11) Proactive Companion Offer (NPC сам предлагает пойти в путь при высоком доверии)
     try {
       if (!companionInviteHandled) {
         const proactiveOffer = await checkNpcProactiveCompanionOffer({
@@ -1935,12 +1955,12 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     }
 
     // ============================================
-    // D&D Р вЂР С›Р вЂўР вЂ™Р С’Р Р‡ Р С›Р В§Р вЂўР В Р вЂўР вЂќР В¬ Р ТђР С›Р вЂќР С›Р вЂ™ (TURN QUEUE Р РЋ Р ВР СњР ВР В¦Р ВР С’Р СћР ВР вЂ™Р С›Р в„ў NPC, Р РЋР СџР Р€Р СћР СњР ВР С™Р С›Р вЂ™ Р В Р СџР ВР СћР С›Р СљР В¦Р вЂўР вЂ™)
+    // D&D БОЕВАЯ ОЧЕРЕДЬ ХОДОВ (TURN QUEUE С ИНИЦИАТИВОЙ NPC, СПУТНИКОВ И ПИТОМЦЕВ)
     // ============================================
     let npcCombatTurns: any[] = [];
     let isRoundCompleted = (!allPlayers || allPlayers.length <= 1);
     try {
-      const isCombat = routerResult.actions.some((a: any) => a.type === "attack") ||
+      const isCombat = routerResult.actions.some((a: any) => (a.action_type || a.type) === "attack") ||
         allNpcs.some((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
 
       const { data: existingTurns } = await supabase.from("turn_queue")
@@ -1949,7 +1969,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         .order("created_at", { ascending: true });
 
       if (isCombat) {
-        // Р СџР С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР В°Р ВµР С Р С” Р В±Р С•РЎР‹ Р Р†РЎР‚Р В°Р В¶Р Т‘Р ВµР В±Р Р…РЎвЂ№РЎвЂ¦ NPC РЎРѓ Р В±РЎР‚Р С•РЎРѓР С”Р С•Р С Р С‘Р Р…Р С‘РЎвЂ Р С‘Р В°РЎвЂљР С‘Р Р†РЎвЂ№
+        // Подключаем к бою враждебных NPC с броском инициативы
         const activeHostileNpcs = allNpcs.filter((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
         for (const hostNpc of activeHostileNpcs) {
           const alreadyInQueue = existingTurns?.some((t: any) => t.npc_id === hostNpc.id);
@@ -1969,12 +1989,12 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
           }
         }
 
-        // Р СџР С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР В°Р ВµР С Р С” Р В±Р С•РЎР‹ РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”Р С•Р Р† Р С‘ Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…Р Р…РЎвЂ№РЎвЂ¦ Р С—Р С‘РЎвЂљР С•Р СРЎвЂ Р ВµР Р† Р С‘Р С–РЎР‚Р С•Р С”Р В°
+        // Подключаем к бою спутников и прирученных питомцев игрока
         const activeCompanions = allNpcs.filter((n: any) =>
           !n.is_hostile &&
           n.is_alive !== false &&
           (n.hp ?? 10) > 0 &&
-          (n.role === "companion" || (Array.isArray(n.status_tags) && (n.status_tags.includes("РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”") || n.status_tags.includes("Р Р†_Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р Вµ") || n.status_tags.includes("Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ") || n.status_tags.includes("Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…"))))
+          (n.role === "companion" || (Array.isArray(n.status_tags) && (n.status_tags.includes("спутник") || n.status_tags.includes("в_отряде") || n.status_tags.includes("питомец") || n.status_tags.includes("приручен"))))
         );
         for (const compNpc of activeCompanions) {
           const alreadyInQueue = existingTurns?.some((t: any) => t.npc_id === compNpc.id);
@@ -1996,10 +2016,10 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       }
 
       if (!existingTurns || existingTurns.length === 0) {
-        // Р С›РЎвЂЎР ВµРЎР‚Р ВµР Т‘Р С‘ Р ВµРЎвЂ°РЎвЂ Р Р…Р ВµРЎвЂљ РІР‚вЂќ РЎРѓР С•Р В·Р Т‘Р В°РЎвЂР С Р Т‘Р В»РЎРЏ Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р† РЎРѓР ВµРЎРѓРЎРѓР С‘Р С‘
+        // Очереди ещё нет — создаём для игроков сессии
         if (allPlayers && allPlayers.length > 1) {
           isRoundCompleted = false;
-          // Р РЋР С•РЎР‚РЎвЂљР С‘РЎР‚РЎС“Р ВµР С Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р†: Р Р† Р В±Р С•РЎР‹ Р С—Р С• Р С‘Р Р…Р С‘РЎвЂ Р С‘Р В°РЎвЂљР С‘Р Р†Р Вµ, Р Р† Р СР С‘РЎР‚Р Р…Р С•Р С РЎР‚Р ВµР В¶Р С‘Р СР Вµ РІР‚вЂќ РЎРѓРЎвЂљРЎР‚Р С•Р С–Р С• Р С—Р С• Р С—Р С•РЎР‚РЎРЏР Т‘Р С”РЎС“ Р Р†РЎвЂ¦Р С•Р Т‘Р В° Р Р† Р СР С‘РЎР‚ (created_at ASC)
+          // Сортируем игроков: в бою по инициативе, в мирном режиме — строго по порядку входа в мир (created_at ASC)
           const sortedPlayers = [...allPlayers].sort((a: any, b: any) => {
             if (isCombat) {
               const diff = (b.initiative || 10) - (a.initiative || 10);
@@ -2028,7 +2048,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
           }
         }
       } else {
-        // Р вЂќР С•Р В±Р В°Р Р†Р В»РЎРЏР ВµР С Р С‘Р С–РЎР‚Р С•Р С”Р С•Р Р†, Р С”Р С•РЎвЂљР С•РЎР‚РЎвЂ№РЎвЂ¦ Р ВµРЎвЂ°РЎвЂ Р Р…Р ВµРЎвЂљ Р Р† Р С•РЎвЂЎР ВµРЎР‚Р ВµР Т‘Р С‘ (Р Р† Р С—Р С•РЎР‚РЎРЏР Т‘Р С”Р Вµ Р С‘РЎвЂ¦ Р Р†РЎвЂ¦Р С•Р Т‘Р В° created_at ASC)
+        // Добавляем игроков, которых ещё нет в очереди (в порядке их входа created_at ASC)
         if (allPlayers && allPlayers.length > 1) {
           const existingPids = new Set(existingTurns.filter((t: any) => t.player_id).map((t: any) => t.player_id));
           const missingPlayers = allPlayers
@@ -2045,7 +2065,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
           }
         }
 
-        // Р вЂ”Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р В°Р ВµР С РЎвЂљР ВµР С”РЎС“РЎвЂ°Р С‘Р в„– РЎвЂ¦Р С•Р Т‘ Р С‘Р С–РЎР‚Р С•Р С”Р В°
+        // Завершаем текущий ход игрока
         await supabase.from("turn_queue").update({
           status: "completed",
           resolved_at: new Date().toISOString(),
@@ -2053,9 +2073,9 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
           roll_result: engineResult,
         }).eq("session_id", session_id).eq("player_id", player.id);
 
-        // Р ВРЎвЂ°Р ВµР С РЎРѓР В»Р ВµР Т‘РЎС“РЎР‹РЎвЂ°Р С‘Р в„– РЎвЂ¦Р С•Р Т‘ РЎРѓР С• РЎРѓРЎвЂљР В°РЎвЂљРЎС“РЎРѓР С•Р С 'waiting'
-        // Р СџРЎР‚Р С‘ isCombat = false РЎвЂ¦Р С•Р Т‘РЎвЂ№ Р С—Р ВµРЎР‚Р ВµР Т‘Р В°РЎР‹РЎвЂљРЎРѓРЎРЏ РЎРѓРЎвЂљРЎР‚Р С•Р С–Р С• Р С—Р С• Р С•РЎвЂЎР ВµРЎР‚Р ВµР Т‘Р С‘ Р Р†РЎвЂ¦Р С•Р Т‘Р В° Р Р† Р СР С‘РЎР‚ (created_at ASC) Р С•РЎвЂљ Р С•Р Т‘Р Р…Р С•Р С–Р С• Р С‘Р С–РЎР‚Р С•Р С”Р В° Р Т‘РЎР‚РЎС“Р С–Р С•Р СРЎС“.
-        // Р СџРЎР‚Р С‘ isCombat = true РЎвЂ¦Р С•Р Т‘РЎвЂ№ РЎС“Р С—Р С•РЎР‚РЎРЏР Т‘Р С•РЎвЂЎР ВµР Р…РЎвЂ№ Р С—Р С• Р В±Р С•Р ВµР Р†Р С•Р в„– Р С‘Р Р…Р С‘РЎвЂ Р С‘Р В°РЎвЂљР С‘Р Р†Р Вµ (initiative DESC, created_at ASC).
+        // Ищем следующий ход со статусом 'waiting'
+        // При isCombat = false ходы передаются строго по очереди входа в мир (created_at ASC) от одного игрока другому.
+        // При isCombat = true ходы упорядочены по боевой инициативе (initiative DESC, created_at ASC).
         let nextQuery = supabase.from("turn_queue")
           .select("id, player_id, npc_id, entity_type, status, initiative, created_at")
           .eq("session_id", session_id)
@@ -2070,16 +2090,16 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
         const { data: nextTurnData } = await nextQuery.limit(1).maybeSingle();
         let nextTurn = nextTurnData;
 
-        // Р вЂўРЎРѓР В»Р С‘ РЎРѓР В»Р ВµР Т‘РЎС“РЎР‹РЎвЂ°Р С‘Р в„– РЎвЂ¦Р С•Р Т‘ Р С—РЎР‚Р С‘Р Р…Р В°Р Т‘Р В»Р ВµР В¶Р С‘РЎвЂљ NPC РІР‚вЂќ Р Р†РЎвЂ№Р С—Р С•Р В»Р Р…РЎРЏР ВµР С Р В±Р С•Р ВµР Р†РЎвЂ№Р Вµ РЎвЂ¦Р С•Р Т‘РЎвЂ№ NPC
+        // Если следующий ход принадлежит NPC — выполняем боевые ходы NPC
         while (nextTurn && nextTurn.entity_type === "npc" && nextTurn.npc_id) {
           const currentTurnNpcId = nextTurn.npc_id;
           const turnNpc = allNpcs.find((n: any) => n.id === currentTurnNpcId);
           if (turnNpc && turnNpc.is_alive !== false && (turnNpc.hp ?? 10) > 0) {
             const isCompanion = !turnNpc.is_hostile &&
-              (turnNpc.role === "companion" || (Array.isArray(turnNpc.status_tags) && (turnNpc.status_tags.includes("РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”") || turnNpc.status_tags.includes("Р Р†_Р С•РЎвЂљРЎР‚РЎРЏР Т‘Р Вµ") || turnNpc.status_tags.includes("Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ") || turnNpc.status_tags.includes("Р С—РЎР‚Р С‘РЎР‚РЎС“РЎвЂЎР ВµР Р…"))));
+              (turnNpc.role === "companion" || (Array.isArray(turnNpc.status_tags) && (turnNpc.status_tags.includes("спутник") || turnNpc.status_tags.includes("в_отряде") || turnNpc.status_tags.includes("питомец") || turnNpc.status_tags.includes("приручен"))));
 
             if (isCompanion) {
-              // Р ТђР С›Р вЂќ Р РЋР СџР Р€Р СћР СњР ВР С™Р С’ / Р СџР ВР СћР С›Р СљР В¦Р С’: Р В°РЎвЂљР В°Р С”РЎС“Р ВµРЎвЂљ Р Р†РЎР‚Р В°Р В¶Р Т‘Р ВµР В±Р Р…Р С•Р С–Р С• Р СР С•Р В±Р В° (Р Р…Р В°Р С—РЎР‚Р С‘Р СР ВµРЎР‚, Р Р†Р С•Р В»Р С”Р В°) Р Р† Р С—Р С•Р СР С•РЎвЂ°РЎРЉ Р С‘Р С–РЎР‚Р С•Р С”РЎС“!
+              // ХОД СПУТНИКА / ПИТОМЦА: атакует враждебного моба (например, волка) в помощь игроку!
               const hostileMobs = allNpcs.filter((n: any) => n.is_hostile && n.is_alive !== false && (n.hp ?? 10) > 0);
               if (hostileMobs.length > 0) {
                 const targetMob = hostileMobs[0];
@@ -2087,7 +2107,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
                   companion: turnNpc,
                   targetMob: {
                     id: targetMob.id,
-                    name: targetMob.name || "Р вЂ™РЎР‚Р В°Р С–",
+                    name: targetMob.name || "Враг",
                     hp: targetMob.hp ?? 10,
                     max_hp: targetMob.max_hp ?? 10,
                     armor_class: targetMob.armor_class || 11,
@@ -2104,7 +2124,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
                     is_alive: targetMob.is_alive,
                   }).eq("id", targetMob.id);
 
-                  // Р вЂР С•Р Р…РЎС“РЎРѓ Р С” Р С•РЎвЂљР Р…Р С•РЎв‚¬Р ВµР Р…Р С‘РЎРЏР С РЎРѓР С• РЎРѓР С—РЎС“РЎвЂљР Р…Р С‘Р С”Р С•Р С Р В·Р В° Р С—Р С•Р СР С•РЎвЂ°РЎРЉ Р Р† Р В±Р С•РЎР‹ (+1)
+                  // Бонус к отношениям со спутником за помощь в бою (+1)
                   try {
                     const { data: rel } = await supabase.from("npc_relationships").select("score").eq("npc_id", turnNpc.id).eq("player_id", player.id).maybeSingle();
                     if (rel) {
@@ -2112,8 +2132,8 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
                     }
                   } catch (e) { /* ignore */ }
 
-                  // Р СџРЎР‚Р С•Р С”Р В°РЎвЂЎР С”Р В° РЎС“РЎР‚Р С•Р Р†Р Р…РЎРЏ Р С—Р С‘РЎвЂљР С•Р СРЎвЂ Р В° Р В·Р В° РЎС“РЎвЂЎР В°РЎРѓРЎвЂљР С‘Р Вµ Р Р† Р В±Р С•РЎР‹ (1..100)
-                  const isPet = Array.isArray(turnNpc.status_tags) && turnNpc.status_tags.includes("Р С—Р С‘РЎвЂљР С•Р СР ВµРЎвЂ ");
+                  // Прокачка уровня питомца за участие в бою (1..100)
+                  const isPet = Array.isArray(turnNpc.status_tags) && turnNpc.status_tags.includes("питомец");
                   if (isPet) {
                     try {
                       const xpAward = attackResult.is_mob_defeated ? 50 : 20;
@@ -2161,7 +2181,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
                 npcCombatTurns.push(attackResult);
               }
             } else {
-              // Р ТђР С›Р вЂќ Р вЂ™Р В Р С’Р вЂ“Р вЂќР вЂўР вЂР СњР С›Р вЂњР С› NPC (Р В°РЎвЂљР В°Р С”Р В° Р С‘Р С–РЎР‚Р С•Р С”Р В°)
+              // ХОД ВРАЖДЕБНОГО NPC (атака игрока)
               const battlefieldPlayers = (allPlayers || []).map((p: any) => ({
                 id: p.id,
                 name: p.name || "Герой",
@@ -2211,13 +2231,13 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
             }
           }
 
-          // Р СџР С•Р СР ВµРЎвЂЎР В°Р ВµР С РЎвЂ¦Р С•Р Т‘ NPC Р С”Р В°Р С” Р Р†РЎвЂ№Р С—Р С•Р В»Р Р…Р ВµР Р…Р Р…РЎвЂ№Р в„–
+          // Помечаем ход NPC как выполненный
           await supabase.from("turn_queue").update({
             status: "completed",
             resolved_at: new Date().toISOString(),
           }).eq("id", nextTurn.id);
 
-          // Р СџРЎР‚Р С•Р Р†Р ВµРЎР‚РЎРЏР ВµР С РЎРѓР В»Р ВµР Т‘РЎС“РЎР‹РЎвЂ°Р С‘Р в„– РЎвЂ¦Р С•Р Т‘
+          // Проверяем следующий ход
           const nextQuery = await supabase.from("turn_queue")
             .select("id, player_id, npc_id, entity_type, status, initiative")
             .eq("session_id", session_id)
@@ -2236,7 +2256,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
             isRoundCompleted = false;
           }
         } else {
-          // Р В Р В°РЎС“Р Р…Р Т‘ Р В·Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р ВµР Р…! Р СџР ВµРЎР‚Р ВµР В·Р В°Р С—РЎС“РЎРѓР С”Р В°Р ВµР С Р С•РЎвЂЎР ВµРЎР‚Р ВµР Т‘РЎРЉ
+          // Раунд завершен! Перезапускаем очередь
           isRoundCompleted = true;
           let queueOrderQuery = supabase.from("turn_queue")
             .select("id, entity_type, initiative, created_at")
@@ -2263,8 +2283,8 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
     } catch (queueErr) { console.warn(`[${requestId}] [SAVE] turn_queue update failed:`, queueErr); }
 
     // ============================================
-    // Р В¤Р С›Р СњР С›Р вЂ™Р В«Р в„ў Р СџР В Р С›Р В¦Р вЂўР РЋР РЋ Р РЋР ВР СљР Р€Р вЂєР Р‡Р В¦Р ВР В Р вЂ“Р ВР вЂ”Р СњР В Р СљР ВР В Р С’ Р СџР С›Р РЋР вЂєР вЂў Р С™Р В Р Р€Р вЂњР С’ Р ТђР С›Р вЂќР С›Р вЂ™
-    // (Р В Р С•Р Р†Р Р…Р С• 1 Р В·Р В°Р С—РЎР‚Р С•РЎРѓ Р С” Р ВР В Р Р…Р В° Р Р†РЎРѓР ВµРЎвЂ¦ РЎС“Р Т‘Р В°Р В»Р ВµР Р…Р Р…РЎвЂ№РЎвЂ¦ NPC, Р С”Р С•Р Р…РЎвЂљР В°Р С”РЎвЂљР С‘РЎР‚Р С•Р Р†Р В°Р Р†РЎв‚¬Р С‘РЎвЂ¦ РЎРѓ Р С‘Р С–РЎР‚Р С•Р С”Р В°Р СР С‘)
+    // ФОНОВЫЙ ПРОЦЕСС СИМУЛЯЦИИ ЖИЗНИ МИРА ПОСЛЕ КРУГА ХОДОВ
+    // (Ровно 1 запрос к ИИ на всех удаленных NPC, контактировавших с игроками)
     // ============================================
     let worldSimResult: any = null;
     if (isRoundCompleted) {
@@ -2283,7 +2303,7 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
           openrouterApiKey,
           model: dmModel,
         });
-        console.log(`[${requestId}] [WORLD_SIM] СЂСџРЉРЊ Round ${nextRound} simulated: ${worldSimResult?.simulated_count || 0} distant NPC(s) acted.`);
+        console.log(`[${requestId}] [WORLD_SIM] 🌍 Round ${nextRound} simulated: ${worldSimResult?.simulated_count || 0} distant NPC(s) acted.`);
       } catch (simErr) {
         console.warn(`[${requestId}] [WORLD_SIM] executeRoundCycleNpcSimulation failed:`, simErr);
       }
@@ -2325,13 +2345,10 @@ ${cleanTextForAI(f.content).slice(0, 2000)}`) // было 600
       } : null,
     }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
 
-
   } catch (err: any) {
-    console.error(`[${requestId}] РІСњРЉ ERROR:`, err);
+    console.error(`[${requestId}] ❌ ERROR:`, err);
     return new Response(JSON.stringify({ error: err?.message || "Internal server error" }), {
       status: 500, headers: { ...CORS, "Content-Type": "application/json" },
     });
   }
 });
-
-

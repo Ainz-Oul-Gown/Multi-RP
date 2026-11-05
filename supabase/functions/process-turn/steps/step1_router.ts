@@ -500,13 +500,16 @@ export async function parsePlayerIntent(
     try {
       console.log(`[step1_router] Attempt ${attempt + 1}/${retries}, model: ${resolvedModel}`);
 
-      const modelList = [
+      const modelList = Array.from(new Set([
         resolvedModel,
+        "google/gemma-4-31b-it:free",
         "meta-llama/llama-3.3-70b-instruct:free",
         "qwen/qwen-2.5-72b-instruct:free",
-        "google/gemma-2-27b-it:free",
+        "deepseek/deepseek-chat:free",
         "google/gemini-2.0-flash-exp:free",
-      ].filter(Boolean);
+        "deepseek/deepseek-chat",
+        "google/gemini-2.0-flash-001",
+      ].filter(Boolean)));
       const currentModel = modelList[attempt % modelList.length] || resolvedModel;
 
       const requestPayload: Record<string, any> = {
@@ -1109,17 +1112,20 @@ export async function classifyIntentWithAI(
 
   const userMsg = `${contextLines.join("\n")}\n\nРеплика/действие игрока: "${actionText}"`;
 
-  // ========= ПУЛ УМНЫХ БЕСПЛАТНЫХ МОДЕЛЕЙ ДЛЯ TIER 2 =========
-  const SMART_FREE_MODELS = [
+  // ========= ПУЛ УМНЫХ БЕСПЛАТНЫХ И СВЕРХЭКОНОМИЧНЫХ МОДЕЛЕЙ ДЛЯ TIER 2 =========
+  const SMART_FREE_MODELS = Array.from(new Set([
     preferredModel,
+    "google/gemma-4-31b-it:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "deepseek/deepseek-chat:free",
+    "google/gemini-2.0-flash-exp:free",
+    "mistralai/mistral-small-24b-instruct-2501:free",
     preferredModel ? preferredModel.replace(/:free$/, "") : null,
-    "meta-llama/llama-3.1-8b-instruct",
     "deepseek/deepseek-chat",
+    "google/gemini-2.0-flash-001",
     "meta-llama/llama-3.3-70b-instruct",
-    "meta-llama/llama-3.2-3b-instruct:free",
-    "meta-llama/llama-3.2-1b-instruct:free",
-    "qwen/qwen-2.5-72b-instruct",
-  ].filter(Boolean) as string[];
+  ].filter(Boolean))) as string[];
 
   for (const model of SMART_FREE_MODELS) {
     try {

@@ -20,6 +20,6 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - run: supabase functions deploy --project-ref xhzpxiiqrtmeduynqmsd
+      - run: supabase functions deploy --project-ref xhzpxiiqrtmeduynqmsd --yes
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

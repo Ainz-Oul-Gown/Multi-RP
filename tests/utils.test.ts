@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAIJson, cleanTextForAI, sanitizeKey, resolveAIEndpoint } from "../supabase/functions/_shared/utils.ts";
+import { parseAIJson, cleanTextForAI, sanitizeKey, resolveAIEndpoint, extractAIMessageText } from "../supabase/functions/_shared/utils.ts";
 
 describe("parseAIJson", () => {
   it("parses plain JSON object", () => {
@@ -105,8 +105,6 @@ describe("cleanTextForAI", () => {
   });
 
   it("preserves safe ASCII text and strips non-safe characters", () => {
-    // cleanTextForAI strips non-ASCII characters outside allowed ranges,
-    // so we only assert it returns a safe ASCII-ish string.
     const input = "Hello, world! 123";
     const cleaned = cleanTextForAI(input);
     expect(cleaned).toBe("Hello, world! 123");
@@ -160,6 +158,23 @@ describe("resolveAIEndpoint", () => {
     expect(res.url).toBe("https://demo.lhr.life/v1/chat/completions");
     expect(res.apiKey).toBe("my-secret");
     expect(res.isCustomEndpoint).toBe(true);
+  });
+});
+
+describe("extractAIMessageText", () => {
+  it("returns message.content when present", () => {
+    expect(extractAIMessageText({ content: '{"status":"success"}' })).toBe('{"status":"success"}');
+  });
+
+  it("rescues Russian narrative drafts from reasoning_content when content is empty (truncated max_tokens)", () => {
+    const msg = {
+      content: "",
+      reasoning_content: `*Drafting Para 1:*\nВоздух здесь пахнет влажной древесиной и озоном, словно перед грозой, но солнце щедро льет свет через густую крону древних деревьев.\n*Critique:* Good sensory start.\n*Drafting Para 2:*\nОн направил взгляд на группу эльфов у корней дуба и увидел, как Эйрин Светлая касается светящегося лепестка, её голос звучал тихо, словно шепот ветра в листве.\n*Drafting Para 3:*\nЭйрин прервала пение и медленно обернулась, её золотые волосы зашевелились в потоке воздуха: «Твой приход нарушил тишину священной рощи, но не испугал сердца лесных духов.»`,
+    };
+    const extracted = extractAIMessageText(msg);
+    expect(extracted).toContain("Воздух здесь пахнет влажной древесиной");
+    expect(extracted).toContain("Эйрин прервала пение");
+    expect(extracted).not.toContain("Critique");
   });
 });
 

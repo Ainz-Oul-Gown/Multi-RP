@@ -10,7 +10,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitizeKey, cleanTextForAI, parseAIJson, resolveAIEndpoint } from "../_shared/utils.ts";
+import { sanitizeKey, cleanTextForAI, parseAIJson, resolveAIEndpoint, resolveCustomModelId, extractAIMessageText } from "../_shared/utils.ts";
 import { parsePlayerIntent, buildRouterHeuristicFallback, classifyIntentWithAI } from "./steps/step1_router.ts";
 import { executeEngine } from "./engine/step2_engine.ts";
 
@@ -67,28 +67,45 @@ const CORS = {
 // ============================================
 async function callAI(systemPrompt: string, userMessage: string, apiKey: string, retries = 3, model?: string): Promise<string> {
   const endpoint = resolveAIEndpoint(apiKey);
-  const useModel = model || (endpoint.isCustomEndpoint ? "local-model" : AI_MODEL);
+  const rawModel = model || (endpoint.isCustomEndpoint ? "local-model" : AI_MODEL);
+  const useModel = endpoint.isCustomEndpoint ? await resolveCustomModelId(endpoint, rawModel) : rawModel;
+  const maxAttempts = endpoint.isCustomEndpoint ? Math.min(retries, 2) : retries;
   let lastError: Error | null = null;
-  for (let attempt = 0; attempt < retries; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       if (attempt > 0) {
         await new Promise((r) => setTimeout(r, 1200 * attempt));
+      }
+      const reqBody: Record<string, any> = {
+        model: useModel,
+        messages: [
+          {
+            role: "system",
+            content: endpoint.isCustomEndpoint
+              ? `/no_think\n${systemPrompt}\n\nВАЖНО: Не пиши длинных рассуждений в <think>, сразу верни только JSON!`
+              : systemPrompt,
+          },
+          {
+            role: "user",
+            content: endpoint.isCustomEndpoint ? `/no_think\n${userMessage}` : userMessage,
+          },
+        ],
+        temperature: 0.5,
+        max_tokens: endpoint.isCustomEndpoint ? 2500 : 800,
+      };
+      if (endpoint.isCustomEndpoint) {
+        reqBody.chat_template_kwargs = { enable_thinking: false };
+        reqBody.reasoning_effort = "none";
       }
       const response = await fetch(endpoint.url, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
         },
-        body: JSON.stringify({
-          model: useModel,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-          temperature: 0.5,
-          max_tokens: 800,
-        }),
+        body: JSON.stringify(reqBody),
         signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 15000),
       });
       if (!response.ok) {
@@ -99,11 +116,11 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
         continue; // retry
       }
       const data = await response.json();
-      const content = data?.choices?.[0]?.message?.content;
+      const content = extractAIMessageText(data?.choices?.[0]?.message);
       // OpenRouter sometimes returns null/empty content — treat as transient error, retry
       if (!content || content.trim() === "") {
         lastError = new Error("AI Router: пустой ответ от LLM");
-        console.warn(`[callAI] attempt ${attempt + 1}/${retries} — empty content, retrying...`);
+        console.warn(`[callAI] attempt ${attempt + 1}/${maxAttempts} — empty content, retrying...`);
         continue;
       }
       return content;
@@ -111,7 +128,7 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
       lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
-  throw new Error(`AI Router: не удалось получить валидный ответ после ${retries} попыток. Последняя ошибка: ${lastError?.message || "unknown"}`);
+  throw new Error(`AI Router: не удалось получить валидный ответ после ${maxAttempts} попыток. Последняя ошибка: ${lastError?.message || "unknown"}`);
 }
 
 // ============================================
@@ -957,9 +974,12 @@ serve(async (req: any) => {
       combinedSubzoneNames.find((zName) => matchesNamedPlace(safeActionText, zName)) ||
       null;
 
-    // Если игрок явно не назвал подзону текущей локации, проверяем мировые локации
+    // Если игрок явно не назвал подзону текущей локации, проверяем ДРУГИЕ мировые локации
+    // (чтобы фраза "Осмотреть обстановку в «Великое Древо Жизни»", когда игрок УЖЕ там, не вызывала ложное перемещение!)
     const deterministicWorldLoc = !deterministicSubzoneName
-      ? availableLocations.find((l) => matchesNamedPlace(safeActionText, l.name)) || null
+      ? availableLocations.find(
+          (l) => (l.id !== session.current_location_id || Boolean(currentWildZone)) && matchesNamedPlace(safeActionText, l.name)
+        ) || null
       : null;
 
     // Детектор намерения перемещения или выхода из помещения

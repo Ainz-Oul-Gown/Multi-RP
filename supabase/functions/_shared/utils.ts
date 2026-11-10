@@ -69,6 +69,47 @@ export function stripThinkingTags(raw: string): string {
   return cleaned;
 }
 
+/**
+ * Извлекает контент ответа из message объекта OpenAI/LM Studio.
+ * Если модель в LM Studio истратила max_tokens на reasoning_content и оставила content пустым,
+ * пытается извлечь JSON или готовые русские абзацы из reasoning_content.
+ */
+export function extractAIMessageText(message: any): string {
+  if (!message || typeof message !== "object") return "";
+  const primary = stripThinkingTags(String(message.content || ""));
+  if (primary.length > 0) return primary;
+
+  const reasoning = String(message.reasoning_content || "").trim();
+  if (!reasoning) return "";
+
+  // 1. Проверяем, нет ли в конце reasoning_content готового JSON-блока
+  const lastJsonStart = reasoning.lastIndexOf('{\n  "');
+  if (lastJsonStart !== -1) {
+    return reasoning.slice(lastJsonStart).trim();
+  }
+
+  // 2. Если это нарратор и модель успела написать черновики абзацев (Para 1 / Para 2 / Para 3 / Draft) на русском языке
+  const cyrillicBlocks = reasoning
+    .split(/\n+/)
+    .map((line) => line.replace(/^\s*(?:\*+[^*]+\*+:?\s*|-\s*|\d+\.\s*)/g, "").trim())
+    .filter((line) => {
+      const cyrCount = (line.match(/[а-яёА-ЯЁ]/g) || []).length;
+      const latCount = (line.match(/[a-zA-Z]/g) || []).length;
+      return cyrCount >= 60 && cyrCount > latCount * 2 && !line.startsWith('"Осмотреть');
+    });
+
+  if (cyrillicBlocks.length > 0) {
+    // Берем последние до 3 уникальных русских абзацев
+    const uniqueParas: string[] = [];
+    for (const b of cyrillicBlocks) {
+      if (!uniqueParas.includes(b)) uniqueParas.push(b);
+    }
+    return uniqueParas.slice(-3).join("\n\n");
+  }
+
+  return "";
+}
+
 const _cachedCustomModelByUrl = new Map<string, string>();
 
 /**
@@ -91,29 +132,31 @@ export async function resolveCustomModelId(endpoint: AIEndpointConfig, requested
   const cached = _cachedCustomModelByUrl.get(endpoint.url);
   if (cached) return cached;
 
-  try {
-    const modelsUrl = endpoint.url.replace(/\/chat\/completions$/, "/models");
-    const resp = await fetch(modelsUrl, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${endpoint.apiKey}`,
-        "Bypass-Tunnel-Reminder": "true",
-        "ngrok-skip-browser-warning": "true",
-      },
-      signal: AbortSignal.timeout(4000),
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      const list = Array.isArray(data?.data) ? data.data : [];
-      // Выбираем первую не-embedding модель
-      const chatModel = list.find((m: any) => m?.id && !String(m.id).toLowerCase().includes("embed")) || list[0];
-      if (chatModel?.id) {
-        _cachedCustomModelByUrl.set(endpoint.url, String(chatModel.id));
-        return String(chatModel.id);
+  const modelsUrl = endpoint.url.replace(/\/chat\/completions$/, "/models");
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const resp = await fetch(modelsUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${endpoint.apiKey}`,
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
+        },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const list = Array.isArray(data?.data) ? data.data : [];
+        // Выбираем первую не-embedding модель
+        const chatModel = list.find((m: any) => m?.id && !String(m.id).toLowerCase().includes("embed")) || list[0];
+        if (chatModel?.id) {
+          _cachedCustomModelByUrl.set(endpoint.url, String(chatModel.id));
+          return String(chatModel.id);
+        }
       }
+    } catch {
+      // Повторим ещё раз при холодном старте туннеля
     }
-  } catch {
-    // Игнорируем ошибку автоопределения и возвращаем дефолт
   }
 
   return model || "local-model";

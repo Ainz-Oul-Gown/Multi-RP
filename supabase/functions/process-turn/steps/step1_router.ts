@@ -4,7 +4,7 @@
 // ИИ выступает "вышибалой" — отсекает абсурд и помечает нецелевое использование предметов.
 
 import { RouterInputContext, RouterOutputPayload, RouterAction, Atmosphere } from "../types.ts";
-import { parseAIJson, cleanTextForAI, resolveAIEndpoint, resolveCustomModelId } from "../../_shared/utils.ts";
+import { parseAIJson, cleanTextForAI, resolveAIEndpoint, resolveCustomModelId, extractAIMessageText } from "../../_shared/utils.ts";
 
 const DEFAULT_MODEL = "xiaomi/mimo-v2.5";
 
@@ -521,14 +521,23 @@ export async function parsePlayerIntent(
       const requestPayload: Record<string, any> = {
         model: currentModel,
         messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: endpoint.isCustomEndpoint ? `${userMessage}\n/no_think` : userMessage },
+          {
+            role: "system",
+            content: endpoint.isCustomEndpoint
+              ? `/no_think\n${systemPrompt}\n\n⚡ КРИТИЧЕСКИ ВАЖНО ДЛЯ ЛОКАЛЬНЫХ МОДЕЛЕЙ: НЕ рассуждай по пунктам в <think> (максимум 1-2 коротких предложения без перебора правил) — сразу выдавай готовый JSON!`
+              : systemPrompt,
+          },
+          {
+            role: "user",
+            content: endpoint.isCustomEndpoint ? `/no_think\n${userMessage}\n/no_think` : userMessage,
+          },
         ],
         temperature: 0.2,
-        max_tokens: endpoint.isCustomEndpoint ? 2500 : 1000,
+        max_tokens: endpoint.isCustomEndpoint ? 4000 : 1000,
       };
       if (endpoint.isCustomEndpoint) {
         requestPayload.chat_template_kwargs = { enable_thinking: false };
+        requestPayload.reasoning_effort = "none";
       } else {
         requestPayload.response_format = { type: "json_object" };
       }
@@ -566,7 +575,7 @@ export async function parsePlayerIntent(
       }
 
       const data = await response.json();
-      const rawContent = data.choices?.[0]?.message?.content;
+      const rawContent = extractAIMessageText(data.choices?.[0]?.message);
 
       if (!rawContent || rawContent.trim() === "") {
         throw new Error("AI Router: пустой ответ от LLM");
@@ -1142,18 +1151,28 @@ export async function classifyIntentWithAI(
         "meta-llama/llama-3.3-70b-instruct",
       ].filter(Boolean))) as string[]);
 
-  for (const model of SMART_FREE_MODELS) {
+  for (const rawModel of SMART_FREE_MODELS) {
     try {
+      const model = endpoint.isCustomEndpoint ? await resolveCustomModelId(endpoint, rawModel) : rawModel;
       const payload: Record<string, any> = {
         model,
         messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMsg },
+          {
+            role: "system",
+            content: endpoint.isCustomEndpoint ? `/no_think\n${systemPrompt}` : systemPrompt,
+          },
+          {
+            role: "user",
+            content: endpoint.isCustomEndpoint ? `/no_think\n${userMsg}\n/no_think` : userMsg,
+          },
         ],
-        max_tokens: 250,
+        max_tokens: endpoint.isCustomEndpoint ? 2000 : 250,
         temperature: 0.1,
       };
-      if (!endpoint.isCustomEndpoint) {
+      if (endpoint.isCustomEndpoint) {
+        payload.chat_template_kwargs = { enable_thinking: false };
+        payload.reasoning_effort = "none";
+      } else {
         payload.response_format = { type: "json_object" };
       }
       const resp = await fetch(endpoint.url, {
@@ -1161,6 +1180,8 @@ export async function classifyIntentWithAI(
         headers: {
           "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 9000),
@@ -1172,7 +1193,7 @@ export async function classifyIntentWithAI(
       }
 
       const data = await resp.json();
-      const content = data.choices?.[0]?.message?.content?.trim();
+      const content = extractAIMessageText(data.choices?.[0]?.message).trim();
       if (!content) continue;
 
       const parsed = parseAIJson(content) as any;

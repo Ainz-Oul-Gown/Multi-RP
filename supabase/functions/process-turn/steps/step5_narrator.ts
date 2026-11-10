@@ -6,7 +6,7 @@
 
 import { SystemTruthDto } from "./step4_system_truth.ts";
 import { buildProactiveWorldDirective, ensurePlayerChoices } from "../../_shared/living_world_director.ts";
-import { resolveAIEndpoint, stripThinkingTags, resolveCustomModelId } from "../../_shared/utils.ts";
+import { resolveAIEndpoint, stripThinkingTags, resolveCustomModelId, extractAIMessageText } from "../../_shared/utils.ts";
 
 export interface NarratorOutputPayload {
   players: Record<string, string>; // player_id -> индивидуальный художественный текст
@@ -528,14 +528,23 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         const reqBody: Record<string, any> = {
           model: effectiveModel,
           messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: curEndpoint.isCustomEndpoint ? `${userMessage}\n/no_think` : userMessage },
+            {
+              role: "system",
+              content: curEndpoint.isCustomEndpoint
+                ? `/no_think\n${systemPrompt}\n\n⚡ КРИТИЧЕСКИ ВАЖНО ДЛЯ ЛОКАЛЬНЫХ МОДЕЛЕЙ: В блоке <think> КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО писать черновики (Drafting/Critique/Self-Correction) и перебирать правила на английском! Сделай максимум 1-2 коротких предложения в <think> и СРАЗУ пиши готовый JSON-ответ на русском языке!`
+                : systemPrompt,
+            },
+            {
+              role: "user",
+              content: curEndpoint.isCustomEndpoint ? `/no_think\n${userMessage}\n/no_think` : userMessage,
+            },
           ],
           temperature: 0.72,
-          max_tokens: curEndpoint.isCustomEndpoint ? 3500 : 1400,
+          max_tokens: curEndpoint.isCustomEndpoint ? 6000 : 1400,
         };
         if (curEndpoint.isCustomEndpoint) {
           reqBody.chat_template_kwargs = { enable_thinking: false };
+          reqBody.reasoning_effort = "none";
         }
 
         const response = await fetch(curEndpoint.url, {
@@ -567,8 +576,7 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         }
 
       const data = await response.json();
-      const rawMsgContent = data.choices?.[0]?.message?.content;
-      const content = stripThinkingTags(rawMsgContent || "");
+      const content = extractAIMessageText(data.choices?.[0]?.message);
       if (!content || content.trim() === "") throw new Error("Empty narrator response");
 
       let parsed = safeParseJson(content);

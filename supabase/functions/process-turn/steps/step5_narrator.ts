@@ -6,7 +6,7 @@
 
 import { SystemTruthDto } from "./step4_system_truth.ts";
 import { buildProactiveWorldDirective, ensurePlayerChoices } from "../../_shared/living_world_director.ts";
-import { resolveAIEndpoint } from "../../_shared/utils.ts";
+import { resolveAIEndpoint, stripThinkingTags, resolveCustomModelId } from "../../_shared/utils.ts";
 
 export interface NarratorOutputPayload {
   players: Record<string, string>; // player_id -> индивидуальный художественный текст
@@ -521,6 +521,23 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         if (attempt > 0 && !isTest) {
           await new Promise((r) => setTimeout(r, 350 * Math.min(attempt, 3)));
         }
+        const effectiveModel = curEndpoint.isCustomEndpoint
+          ? await resolveCustomModelId(curEndpoint, curModel)
+          : curModel;
+
+        const reqBody: Record<string, any> = {
+          model: effectiveModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: curEndpoint.isCustomEndpoint ? `${userMessage}\n/no_think` : userMessage },
+          ],
+          temperature: 0.72,
+          max_tokens: curEndpoint.isCustomEndpoint ? 3500 : 1400,
+        };
+        if (curEndpoint.isCustomEndpoint) {
+          reqBody.chat_template_kwargs = { enable_thinking: false };
+        }
+
         const response = await fetch(curEndpoint.url, {
           method: "POST",
           headers: {
@@ -528,16 +545,10 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
             "Content-Type": "application/json",
             "HTTP-Referer": "https://ainz-oul-gown.github.io/Multi-RP/",
             "X-Title": "Multi-RP",
+            "Bypass-Tunnel-Reminder": "true",
+            "ngrok-skip-browser-warning": "true",
           },
-          body: JSON.stringify({
-            model: curModel,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userMessage },
-            ],
-            temperature: 0.72,
-            max_tokens: 1400,
-          }),
+          body: JSON.stringify(reqBody),
           signal: AbortSignal.timeout(curEndpoint.isCustomEndpoint ? curEndpoint.timeoutMs : 26000),
         });
 
@@ -556,7 +567,8 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         }
 
       const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
+      const rawMsgContent = data.choices?.[0]?.message?.content;
+      const content = stripThinkingTags(rawMsgContent || "");
       if (!content || content.trim() === "") throw new Error("Empty narrator response");
 
       let parsed = safeParseJson(content);

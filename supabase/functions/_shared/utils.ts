@@ -56,6 +56,69 @@ export function resolveAIEndpoint(rawKeyOrUrl?: string | null, defaultBaseUrl?: 
   };
 }
 
+export function stripThinkingTags(raw: string): string {
+  if (!raw) return "";
+  // Удаляем завершённые блоки <think>...</think> (характерно для Qwen3/3.5, DeepSeek-R1, QwQ)
+  let cleaned = String(raw).replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  // Если модель оборвалась по max_tokens внутри незакрытого <think>, пытаемся спасти JSON в конце
+  if (cleaned.includes("<think>")) {
+    const afterThink = cleaned.split(/<think>/i).pop() || "";
+    const jsonStart = afterThink.indexOf("{");
+    cleaned = jsonStart !== -1 ? afterThink.slice(jsonStart).trim() : afterThink.trim();
+  }
+  return cleaned;
+}
+
+const _cachedCustomModelByUrl = new Map<string, string>();
+
+/**
+ * Для LM Studio в режиме Just-in-Time (JIT) loading: если выбрана заглушка "local-model"
+ * или облачное имя модели (с "/"), автоматически запрашивает список моделей с GET /v1/models
+ * и подставляет реальный идентификатор загруженной модели.
+ */
+export async function resolveCustomModelId(endpoint: AIEndpointConfig, requestedModel?: string): Promise<string> {
+  const model = (requestedModel || "").trim();
+  if (!endpoint.isCustomEndpoint) {
+    return model || "google/gemma-4-31b-it:free";
+  }
+  // Если пользователь явно вписал локальное имя модели (не "local-model" и не облачный префикс OpenRouter)
+  const CLOUD_PREFIXES = ["google/", "meta-llama/", "deepseek/", "openai/", "anthropic/", "mistralai/", "minimax/", "nvidia/", "xiaomi/", "openrouter/"];
+  const isCloudSlug = CLOUD_PREFIXES.some((p) => model.startsWith(p)) || model.endsWith(":free");
+  if (model && model !== "local-model" && !isCloudSlug) {
+    return model;
+  }
+
+  const cached = _cachedCustomModelByUrl.get(endpoint.url);
+  if (cached) return cached;
+
+  try {
+    const modelsUrl = endpoint.url.replace(/\/chat\/completions$/, "/models");
+    const resp = await fetch(modelsUrl, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${endpoint.apiKey}`,
+        "Bypass-Tunnel-Reminder": "true",
+        "ngrok-skip-browser-warning": "true",
+      },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const list = Array.isArray(data?.data) ? data.data : [];
+      // Выбираем первую не-embedding модель
+      const chatModel = list.find((m: any) => m?.id && !String(m.id).toLowerCase().includes("embed")) || list[0];
+      if (chatModel?.id) {
+        _cachedCustomModelByUrl.set(endpoint.url, String(chatModel.id));
+        return String(chatModel.id);
+      }
+    }
+  } catch {
+    // Игнорируем ошибку автоопределения и возвращаем дефолт
+  }
+
+  return model || "local-model";
+}
+
 export function cleanTextForAI(raw: string | null | undefined, maxLength: number = 4000): string {
   if (!raw) return "";
   let text = String(raw);
@@ -75,7 +138,8 @@ const VALID_STATS = ["STR", "DEX", "CON", "INT", "WIS", "CHA"] as const;
 export type StatKey = typeof VALID_STATS[number];
 export type StatsRecord = Record<StatKey, number>;
 
-export function parseAIJson(text: string): any {
+export function parseAIJson(rawText: string): any {
+  const text = stripThinkingTags(rawText);
   // Try direct parse, then unwrap if it's a stats wrapper
   try {
     const parsed = JSON.parse(text);

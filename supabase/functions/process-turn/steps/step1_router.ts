@@ -4,7 +4,7 @@
 // ИИ выступает "вышибалой" — отсекает абсурд и помечает нецелевое использование предметов.
 
 import { RouterInputContext, RouterOutputPayload, RouterAction, Atmosphere } from "../types.ts";
-import { parseAIJson, cleanTextForAI, resolveAIEndpoint } from "../../_shared/utils.ts";
+import { parseAIJson, cleanTextForAI, resolveAIEndpoint, resolveCustomModelId } from "../../_shared/utils.ts";
 
 const DEFAULT_MODEL = "xiaomi/mimo-v2.5";
 
@@ -513,18 +513,23 @@ export async function parsePlayerIntent(
             "deepseek/deepseek-chat",
             "google/gemini-2.0-flash-001",
           ].filter(Boolean)));
-      const currentModel = modelList[attempt % modelList.length] || resolvedModel;
+      const rawSelectedModel = modelList[attempt % modelList.length] || resolvedModel;
+      const currentModel = endpoint.isCustomEndpoint
+        ? await resolveCustomModelId(endpoint, rawSelectedModel)
+        : rawSelectedModel;
 
       const requestPayload: Record<string, any> = {
         model: currentModel,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
+          { role: "user", content: endpoint.isCustomEndpoint ? `${userMessage}\n/no_think` : userMessage },
         ],
         temperature: 0.2,
-        max_tokens: 1000,
+        max_tokens: endpoint.isCustomEndpoint ? 2500 : 1000,
       };
-      if (!endpoint.isCustomEndpoint) {
+      if (endpoint.isCustomEndpoint) {
+        requestPayload.chat_template_kwargs = { enable_thinking: false };
+      } else {
         requestPayload.response_format = { type: "json_object" };
       }
 
@@ -534,6 +539,8 @@ export async function parsePlayerIntent(
         headers: {
           "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
+          "Bypass-Tunnel-Reminder": "true",
+          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify(requestPayload),
         signal: AbortSignal.timeout(routerTimeout),

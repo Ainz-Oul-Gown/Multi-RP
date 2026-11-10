@@ -279,6 +279,20 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
       if (!endpoint.isCustomEndpoint) {
         headers['HTTP-Referer'] = typeof window !== 'undefined' ? window.location.origin : 'https://multirp.ai';
         headers['X-Title'] = 'MultiRP-AI';
+      } else {
+        headers['Bypass-Tunnel-Reminder'] = 'true';
+        headers['ngrok-skip-browser-warning'] = 'true';
+        requestBody.chat_template_kwargs = { enable_thinking: false };
+        if (requestBody.model === 'local-model') {
+          try {
+            const mRes = await fetch(endpoint.url.replace(/\/chat\/completions$/, '/models'), { headers });
+            if (mRes.ok) {
+              const mData = await mRes.json();
+              const found = (mData?.data || []).find(m => m?.id && !String(m.id).toLowerCase().includes('embed')) || mData?.data?.[0];
+              if (found?.id) requestBody.model = found.id;
+            }
+          } catch {}
+        }
       }
 
       const response = await fetch(endpoint.url, {
@@ -298,7 +312,8 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
       }
 
       const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || '';
+      const rawContent = data.choices?.[0]?.message?.content || '';
+      const content = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
       if (!content.trim() && modelsToTry.length > 1) {
         console.warn(`[callOpenRouter] Model ${currentModel} returned empty content, trying next fallback...`);
         continue;
@@ -306,7 +321,7 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
 
       console.log('[callOpenRouter] Response:', {
         provider: data.provider || (endpoint.isCustomEndpoint ? 'LM Studio / Custom' : 'OpenRouter'),
-        model: data.model || currentModel,
+        model: data.model || requestBody.model || currentModel,
         totalTokens: data.usage?.total_tokens,
         contentLength: content.length,
       });

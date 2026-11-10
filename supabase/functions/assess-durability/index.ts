@@ -2,7 +2,7 @@
 // Оценка износа/потери предмета после использования
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+import { sanitizeKey, cleanTextForAI, parseAIJson, resolveAIEndpoint } from "../_shared/utils.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -97,13 +97,16 @@ serve(async (req) => {
 
     const userMessage = `Предмет: ${item_name} (тип: ${item_type}, состояние: ${item_condition}, прочность: ${item_durability}%)\nДействие: ${action_description}\nКонтекст: ${use_context}\n\nОцени износ и новое состояние предмета.`;
 
-    const modelsToTry = Array.from(new Set([
-      userModel,
-      "google/gemma-4-31b-it:free",
-      "meta-llama/llama-3.3-70b-instruct:free",
-      "qwen/qwen-2.5-72b-instruct:free",
-      "deepseek/deepseek-chat:free",
-    ].filter(Boolean)));
+    const endpoint = resolveAIEndpoint(apiKey);
+    const modelsToTry = endpoint.isCustomEndpoint
+      ? [userModel || "local-model"]
+      : Array.from(new Set([
+          userModel,
+          "google/gemma-4-31b-it:free",
+          "meta-llama/llama-3.3-70b-instruct:free",
+          "qwen/qwen-2.5-72b-instruct:free",
+          "deepseek/deepseek-chat:free",
+        ].filter(Boolean)));
 
     let rawContent = "";
     let assessment: any = null;
@@ -111,10 +114,10 @@ serve(async (req) => {
     let errDetails = "";
 
     for (const curModel of modelsToTry) {
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch(endpoint.url, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
           "HTTP-Referer": SUPABASE_URL,
           "X-Title": "MultiRP-AI",
@@ -128,7 +131,7 @@ serve(async (req) => {
           temperature: 0.7,
           max_tokens: 500,
         }),
-        signal: AbortSignal.timeout(25000),
+        signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 25000),
       });
 
       console.log(`assess-durability OpenRouter status (${curModel}):`, response.status);

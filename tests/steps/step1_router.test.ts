@@ -3,11 +3,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Мокаем _shared/utils.ts
-vi.mock("../../supabase/functions/_shared/utils.ts", () => ({
-  parseAIJson: vi.fn(),
-  cleanTextForAI: vi.fn((s: string) => String(s || "").trim()),
-  sanitizeKey: vi.fn((s: string) => String(s || "").trim()),
-}));
+vi.mock("../../supabase/functions/_shared/utils.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../supabase/functions/_shared/utils.ts")>();
+  return {
+    ...actual,
+    parseAIJson: vi.fn(),
+    cleanTextForAI: vi.fn((s: string) => String(s || "").trim()),
+    sanitizeKey: vi.fn((s: string) => String(s || "").trim()),
+  };
+});
 
 import { parseAIJson } from "../../supabase/functions/_shared/utils.ts";
 import { RouterInputContext } from "../../supabase/functions/process-turn/types.ts";

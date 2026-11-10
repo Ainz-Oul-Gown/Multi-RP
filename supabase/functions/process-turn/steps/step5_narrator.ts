@@ -6,6 +6,7 @@
 
 import { SystemTruthDto } from "./step4_system_truth.ts";
 import { buildProactiveWorldDirective, ensurePlayerChoices } from "../../_shared/living_world_director.ts";
+import { resolveAIEndpoint } from "../../_shared/utils.ts";
 
 export interface NarratorOutputPayload {
   players: Record<string, string>; // player_id -> индивидуальный художественный текст
@@ -483,10 +484,14 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         )
       );
 
+  const primaryEndpoint = resolveAIEndpoint(openrouter_api_key);
+
   // Сначала лучшие бесплатные модели 24B-72B+ (чтобы при нулевом балансе не падать на 402 и не деградировать до 1B/3B),
   // затем сверхэкономичные платные модели ($10 хватает на ~15 000+ ходов)
   const modelsToTry = isTest
     ? [dm_model || "test-model"]
+    : primaryEndpoint.isCustomEndpoint
+    ? [dm_model || "local-model"]
     : Array.from(
         new Set(
           [
@@ -507,6 +512,7 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
   let lastErr: any = null;
 
   for (const curKey of allKeys) {
+    const curEndpoint = resolveAIEndpoint(curKey);
     let keyAuthFailed = false;
     for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
       if (keyAuthFailed) break;
@@ -515,10 +521,10 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
         if (attempt > 0 && !isTest) {
           await new Promise((r) => setTimeout(r, 350 * Math.min(attempt, 3)));
         }
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await fetch(curEndpoint.url, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${curKey}`,
+            "Authorization": `Bearer ${curEndpoint.apiKey}`,
             "Content-Type": "application/json",
             "HTTP-Referer": "https://ainz-oul-gown.github.io/Multi-RP/",
             "X-Title": "Multi-RP",
@@ -532,7 +538,7 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
             temperature: 0.72,
             max_tokens: 1400,
           }),
-          signal: AbortSignal.timeout(26000),
+          signal: AbortSignal.timeout(curEndpoint.isCustomEndpoint ? curEndpoint.timeoutMs : 26000),
         });
 
         if (!response.ok) {
@@ -540,7 +546,7 @@ export async function generateNarrative(context: NarratorInputContext): Promise<
           const errMsg = `Narrator LLM error: ${response.status} - ${errText.slice(0, 150)}`;
           // ВАЖНО: 402 (Insufficient credits) на платной модели НЕ означает невалидный ключ для :free моделей!
           // Прерываем цикл по ключу ТОЛЬКО при 401 (Unauthorized / неверный API-ключ).
-          if (response.status === 401) {
+          if (response.status === 401 && !curEndpoint.isCustomEndpoint) {
             console.warn(`[step5_narrator] Key auth failure (401) on ${curModel}. Trying next key.`);
             keyAuthFailed = true;
             lastErr = new Error(errMsg);

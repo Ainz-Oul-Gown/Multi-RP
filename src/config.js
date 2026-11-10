@@ -5,6 +5,62 @@ import { getHitDice, calculateHpDnd } from './config/hitDice.js';
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://YOUR_PROJECT.supabase.co';
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_ANON_KEY';
 export const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
+export const AI_BASE_URL = import.meta.env.VITE_AI_BASE_URL || 'https://openrouter.ai/api/v1/chat/completions';
+
+/**
+ * Распознаёт, указан ли в поле ключа/настроек кастомный URL (LM Studio, Ollama, Cloudflare/Pinggy/localhost.run туннель)
+ * или стандартный ключ OpenRouter.
+ * Поддерживает формат:
+ *  - "http://localhost:1234" -> url: "http://localhost:1234/v1/chat/completions", apiKey: "lm-studio"
+ *  - "https://xxxx.lhr.life" -> url: "https://xxxx.lhr.life/v1/chat/completions", apiKey: "lm-studio"
+ *  - "https://xxxx.lhr.life|my-token" -> url: "https://xxxx.lhr.life/v1/chat/completions", apiKey: "my-token"
+ *  - "sk-or-v1-..." -> url: AI_BASE_URL, apiKey: "sk-or-v1-..."
+ */
+export function resolveAIEndpoint(rawKeyOrUrl = '', defaultBaseUrl = AI_BASE_URL) {
+  const trimmed = String(rawKeyOrUrl || '').trim();
+  const envIsCustom = Boolean(
+    defaultBaseUrl &&
+    !defaultBaseUrl.includes('openrouter.ai')
+  );
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    const [rawUrlPart, customToken] = trimmed.split('|').map(s => s.trim());
+    let normalizedUrl = rawUrlPart.replace(/\/+$/, '');
+    if (!normalizedUrl.endsWith('/chat/completions')) {
+      if (normalizedUrl.endsWith('/v1')) {
+        normalizedUrl += '/chat/completions';
+      } else {
+        normalizedUrl += '/v1/chat/completions';
+      }
+    }
+    return {
+      url: normalizedUrl,
+      apiKey: customToken || 'lm-studio',
+      isCustomEndpoint: true,
+      timeoutMs: 90000,
+    };
+  }
+
+  if (envIsCustom) {
+    let normalizedUrl = String(defaultBaseUrl).trim().replace(/\/+$/, '');
+    if (!normalizedUrl.endsWith('/chat/completions')) {
+      normalizedUrl += normalizedUrl.endsWith('/v1') ? '/chat/completions' : '/v1/chat/completions';
+    }
+    return {
+      url: normalizedUrl,
+      apiKey: trimmed || 'lm-studio',
+      isCustomEndpoint: true,
+      timeoutMs: 90000,
+    };
+  }
+
+  return {
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    apiKey: trimmed,
+    isCustomEndpoint: false,
+    timeoutMs: 30000,
+  };
+}
 
 // AI Model Configuration
 export const AI_MODEL = 'google/gemma-4-31b-it:free';
@@ -14,6 +70,8 @@ export const AI_NARRATOR_TIMEOUT = 30000;
 
 // Model options for card generation (бестиарий, NPC, география)
 export const CARD_GENERATION_MODELS = [
+  // ── Локальная LLM (LM Studio / Ollama на ПК) ──
+  { id: 'local-model',                                name: '🖥️ LM Studio — Локальная модель на ПК',         provider: 'Local' },
   // ── Бесплатные (рекомендуется) ──
   { id: 'google/gemma-4-31b-it:free',                name: '⭐ Gemma 4 31B (free) — рекомендуем',          provider: 'Google' },
   { id: 'meta-llama/llama-3.3-70b-instruct:free',    name: '🔥 Llama 3.3 70B (free) — точный JSON',        provider: 'Meta' },
@@ -33,6 +91,8 @@ export const CARD_GENERATION_MODELS = [
 
 // Model options for DM (narrator / рассказчик)
 export const DM_MODELS = [
+  // ── Локальная LLM (LM Studio / Ollama на ПК) ──
+  { id: 'local-model',                                name: '🖥️ LM Studio — Локальная модель на ПК',         provider: 'Local' },
   // ── Бесплатные (лучшие для ролевой игры и русского языка) ──
   { id: 'google/gemma-4-31b-it:free',                name: '⭐ Gemma 4 31B (free) — топ нарратив',         provider: 'Google' },
   { id: 'deepseek/deepseek-chat:free',               name: '🔥 DeepSeek V3 (free) — лучшая проза и отыгрыш', provider: 'DeepSeek' },
@@ -56,6 +116,8 @@ export const DM_MODELS = [
 
 // Model options for GPS (время и локация — вызывается только при перемещении)
 export const GPS_MODELS = [
+  // ── Локальная LLM (LM Studio / Ollama на ПК) ──
+  { id: 'local-model',                                name: '🖥️ LM Studio — Локальная модель на ПК',         provider: 'Local' },
   // ── Бесплатные (достаточно для GPS) ──
   { id: 'google/gemma-4-31b-it:free',                name: '⭐ Gemma 4 31B (free) — рекомендуем',          provider: 'Google' },
   { id: 'meta-llama/llama-3.3-70b-instruct:free',    name: '🔥 Llama 3.3 70B (free) — точная география',   provider: 'Meta' },
@@ -74,6 +136,8 @@ export const GPS_MODELS = [
 
 // Model options for Satellite (парсер намерений игрока)
 export const SATELLITE_MODELS = [
+  // ── Локальная LLM (LM Studio / Ollama на ПК) ──
+  { id: 'local-model',                                name: '🖥️ LM Studio — Локальная модель на ПК',         provider: 'Local' },
   // ── Бесплатные ──
   { id: 'google/gemma-4-31b-it:free',                name: '⭐ Gemma 4 31B (free) — рекомендуем',          provider: 'Google' },
   { id: 'meta-llama/llama-3.3-70b-instruct:free',    name: '🔥 Llama 3.3 70B (free) — лучший парсер JSON', provider: 'Meta' },

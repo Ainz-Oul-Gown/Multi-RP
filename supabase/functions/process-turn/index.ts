@@ -10,7 +10,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+import { sanitizeKey, cleanTextForAI, parseAIJson, resolveAIEndpoint } from "../_shared/utils.ts";
 import { parsePlayerIntent, buildRouterHeuristicFallback, classifyIntentWithAI } from "./steps/step1_router.ts";
 import { executeEngine } from "./engine/step2_engine.ts";
 
@@ -66,17 +66,18 @@ const CORS = {
 // AI API call
 // ============================================
 async function callAI(systemPrompt: string, userMessage: string, apiKey: string, retries = 3, model?: string): Promise<string> {
-  const useModel = model || AI_MODEL;
+  const endpoint = resolveAIEndpoint(apiKey);
+  const useModel = model || (endpoint.isCustomEndpoint ? "local-model" : AI_MODEL);
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       if (attempt > 0) {
         await new Promise((r) => setTimeout(r, 1200 * attempt));
       }
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch(endpoint.url, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -88,11 +89,11 @@ async function callAI(systemPrompt: string, userMessage: string, apiKey: string,
           temperature: 0.5,
           max_tokens: 800,
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 15000),
       });
       if (!response.ok) {
         lastError = new Error(`AI API error: ${response.status}`);
-        if (response.status === 401 || response.status === 402 || response.status === 403) {
+        if (!endpoint.isCustomEndpoint && (response.status === 401 || response.status === 402 || response.status === 403)) {
           throw lastError;
         }
         continue; // retry

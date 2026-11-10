@@ -2,7 +2,7 @@
 // Автоматическая генерация карты расстояний (location_map) и типа местности (terrain_type) через ИИ.
 // Вызывается при создании стартовой локации, смене локации или входе в дикую зону.
 
-import { cleanTextForAI, parseAIJson } from "./utils.ts";
+import { cleanTextForAI, parseAIJson, resolveAIEndpoint } from "./utils.ts";
 
 export type TerrainType = "open" | "forest" | "cave" | "urban" | "building" | "mountain";
 
@@ -245,20 +245,23 @@ export async function ensureLocationMapAndTerrain(params: {
         isWildZone,
       });
 
-      const modelsToTry = Array.from(new Set([
-        model,
-        "google/gemma-4-31b-it:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "qwen/qwen-2.5-72b-instruct:free",
-        "deepseek/deepseek-chat:free",
-      ].filter(Boolean)));
+      const endpoint = resolveAIEndpoint(openrouterApiKey);
+      const modelsToTry = endpoint.isCustomEndpoint
+        ? [model || "local-model"]
+        : Array.from(new Set([
+            model,
+            "google/gemma-4-31b-it:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "deepseek/deepseek-chat:free",
+          ].filter(Boolean)));
 
       for (const curModel of modelsToTry) {
         try {
-          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          const resp = await fetch(endpoint.url, {
             method: "POST",
             headers: {
-              "Authorization": `Bearer ${openrouterApiKey}`,
+              "Authorization": `Bearer ${endpoint.apiKey}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -273,7 +276,7 @@ export async function ensureLocationMapAndTerrain(params: {
               temperature: 0.3,
               max_tokens: 1000,
             }),
-            signal: AbortSignal.timeout(12000),
+            signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 12000),
           });
 
           if (resp.ok) {

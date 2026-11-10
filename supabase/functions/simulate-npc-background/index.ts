@@ -2,13 +2,12 @@
 // Фоновая автономность NPC: действия главных персонажей за кадром
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+import { sanitizeKey, cleanTextForAI, parseAIJson, resolveAIEndpoint } from "../_shared/utils.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
 const AI_MODEL = "google/gemma-4-31b-it:free";
-const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -19,21 +18,24 @@ const CORS = {
 const SYSTEM_PROMPT = `Прошло дней: [days_passed]. Опиши 1 предложением, что NPC сделал за кадром (на основе его background и habits). Если он нашел или создал предмет, укажи его. JSON: { action_summary: 'текст', obtained_item_name: 'Название или null', item_type: 'weapon|misc' }`;
 
 async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string, preferredModel = AI_MODEL): Promise<string> {
-  const modelsToTry = Array.from(new Set([
-    preferredModel,
-    "google/gemma-4-31b-it:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "qwen/qwen-2.5-72b-instruct:free",
-    "deepseek/deepseek-chat:free",
-  ].filter(Boolean)));
+  const endpoint = resolveAIEndpoint(apiKey);
+  const modelsToTry = endpoint.isCustomEndpoint
+    ? [preferredModel || "local-model"]
+    : Array.from(new Set([
+        preferredModel,
+        "google/gemma-4-31b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen-2.5-72b-instruct:free",
+        "deepseek/deepseek-chat:free",
+      ].filter(Boolean)));
 
   let lastErr = "";
   for (const curModel of modelsToTry) {
     try {
-      const response = await fetch(OPENROUTER_CHAT_URL, {
+      const response = await fetch(endpoint.url, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
           "HTTP-Referer": SUPABASE_URL,
           "X-Title": "MultiRP-AI",
@@ -47,7 +49,7 @@ async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: st
           temperature: 0.7,
           max_tokens: 1000,
         }),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 20000),
       });
 
       if (!response.ok) {

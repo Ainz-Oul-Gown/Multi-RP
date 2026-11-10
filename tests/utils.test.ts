@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAIJson, cleanTextForAI, sanitizeKey } from "../supabase/functions/_shared/utils.ts";
+import { parseAIJson, cleanTextForAI, sanitizeKey, resolveAIEndpoint } from "../supabase/functions/_shared/utils.ts";
 
 describe("parseAIJson", () => {
   it("parses plain JSON object", () => {
@@ -138,3 +138,28 @@ describe("sanitizeKey", () => {
     expect(sanitizeKey("abc-123_ABC")).toBe("abc-123_ABC");
   });
 });
+
+describe("resolveAIEndpoint", () => {
+  it("resolves standard OpenRouter key", () => {
+    const res = resolveAIEndpoint("sk-or-v1-abc123");
+    expect(res.url).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(res.apiKey).toBe("sk-or-v1-abc123");
+    expect(res.isCustomEndpoint).toBe(false);
+  });
+
+  it("resolves local LM Studio URL and normalizes /v1/chat/completions", () => {
+    const res = resolveAIEndpoint("http://localhost:1234");
+    expect(res.url).toBe("http://localhost:1234/v1/chat/completions");
+    expect(res.apiKey).toBe("lm-studio");
+    expect(res.isCustomEndpoint).toBe(true);
+    expect(res.timeoutMs).toBe(90000);
+  });
+
+  it("resolves tunnel URL (localhost.run / pinggy / cloudflare) with optional token", () => {
+    const res = resolveAIEndpoint("https://demo.lhr.life|my-secret");
+    expect(res.url).toBe("https://demo.lhr.life/v1/chat/completions");
+    expect(res.apiKey).toBe("my-secret");
+    expect(res.isCustomEndpoint).toBe(true);
+  });
+});
+

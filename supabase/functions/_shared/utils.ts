@@ -5,6 +5,57 @@ export function sanitizeKey(raw: string): string {
   return (raw || "").trim().replace(/[^\x20-\x7E]/g, "");
 }
 
+export interface AIEndpointConfig {
+  url: string;
+  apiKey: string;
+  isCustomEndpoint: boolean;
+  timeoutMs: number;
+}
+
+/**
+ * Распознаёт URL кастомного сервера (LM Studio, Ollama, Pinggy, localhost.run, Cloudflare Tunnel)
+ * или стандартный ключ OpenRouter.
+ * Позволяет передавать URL прямо в поле openrouter_key в настройках аккаунта (с опциональным |token).
+ */
+export function resolveAIEndpoint(rawKeyOrUrl?: string | null, defaultBaseUrl?: string): AIEndpointConfig {
+  const trimmed = sanitizeKey(String(rawKeyOrUrl || ""));
+  const envBase = defaultBaseUrl || (typeof Deno !== "undefined" ? Deno.env.get("AI_BASE_URL") : "") || "";
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    const [rawUrlPart, customToken] = trimmed.split("|").map((s) => s.trim());
+    let normalizedUrl = rawUrlPart.replace(/\/+$/, "");
+    if (!normalizedUrl.endsWith("/chat/completions")) {
+      normalizedUrl += normalizedUrl.endsWith("/v1") ? "/chat/completions" : "/v1/chat/completions";
+    }
+    return {
+      url: normalizedUrl,
+      apiKey: customToken || "lm-studio",
+      isCustomEndpoint: true,
+      timeoutMs: 90000,
+    };
+  }
+
+  if (envBase && !envBase.includes("openrouter.ai")) {
+    let normalizedUrl = envBase.trim().replace(/\/+$/, "");
+    if (!normalizedUrl.endsWith("/chat/completions")) {
+      normalizedUrl += normalizedUrl.endsWith("/v1") ? "/chat/completions" : "/v1/chat/completions";
+    }
+    return {
+      url: normalizedUrl,
+      apiKey: trimmed || "lm-studio",
+      isCustomEndpoint: true,
+      timeoutMs: 90000,
+    };
+  }
+
+  return {
+    url: "https://openrouter.ai/api/v1/chat/completions",
+    apiKey: trimmed,
+    isCustomEndpoint: false,
+    timeoutMs: 25000,
+  };
+}
+
 export function cleanTextForAI(raw: string | null | undefined, maxLength: number = 4000): string {
   if (!raw) return "";
   let text = String(raw);

@@ -1,6 +1,6 @@
 // supabase/functions/_shared/starting_location_generator.ts
 // Генератор стартовой локации на основе карточки персонажа и первого сообщения
-import { cleanTextForAI, parseAIJson } from "./utils.ts";
+import { cleanTextForAI, parseAIJson, resolveAIEndpoint } from "./utils.ts";
 import { resolveNpcRace } from "./npcRaceResolver.ts";
 
 export interface SubzoneInfo {
@@ -481,20 +481,23 @@ export async function ensureStartingLocation(params: {
         player_level: player.level || 1,
       });
 
-      const modelsToTry = Array.from(new Set([
-        model,
-        "google/gemma-4-31b-it:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "qwen/qwen-2.5-72b-instruct:free",
-        "deepseek/deepseek-chat:free",
-      ].filter(Boolean)));
+      const endpoint = resolveAIEndpoint(openrouter_api_key);
+      const modelsToTry = endpoint.isCustomEndpoint
+        ? [model || "local-model"]
+        : Array.from(new Set([
+            model,
+            "google/gemma-4-31b-it:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "deepseek/deepseek-chat:free",
+          ].filter(Boolean)));
 
       for (const curModel of modelsToTry) {
         try {
-          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          const resp = await fetch(endpoint.url, {
             method: "POST",
             headers: {
-              "Authorization": `Bearer ${openrouter_api_key}`,
+              "Authorization": `Bearer ${endpoint.apiKey}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -506,7 +509,7 @@ export async function ensureStartingLocation(params: {
               temperature: 0.7,
               max_tokens: 700,
             }),
-            signal: AbortSignal.timeout(12000),
+            signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 12000),
           });
 
           if (resp.ok) {

@@ -1,5 +1,5 @@
 // src/api/openrouter.js — Прямые запросы к OpenRouter (без лимитов Supabase)
-import { OPENROUTER_API_KEY, AI_MODEL, CARD_GENERATION_MODELS, calculateDerivedStats, getRaceAcBonus } from '../config.js';
+import { OPENROUTER_API_KEY, AI_MODEL, CARD_GENERATION_MODELS, calculateDerivedStats, getRaceAcBonus, resolveAIEndpoint } from '../config.js';
 import { DAMAGE_TYPES, getDamageType, canBeDot, canHalfOnSave, getSaveAbility } from '../config/damageTypes.js';
 import { generateDamageDice, rollDice, getAverageDamage } from '../utils/dice.js';
 import { getHitDice, calculateHpDnd, getDieAverage } from '../config/hitDice.js';
@@ -224,24 +224,27 @@ async function getCardModel() {
   return settings.card_model || AI_MODEL;
 }
 
-// Call OpenRouter directly from frontend (no Edge Function limits) with automatic fallback across free/cheap models
+// Call OpenRouter or local LM Studio directly from frontend (no Edge Function limits) with automatic fallback across free/cheap models
 export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error('Укажите OpenRouter API Key в настройках аккаунта');
+  const rawKey = await getApiKey();
+  const endpoint = resolveAIEndpoint(rawKey);
+  if (!endpoint.apiKey) {
+    throw new Error('Укажите OpenRouter API Key или URL LM Studio в настройках аккаунта');
   }
 
   // Use specified model or get from user settings
   const primaryModel = options.model || await getCardModel();
-  const fallbackCandidates = [
-    primaryModel,
-    'google/gemma-4-31b-it:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'qwen/qwen-2.5-72b-instruct:free',
-    'deepseek/deepseek-chat:free',
-    'google/gemini-2.0-flash-exp:free',
-    'mistralai/mistral-small-24b-instruct-2501:free',
-  ].filter(Boolean);
+  const fallbackCandidates = endpoint.isCustomEndpoint
+    ? [primaryModel || 'local-model']
+    : [
+        primaryModel,
+        'google/gemma-4-31b-it:free',
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'qwen/qwen-2.5-72b-instruct:free',
+        'deepseek/deepseek-chat:free',
+        'google/gemini-2.0-flash-exp:free',
+        'mistralai/mistral-small-24b-instruct-2501:free',
+      ].filter(Boolean);
   const modelsToTry = [...new Set(fallbackCandidates)];
 
   let lastErrorText = '';
@@ -262,20 +265,25 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
     }
 
     console.log('[callOpenRouter] Request:', {
+      url: endpoint.url,
       model: requestBody.model,
       userMsgLength: userMessage.length,
       systemMsgLength: systemPrompt.length,
     });
 
     try {
-      const response = await fetch(OPENROUTER_CHAT_URL, {
+      const headers = {
+        'Authorization': `Bearer ${endpoint.apiKey}`,
+        'Content-Type': 'application/json',
+      };
+      if (!endpoint.isCustomEndpoint) {
+        headers['HTTP-Referer'] = typeof window !== 'undefined' ? window.location.origin : 'https://multirp.ai';
+        headers['X-Title'] = 'MultiRP-AI';
+      }
+
+      const response = await fetch(endpoint.url, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://multirp.ai',
-          'X-Title': 'MultiRP-AI',
-        },
+        headers,
         body: JSON.stringify(requestBody),
       });
 
@@ -283,7 +291,7 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
         lastStatus = response.status;
         lastErrorText = await response.text();
         console.warn(`[callOpenRouter] Model ${currentModel} returned ${response.status}, trying next fallback...`, lastErrorText.slice(0, 200));
-        if (response.status === 401) {
+        if (response.status === 401 && !endpoint.isCustomEndpoint) {
           throw new Error(`Неверный API-ключ OpenRouter (401): ${lastErrorText}`);
         }
         continue;
@@ -297,7 +305,7 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
       }
 
       console.log('[callOpenRouter] Response:', {
-        provider: data.provider,
+        provider: data.provider || (endpoint.isCustomEndpoint ? 'LM Studio / Custom' : 'OpenRouter'),
         model: data.model || currentModel,
         totalTokens: data.usage?.total_tokens,
         contentLength: content.length,
@@ -310,7 +318,7 @@ export async function callOpenRouter(systemPrompt, userMessage, options = {}) {
     }
   }
 
-  throw new Error(`OpenRouter error: ${lastStatus || 'network'} - ${lastErrorText}`);
+  throw new Error(`AI API error (${endpoint.isCustomEndpoint ? endpoint.url : 'OpenRouter'}): ${lastStatus || 'network'} - ${lastErrorText}`);
 }
 
 // Count NPCs in text

@@ -1,8 +1,6 @@
 // src/api/storyline.js — Генератор, редактор и менеджер сюжетных линий на основе мира
 import { supabase } from './supabase.js';
-import { OPENROUTER_API_KEY, AI_MODEL } from '../config.js';
-
-const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
+import { OPENROUTER_API_KEY, AI_MODEL, resolveAIEndpoint } from '../config.js';
 
 async function resolveUserSettings() {
   const { data: { session } } = await supabase.auth.getSession();
@@ -162,26 +160,29 @@ function safeParseStorylineJson(rawText) {
 /**
  * Надёжный вызов OpenRouter с перебором резервных бесплатных/экономных моделей для генерации сюжета
  */
-async function callStorylineLLM(apiKey, chosenModel, systemPrompt, userPrompt, temperature = 0.7) {
-  const modelsToTry = [...new Set([
-    chosenModel,
-    'google/gemma-4-31b-it:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'qwen/qwen-2.5-72b-instruct:free',
-    'deepseek/deepseek-chat:free',
-    'google/gemini-2.0-flash-exp:free',
-    'mistralai/mistral-small-24b-instruct-2501:free',
-  ].filter(Boolean))];
+async function callStorylineLLM(rawKeyOrUrl, chosenModel, systemPrompt, userPrompt, temperature = 0.7) {
+  const endpoint = resolveAIEndpoint(rawKeyOrUrl);
+  const modelsToTry = endpoint.isCustomEndpoint
+    ? [chosenModel || 'local-model']
+    : [...new Set([
+        chosenModel,
+        'google/gemma-4-31b-it:free',
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'qwen/qwen-2.5-72b-instruct:free',
+        'deepseek/deepseek-chat:free',
+        'google/gemini-2.0-flash-exp:free',
+        'mistralai/mistral-small-24b-instruct-2501:free',
+      ].filter(Boolean))];
 
   let lastStatus = 0;
   let lastErrorText = '';
 
   for (const currentModel of modelsToTry) {
     try {
-      const res = await fetch(OPENROUTER_CHAT_URL, {
+      const res = await fetch(endpoint.url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${endpoint.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -199,7 +200,7 @@ async function callStorylineLLM(apiKey, chosenModel, systemPrompt, userPrompt, t
         lastStatus = res.status;
         lastErrorText = await res.text();
         console.warn(`[Storyline] Model ${currentModel} failed (${res.status}), trying next...`);
-        if (res.status === 401) {
+        if (res.status === 401 && !endpoint.isCustomEndpoint) {
           throw new Error(`OpenRouter error (${res.status}): ${lastErrorText}`);
         }
         continue;
@@ -220,7 +221,7 @@ async function callStorylineLLM(apiKey, chosenModel, systemPrompt, userPrompt, t
     }
   }
 
-  throw new Error(`OpenRouter error (${lastStatus || 'parse'}): ${lastErrorText}`);
+  throw new Error(`AI error (${lastStatus || 'parse'}): ${lastErrorText}`);
 }
 
 /**
@@ -234,11 +235,12 @@ export async function generateStorylineForSession({
   model = null,
 }) {
   const userSettings = await resolveUserSettings();
-  const apiKey = openrouterApiKey || userSettings.openrouter_key || OPENROUTER_API_KEY;
+  const rawKey = openrouterApiKey || userSettings.openrouter_key || OPENROUTER_API_KEY;
+  const endpoint = resolveAIEndpoint(rawKey);
   const chosenModel = model || userSettings.satellite_model || userSettings.dm_model || AI_MODEL;
 
-  if (!apiKey) {
-    throw new Error('Для генерации сюжета требуется API-ключ OpenRouter в настройках профиля');
+  if (!endpoint.apiKey) {
+    throw new Error('Для генерации сюжета требуется API-ключ OpenRouter или URL LM Studio в настройках профиля');
   }
 
   const worldCtx = await loadWorldContext(worldId);

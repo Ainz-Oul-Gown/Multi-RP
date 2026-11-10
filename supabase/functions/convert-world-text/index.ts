@@ -2,7 +2,7 @@
 // Конвертирует текстовое описание мира в структурированный JSON
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+import { sanitizeKey, cleanTextForAI, parseAIJson, resolveAIEndpoint } from "../_shared/utils.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -88,22 +88,25 @@ serve(async (req) => {
 
     const userMessage = `Мир: "${world_name}"\n\nОписание:\n${safeDescription}`;
 
-    const modelsToTry = Array.from(new Set([
-      userModel,
-      "google/gemma-4-31b-it:free",
-      "meta-llama/llama-3.3-70b-instruct:free",
-      "qwen/qwen-2.5-72b-instruct:free",
-      "deepseek/deepseek-chat:free",
-    ].filter(Boolean)));
+    const endpoint = resolveAIEndpoint(apiKey);
+    const modelsToTry = endpoint.isCustomEndpoint
+      ? [userModel || "local-model"]
+      : Array.from(new Set([
+          userModel,
+          "google/gemma-4-31b-it:free",
+          "meta-llama/llama-3.3-70b-instruct:free",
+          "qwen/qwen-2.5-72b-instruct:free",
+          "deepseek/deepseek-chat:free",
+        ].filter(Boolean)));
 
     let rawContent = "";
     let settings: any = null;
 
     for (const curModel of modelsToTry) {
-      const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const aiRes = await fetch(endpoint.url, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -122,7 +125,7 @@ serve(async (req) => {
       if (!aiRes.ok) {
         const errText = await aiRes.text();
         console.warn(`AI error (${curModel}):`, errText);
-        if (aiRes.status === 401) break;
+        if (aiRes.status === 401 && !endpoint.isCustomEndpoint) break;
         continue;
       }
 

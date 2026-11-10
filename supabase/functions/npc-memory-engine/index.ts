@@ -2,7 +2,7 @@
 // Движок Каскадной Памяти NPC: управление воспоминаниями (vivid -> medium -> belief)
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitizeKey, cleanTextForAI, parseAIJson } from "../_shared/utils.ts";
+import { sanitizeKey, cleanTextForAI, parseAIJson, resolveAIEndpoint } from "../_shared/utils.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -11,7 +11,6 @@ const FALLBACK_OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
 const EMBEDDING_MODEL = "baai/bge-m3";
 const CHAT_MODEL = "google/gemma-4-31b-it:free";
 const OPENROUTER_EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings";
-const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -74,21 +73,24 @@ async function generateEmbedding(text: string, apiKey: string): Promise<number[]
 }
 
 async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: string, preferredModel = CHAT_MODEL): Promise<string> {
-  const modelsToTry = Array.from(new Set([
-    preferredModel,
-    "google/gemma-4-31b-it:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "qwen/qwen-2.5-72b-instruct:free",
-    "deepseek/deepseek-chat:free",
-  ].filter(Boolean)));
+  const endpoint = resolveAIEndpoint(apiKey);
+  const modelsToTry = endpoint.isCustomEndpoint
+    ? [preferredModel || "local-model"]
+    : Array.from(new Set([
+        preferredModel,
+        "google/gemma-4-31b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen-2.5-72b-instruct:free",
+        "deepseek/deepseek-chat:free",
+      ].filter(Boolean)));
 
   let lastErr = "";
   for (const curModel of modelsToTry) {
     try {
-      const response = await fetch(OPENROUTER_CHAT_URL, {
+      const response = await fetch(endpoint.url, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
           "HTTP-Referer": SUPABASE_URL,
           "X-Title": "MultiRP-AI",
@@ -102,7 +104,7 @@ async function callChatLLM(systemPrompt: string, userMessage: string, apiKey: st
           temperature: 0.7,
           max_tokens: 1000,
         }),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 20000),
       });
 
       if (!response.ok) {

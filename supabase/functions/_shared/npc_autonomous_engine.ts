@@ -20,7 +20,7 @@ export function gameTimeToMinutes(t: GameTimePoint): number {
   );
 }
 
-import { parseAIJson } from "./utils.ts";
+import { parseAIJson, resolveAIEndpoint } from "./utils.ts";
 
 /**
  * Инициатива спутника в текущей сцене:
@@ -90,12 +90,14 @@ export async function handleCompanionInSceneAction(params: {
 
       const userPrompt = `Спутник:\n${companionInfo}\n\nДействие игрока (${acting_player_name}): "${rawAction}"\n\nКак спутник реагирует и помогает? Выдай JSON.`;
 
-      for (const curModel of modelsToTry) {
+      const endpoint = resolveAIEndpoint(openrouter_api_key);
+      const effectiveModels = endpoint.isCustomEndpoint ? [model || "local-model"] : modelsToTry;
+      for (const curModel of effectiveModels) {
         try {
-          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          const resp = await fetch(endpoint.url, {
             method: "POST",
             headers: {
-              "Authorization": `Bearer ${openrouter_api_key}`,
+              "Authorization": `Bearer ${endpoint.apiKey}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -107,7 +109,7 @@ export async function handleCompanionInSceneAction(params: {
               temperature: 0.6,
               max_tokens: 300,
             }),
-            signal: AbortSignal.timeout(7000),
+            signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 7000),
           });
 
           if (resp.ok) {
@@ -415,20 +417,23 @@ export async function generateCompanionDialogue(params: {
 
 Сгенерируй живую, выразительную реплику (1-2 предложения), обращаясь к игроку по имени (${player_name}).`;
 
-      const modelsToTry = [
-        model,
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "qwen/qwen-2.5-72b-instruct:free",
-        "google/gemma-2-27b-it:free",
-        "google/gemini-2.0-flash-exp:free",
-      ].filter(Boolean);
+      const endpoint = resolveAIEndpoint(openrouter_api_key);
+      const modelsToTry = endpoint.isCustomEndpoint
+        ? [model || "local-model"]
+        : [
+            model,
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "google/gemma-2-27b-it:free",
+            "google/gemini-2.0-flash-exp:free",
+          ].filter(Boolean);
 
       for (const curModel of modelsToTry) {
         try {
-          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          const resp = await fetch(endpoint.url, {
             method: "POST",
             headers: {
-              "Authorization": `Bearer ${openrouter_api_key}`,
+              "Authorization": `Bearer ${endpoint.apiKey}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -440,7 +445,7 @@ export async function generateCompanionDialogue(params: {
               temperature: 0.7,
               max_tokens: 150,
             }),
-            signal: AbortSignal.timeout(4500),
+            signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 4500),
           });
 
           if (resp.ok) {

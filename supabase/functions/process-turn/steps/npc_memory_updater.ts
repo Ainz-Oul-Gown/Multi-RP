@@ -8,7 +8,7 @@ import {
   getMemoryTierFromVividness,
   EvaluatedMemoryResult,
 } from "../../_shared/npc_relationship_engine.ts";
-import { cleanTextForAI, parseAIJson } from "../../_shared/utils.ts";
+import { cleanTextForAI, parseAIJson, resolveAIEndpoint } from "../../_shared/utils.ts";
 
 export interface NpcUpdateSummary {
   npc_id: string;
@@ -125,21 +125,24 @@ export async function processNpcInteractions(params: {
             outcome_text: outcomeSnippet,
           });
 
-          const modelsToTry = Array.from(new Set([
-            chat_model,
-            "google/gemma-4-31b-it:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "qwen/qwen-2.5-72b-instruct:free",
-            "deepseek/deepseek-chat:free",
-          ].filter(Boolean)));
+          const endpoint = resolveAIEndpoint(openrouter_api_key);
+          const modelsToTry = endpoint.isCustomEndpoint
+            ? [chat_model || "local-model"]
+            : Array.from(new Set([
+                chat_model,
+                "google/gemma-4-31b-it:free",
+                "meta-llama/llama-3.3-70b-instruct:free",
+                "qwen/qwen-2.5-72b-instruct:free",
+                "deepseek/deepseek-chat:free",
+              ].filter(Boolean)));
 
           let parsedEval: any = null;
           for (const curModel of modelsToTry) {
             try {
-              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              const resp = await fetch(endpoint.url, {
                 method: "POST",
                 headers: {
-                  "Authorization": `Bearer ${openrouter_api_key}`,
+                  "Authorization": `Bearer ${endpoint.apiKey}`,
                   "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
@@ -151,7 +154,7 @@ export async function processNpcInteractions(params: {
                   temperature: 0.7,
                   max_tokens: 500,
                 }),
-                signal: AbortSignal.timeout(10000),
+                signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 10000),
               });
 
               if (resp.ok) {

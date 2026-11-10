@@ -4,9 +4,8 @@
 // ИИ выступает "вышибалой" — отсекает абсурд и помечает нецелевое использование предметов.
 
 import { RouterInputContext, RouterOutputPayload, RouterAction, Atmosphere } from "../types.ts";
-import { parseAIJson, cleanTextForAI } from "../../_shared/utils.ts";
+import { parseAIJson, cleanTextForAI, resolveAIEndpoint } from "../../_shared/utils.ts";
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "xiaomi/mimo-v2.5";
 
 // ============================================
@@ -490,26 +489,30 @@ export async function parsePlayerIntent(
   retries: number = 3
 ): Promise<RouterOutputPayload> {
   const resolvedApiKey = apiKey || input?.openrouter_api_key || "";
-  const resolvedModel = (model && model !== DEFAULT_MODEL) ? model : (input?.satellite_model || model || DEFAULT_MODEL);
+  const endpoint = resolveAIEndpoint(resolvedApiKey);
+  const resolvedModel = (model && model !== DEFAULT_MODEL) ? model : (input?.satellite_model || model || (endpoint.isCustomEndpoint ? "local-model" : DEFAULT_MODEL));
   const systemPrompt = buildRouterSystemPrompt();
   const userMessage = buildUserMessage(input);
 
   let lastError: Error | null = null;
+  const maxAttempts = endpoint.isCustomEndpoint ? Math.min(retries, 2) : retries;
 
-  for (let attempt = 0; attempt < retries; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      console.log(`[step1_router] Attempt ${attempt + 1}/${retries}, model: ${resolvedModel}`);
+      console.log(`[step1_router] Attempt ${attempt + 1}/${maxAttempts}, model: ${resolvedModel}, url: ${endpoint.url}`);
 
-      const modelList = Array.from(new Set([
-        resolvedModel,
-        "google/gemma-4-31b-it:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "qwen/qwen-2.5-72b-instruct:free",
-        "deepseek/deepseek-chat:free",
-        "google/gemini-2.0-flash-exp:free",
-        "deepseek/deepseek-chat",
-        "google/gemini-2.0-flash-001",
-      ].filter(Boolean)));
+      const modelList = endpoint.isCustomEndpoint
+        ? [resolvedModel || "local-model"]
+        : Array.from(new Set([
+            resolvedModel,
+            "google/gemma-4-31b-it:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "deepseek/deepseek-chat:free",
+            "google/gemini-2.0-flash-exp:free",
+            "deepseek/deepseek-chat",
+            "google/gemini-2.0-flash-001",
+          ].filter(Boolean)));
       const currentModel = modelList[attempt % modelList.length] || resolvedModel;
 
       const requestPayload: Record<string, any> = {
@@ -520,30 +523,33 @@ export async function parsePlayerIntent(
         ],
         temperature: 0.2,
         max_tokens: 1000,
-        response_format: { type: "json_object" },
       };
+      if (!endpoint.isCustomEndpoint) {
+        requestPayload.response_format = { type: "json_object" };
+      }
 
-      let response = await fetch(OPENROUTER_URL, {
+      const routerTimeout = endpoint.isCustomEndpoint ? endpoint.timeoutMs : 15000;
+      let response = await fetch(endpoint.url, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${resolvedApiKey}`,
+          "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(requestPayload),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(routerTimeout),
       });
 
       // Fallback: если модель не поддерживает response_format (HTTP 400), пробуем без него
-      if (response.status === 400) {
+      if (response.status === 400 && requestPayload.response_format) {
         delete requestPayload.response_format;
-        response = await fetch(OPENROUTER_URL, {
+        response = await fetch(endpoint.url, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${resolvedApiKey}`,
+            "Authorization": `Bearer ${endpoint.apiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify(requestPayload),
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(routerTimeout),
         });
       }
 
@@ -1112,40 +1118,45 @@ export async function classifyIntentWithAI(
 
   const userMsg = `${contextLines.join("\n")}\n\nРеплика/действие игрока: "${actionText}"`;
 
-  // ========= ПУЛ УМНЫХ БЕСПЛАТНЫХ И СВЕРХЭКОНОМИЧНЫХ МОДЕЛЕЙ ДЛЯ TIER 2 =========
-  const SMART_FREE_MODELS = Array.from(new Set([
-    preferredModel,
-    "google/gemma-4-31b-it:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "qwen/qwen-2.5-72b-instruct:free",
-    "deepseek/deepseek-chat:free",
-    "google/gemini-2.0-flash-exp:free",
-    "mistralai/mistral-small-24b-instruct-2501:free",
-    preferredModel ? preferredModel.replace(/:free$/, "") : null,
-    "deepseek/deepseek-chat",
-    "google/gemini-2.0-flash-001",
-    "meta-llama/llama-3.3-70b-instruct",
-  ].filter(Boolean))) as string[];
+  const endpoint = resolveAIEndpoint(apiKey);
+  const SMART_FREE_MODELS = endpoint.isCustomEndpoint
+    ? [preferredModel || "local-model"]
+    : (Array.from(new Set([
+        preferredModel,
+        "google/gemma-4-31b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen-2.5-72b-instruct:free",
+        "deepseek/deepseek-chat:free",
+        "google/gemini-2.0-flash-exp:free",
+        "mistralai/mistral-small-24b-instruct-2501:free",
+        preferredModel ? preferredModel.replace(/:free$/, "") : null,
+        "deepseek/deepseek-chat",
+        "google/gemini-2.0-flash-001",
+        "meta-llama/llama-3.3-70b-instruct",
+      ].filter(Boolean))) as string[]);
 
   for (const model of SMART_FREE_MODELS) {
     try {
-      const resp = await fetch(OPENROUTER_URL, {
+      const payload: Record<string, any> = {
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMsg },
+        ],
+        max_tokens: 250,
+        temperature: 0.1,
+      };
+      if (!endpoint.isCustomEndpoint) {
+        payload.response_format = { type: "json_object" };
+      }
+      const resp = await fetch(endpoint.url, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${endpoint.apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMsg },
-          ],
-          max_tokens: 250,
-          temperature: 0.1,
-          response_format: { type: "json_object" },
-        }),
-        signal: AbortSignal.timeout(9000), // 9 сек таймаут
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(endpoint.isCustomEndpoint ? endpoint.timeoutMs : 9000),
       });
 
       if (!resp.ok) {

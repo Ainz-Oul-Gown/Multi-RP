@@ -775,36 +775,34 @@ export function renderLobby(container, user) {
           </div>
 
            <div class="form-group" style="margin-bottom: 1rem;">
-             <label class="form-label">OpenRouter API Key</label>
+             <label class="form-label">OpenRouter API Key или URL LM Studio (Туннель)</label>
              <div style="display: flex; gap: 0.4rem; align-items: center;">
                <input
                  class="input"
                  type="password"
                  id="openrouterKeyInput"
-                 placeholder="sk-or-v1-..."
+                 placeholder="sk-or-v1-... или https://xxxx.lhr.life / http://localhost:1234"
                  value="${userSettings?.openrouter_key || ''}"
                  autocomplete="off"
                  style="flex: 1;"
                />
-               <button type="button" class="btn btn-secondary btn-sm" id="toggleOpenrouterKeyVisibilityBtn" title="Показать / скрыть ключ" style="padding: 0.45rem 0.65rem; white-space: nowrap;">
+               <button type="button" class="btn btn-secondary btn-sm" id="toggleOpenrouterKeyVisibilityBtn" title="Показать / скрыть ключ или URL" style="padding: 0.45rem 0.65rem; white-space: nowrap;">
                  👁️
                </button>
-               <button type="button" class="btn btn-secondary btn-sm" id="copyOpenrouterKeyBtn" title="Скопировать OpenRouter API Key в буфер обмена" style="padding: 0.45rem 0.75rem; white-space: nowrap;">
+               <button type="button" class="btn btn-secondary btn-sm" id="copyOpenrouterKeyBtn" title="Скопировать ключ или URL в буфер обмена" style="padding: 0.45rem 0.75rem; white-space: nowrap;">
                  📋 Копировать
                </button>
              </div>
              <span class="form-hint">
-               Ваш личный ключ для OpenRouter API.
-               ${maskedKey ? `Текущий: <code>${maskedKey}</code>` : 'Не задан — игра не сможет вызывать ИИ.'}
-             </span>
-             <span class="form-hint" style="margin-top: 0.25rem;">
-               Получите ключ на <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>
+               Укажите ключ <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter</a> (<code>sk-or-v1-...</code>) <b>ИЛИ</b> адрес вашей локальной LLM в LM Studio (например, <code>http://localhost:1234</code> для ПК или публичный туннель <code>https://xxxx.lhr.life</code> / <code>https://xxxx.a.free.pinggy.link</code> для игры с телефонов).
+               ${maskedKey ? `<br/>Текущий: <code>${maskedKey}</code>` : '<br/>Не задан — игра не сможет вызывать ИИ.'}
              </span>
            </div>
 
            <div style="margin-bottom: 1.25rem; padding: 0.85rem; background: rgba(212, 163, 89, 0.08); border-radius: 8px; border: 1px solid rgba(212, 163, 89, 0.25);">
              <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--accent-gold-bright);">⚡ Быстрые пресеты связок:</div>
              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+               <button type="button" class="btn btn-secondary btn-sm" id="presetLocalLmStudioBtn" title="Все роли через вашу локальную нейросеть в LM Studio на ПК">🖥️ LM Studio (Свой ПК)</button>
                <button type="button" class="btn btn-secondary btn-sm" id="presetFreeBtn" title="Все роли на качественных бесплатных моделях OpenRouter">🆓 Бесплатно ($0)</button>
                <button type="button" class="btn btn-secondary btn-sm" id="presetOptimumBtn" title="Минимум затрат (~$0.50/1000 ходов) при максимальном интеллекте парсера и нарратора">⚡ Оптимум (Топ)</button>
                <button type="button" class="btn btn-secondary btn-sm" id="presetMaxBtn" title="Премиум-качество с Claude 3.5 Haiku и GPT-4o Mini">👑 Максимум</button>
@@ -2493,6 +2491,23 @@ export function renderLobby(container, user) {
     document.getElementById('lobbyCopyDbInviteBtn')?.addEventListener('click', copyDbInviteHandler);
 
     // Preset buttons for model selection
+    document.getElementById('presetLocalLmStudioBtn')?.addEventListener('click', () => {
+      const card = document.getElementById('cardModelInput');
+      const dm = document.getElementById('dmModelInput');
+      const gps = document.getElementById('gpsModelInput');
+      const sat = document.getElementById('satelliteModelInput');
+      const keyInput = document.getElementById('openrouterKeyInput');
+      if (card) card.value = 'local-model';
+      if (dm) dm.value = 'local-model';
+      if (gps) gps.value = 'local-model';
+      if (sat) sat.value = 'local-model';
+      if (keyInput && !keyInput.value.trim()) {
+        keyInput.value = 'http://localhost:1234';
+        keyInput.type = 'text';
+      }
+      toast.info('Применен пресет: 🖥️ LM Studio (укажите URL туннеля для игры с телефонов или http://localhost:1234)');
+    });
+
     document.getElementById('presetFreeBtn')?.addEventListener('click', () => {
       const card = document.getElementById('cardModelInput');
       const dm = document.getElementById('dmModelInput');
